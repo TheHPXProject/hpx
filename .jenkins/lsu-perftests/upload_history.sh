@@ -103,7 +103,12 @@ main_readme() {
         "master branch, measured by its Jenkins CI on the Rostam cluster at" \
         "LSU (see \`.jenkins/lsu-perftests\` and \`tools/perftests_ci\` in" \
         "the HPX repository). The graphs below show the median time of every" \
-        "measurement over the date of the commit; lower is faster."
+        "measurement over the master commits in their order, labeled with" \
+        "their pull requests (or the commits without one); lower is faster." \
+        "The table below each graph lists the commits after which a median" \
+        "changed, the numbered commits are marked on the graph, and the" \
+        "ringed points are the medians that changed (red slower, green" \
+        "faster)."
     echo
     echo "## Layout"
     echo
@@ -128,9 +133,9 @@ main_readme() {
     echo
     echo "## Performance over time"
     echo
-    # The links of the graphs are relative to timeline/
+    # The links of the graphs and the runs are relative to timeline/
     if [[ -s "${data}/timeline/README-timeline.md" ]]; then
-        sed 's|](\([^/)]*\.svg\))|](timeline/\1)|' \
+        sed -e 's|](\([^/)]*\.svg\))|](timeline/\1)|' -e 's|](\.\./|](|g' \
             "${data}/timeline/README-timeline.md"
     else
         echo "The graphs couldn't be drawn yet."
@@ -142,17 +147,22 @@ main_readme() {
         "[LICENSE_1_0.txt](LICENSE_1_0.txt)."
 }
 
-# Prints the README.md of the runs of a year, the newest commit first
+# Prints the README.md of the runs of a year, the newest commit first. The
+# builds link to Jenkins: runs.tsv has only their numbers, but all runs are
+# uploaded by builds of this job (JOB_URL).
 year_readme() {
-    local data="$1" run_year="$2"
+    local data="$1" run_year="$2" build_link
     echo "# Performance test runs of ${run_year}"
     echo
     echo "[Performance history](../README.md)"
     echo
     echo "| Commit date | Commit | Pull request | Build | Node | Status |"
     echo "| --- | --- | --- | --- | --- | --- |"
-    tail -n +2 "${data}/runs.tsv" | sort -r | while IFS=$'\t' read -r date \
-        commit pull_request build status run_node directory; do
+    # read would merge consecutive tabs (tab is IFS whitespace) and shift the
+    # fields of a run without pull request, so split at \037 instead
+    tail -n +2 "${data}/runs.tsv" | sort -r | tr '\t' '\037' |
+        while IFS=$'\037' read -r date commit pull_request build status \
+            run_node directory; do
         if [[ "${directory%%/*}" != "${run_year}" ]]; then
             continue
         fi
@@ -161,10 +171,14 @@ year_readme() {
             "") status="unknown" ;;
             *) status="failed (${status})" ;;
         esac
+        build_link="${build}"
+        if [[ -n "${build}" && -n "${JOB_URL:-}" ]]; then
+            build_link="[${build}](${JOB_URL%/}/${build}/)"
+        fi
         printf '| %s | [%s](%s/README.md) | %s | %s | %s | %s |\n' \
             "${date}" "${commit:0:12}" "${directory#*/}" \
             "${pull_request:+[#${pull_request}](https://github.com/TheHPXProject/hpx/pull/${pull_request})}" \
-            "${build}" "${run_node}" "${status}"
+            "${build_link}" "${run_node}" "${status}"
     done
 }
 

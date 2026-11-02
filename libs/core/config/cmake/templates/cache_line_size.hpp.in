@@ -1,4 +1,4 @@
-//  Copyright (c) 2024 Hartmut Kaiser
+//  Copyright (c) 2024-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -13,5 +13,37 @@ namespace hpx::threads {
     constexpr std::size_t get_cache_line_size() noexcept
     {
         return @HPX_INTERNAL_CACHE_LINE_SIZE_DETECT@;
+    }
+
+    /// \brief Returns the minimal distance in bytes between data that
+    ///        different cores write, to avoid false sharing.
+    ///
+    /// This can be larger than the cache line size: Intel's L2 spatial
+    /// prefetcher (since Sandy Bridge) fetches the 128-byte aligned pair of
+    /// every 64-byte line it fetches, and some ARM64 cores (Apple M series)
+    /// have 128-byte lines. The defaults follow common practice (crossbeam,
+    /// folly): 128 bytes on x86-64, ARM64 and 64-bit POWER, 256 bytes on
+    /// s390x, and the cache line size everywhere else.
+    /// std::hardware_destructive_interference_size is not used, as the
+    /// compilers report 64 bytes on x86-64. The CMake option
+    /// HPX_WITH_DESTRUCTIVE_INTERFERENCE_SIZE overrides the default.
+    ///
+    /// \returns A power of two that is at least the cache line size.
+    constexpr std::size_t get_destructive_interference_size() noexcept
+    {
+        // 0: not set at configuration time, use the default
+        constexpr std::size_t configured =
+            @HPX_INTERNAL_DESTRUCTIVE_INTERFERENCE_SIZE@;
+#if defined(__x86_64__) || defined(_M_X64) || defined(__aarch64__) ||          \
+    defined(_M_ARM64) || defined(__powerpc64__)
+        constexpr std::size_t by_architecture = 128;
+#elif defined(__s390x__)
+        constexpr std::size_t by_architecture = 256;
+#else
+        constexpr std::size_t by_architecture = get_cache_line_size();
+#endif
+        constexpr std::size_t size =
+            configured != 0 ? configured : by_architecture;
+        return size < get_cache_line_size() ? get_cache_line_size() : size;
     }
 }    // namespace hpx::threads

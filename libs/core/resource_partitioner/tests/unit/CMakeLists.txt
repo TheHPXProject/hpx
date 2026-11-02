@@ -12,6 +12,7 @@ set(tests
     scheduler_binding_check
     scheduler_priority_check
     scheduling_policy_wiring
+    shutdown_left_work
     shutdown_suspended_pus
     suspend_disabled
     suspend_pool
@@ -33,6 +34,8 @@ set(resource_partitioner_info_PARAMETERS THREADS_PER_LOCALITY 4)
 set(used_pus_PARAMETERS THREADS_PER_LOCALITY 4 RUN_SERIAL)
 
 set(scheduler_priority_check_PARAMETERS THREADS_PER_LOCALITY -1)
+# the default pool and two workers of the pool "work"
+set(shutdown_left_work_PARAMETERS THREADS_PER_LOCALITY 3)
 set(shutdown_suspended_pus_PARAMETERS THREADS_PER_LOCALITY 4)
 
 if(CMAKE_SYSTEM_NAME MATCHES "Linux")

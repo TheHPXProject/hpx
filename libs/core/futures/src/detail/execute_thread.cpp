@@ -160,6 +160,19 @@ namespace hpx::threads::detail {
                     // and was not run here.
                     if (prev_state == thread_schedule_state::terminated)
                     {
+#if defined(HPX_HAVE_THREAD_CUMULATIVE_COUNTS)
+                        // Counted on the worker running now: a child that
+                        // suspended may have resumed on another worker. A
+                        // future waited on outside any HPX thread has no
+                        // worker to count it on.
+                        if (auto* self = get_self_id_data())
+                        {
+                            self->get_scheduler_base()
+                                ->get_parent_pool()
+                                ->add_directly_executed_thread(
+                                    get_local_thread_num_tss());
+                        }
+#endif
                         hpx::tracing::task_completed(thrdptr);
                     }
                 });
@@ -211,7 +224,7 @@ namespace hpx::threads::detail {
                 thrdptr->get_last_worker_thread_num()));
             scheduler->schedule_thread_last(HPX_MOVE(thrd), hint);
             scheduler->do_some_work(
-                hint.mode == hpx::threads::thread_schedule_hint_mode::numa ?
+                hint.mode() == hpx::threads::thread_schedule_hint_mode::numa ?
                     static_cast<std::size_t>(-1) :
                     hint.hint);
         }

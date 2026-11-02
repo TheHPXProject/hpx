@@ -99,6 +99,53 @@ namespace hpx::threads::detail {
         // spin for some time after queues have become empty
         bool may_exit = false;
 
+        // This worker was the last to leave and found work on the queues of
+        // workers that have left already (see leave_scheduling_loop). It
+        // runs and steals as if the pool was running until no work is left.
+        bool take_over = false;
+        scheduler.SchedulingPolicy::enter_scheduling_loop();
+
+        // a worker that exits the loop in any other way (terminating, an
+        // exception) is no longer counted either, so that the last worker
+        // still checks for work left
+        bool left = false;
+        auto abandon = hpx::experimental::scope_exit([&] {
+            if (!left)
+                scheduler.SchedulingPolicy::abandon_scheduling_loop();
+        });
+
+        auto const leave = [&]() {
+            if (scheduler.SchedulingPolicy::leave_scheduling_loop())
+            {
+                left = true;
+                this_state.store(hpx::state::stopped);
+                return true;
+            }
+            if (!take_over)
+            {
+                take_over = true;
+                may_exit = false;
+                idle_loop_count = 0;
+            }
+            return false;
+        };
+
+        // A bound thread created on this worker runs only here: while one is
+        // alive the worker must not leave, even if it is not queued yet (a
+        // woken thread is marked pending before it is queued)
+        auto const has_live_bound_threads = [&]() {
+            if constexpr (requires {
+                              scheduler.has_live_bound_threads(num_thread);
+                          })
+            {
+                return scheduler.has_live_bound_threads(num_thread);
+            }
+            else
+            {
+                return false;
+            }
+        };
+
         std::shared_ptr<bool> background_running;
         thread_id_ref_type background_thread;
         bool const do_background_work =
@@ -137,21 +184,25 @@ namespace hpx::threads::detail {
             }
 
             // Get the next HPX thread from the queue
-            bool running = this_state.load(std::memory_order_relaxed) <
-                hpx::state::pre_sleep;
+            bool running = take_over ||
+                this_state.load(std::memory_order_relaxed) <
+                    hpx::state::pre_sleep;
 
             // extract the stealing mode once per loop iteration (except during
-            // shutdown)
-            bool enable_stealing = !may_exit &&
-                scheduler.has_scheduler_mode(
-                    policies::scheduler_mode::enable_stealing, num_thread);
+            // shutdown). A worker that took over has to steal: the work left
+            // is on the queues of workers that have left.
+            bool enable_stealing = take_over ||
+                (!may_exit &&
+                    scheduler.has_scheduler_mode(
+                        policies::scheduler_mode::enable_stealing, num_thread));
 
             // stealing staged threads is enabled if:
             // - fast idle mode is on: same as normal stealing
             // - fast idle mode off: only after normal stealing has failed for
             //                       a while (see steal_staged_threshold)
+            // - right away for a worker that took over
             bool enable_stealing_staged = enable_stealing;
-            if (enable_stealing_staged &&
+            if (!take_over && enable_stealing_staged &&
                 !scheduler.has_scheduler_mode(
                     policies::scheduler_mode::fast_idle_mode, num_thread))
             {
@@ -431,14 +482,16 @@ namespace hpx::threads::detail {
                     hpx::tracing::os_thread_sleep(num_thread);
 
                     // Clean up terminated threads before trying to exit
-                    bool can_exit = !running &&
+                    bool can_exit =
                         scheduler.SchedulingPolicy::cleanup_terminated(
                             num_thread, true) &&
                         scheduler.SchedulingPolicy::get_queue_length(
                             num_thread) == 0;
 
-                    if (this_state.load(std::memory_order_relaxed) ==
-                        hpx::state::pre_sleep)
+                    auto const current_state =
+                        this_state.load(std::memory_order_relaxed);
+
+                    if (current_state == hpx::state::pre_sleep)
                     {
                         if (can_exit)
                         {
@@ -448,9 +501,11 @@ namespace hpx::threads::detail {
                     else
                     {
                         can_exit = can_exit &&
+                            (current_state > hpx::state::pre_sleep) &&
                             scheduler.SchedulingPolicy::get_thread_count(
                                 thread_schedule_state::suspended,
-                                thread_priority::default_, num_thread) == 0;
+                                thread_priority::default_, num_thread) == 0 &&
+                            !has_live_bound_threads();
 
                         if (can_exit)
                         {
@@ -469,8 +524,8 @@ namespace hpx::threads::detail {
                                 }
                                 else
                                 {
-                                    this_state.store(hpx::state::stopped);
-                                    break;
+                                    if (leave())
+                                        break;
                                 }
                             }
                             else
@@ -495,6 +550,33 @@ namespace hpx::threads::detail {
                 // if stealing yielded a new task, run it first
                 if (next_thrd != nullptr)
                 {
+                    continue;
+                }
+
+                // a worker that took over leaves once all work is done; its
+                // background thread was stopped before
+                if (take_over)
+                {
+                    // the check for terminating below is skipped
+                    if (this_state.load(std::memory_order_relaxed) ==
+                        hpx::state::terminating)
+                    {
+                        break;
+                    }
+
+                    // A scheduler with work stealing can't reach (e.g. queues
+                    // only the worker that has left runs) moves it to this
+                    // worker's queues in take_over_work.
+                    if constexpr (requires {
+                                      scheduler.take_over_work(num_thread);
+                                  })
+                    {
+                        if (scheduler.take_over_work(num_thread))
+                            continue;
+                    }
+
+                    if (leave())
+                        break;
                     continue;
                 }
 
@@ -574,18 +656,24 @@ namespace hpx::threads::detail {
                 }
                 else
                 {
-                    bool const can_exit = !running &&
+                    auto const current_state =
+                        this_state.load(std::memory_order_relaxed);
+
+                    bool const can_exit =
+                        (current_state == hpx::state::stopping ||
+                            current_state == hpx::state::terminating) &&
                         scheduler.SchedulingPolicy::cleanup_terminated(true) &&
                         scheduler.SchedulingPolicy::get_thread_count(
                             thread_schedule_state::suspended,
                             thread_priority::default_, num_thread) == 0 &&
                         scheduler.SchedulingPolicy::get_queue_length(
-                            num_thread) == 0;
+                            num_thread) == 0 &&
+                        !has_live_bound_threads();
 
                     if (can_exit)
                     {
-                        this_state.store(hpx::state::stopped);
-                        break;
+                        if (leave())
+                            break;
                     }
                 }
 

@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -70,7 +70,7 @@ namespace hpx::util::cache::entries {
         friend auto operator<(
             size_entry const& lhs, size_entry const& rhs) noexcept
         {
-            return rhs.get_size() < lhs.get_size();
+            return lhs.get_size() < rhs.get_size();
         }
         friend auto operator>(
             size_entry const& lhs, size_entry const& rhs) noexcept
