@@ -5,7 +5,7 @@
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 # add subdirectories
-set(subdirs algorithms block container_algorithms unseq_algorithms)
+set(subdirs algorithms block container_algorithms task_sizes unseq_algorithms)
 
 if(HPX_WITH_DATAPAR)
   set(subdirs ${subdirs} datapar_algorithms)
