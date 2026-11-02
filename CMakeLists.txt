@@ -1562,9 +1562,6 @@ if((HPX_WITH_NETWORKING AND HPX_WITH_PARCELPORT_MPI)
     # hpx_add_compile_flag() below does not add the extra options to the top
     # level directory
     hpx_add_config_define(OMPI_IMPORTS)
-    if(HPX_WITH_CUDA)
-      hpx_add_config_cond_define(NOMINMAX)
-    endif()
   endif()
 endif()
 
