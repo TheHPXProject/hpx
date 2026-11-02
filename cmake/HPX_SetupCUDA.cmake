@@ -66,11 +66,14 @@ if(HPX_WITH_CUDA AND NOT TARGET Cuda::cuda)
       )
     else()
       # Windows
+
+      # the CUDA headers (libcu++, used by stdexec) break if windows.h defines
+      # min and max as macros; the compile definition reaches dependent targets
+      # also if they include windows.h before any HPX header
       if(NOT HPX_FIND_PACKAGE)
-        # the CUDA headers (libcu++, used by stdexec) break if windows.h defines
-        # min and max as macros
         hpx_add_config_cond_define(NOMINMAX)
       endif()
+      target_compile_definitions(Cuda::cuda INTERFACE NOMINMAX)
       set(CUDA_PROPAGATE_HOST_FLAGS OFF)
       target_compile_options(
         Cuda::cuda
