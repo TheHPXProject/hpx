@@ -316,10 +316,13 @@ namespace hpx::parallel {
                         {
                             return false;
                         }
-                        if (part_begin == part_end)
+                        if (part_begin == part_end && part_end == last2)
                         {
                             return true;
                         }
+                        // the chunk only consists of elements covered by the
+                        // previous chunk; the run of equal elements that
+                        // starts at the next chunk still has to be verified
                         value = HPX_INVOKE(proj2, *part_begin);
                     }
 
