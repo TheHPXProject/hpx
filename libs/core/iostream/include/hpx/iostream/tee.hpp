@@ -21,6 +21,7 @@
 #include <hpx/iostream/traits.hpp>
 
 #include <concepts>
+#include <ios>
 #include <type_traits>
 
 namespace hpx::iostream {
