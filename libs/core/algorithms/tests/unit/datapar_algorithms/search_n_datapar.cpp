@@ -309,6 +309,30 @@ void test_search_n_non_contiguous()
     HPX_TEST_EQ(pack_calls.load(), 0);
 }
 
+// A generic predicate with an explicit bool return type cannot be called
+// with packs; it must compile and fall back to the scalar path.
+void test_search_n_bool_returning_predicate()
+{
+    auto pred = [](auto const& a, auto const& b) -> bool { return a == b; };
+
+    std::vector<int> haystack(10007, 9);
+    for (std::size_t pos :
+        {std::size_t(126), std::size_t(5000), haystack.size() - 3})
+    {
+        std::fill(haystack.begin(), haystack.end(), 9);
+        std::fill(haystack.begin() + static_cast<std::ptrdiff_t>(pos),
+            haystack.begin() + static_cast<std::ptrdiff_t>(pos + 3), 1);
+
+        auto const expected =
+            std::search_n(haystack.begin(), haystack.end(), 3, 1);
+
+        HPX_TEST(hpx::search_n(hpx::execution::simd, haystack.begin(),
+                     haystack.end(), 3, 1, pred) == expected);
+        HPX_TEST(hpx::search_n(hpx::execution::par_simd, haystack.begin(),
+                     haystack.end(), 3, 1, pred) == expected);
+    }
+}
+
 void search_n_boundary_tests()
 {
     using namespace hpx::execution;
@@ -317,6 +341,7 @@ void search_n_boundary_tests()
     test_search_n_boundaries(par_simd);
     test_search_n_uses_simd_path();
     test_search_n_non_contiguous();
+    test_search_n_bool_returning_predicate();
 }
 
 int hpx_main(hpx::program_options::variables_map& vm)

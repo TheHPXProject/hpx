@@ -14,10 +14,7 @@
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/parallel/algorithms/detail/search.hpp>
 #include <hpx/parallel/datapar/iterator_helpers.hpp>
-#include <hpx/parallel/datapar/loop.hpp>
-#include <hpx/parallel/datapar/zip_iterator.hpp>
 #include <hpx/parallel/util/cancellation_token.hpp>
-#include <hpx/parallel/util/loop.hpp>
 
 #include <cstddef>
 #include <iterator>
@@ -30,6 +27,10 @@ namespace hpx::parallel::detail {
     // Only the haystack is loaded as SIMD packs (straight from memory, so it
     // must be contiguous); the needle is read element by element. The pack
     // type is named only once the haystack is known to be datapar compatible.
+    // The predicate must return a mask when called with a pack: a predicate
+    // that returns plain bool (e.g. a generic lambda with an explicit -> bool
+    // return type) would not compile in the SIMD body, so it takes the scalar
+    // fallback instead.
     HPX_CXX_CORE_EXPORT template <typename Iter1, typename Iter2, typename Pred,
         typename Proj1, typename Proj2>
     constexpr bool search_datapar_compatible() noexcept
@@ -47,8 +48,12 @@ namespace hpx::parallel::detail {
 
             return requires(pack_type& pack, Pred& pred, Proj1& pack_proj,
                 Proj2& scalar_proj, Iter2 needle) {
-                HPX_INVOKE(pred, HPX_INVOKE(pack_proj, pack),
-                    HPX_INVOKE(scalar_proj, *needle));
+                requires !std::is_arithmetic_v<std::decay_t<decltype(HPX_INVOKE(
+                    pred, HPX_INVOKE(pack_proj, pack),
+                    HPX_INVOKE(scalar_proj, *needle)))>>;
+                hpx::parallel::traits::any_of(
+                    HPX_INVOKE(pred, HPX_INVOKE(pack_proj, pack),
+                        HPX_INVOKE(scalar_proj, *needle)));
             };
         }
     }
@@ -70,7 +75,10 @@ namespace hpx::parallel::detail {
 
             return requires(pack_type& pack, Pred& predicate, Proj& pack_proj,
                 V const& value) {
-                HPX_INVOKE(predicate, HPX_INVOKE(pack_proj, pack), value);
+                requires !std::is_arithmetic_v<std::decay_t<decltype(HPX_INVOKE(
+                    predicate, HPX_INVOKE(pack_proj, pack), value))>>;
+                hpx::parallel::traits::any_of(
+                    HPX_INVOKE(predicate, HPX_INVOKE(pack_proj, pack), value));
             };
         }
     }
@@ -129,8 +137,7 @@ namespace hpx::parallel::detail {
 
                 if (hpx::parallel::traits::any_of(mask))
                 {
-                    Iter1 candidate = curr;
-                    for (std::size_t j = 0; j < pack_size; ++j, ++candidate)
+                    for (std::size_t j = 0; j < pack_size; ++j)
                     {
                         if (verify_match(i + j))
                         {
