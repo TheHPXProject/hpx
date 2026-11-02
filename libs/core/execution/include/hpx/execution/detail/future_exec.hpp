@@ -151,8 +151,8 @@ namespace hpx::lcos::detail {
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT struct post_policy_spawner
     {
-        // The hint of the executor the continuation was given to, if any. As
-        // with the executor's post, a size in it wins over the function's.
+        // The hint of the executor the continuation was given to, if any. The
+        // task size comes from the continuation only.
         threads::thread_schedule_hint hint;
 
         template <typename F>
@@ -160,10 +160,7 @@ namespace hpx::lcos::detail {
             threads::thread_id_ref_type& id, threads::task_size size) const
         {
             auto task_hint = hint;
-            if (task_hint.task_size() == threads::task_size::unknown)
-            {
-                task_hint.task_size(size);
-            }
+            task_hint.task_size(size);
 
             threads::thread_init_data data(
                 threads::make_thread_function_nullary(HPX_FORWARD(F, f)),
