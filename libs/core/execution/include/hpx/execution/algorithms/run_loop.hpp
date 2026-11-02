@@ -11,11 +11,14 @@
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/execution_base.hpp>
+#include <hpx/modules/functional.hpp>
 #include <hpx/modules/memory.hpp>
 #include <hpx/modules/synchronization.hpp>
 #include <hpx/modules/thread_support.hpp>
 #include <hpx/modules/type_support.hpp>
 
+#include <atomic>
+#include <cstddef>
 #include <exception>
 #include <mutex>
 #include <type_traits>
@@ -288,7 +291,7 @@ namespace hpx::execution::experimental {
 
     private:
         bool stop = false;
-        bool is_running = false;
+        std::atomic<std::size_t> active_threads{0};
 
         void push_back(run_loop_opstate_base* t)
         {
@@ -340,10 +343,7 @@ namespace hpx::execution::experimental {
         // Otherwise, has no effects.
         ~run_loop()
         {
-            auto const local_mtx = mtx;    // keep alive
-            std::unique_lock l(local_mtx->mtx_);
-
-            if (head.next != &head || is_running)
+            if (head.next != &head || active_threads != 0)
             {
                 std::terminate();
             }
@@ -359,22 +359,9 @@ namespace hpx::execution::experimental {
         {
             // Precondition: state is starting.
             //HPX_ASSERT(head.next != &head || !stop);
-            {
-                auto const local_mtx = mtx;
-                std::unique_lock l(local_mtx->mtx_);
-                is_running = true;
-            }
-
-            struct runner_guard
-            {
-                run_loop* self;
-                ~runner_guard()
-                {
-                    auto const local_mtx = self->mtx;
-                    std::unique_lock l(local_mtx->mtx_);
-                    self->is_running = false;
-                }
-            } guard{this};
+            ++active_threads;
+            auto on_exit =
+                hpx::experimental::scope_exit([this]() { --active_threads; });
 
             for (run_loop_opstate_base* t; (t = pop_front()) != &head; /**/)
             {
