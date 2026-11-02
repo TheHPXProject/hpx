@@ -66,6 +66,11 @@ if(HPX_WITH_CUDA AND NOT TARGET Cuda::cuda)
       )
     else()
       # Windows
+      if(NOT HPX_FIND_PACKAGE)
+        # the CUDA headers (libcu++, used by stdexec) break if windows.h defines
+        # min and max as macros
+        hpx_add_config_cond_define(NOMINMAX)
+      endif()
       set(CUDA_PROPAGATE_HOST_FLAGS OFF)
       target_compile_options(
         Cuda::cuda
@@ -99,6 +104,13 @@ if(HPX_WITH_CUDA AND NOT TARGET Cuda::cuda)
         Cuda::cuda
         INTERFACE $<$<COMPILE_LANGUAGE:CUDA>:$<$<CONFIG:Release>: -DNDEBUG -O2
                   -Xcompiler=-MD,-Ox -Xcompiler=-bigobj >>
+      )
+      # stdexec needs a conforming __cplusplus and preprocessor from the host
+      # compiler too (see the corresponding CXX options in CMakeLists.txt)
+      target_compile_options(
+        Cuda::cuda
+        INTERFACE $<$<COMPILE_LANGUAGE:CUDA>: -Xcompiler=-Zc:__cplusplus
+                  -Xcompiler=-Zc:preprocessor >
       )
     endif()
     set(CUDA_SEPARABLE_COMPILATION ON)

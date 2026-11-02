@@ -27,7 +27,7 @@ foreach(benchmark ${benchmarks})
     ${benchmark}_test INTERNAL_FLAGS
     SOURCES ${sources}
     EXCLUDE_FROM_ALL ${${benchmark}_FLAGS}
-    DEPENDENCIES hpx_async_cuda ${${benchmark}_FLAGS}
+    DEPENDENCIES ${${benchmark}_FLAGS}
     FOLDER "Benchmarks/Modules/Core/AsyncCuda"
   )
 

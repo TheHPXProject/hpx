@@ -21,8 +21,9 @@ namespace hpx::cuda::experimental {
     {
         if (err != cudaSuccess)
         {
+            char const* msg = cudaGetErrorString(err);
             auto temp = std::string("cuda function returned error code :") +
-                cudaGetErrorString(err);
+                (msg != nullptr ? msg : std::to_string(static_cast<int>(err)));
             throw cuda_exception(temp, err);
         }
     }

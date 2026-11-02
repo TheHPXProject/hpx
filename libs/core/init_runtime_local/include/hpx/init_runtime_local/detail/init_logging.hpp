@@ -24,8 +24,7 @@ namespace hpx::util {
     HPX_CXX_CORE_EXPORT struct HPX_CORE_EXPORT console_local
       : logging::destination::manipulator
     {
-        constexpr console_local(
-            logging::level level, logging_destination dest) noexcept
+        console_local(logging::level level, logging_destination dest) noexcept
           : level_(level)
           , dest_(dest)
         {
