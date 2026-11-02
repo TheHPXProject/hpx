@@ -597,12 +597,47 @@ void test_reduce_by_key_custom_comparator()
     }
 }
 
+void test_reduce_by_key_asymmetric_comparator()
+{
+    using namespace hpx::execution;
+
+    // std::less is not symmetric, so the order in which neighbouring keys are
+    // passed to the comparator matters; it must always be (earlier, later)
+    {
+        // comp(3, 2) and comp(2, 1) are false: every key starts a new group
+        std::vector<int> keys = {3, 2, 1};
+        std::vector<int> values = {1, 2, 4};
+        std::vector<int> out_k(3, 0), out_v(3, 0);
+
+        auto r = hpx::experimental::reduce_by_key(seq, keys.begin(), keys.end(),
+            values.begin(), out_k.begin(), out_v.begin(), std::less<int>());
+
+        HPX_TEST_EQ(std::distance(out_v.begin(), r.out), std::ptrdiff_t(3));
+        HPX_TEST_EQ(out_v[0], 1);
+        HPX_TEST_EQ(out_v[1], 2);
+        HPX_TEST_EQ(out_v[2], 4);
+    }
+    {
+        // comp(1, 2) and comp(2, 3) are true: all keys form a single group
+        std::vector<int> keys = {1, 2, 3};
+        std::vector<int> values = {1, 2, 4};
+        std::vector<int> out_k(3, 0), out_v(3, 0);
+
+        auto r = hpx::experimental::reduce_by_key(seq, keys.begin(), keys.end(),
+            values.begin(), out_k.begin(), out_v.begin(), std::less<int>());
+
+        HPX_TEST_EQ(std::distance(out_v.begin(), r.out), std::ptrdiff_t(1));
+        HPX_TEST_EQ(out_v[0], 7);
+    }
+}
+
 void reduce_by_key_edge_case_test()
 {
     test_reduce_by_key_empty();
     test_reduce_by_key_single_group();
     test_reduce_by_key_all_unique();
     test_reduce_by_key_custom_comparator();
+    test_reduce_by_key_asymmetric_comparator();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
