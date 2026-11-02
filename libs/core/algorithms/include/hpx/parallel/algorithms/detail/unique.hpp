@@ -72,8 +72,11 @@ namespace hpx::parallel::detail {
                     bool r = hpx::invoke(pred, hpx::invoke(proj, *base),
                         hpx::invoke(proj, hpx::get<0>(*it)));
 
-                    if (!((hpx::get<1>(*it) = r)))
+                    hpx::get<1>(*it) = r;
+                    if (!r)
+                    {
                         base = hpx::get<0>(it.get_iterator_tuple());
+                    }
                 });
         }
     };
@@ -185,7 +188,8 @@ namespace hpx::parallel::detail {
                     bool r = hpx::invoke(pred, hpx::invoke(proj, *base),
                         hpx::invoke(proj, hpx::get<0>(*it)));
 
-                    if (!(hpx::get<1>(*it) = r))
+                    hpx::get<1>(*it) = r;
+                    if (!r)
                     {
                         base = hpx::get<0>(it.get_iterator_tuple());
                         ++curr;

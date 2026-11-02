@@ -37,6 +37,24 @@ namespace hpx::parallel::detail {
                 HPX_INVOKE(pred, HPX_INVOKE(proj, v), HPX_INVOKE(proj, v)));
         };
 
+    template <typename Mask>
+    HPX_HOST_DEVICE HPX_FORCEINLINE bool mask_lane_is_true(
+        Mask const& msk, std::size_t i) noexcept
+    {
+        if constexpr (requires { msk.get(i); })
+        {
+            return static_cast<bool>(msk.get(i));
+        }
+        else if constexpr (requires { msk[i]; })
+        {
+            return static_cast<bool>(msk[i]);
+        }
+        else
+        {
+            return static_cast<bool>(msk);
+        }
+    }
+
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT template <typename ExPolicy>
     struct datapar_unique
@@ -82,7 +100,7 @@ namespace hpx::parallel::detail {
                 ++first;
                 --count;
 
-                while (count >= num_lanes)
+                while (count >= static_cast<decltype(count)>(num_lanes))
                 {
                     auto v_prev = traits::vector_pack_load<vector_type,
                         value_type>::unaligned(prev);
@@ -96,7 +114,7 @@ namespace hpx::parallel::detail {
                     {
                         for (std::size_t i = 0; i != num_lanes; ++i)
                         {
-                            if (!msk[i])
+                            if (!mask_lane_is_true(msk, i))
                             {
                                 FwdIter it = std::next(first, i);
                                 if (++dest != it)
@@ -186,7 +204,7 @@ namespace hpx::parallel::detail {
                 InIter prev = first;
                 ++first;
 
-                while (count >= num_lanes)
+                while (count >= static_cast<decltype(count)>(num_lanes))
                 {
                     auto v_prev = traits::vector_pack_load<vector_type,
                         value_type>::unaligned(prev);
@@ -200,7 +218,7 @@ namespace hpx::parallel::detail {
                     {
                         for (std::size_t i = 0; i != num_lanes; ++i)
                         {
-                            if (!msk[i])
+                            if (!mask_lane_is_true(msk, i))
                             {
                                 *dest++ = *std::next(first, i);
                             }
