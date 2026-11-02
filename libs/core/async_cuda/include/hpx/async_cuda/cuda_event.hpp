@@ -44,8 +44,12 @@ namespace hpx::cuda::experimental {
             // throw, and the events go away with the context anyway
             for (int device = 0; device < max_number_devices_; device++)
             {
+                // don't let an error left from an earlier asynchronous
+                // operation stop the cleanup
+                [[maybe_unused]] cudaError_t const previous_error =
+                    cudaGetLastError();
                 if (cudaSetDevice(device) != cudaSuccess)
-                    return;
+                    continue;
 
                 cudaEvent_t event;
                 while (free_lists_[device].pop(event))
