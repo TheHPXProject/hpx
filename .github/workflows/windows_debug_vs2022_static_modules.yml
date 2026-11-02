@@ -18,7 +18,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v7
-    - uses: lukka/get-cmake@v4.4.4
+    - uses: lukka/get-cmake@v4.4.5
 
     - name: Install dependencies
       uses: ./.github/actions/setup-vcpkg
