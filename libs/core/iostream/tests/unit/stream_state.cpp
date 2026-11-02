@@ -15,6 +15,8 @@
 #include <hpx/modules/iostream.hpp>
 #include <hpx/modules/testing.hpp>
 
+#include <ios>
+
 using hpx::iostream::seekable_device_tag;
 using hpx::iostream::stream;
 using hpx::iostream::stream_offset;

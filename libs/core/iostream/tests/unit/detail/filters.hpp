@@ -20,7 +20,7 @@
 #include <cctype>
 #include <cstddef>
 #include <cstdlib>
-#include <iosfwd>
+#include <ios>
 #include <type_traits>
 #include <vector>
 
