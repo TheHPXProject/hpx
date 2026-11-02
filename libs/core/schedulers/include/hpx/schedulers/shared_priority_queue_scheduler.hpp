@@ -936,15 +936,31 @@ namespace hpx::threads::policies {
                           .queue_index_;
 
             std::size_t this_thread = local_thread_number();
-            HPX_ASSERT(this_thread < num_workers_);
 
-            auto d2 = d_lookup_[this_thread];
-            auto q2 = q_lookup_[this_thread];
-            bool xthread = ((q1 != q2) || (d1 != d2));
-            spq_deb.debug(debug::str<>("destroy_thread"), "xthread", xthread,
-                "task owned by", "D", debug::dec<2>(d1), "Q", debug::dec<3>(q1),
-                "this thread", "D", debug::dec<2>(d2), "Q", debug::dec<3>(q2),
-                debug::threadinfo<threads::thread_data*>(thrd));
+            // A thread outside of this pool (an external thread, the main thread
+            // or a worker of another pool) dropped the last reference:
+            // let the owning worker clean up the task.
+            bool const is_external = this_thread >= num_workers_;
+            bool const xthread = is_external || q_lookup_[this_thread] != q1 ||
+                d_lookup_[this_thread] != d1;
+
+            if (is_external)
+            {
+                spq_deb.debug(debug::str<>("destroy_thread"), "xthread",
+                    xthread, "task owned by", "D", debug::dec<2>(d1), "Q",
+                    debug::dec<3>(q1), "this thread", "external",
+                    debug::threadinfo<threads::thread_data*>(thrd));
+            }
+            else
+            {
+                auto d2 = d_lookup_[this_thread];
+                auto q2 = q_lookup_[this_thread];
+                spq_deb.debug(debug::str<>("destroy_thread"), "xthread",
+                    xthread, "task owned by", "D", debug::dec<2>(d1), "Q",
+                    debug::dec<3>(q1), "this thread", "D", debug::dec<2>(d2),
+                    "Q", debug::dec<3>(q2),
+                    debug::threadinfo<threads::thread_data*>(thrd));
+            }
 
             // the cleanup of a task should be done by the original owner of the
             // task, so return it to the queue it came from before it was stolen

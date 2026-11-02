@@ -286,9 +286,10 @@ void run_merge_benchmark_sweep(std::string label, int const test_count,
         last2, dest);
 
     double overhead_time = 0.0;
+    // merge partitions over all output elements
     double const time_per_iteration = force_sequential_time /
-        static_cast<double>((std::max) (std::distance(first1, last1),
-            std::distance(first2, last2)));
+        static_cast<double>(
+            std::distance(first1, last1) + std::distance(first2, last2));
 
     bool first_line = true;
     for (auto const cores : num_cores)
