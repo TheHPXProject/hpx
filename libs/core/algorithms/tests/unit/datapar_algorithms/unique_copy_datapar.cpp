@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <cstdlib>
 #include <ctime>
+#include <deque>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -82,11 +83,72 @@ void test_unique_copy_simd()
         rand_base);
 }
 
+template <typename ExPolicy>
+void test_unique_copy_contiguous(ExPolicy policy)
+{
+    std::vector<int> c = {1, 1, 2, 2, 3, 3, 3, 4, 5, 5, 6};
+    std::vector<int> res(c.size());
+    std::vector<int> expected(c.size());
+
+    auto result = hpx::unique_copy(policy, c.begin(), c.end(), res.begin(),
+        [](auto const a, auto const b) { return a == b; });
+    res.erase(result, res.end());
+
+    auto exp_end = std::unique_copy(c.begin(), c.end(), expected.begin(),
+        [](int a, int b) { return a == b; });
+    expected.erase(exp_end, expected.end());
+
+    HPX_TEST(res == expected);
+}
+
+template <typename ExPolicy>
+void test_unique_copy_deque(ExPolicy policy)
+{
+    std::deque<int> c = {1, 1, 2, 2, 3, 3, 3, 4, 5, 5, 6};
+    std::vector<int> res(c.size());
+    std::vector<int> expected(c.size());
+
+    auto result = hpx::unique_copy(policy, c.begin(), c.end(), res.begin(),
+        [](auto const a, auto const b) { return a == b; });
+    res.erase(result, res.end());
+
+    auto exp_end = std::unique_copy(c.begin(), c.end(), expected.begin(),
+        [](int a, int b) { return a == b; });
+    expected.erase(exp_end, expected.end());
+
+    HPX_TEST(res == expected);
+}
+
+template <typename ExPolicy>
+void test_unique_copy_arithmetic_pred(ExPolicy policy)
+{
+    std::vector<int> c = {1, 1, 2, 2, 3, 3, 3, 4, 5, 5, 6};
+    std::vector<int> res(c.size());
+    std::vector<int> expected(c.size());
+
+    auto result = hpx::unique_copy(policy, c.begin(), c.end(), res.begin(),
+        [](auto const a, auto const b) -> int { return a == b ? 1 : 0; });
+    res.erase(result, res.end());
+
+    auto exp_end = std::unique_copy(c.begin(), c.end(), expected.begin(),
+        [](int a, int b) { return a == b; });
+    expected.erase(exp_end, expected.end());
+
+    HPX_TEST(res == expected);
+}
+
 void unique_copy_test()
 {
     test_unique_copy_simd<std::random_access_iterator_tag>();
     test_unique_copy_simd<std::bidirectional_iterator_tag>();
     test_unique_copy_simd<std::forward_iterator_tag>();
+
+    test_unique_copy_contiguous(hpx::execution::simd);
+    test_unique_copy_contiguous(hpx::execution::par_simd);
+    test_unique_copy_deque(hpx::execution::simd);
+    test_unique_copy_deque(hpx::execution::par_simd);
+    test_unique_copy_arithmetic_pred(hpx::execution::simd);
+    test_unique_copy_arithmetic_pred(hpx::execution::par_simd);
 }
 
 int hpx_main(hpx::program_options::variables_map& vm)

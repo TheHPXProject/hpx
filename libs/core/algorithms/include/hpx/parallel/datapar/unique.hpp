@@ -12,6 +12,7 @@
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/functional.hpp>
+#include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
 #include <hpx/parallel/algorithms/detail/unique.hpp>
 #include <hpx/parallel/datapar/iterator_helpers.hpp>
@@ -29,10 +30,8 @@ namespace hpx::parallel::detail {
     template <typename Pred, typename Proj, typename Vector>
     inline constexpr bool is_unique_datapar_compatible_v =
         requires(Pred&& pred, Proj&& proj, Vector&& v) {
-            requires !std::is_same_v<
-                std::decay_t<decltype(HPX_INVOKE(
-                    pred, HPX_INVOKE(proj, v), HPX_INVOKE(proj, v)))>,
-                bool>;
+            requires !std::is_arithmetic_v<std::decay_t<decltype(HPX_INVOKE(
+                pred, HPX_INVOKE(proj, v), HPX_INVOKE(proj, v)))>>;
             traits::all_of(
                 HPX_INVOKE(pred, HPX_INVOKE(proj, v), HPX_INVOKE(proj, v)));
         };
@@ -75,7 +74,11 @@ namespace hpx::parallel::detail {
             constexpr std::size_t num_lanes =
                 traits::vector_pack_size_v<vector_type>;
 
-            constexpr bool can_vectorize = (num_lanes > 1) &&
+            constexpr bool is_contiguous =
+                std::contiguous_iterator<std::decay_t<FwdIter>> ||
+                hpx::traits::is_contiguous_iterator_v<std::decay_t<FwdIter>>;
+
+            constexpr bool can_vectorize = (num_lanes > 1) && is_contiguous &&
                 is_unique_datapar_compatible_v<Pred, Proj, vector_type>;
 
             if constexpr (!can_vectorize)
@@ -184,7 +187,11 @@ namespace hpx::parallel::detail {
             constexpr std::size_t num_lanes =
                 traits::vector_pack_size_v<vector_type>;
 
-            constexpr bool can_vectorize = (num_lanes > 1) &&
+            constexpr bool is_contiguous =
+                std::contiguous_iterator<std::decay_t<InIter>> ||
+                hpx::traits::is_contiguous_iterator_v<std::decay_t<InIter>>;
+
+            constexpr bool can_vectorize = (num_lanes > 1) && is_contiguous &&
                 is_unique_datapar_compatible_v<Pred, Proj, vector_type>;
 
             if constexpr (!can_vectorize)
@@ -264,8 +271,13 @@ namespace hpx::parallel::detail {
     constexpr InIter hpx_invoke(sequential_unique_t<ExPolicy>, InIter first,
         Sent last, Pred&& pred, Proj&& proj)
     {
+        constexpr bool is_contiguous =
+            std::contiguous_iterator<std::decay_t<InIter>> ||
+            hpx::traits::is_contiguous_iterator_v<std::decay_t<InIter>>;
+
         if constexpr (hpx::parallel::util::detail::iterator_datapar_compatible<
-                          InIter>::value)
+                          InIter>::value &&
+            is_contiguous)
         {
             return datapar_unique<ExPolicy>::call(
                 first, last, HPX_FORWARD(Pred, pred), HPX_FORWARD(Proj, proj));
@@ -311,8 +323,13 @@ namespace hpx::parallel::detail {
         sequential_unique_copy_t<ExPolicy>, InIter first, Sent last,
         OutIter dest, Pred&& pred, Proj&& proj, IsForwardIter is_fwd)
     {
+        constexpr bool is_contiguous =
+            std::contiguous_iterator<std::decay_t<InIter>> ||
+            hpx::traits::is_contiguous_iterator_v<std::decay_t<InIter>>;
+
         if constexpr (hpx::parallel::util::detail::iterator_datapar_compatible<
-                          InIter>::value)
+                          InIter>::value &&
+            is_contiguous)
         {
             return datapar_unique_copy<ExPolicy>::call(first, last, dest,
                 HPX_FORWARD(Pred, pred), HPX_FORWARD(Proj, proj), is_fwd);

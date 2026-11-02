@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <cstdlib>
 #include <ctime>
+#include <deque>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -82,11 +83,69 @@ void test_unique_simd()
         rand_base);
 }
 
+template <typename ExPolicy>
+void test_unique_contiguous(ExPolicy policy)
+{
+    std::vector<int> c = {1, 1, 2, 2, 3, 3, 3, 4, 5, 5, 6};
+    std::vector<int> d = c;
+
+    auto result = hpx::unique(policy, c.begin(), c.end(),
+        [](auto const a, auto const b) { return a == b; });
+    c.erase(result, c.end());
+
+    auto expected =
+        std::unique(d.begin(), d.end(), [](int a, int b) { return a == b; });
+    d.erase(expected, d.end());
+
+    HPX_TEST(c == d);
+}
+
+template <typename ExPolicy>
+void test_unique_deque(ExPolicy policy)
+{
+    std::deque<int> c = {1, 1, 2, 2, 3, 3, 3, 4, 5, 5, 6};
+    std::deque<int> d = c;
+
+    auto result = hpx::unique(policy, c.begin(), c.end(),
+        [](auto const a, auto const b) { return a == b; });
+    c.erase(result, c.end());
+
+    auto expected =
+        std::unique(d.begin(), d.end(), [](int a, int b) { return a == b; });
+    d.erase(expected, d.end());
+
+    HPX_TEST(c == d);
+}
+
+template <typename ExPolicy>
+void test_unique_arithmetic_pred(ExPolicy policy)
+{
+    std::vector<int> c = {1, 1, 2, 2, 3, 3, 3, 4, 5, 5, 6};
+    std::vector<int> d = c;
+
+    auto result = hpx::unique(policy, c.begin(), c.end(),
+        [](auto const a, auto const b) -> int { return a == b ? 1 : 0; });
+    c.erase(result, c.end());
+
+    auto expected =
+        std::unique(d.begin(), d.end(), [](int a, int b) { return a == b; });
+    d.erase(expected, d.end());
+
+    HPX_TEST(c == d);
+}
+
 void unique_test()
 {
     test_unique_simd<std::random_access_iterator_tag>();
     test_unique_simd<std::bidirectional_iterator_tag>();
     test_unique_simd<std::forward_iterator_tag>();
+
+    test_unique_contiguous(hpx::execution::simd);
+    test_unique_contiguous(hpx::execution::par_simd);
+    test_unique_deque(hpx::execution::simd);
+    test_unique_deque(hpx::execution::par_simd);
+    test_unique_arithmetic_pred(hpx::execution::simd);
+    test_unique_arithmetic_pred(hpx::execution::par_simd);
 }
 
 int hpx_main(hpx::program_options::variables_map& vm)
