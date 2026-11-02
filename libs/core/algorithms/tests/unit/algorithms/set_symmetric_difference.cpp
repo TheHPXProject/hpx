@@ -8,6 +8,7 @@
 #include <hpx/init.hpp>
 #include <hpx/modules/testing.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <iostream>
 #include <iterator>
@@ -526,6 +527,23 @@ void set_symmetric_difference_bad_alloc_test()
     test_set_symmetric_difference_bad_alloc<std::forward_iterator_tag>();
 }
 
+void test_set_symmetric_difference_first_chunk_shifted()
+{
+    for (int i = 0; i != 4; ++i)
+    {
+        std::vector<int> const c1 = {3, 3};
+        std::vector<int> const c2 = {0, 2};
+        std::vector<int> d1(4, -1);
+        std::vector<int> d2(4, -1);
+        auto const r = hpx::set_symmetric_difference(hpx::execution::par,
+            c1.begin(), c1.end(), c2.begin(), c2.end(), d1.begin());
+        std::set_symmetric_difference(
+            c1.begin(), c1.end(), c2.begin(), c2.end(), d2.begin());
+        HPX_TEST(r == d1.end());
+        HPX_TEST(d1 == d2);
+    }
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 int hpx_main(hpx::program_options::variables_map& vm)
 {
@@ -538,6 +556,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
 
     set_symmetric_difference_test1();
     set_symmetric_difference_test2();
+    test_set_symmetric_difference_first_chunk_shifted();
     set_symmetric_difference_exception_test();
     set_symmetric_difference_bad_alloc_test();
     return hpx::local::finalize();
