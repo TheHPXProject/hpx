@@ -44,6 +44,7 @@ set(tests
     query_get_allocator
     rebind_executor_parameters
     rebind_policy
+    task_size_chunk_size_configuration
 )
 
 set(future_then_executor_PARAMETERS THREADS_PER_LOCALITY 4)

@@ -6,16 +6,15 @@
 
 // The local priority queue scheduler steals staged tasks after
 // hpx.thread_queue.idle_loop_count_steal_staged empty scheduling loop
-// iterations, but until hpx.max_idle_loop_count / 2 iterations only from
-// workers that hold at least hpx.thread_queue.min_tasks_to_steal_staged_early
-// of them. Fast idle mode steals staged tasks right away.
+// iterations, but only from workers that hold at least
+// hpx.thread_queue.min_tasks_to_steal_staged_early of them. Once the thieves
+// found a worker's staged tasks there often enough in a row (its owner doesn't
+// get to them), one of them steals a task regardless. Fast idle mode steals
+// staged tasks right away.
 //
 // Worker 0 is kept busy while tasks are posted to it (and stay staged there),
-// the test checks whether other workers steal them in the meantime:
-//   --mode=early: max_idle_loop_count is huge, a few tasks must stay put,
-//                 many tasks must be stolen
-//   --mode=late:  max_idle_loop_count is small, a few tasks must be stolen
-//   --mode=fast-idle: fast idle mode on, a few tasks must be stolen
+// the test checks that other workers steal them in the meantime, a few of them
+// as well as many (--mode=default or --mode=fast-idle).
 
 #include <hpx/execution.hpp>
 #include <hpx/future.hpp>
@@ -108,27 +107,18 @@ std::ptrdiff_t run_case(std::ptrdiff_t num_tasks,
     return result;
 }
 
-int test(std::string const& mode)
+int test()
 {
-    if (mode == "early")
-    {
-        // too few tasks, they are not stolen before worker 0 is released
-        HPX_TEST_EQ(
-            run_case(few_tasks, few_tasks + 1, std::chrono::milliseconds(200)),
-            std::ptrdiff_t(0));
+    // fewer tasks than the minimum: they are stolen anyway, as worker 0
+    // doesn't get to them
+    HPX_TEST_EQ(
+        run_case(few_tasks, few_tasks, std::chrono::milliseconds(timeout)),
+        few_tasks);
 
-        // enough tasks, all but the last few are stolen
-        HPX_TEST_LTE(many_tasks - min_tasks + 1,
-            run_case(many_tasks, many_tasks - min_tasks + 1,
-                std::chrono::milliseconds(timeout)));
-    }
-    else
-    {
-        // late phase or fast idle mode: everything is stolen
-        HPX_TEST_EQ(
-            run_case(few_tasks, few_tasks, std::chrono::milliseconds(timeout)),
-            few_tasks);
-    }
+    // enough tasks: all of them are stolen
+    HPX_TEST_EQ(
+        run_case(many_tasks, many_tasks, std::chrono::milliseconds(timeout)),
+        many_tasks);
     return 0;
 }
 
@@ -146,7 +136,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
         hpx::launch::task_policy(hpx::threads::thread_priority::default_,
             hpx::threads::thread_stacksize::default_,
             hpx::threads::thread_schedule_hint(1));
-    hpx::async(policy1, [&] { return test(mode); }).get();
+    hpx::async(policy1, [] { return test(); }).get();
 
     return hpx::local::finalize();
 }
@@ -156,8 +146,8 @@ int main(int argc, char* argv[])
     hpx::program_options::options_description desc(
         "Usage: " HPX_APPLICATION_STRING " [options]");
     desc.add_options()("mode",
-        hpx::program_options::value<std::string>()->default_value("early"),
-        "early | late | fast-idle");
+        hpx::program_options::value<std::string>()->default_value("default"),
+        "default | fast-idle");
 
     hpx::local::init_params init_args;
     init_args.desc_cmdline = desc;

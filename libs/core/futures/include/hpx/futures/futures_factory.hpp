@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -118,7 +118,7 @@ namespace hpx::lcos::local {
                         policy.set_hint(hint);
                     }
                 }
-                threads::detail::set_task_size<std::decay_t<F>>(hint);
+                threads::detail::set_task_size(hint, f_);
 
                 hpx::intrusive_ptr<base_type> this_(this);
                 if (policy == launch::fork)
