@@ -39,20 +39,20 @@ index 2b7144d..d16deb9 100644
 @@ -59,7 +59,7 @@ namespace STDEXEC
                                || __with_member<_Sender, _Receiver>
                                || __with_co_await<_Sender, _Receiver>;
-
+ 
 -#  if !STDEXEC_MSVC()
 +#  if !STDEXEC_MSVC() && !STDEXEC_NVCC()
-
+ 
  #    define STDEXEC_CONNECT_DECLFN_FOR(_EXPR) __declfn_t<decltype(_EXPR), noexcept(_EXPR)>
-
+ 
 diff --git a/include/stdexec/__detail/__counting_scopes.hpp b/include/stdexec/__detail/__counting_scopes.hpp
 index 3646b86..5653c1d 100644
 --- a/include/stdexec/__detail/__counting_scopes.hpp
 +++ b/include/stdexec/__detail/__counting_scopes.hpp
 @@ -46,6 +46,15 @@ import stdexec;
-
+ 
  #  include "__prologue.hpp"
-
+ 
 +// nvcc's cudafe lambda transformation makes the __scope_join_t sexpr fail the
 +// sender constraint in the host compiler pass; relax the return-type
 +// constraint there. The returned type is unchanged.
@@ -67,7 +67,7 @@ index 3646b86..5653c1d 100644
    struct _JOINING_A_COUNTING_SCOPE_NEEDS_A_SCHEDULER_IN_THE_ENVIRONMENT_
 @@ -793,7 +802,7 @@ namespace STDEXEC
      using __counting_scopes::__base_scope::close;
-
+ 
      [[nodiscard]]
 -    sender auto join() noexcept
 +    STDEXEC_JOIN_SENDER_AUTO join() noexcept
@@ -76,7 +76,7 @@ index 3646b86..5653c1d 100644
        return __sexpr{__counting_scopes::__scope_join_t(), this};
 @@ -867,7 +876,7 @@ namespace STDEXEC
      using __counting_scopes::__base_scope::close;
-
+ 
      [[nodiscard]]
 -    sender auto join() noexcept
 +    STDEXEC_JOIN_SENDER_AUTO join() noexcept
@@ -90,7 +90,7 @@ index 45671c7..aa4b584 100644
 @@ -162,6 +162,34 @@ namespace STDEXEC
        }
      };
-
+ 
 +#if STDEXEC_NVCC()
 +    // nvcc fails to deduce operator() when the return type goes through the
 +    // __join_env_t alias (a call through an `auto const&` NTTP) in an
@@ -128,7 +128,7 @@ index 45671c7..aa4b584 100644
      };
 +#endif
    }  // namespace __env
-
+ 
    STDEXEC_MODULE_EXPORT_AUTHORING
 diff --git a/include/stdexec/__detail/__receiver_adaptor.hpp b/include/stdexec/__detail/__receiver_adaptor.hpp
 index b670170..2a68be6 100644
@@ -141,7 +141,7 @@ index b670170..2a68be6 100644
 -    static constexpr bool __has_base = !__std::derived_from<_Base, __adaptors::__no::__nope>;
 +    static constexpr bool __has_base =
 +      !(__std::derived_from<_Base, __adaptors::__no::__nope>);
-
+ 
      template <class _Self>
      using __base_from_derived_t = decltype(__declval<_Self>().base());
 diff --git a/include/stdexec/__detail/__transform_completion_signatures.hpp b/include/stdexec/__detail/__transform_completion_signatures.hpp
@@ -151,7 +151,7 @@ index 471eb6f..ad643cc 100644
 @@ -329,6 +329,12 @@ namespace STDEXEC
      }
    };
-
+ 
 +  // Build the _WHERE_(_IN_ALGORITHM_, _AlgoTag) diagnostic function type through
 +  // an alias template so the function-type syntax stays fully dependent (EDG
 +  // otherwise rejects the pack expansion).
@@ -186,13 +186,13 @@ index d9ad046..6bb880f 100644
 @@ -98,7 +98,11 @@ namespace STDEXEC
    template <class _Ty>
    inline constexpr std::string_view __mnameof = __detail::__get_pretty_name<_Ty>();
-
+ 
 +#  if !STDEXEC_NVCC()
 +  // nvcc's EDG front end formats the pretty function name differently; the
 +  // name extraction is diagnostics-only, so skip the check there.
    static_assert(__mnameof<void> == "void");
 +#  endif
-
+ 
    //////////////////////////////////////////////////////////////////////////////
    // __type_info
 @@ -255,7 +259,8 @@ namespace STDEXEC

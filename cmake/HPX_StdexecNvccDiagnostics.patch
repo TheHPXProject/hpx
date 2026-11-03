@@ -26,9 +26,9 @@ file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 @@ -182,7 +182,7 @@
    // constexpr stdlib exception types, https://wg21.link/p3378
    using __exception = ::std::exception;
-
+ 
 -#  elif __cpp_constexpr >= 201907L && !STDEXEC_MSVC() && !STDEXEC_NVHPC()
 +#  elif __cpp_constexpr >= 201907L && !STDEXEC_MSVC() && !STDEXEC_NVHPC() && !STDEXEC_NVCC()
-
+ 
    // constexpr virtual functions
    struct __exception
