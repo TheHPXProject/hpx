@@ -79,9 +79,10 @@ if(HPX_WITH_ITTNOTIFY AND HPX_WITH_PARCEL_PROFILING)
   add_dependencies(itt_parcel_events_test hpx_itt_test_collector)
 
   # The scheduled-marker check needs the large parcels received with zero-copy,
-  # so both zero-copy options are pinned on. With a backtrace taken for every
-  # lock (HPX_WITH_VERIFY_LOCKS_BACKTRACE) the test takes about a minute, hence
-  # the timeout.
+  # so both zero-copy options are pinned on. Lock backtraces
+  # (HPX_WITH_VERIFY_LOCKS_BACKTRACE) would make the test take about a minute,
+  # so they are turned off with hpx.trace_depth=0. The timeout keeps a hang from
+  # stalling the CI job.
   add_hpx_unit_test(
     "modules.parcelset" itt_parcel_events
     --collector=$<TARGET_FILE:hpx_itt_test_collector>
@@ -90,5 +91,6 @@ if(HPX_WITH_ITTNOTIFY AND HPX_WITH_PARCEL_PROFILING)
     RUN_SERIAL
     ARGS --hpx:ini=hpx.parcel.zero_copy_optimization=1
          --hpx:ini=hpx.parcel.zero_copy_receive_optimization=1
+         --hpx:ini=hpx.trace_depth=0
   )
 endif()
