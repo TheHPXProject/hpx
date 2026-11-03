@@ -87,10 +87,22 @@ namespace hpx::execution::experimental {
                     });
             }
 
-            // set_error: store the exception in the promise
-            void set_error(std::exception_ptr ep) && noexcept
+            // set_error: preserve exception pointers and wrap other error
+            // values so they can be propagated through hpx::future.
+            template <typename E>
+            friend void tag_invoke(hpx::execution::experimental::set_error_t,
+                sender_future_receiver&& r, E&& err) noexcept
             {
-                promise_.set_exception(HPX_MOVE(ep));
+                if constexpr (std::is_same_v<std::remove_cvref_t<E>,
+                                  std::exception_ptr>)
+                {
+                    r.promise_.set_exception(HPX_FORWARD(E, err));
+                }
+                else
+                {
+                    r.promise_.set_exception(
+                        std::make_exception_ptr(HPX_FORWARD(E, err)));
+                }
             }
 
             // set_stopped: convert stopped signal to hpx::thread_interrupted
