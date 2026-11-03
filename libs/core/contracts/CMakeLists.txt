@@ -32,8 +32,11 @@ else()
     )
     set(contracts_mode ${HPX_WITH_CONTRACTS_MODE})
   else()
-    # The violation handler still needs a mode, report IGNORE
-    if(DEFINED HPX_WITH_CONTRACTS_MODE)
+    # The violation handler still needs a mode, report IGNORE. Only warn for a
+    # non-default mode, the cache entry stays around after contracts were on.
+    if(DEFINED HPX_WITH_CONTRACTS_MODE AND NOT HPX_WITH_CONTRACTS_MODE STREQUAL
+                                           "ENFORCE"
+    )
       hpx_warn("HPX_WITH_CONTRACTS_MODE is ignored if HPX_WITH_CONTRACTS=OFF")
     endif()
     set(contracts_mode "IGNORE")
