@@ -201,6 +201,7 @@ namespace hpx {
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/type_support.hpp>
+#include <hpx/parallel/algorithms/detail/advance_and_get_distance.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
@@ -304,16 +305,16 @@ namespace hpx::parallel {
             using difference_type =
                 typename std::iterator_traits<Iter>::difference_type;
 
-            difference_type n = last - first;
+            Iter end = first;
+            difference_type n = detail::advance_and_get_distance(end, last);
             if (n > 1)
             {
                 for (difference_type start = (n - 2) / 2; start >= 0; --start)
                 {
                     sift_down(first, comp, proj, n, first + start);
                 }
-                return first + n;
             }
-            return first;
+            return end;
         }
 
         //////////////////////////////////////////////////////////////////////
@@ -340,12 +341,13 @@ namespace hpx::parallel {
             make_heap_thread(ExPolicy&& policy, RndIter first, Sent last,
                 Comp&& comp, Proj&& proj)
             {
+                RndIter end = first;
                 typename std::iterator_traits<RndIter>::difference_type n =
-                    last - first;
+                    detail::advance_and_get_distance(end, last);
                 if (n <= 1)
                 {
                     return util::detail::algorithm_result<ExPolicy,
-                        RndIter>::get(HPX_MOVE(first));
+                        RndIter>::get(HPX_MOVE(end));
                 }
 
                 using execution_policy = std::decay_t<ExPolicy>;
@@ -516,9 +518,8 @@ namespace hpx::parallel {
                     }
                 }
 
-                std::advance(first, n);
                 return util::detail::algorithm_result<ExPolicy, RndIter>::get(
-                    HPX_MOVE(first));
+                    HPX_MOVE(end));
             }
 
             template <typename ExPolicy, typename RndIter, typename Sent,
