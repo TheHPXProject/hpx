@@ -44,6 +44,7 @@ namespace hpx::distributed {
         /// Synchronization: None
         /// Postconditions: counter_ == count.
         ///
+        /// \pre count >= 0
         explicit latch(std::ptrdiff_t count);
 
         /// Extension: Create a client side representation for the existing
@@ -106,6 +107,8 @@ namespace hpx::distributed {
         ///
         /// Synchronization: Synchronizes with all calls that block on this
         /// latch and with all is_ready calls on this latch that return true .
+        ///
+        /// \pre n >= 0
         ///
         /// \note Only n >= 0 is checked here, counter_ lives in the (possibly
         ///       remote) latch component.
