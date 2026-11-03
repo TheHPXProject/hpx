@@ -448,7 +448,7 @@ namespace hpx::parallel {
 
         if (nmid > 1024)
         {
-            if (detail::is_sorted_sequential(first, middle, comp))
+            if (detail::is_sorted_sequential(first, first + nelem, comp))
             {
                 return first + nelem;
             }
@@ -485,7 +485,7 @@ namespace hpx::parallel {
 
         if (nmid > 1024)
         {
-            if (detail::is_sorted_sequential(first, middle, comp))
+            if (detail::is_sorted_sequential(first, first + nelem, comp))
             {
                 return hpx::make_ready_future(first + nelem);
             }
