@@ -36,19 +36,29 @@ int hpx_main(hpx::program_options::variables_map& vm)
         hpx::get_num_localities(hpx::launch::sync);
     std::uint32_t const this_locality = hpx::get_locality_id();
     int const arity = vm["arity"].as<int>();
+    if (arity < 2)
+    {
+        if (this_locality == 0)
+        {
+            std::cerr << "--arity must be at least 2\n";
+        }
+        hpx::finalize();
+        return 1;
+    }
 
     //[hierarchical_collectives_create
     // All sites create the communicator with the same arguments. The arity is
     // the number of children of each node in the tree of communicators.
     //
     // Below the flat fallback threshold (16 sites by default) the
-    // communicator collapses to a single flat communicator. Pass 0 to always
-    // build a tree, which is what this example does so that the tree is used
-    // even when it runs on a few localities only.
+    // communicator collapses to a single flat communicator. This example
+    // passes 0 to disable that fallback, so that it builds a tree even on a
+    // few localities, as long as the arity is smaller than the number of
+    // localities.
     auto const comm = create_hierarchical_communicator(hierarchical_basename,
         num_sites_arg(num_localities), this_site_arg(this_locality),
-        arity_arg(arity), generation_arg(), root_site_arg(0),
-        flat_fallback_threshold_arg(0));
+        arity_arg(static_cast<std::size_t>(arity)), generation_arg(),
+        root_site_arg(0), flat_fallback_threshold_arg(0));
     //]
 
     //[hierarchical_collectives_use
