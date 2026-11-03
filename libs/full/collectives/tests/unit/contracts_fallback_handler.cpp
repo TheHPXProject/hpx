@@ -95,6 +95,9 @@ void test_hierarchical_communicator()
     HPX_TEST(comms.get(size - 1).valid());
     (void) comms.site(size - 1);
     (void) comms[size - 1];
+    HPX_TEST(comms.back().valid());
+    HPX_TEST_EQ(static_cast<std::size_t>(comms.last_site()),
+        static_cast<std::size_t>(comms.site(size - 1)));
 
     HPX_TEST_EQ(handler_call_count, count);
 
