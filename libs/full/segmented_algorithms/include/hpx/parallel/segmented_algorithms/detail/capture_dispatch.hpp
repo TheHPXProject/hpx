@@ -264,11 +264,11 @@ namespace hpx::parallel::detail {
     constexpr std::size_t max_capture_batch_elements() noexcept
     {
         constexpr std::size_t element_bytes =
-            (std::max) (sizeof(Value1), sizeof(Value2));
+            (std::max)(sizeof(Value1), sizeof(Value2));
 
         constexpr std::size_t count = max_capture_batch_bytes / element_bytes;
 
-        return (std::max) (std::size_t(1), count);
+        return (std::max)(std::size_t(1), count);
     }
 
     HPX_CXX_EXPORT template <typename LocalIterator>
@@ -429,8 +429,8 @@ namespace hpx::parallel::detail {
             act, hpx::colocated(routing_partition_id), HPX_MOVE(ranges));
     }
 
-    HPX_CXX_EXPORT template <typename Algo>
     // handle the case of different localities
+    HPX_CXX_EXPORT template <typename Algo>
     struct captured_comparison
       : algorithm<captured_comparison<Algo>, typename Algo::result_type>
     {
@@ -439,14 +439,13 @@ namespace hpx::parallel::detail {
                 "captured_comparison")
         {
         }
-        template <typename ExPolicy, typename Iterator, typename Values,
-            typename Pred>
-
         /// Compare the local range with the captured values sequentially.
         /// Complete the comparison before returning so the captured values
         /// are alive until all comparisons complete
-        static typename Algo::result_type sequential(ExPolicy policy,
-            Algo algo, Iterator first, Iterator last, Values values, Pred pred)
+        template <typename ExPolicy, typename Iterator, typename Values,
+            typename Pred>
+        static typename Algo::result_type sequential(ExPolicy policy, Algo algo,
+            Iterator first, Iterator last, Values values, Pred pred)
         {
             return algo.call2(policy(hpx::execution::non_task),
                 std::true_type(), first, last, values.begin(), pred);
@@ -472,15 +471,14 @@ namespace hpx::parallel::detail {
         // same locality
         if (get_partition_locality(id1) == get_partition_locality(id2))
         {
-            return dispatch_async(id1, HPX_MOVE(algo), HPX_MOVE(policy),
-                is_seq, first1, last1, first2, HPX_MOVE(pred));
+            return dispatch_async(id1, HPX_MOVE(algo), HPX_MOVE(policy), is_seq,
+                first1, last1, first2, HPX_MOVE(pred));
         }
 
         // different localities
         using value_type = typename std::iterator_traits<Iterator2>::value_type;
-        std::vector<indexed_partition_range<Iterator2>> ranges = {
-            {0, {id2, first2,
-                    std::next(first2, std::distance(first1, last1))}}};
+        std::vector<indexed_partition_range<Iterator2>> ranges = {{0,
+            {id2, first2, std::next(first2, std::distance(first1, last1))}}};
 
         auto values = capture_async<value_type>(id2, HPX_MOVE(ranges));
         return HPX_MOVE(values).then(
