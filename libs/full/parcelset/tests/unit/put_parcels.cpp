@@ -257,6 +257,15 @@ hpx::naming::gid_type missing_locality_gid()
         hpx::get_num_localities(hpx::launch::sync));
 }
 
+int expected_tolerated_error()
+{
+#if defined(HPX_HAVE_FORCE_DISCONNECT)
+    return 0;
+#else
+    return static_cast<int>(hpx::error::bad_parameter);
+#endif
+}
+
 hpx::parcelset::parcel generate_missing_locality_parcel()
 {
     std::vector<double> data(1, 1.0);
@@ -303,8 +312,7 @@ void test_put_parcel_unknown_locality_synchronous()
         {
             HPX_TEST(!threw);
             HPX_TEST(called);
-            HPX_TEST_EQ(
-                got.value(), static_cast<int>(hpx::error::bad_parameter));
+            HPX_TEST_EQ(got.value(), expected_tolerated_error());
         }
         else
         {
@@ -336,8 +344,15 @@ void test_put_parcel_unknown_locality_rescheduled()
     if (f.is_ready())
     {
         f.get();
-        HPX_TEST_EQ(
-            state->got.value(), static_cast<int>(hpx::error::bad_parameter));
+        if (hpx::tolerate_node_faults())
+        {
+            HPX_TEST_EQ(state->got.value(), expected_tolerated_error());
+        }
+        else
+        {
+            HPX_TEST_EQ(state->got.value(),
+                static_cast<int>(hpx::error::bad_parameter));
+        }
     }
 }
 
@@ -369,8 +384,15 @@ void test_put_parcels_unknown_locality_rescheduled()
     if (f.is_ready())
     {
         f.get();
-        HPX_TEST_EQ(
-            state->got.value(), static_cast<int>(hpx::error::bad_parameter));
+        if (hpx::tolerate_node_faults())
+        {
+            HPX_TEST_EQ(state->got.value(), expected_tolerated_error());
+        }
+        else
+        {
+            HPX_TEST_EQ(state->got.value(),
+                static_cast<int>(hpx::error::bad_parameter));
+        }
     }
 }
 
