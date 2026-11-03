@@ -665,8 +665,8 @@ hpx_option(
 )
 
 hpx_option(
-  HPX_WITH_STDEXEC_TAG STRING "STDEXEC repository commit, tag, or branch" "main"
-  CATEGORY "Executor"
+  HPX_WITH_STDEXEC_TAG STRING "STDEXEC repository commit, tag, or branch"
+  "1d58877ad898fa3422658d47b28f67deb9c10e80" CATEGORY "Executor"
 )
 
 # ##############################################################################

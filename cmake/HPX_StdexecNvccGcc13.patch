@@ -12,58 +12,30 @@ selects a different sender representation. HPX's Stdexec interface target
 exports this definition for nvcc builds. These workarounds enable host-side
 sender machinery in CUDA translation units, not arbitrary GPU sender execution.
 
-With the complete patch stack, nvcc 12.8.93 and GCC 13.3 crash with
-"Segmentation fault" when compiling this CUDA translation unit without
-STDEXEC_DEMANGLE_SENDER_NAMES:
+With the complete patch stack, nvcc 12.8.93 and GCC 13.3 crash compiling
+sync_wait(just(42)) without STDEXEC_DEMANGLE_SENDER_NAMES. The macro selects a
+descriptor object instead of a lambda descriptor and must not differ between
+C++ and CUDA consumers.
 
-  #include <stdexec/execution.hpp>
-  #include <tuple>
-  int main() {
-    auto r = stdexec::sync_wait(stdexec::just(42));
-    return r && std::get<0>(*r) == 42 ? 0 : 1;
-  }
+Per-header rationale:
 
-Compile with -std=c++20 --expt-relaxed-constexpr --extended-lambda and the
-patched include directory. Adding -DSTDEXEC_DEMANGLE_SENDER_NAMES makes the
-same program compile and run. The macro selects a descriptor object instead
-of a lambda descriptor; it must not differ between C++ and CUDA consumers.
+- __basic_sender.hpp, __receivers.hpp, and __sender_adaptor_closure.hpp:
+  construct stateless callable objects locally because references to the
+  corresponding constexpr global objects are rejected in device code.
+- __meta.hpp and __sender_concepts.hpp: remove unintended cv/ref qualifiers
+  during completion deduction.
+- __utility.hpp: avoid reference callable template arguments in generated host
+  code.
+- __sync_wait.hpp: keep the dependent value_type lookup valid in generated
+  host code.
+- __config.hpp: enable the GCC copy-elision workaround when GCC is the host
+  compiler behind nvcc. See https://gcc.gnu.org/bugzilla/show_bug.cgi?id=98995.
 
-Per-header rationale and diagnostics (with the representation macro enabled):
+Tracking: https://github.com/TheHPXProject/hpx/pull/7711. Retest the
+stdexec_cuda and algorithm_sender_cuda regressions when updating the pin.
 
-- __basic_sender.hpp: the original connect object produces "identifier
-  stdexec::connect is undefined in device code". Construct the same stateless
-  callable locally under nvcc.
-- __just.hpp: likewise, __make_sexpr<just_t> is undefined in device code.
-- __receivers.hpp: likewise, __invoke and set_value are undefined in device
-  code. Preserve the original expressions for other compilers.
-- __sender_adaptor_closure.hpp: likewise, __apply is undefined in device code.
-  Only nvcc uses the internal __tup::__apply_t spelling.
-- __meta.hpp: without cv/ref removal, completion_signatures<...> const&
-  "is not a class, struct, or union type" during completion deduction.
-- __sender_concepts.hpp: without cv/ref removal, then reports "deduced return
-  type does not satisfy placeholder constraints", followed by no operator|.
-- __utility.hpp: reference callable template arguments produce "no instance
-  of function template stdexec::connect_t::operator() matches the argument
-  list" in sync_wait, followed by its incompatible-connect static assertion.
-- __sync_wait.hpp: the dependent value_type alias produces generated host
-  errors including "_Error was not declared in this scope". The helper keeps
-  that type lookup dependent.
-- __config.hpp: STDEXEC_GCC() is false under nvcc although GCC compiles the
-  host code, so the existing GCC copy-elision workaround is not enabled there;
-  enable it for nvcc with a GCC host compiler too. See
-  https://gcc.gnu.org/bugzilla/show_bug.cgi?id=98995. This hunk was not
-  independently triggered by the bounded just/then/variant regression; retest
-  the wider HPX/Kokkos consumers before removing it.
-
-Tracking: https://github.com/TheHPXProject/hpx/pull/7711. No separate stdexec
-issue is recorded for these additional failures. When updating the pin,
-retest the reproducer and the stdexec_cuda/algorithm_sender_cuda regressions
-with each workaround disabled before removing it. The preceding async_scope
-patch separately tracks NVIDIA/stdexec#2304.
-
-Keep this patch separate so existing FetchContent checkouts with the earlier
-nvcc patches can acquire it. It applies to stdexec commit
-04de75de5807e73a229acf047c6976575e313359, pinned by HPX 2.0.0-rc1.
+This patch applies to stdexec commit
+1d58877ad898fa3422658d47b28f67deb9c10e80.
 
 Copyright (c) 2026 Dominic Marcello
 
@@ -71,9 +43,11 @@ SPDX-License-Identifier: BSL-1.0
 Distributed under the Boost Software License, Version 1.0. (See accompanying
 file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
+diff --git a/include/stdexec/__detail/__basic_sender.hpp b/include/stdexec/__detail/__basic_sender.hpp
+index 0a8137d..f40d587 100644
 --- a/include/stdexec/__detail/__basic_sender.hpp
 +++ b/include/stdexec/__detail/__basic_sender.hpp
-@@ -142,7 +142,11 @@
+@@ -125,7 +125,11 @@ namespace STDEXEC
            -> __tuple<connect_result_t<_Child, __rcvr<_Tag, _State, _Idx>>...>
        {
          return __tuple{
@@ -84,35 +58,25 @@ file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 +#  endif
        }
      };
- 
+
+diff --git a/include/stdexec/__detail/__config.hpp b/include/stdexec/__detail/__config.hpp
+index e7b22ab..a33b500 100644
 --- a/include/stdexec/__detail/__config.hpp
 +++ b/include/stdexec/__detail/__config.hpp
-@@ -581,7 +581,7 @@
+@@ -609,7 +609,7 @@ namespace STDEXEC
  #  define STDEXEC_IMMOVABLE(_XP) _XP(_XP&&) = delete
  #endif
- 
+
 -#if STDEXEC_GCC()
 +#if STDEXEC_GCC() || (STDEXEC_NVCC() && defined(__GNUC__) && !defined(__clang__))
- // BUG (gcc#98995): copy elision fails when initializing a [[no_unique_address]] field
- // from a function returning an object of class type by value.
- // See: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=98995
---- a/include/stdexec/__detail/__just.hpp
-+++ b/include/stdexec/__detail/__just.hpp
-@@ -171,7 +171,11 @@
-     STDEXEC_ATTRIBUTE(host, device)
-     constexpr auto operator()(_Ts&&... __ts) const noexcept(__nothrow_decay_copyable<_Ts...>)
-     {
-+#  if STDEXEC_NVCC()
-+      return __detail::__make_sexpr_t<just_t>{}(__tuple{static_cast<_Ts&&>(__ts)...});
-+#  else
-       return __make_sexpr<just_t>(__tuple{static_cast<_Ts&&>(__ts)...});
-+#  endif
-     }
-   };
- 
+ // BUG (gcc#98995): copy elision fails when initializing a [[no_unique_address]]
+ // field from a function returning an object of class type by value. See:
+ // https://gcc.gnu.org/bugzilla/show_bug.cgi?id=98995
+diff --git a/include/stdexec/__detail/__meta.hpp b/include/stdexec/__detail/__meta.hpp
+index 3275412..6ca26c5 100644
 --- a/include/stdexec/__detail/__meta.hpp
 +++ b/include/stdexec/__detail/__meta.hpp
-@@ -57,6 +57,9 @@
+@@ -60,6 +60,9 @@ namespace STDEXEC
  #  if STDEXEC_GCC() && STDEXEC_GCC_VERSION < 1300
    template <auto _Value>
    using __mtypeof = std::remove_const_t<decltype(_Value)>;
@@ -122,9 +86,11 @@ file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
  #  else
    template <auto _Value>
    using __mtypeof = decltype(_Value);
+diff --git a/include/stdexec/__detail/__receivers.hpp b/include/stdexec/__detail/__receivers.hpp
+index 2cc3197..37de040 100644
 --- a/include/stdexec/__detail/__receivers.hpp
 +++ b/include/stdexec/__detail/__receivers.hpp
-@@ -448,13 +448,23 @@
+@@ -423,13 +423,23 @@ namespace STDEXEC
      {
        if constexpr (__std::same_as<void, __invoke_result_t<_Fun, _As...>>)
        {
@@ -148,9 +114,11 @@ file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
        }
      }
      STDEXEC_CATCH_ALL
+diff --git a/include/stdexec/__detail/__sender_adaptor_closure.hpp b/include/stdexec/__detail/__sender_adaptor_closure.hpp
+index e771021..7226f44 100644
 --- a/include/stdexec/__detail/__sender_adaptor_closure.hpp
 +++ b/include/stdexec/__detail/__sender_adaptor_closure.hpp
-@@ -114,7 +114,11 @@
+@@ -114,7 +114,11 @@ namespace STDEXEC
      constexpr auto
      operator()(_Sender&& __sndr) && noexcept(__nothrow_callable<_Fn, _Sender, _As...>)
      {
@@ -162,7 +130,7 @@ file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
                                static_cast<__tuple<_As...>&&>(__args_),
                                static_cast<_Sender&&>(__sndr));
      }
-@@ -125,7 +129,11 @@
+@@ -125,7 +129,11 @@ namespace STDEXEC
      constexpr auto operator()(_Sender&& __sndr) const & noexcept(
        __nothrow_callable<_Fn const &, _Sender, _As const &...>)
      {
@@ -172,11 +140,13 @@ file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
        return STDEXEC::__apply(__fn_, __args_, static_cast<_Sender&&>(__sndr));
 +#  endif
      }
- 
+
     private:
+diff --git a/include/stdexec/__detail/__sender_concepts.hpp b/include/stdexec/__detail/__sender_concepts.hpp
+index 2b88d72..a367b77 100644
 --- a/include/stdexec/__detail/__sender_concepts.hpp
 +++ b/include/stdexec/__detail/__sender_concepts.hpp
-@@ -138,6 +138,10 @@
+@@ -141,6 +141,10 @@ namespace STDEXEC
    template <auto _Completions>
    inline constexpr bool __constant_completion_signatures_v =
      __valid_completion_signatures<std::remove_const_t<decltype(_Completions)>>;
@@ -187,10 +157,12 @@ file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
  #  else
    template <auto _Completions>
    inline constexpr bool __constant_completion_signatures_v =
+diff --git a/include/stdexec/__detail/__sync_wait.hpp b/include/stdexec/__detail/__sync_wait.hpp
+index 6b500e2..eb6288f 100644
 --- a/include/stdexec/__detail/__sync_wait.hpp
 +++ b/include/stdexec/__detail/__sync_wait.hpp
-@@ -53,6 +53,13 @@
- 
+@@ -53,6 +53,14 @@ STDEXEC_PRAGMA_IGNORE_MSVC(4714)  // marked as __forceinline not inlined
+
  namespace STDEXEC::__sync_wait
  {
 +#  if STDEXEC_NVCC()
@@ -200,10 +172,11 @@ file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 +    using __t = typename _Result::value_type;
 +  };
 +#  endif
-   /////////////////////////////////////////////////////////////////////////////
++
+   //////////////////////////////////////////////////////////////////////////////
    // [exec.sync.wait]
    // [exec.sync.wait.var]
-@@ -488,7 +495,11 @@
+@@ -493,7 +501,11 @@ STDEXEC_P2300_NAMESPACE_BEGIN(this_thread)
                                   sync_wait_with_variant_t,
                                   _CvSender>;
        static_assert(STDEXEC::__is_instance_of<__result_t, std::optional>);
@@ -213,13 +186,15 @@ file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
        using __variant_t = __result_t::value_type;
 +#  endif
        static_assert(STDEXEC::__is_instance_of<__variant_t, std::variant>);
- 
+
        using _Domain = STDEXEC::__completion_domain_of_t<STDEXEC::set_value_t,
+diff --git a/include/stdexec/__detail/__utility.hpp b/include/stdexec/__detail/__utility.hpp
+index f26e1df..cd23b6d 100644
 --- a/include/stdexec/__detail/__utility.hpp
 +++ b/include/stdexec/__detail/__utility.hpp
-@@ -97,7 +97,11 @@
+@@ -97,7 +97,11 @@ namespace STDEXEC
    using __call_result_or_t = __minvoke_or_q<__call_result_t, _Default, _Fun, _As...>;
- 
+
  // BUGBUG TODO file this bug with nvc++
 -#  if STDEXEC_EDG()
 +#  if STDEXEC_NVCC()
@@ -230,10 +205,10 @@ file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
    STDEXEC_MODULE_EXPORT_META
    template <auto const & _Fun, class... _As>
    using __result_of = __call_result_t<decltype(_Fun), _As...>;
-@@ -107,9 +111,15 @@
+@@ -107,9 +111,15 @@ namespace STDEXEC
    using __result_of = decltype(_Fun(__declval<_As>()...));
  #  endif
- 
+
 +#  if STDEXEC_NVCC()
 +  STDEXEC_MODULE_EXPORT_AUTHORING
 +  template <auto _Fun, class... _As>
@@ -243,6 +218,6 @@ file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
    template <auto const & _Fun, class... _As>
    inline constexpr bool __noexcept_of = noexcept(_Fun(__declval<_As>()...));
 +#  endif
- 
+
    // For emplacing non-movable types into optionals:
    template <__nothrow_move_constructible _Fn>

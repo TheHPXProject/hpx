@@ -11,8 +11,6 @@
 #
 # * HPX_StdexecNvccWorkarounds.patch: lets nvcc parse the HPX execution headers
 #   (stdexec's own GPU CI covers clang-CUDA and nvc++ only)
-# * HPX_StdexecInlineSchedulerNvcc.patch: inline_scheduler's static_assert under
-#   nvcc
 # * HPX_StdexecAsyncScopeNvcc.patch: exec::async_scope::on_empty() under nvcc
 # * HPX_StdexecNvccGcc13.patch: sender instantiations with nvcc and a GCC 13
 #   host compiler
@@ -44,6 +42,7 @@ if(NOT GIT_EXECUTABLE)
   message(${_hpx_stdexec_patch_severity}
           "git not found, cannot apply stdexec patch: ${HPX_STDEXEC_PATCH_FILE}"
   )
+  return()
 endif()
 
 # Already applied (a reconfigure re-runs the patch command)?

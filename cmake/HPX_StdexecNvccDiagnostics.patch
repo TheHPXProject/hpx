@@ -1,6 +1,6 @@
 Keep nvcc on stdexec's nonvirtual diagnostic fallback.
 
-With stdexec commit 04de75de5807e73a229acf047c6976575e313359 and the other
+With stdexec commit 1d58877ad898fa3422658d47b28f67deb9c10e80 and the other
 nvcc patches applied, algorithm_sender_cuda.cu fails at __then.hpp:213 with
 nvcc 12.8.93 and GCC 13.4.0: the then sender fails __well_formed_sender for
 the unique_any_sender/transfer/bulk/then chain. Kokkos_Core.cpp and
@@ -26,9 +26,9 @@ file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 @@ -182,7 +182,7 @@
    // constexpr stdlib exception types, https://wg21.link/p3378
    using __exception = ::std::exception;
- 
+
 -#  elif __cpp_constexpr >= 201907L && !STDEXEC_MSVC() && !STDEXEC_NVHPC()
 +#  elif __cpp_constexpr >= 201907L && !STDEXEC_MSVC() && !STDEXEC_NVHPC() && !STDEXEC_NVCC()
- 
+
    // constexpr virtual functions
    struct __exception
