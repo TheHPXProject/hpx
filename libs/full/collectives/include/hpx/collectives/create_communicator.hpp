@@ -48,6 +48,13 @@ namespace hpx { namespace collectives {
         [[nodiscard]] std::pair<num_sites_arg, this_site_arg>
         get_info() const noexcept;
 
+        /// Retrieve the number of used sites, the index of the current site
+        /// and the index of the root site for this communicator instance.
+        ///
+        /// \pre valid()
+        [[nodiscard]] std::tuple<num_sites_arg, this_site_arg, root_site_arg>
+        get_info_ex() const noexcept;
+
         /// Return whether this communicator instance represents the root site
         /// of the communication operation.
         ///
