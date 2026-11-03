@@ -214,6 +214,7 @@ set(sender_tests
     rotate_sender
     rotate_copy_sender
     search_sender
+    sender_algorithm_contracts
     set_difference_sender
     set_intersection_sender
     shift_left_sender
