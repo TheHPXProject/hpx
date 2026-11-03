@@ -123,7 +123,8 @@ int hpx_main(hpx::program_options::variables_map& vm)
         std::cout << "broadcast: " << message << "\n" << std::flush;
     }
 
-    return hpx::finalize(ok ? 0 : 1);
+    hpx::finalize();
+    return ok ? 0 : 1;
 }
 
 int main(int argc, char* argv[])
