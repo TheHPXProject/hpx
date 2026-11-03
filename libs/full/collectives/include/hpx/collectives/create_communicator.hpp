@@ -11,6 +11,7 @@
 /// \page hpx::collectives::create_communicator
 /// \page hpx::collectives::create_local_communicator
 /// \page hpx::collectives::create_hierarchical_communicator
+/// \page hpx::collectives::hierarchical_communicator
 /// \page hpx::collectives::communicator::set_info
 /// \page hpx::collectives::communicator::get_info
 /// \page hpx::collectives::communicator::is_root
@@ -122,6 +123,26 @@ namespace hpx { namespace collectives {
         num_sites_arg num_sites, this_site_arg this_site,
         generation_arg generation = generation_arg(),
         root_site_arg root_site = root_site_arg());
+
+    /// A hierarchical communicator instance represents a tree of
+    /// communicators that together connect all sites participating in a
+    /// collective operation. Create it with
+    /// \a create_hierarchical_communicator and pass it to the collective
+    /// operations in place of a \a communicator.
+    struct hierarchical_communicator
+    {
+        /// Retrieve the number of participating sites and the index of the
+        /// current site for this communicator instance.
+        [[nodiscard]] hpx::tuple<num_sites_arg, this_site_arg>
+        get_info() const noexcept;
+
+        /// Return the number of children of each node in the tree of
+        /// communicators.
+        [[nodiscard]] constexpr arity_arg get_arity() const noexcept;
+
+        /// Return the site at the root of the tree of communicators.
+        [[nodiscard]] constexpr root_site_arg get_root_site() const noexcept;
+    };
 
     /// Create a new hierarchical communicator object usable with collective
     /// operations
