@@ -1,7 +1,9 @@
 //  Copyright (c) 2022 Hartmut Kaiser
 //
-//  SPDX-License-Identifier: BSL-1.0 Distributed under the Boost Software
-//  License, Version 1.0. (See accompanying file LICENSE_1_0.txt or copy at
+//  SPDX-License-Identifier: BSL-1.0
+// 
+//  Distributed under the Boost Software License, Version 1.0. (See
+//  accompanying file LICENSE_1_0.txt or copy at
 //  http://www.boost.org/LICENSE_1_0.txt)
 //
 // This code was adapted from boost dynamic_bitset
