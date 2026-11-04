@@ -5,8 +5,9 @@
 #  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 # Copyright and licensing information for files that can't carry a comment
-# header (images, data, generated reference results, JSON, templates). Files
-# that carry their own SPDX header take precedence over this file. See
+# header (images, data, generated reference results, JSON, templates). As all
+# annotations use 'aggregate' precedence, information found in a covered file
+# itself is combined with the information given here. See
 # https://reuse.software/spec-3.3/ for details.
 
 version = 1
