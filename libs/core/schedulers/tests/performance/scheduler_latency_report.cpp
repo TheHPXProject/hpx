@@ -24,7 +24,9 @@
 //  coarse timer they last longer than requested. The sparse, burst and
 //  batch cases need other workers to take tasks from the creating worker's
 //  queue; they are skipped with a scheduler that does not steal and with
-//  only one worker.
+//  only one worker. The steps wait in real time, so each case runs only
+//  --warmup untimed steps before the timed ones, instead of the default of
+//  the performance tests (40 with nanobench), which took most of the time.
 
 #include <hpx/config.hpp>
 #include <hpx/algorithm.hpp>
@@ -159,6 +161,7 @@ namespace {
 int hpx_main(variables_map& vm)
 {
     std::size_t const steps = vm["test_count"].as<std::size_t>();
+    std::size_t const warmup = vm["warmup"].as<std::size_t>();
 
     hpx::util::perftests_init(vm, "scheduler_latency_report");
 
@@ -168,13 +171,15 @@ int hpx_main(variables_map& vm)
     if (scheduler_steals())
     {
         hpx::util::perftests_report("scheduler latency - sparse", "post", steps,
+            warmup,
             [gap = vm["sparse-gap"].as<std::uint64_t>()] { sparse(200, gap); });
 
         hpx::util::perftests_report("scheduler latency - burst", "post", steps,
+            warmup,
             [gap = vm["burst-gap"].as<std::uint64_t>()] { burst(10, gap); });
 
         hpx::util::perftests_report("scheduler latency - batch",
-            "parallel_executor", steps,
+            "parallel_executor", steps, warmup,
             [gap = vm["batch-gap"].as<std::uint64_t>()] { batch(100, gap); });
     }
     else
@@ -184,7 +189,7 @@ int hpx_main(variables_map& vm)
     }
 
     hpx::util::perftests_report("scheduler latency - loop", "par", steps,
-        [gap = vm["loop-gap"].as<std::uint64_t>()] { loop(100, gap); });
+        warmup, [gap = vm["loop-gap"].as<std::uint64_t>()] { loop(100, gap); });
 
     hpx::util::perftests_print_times();
 
@@ -211,7 +216,11 @@ int main(int argc, char* argv[])
          "idle time before each parallel loop (in us)")
 
         ("test_count", value<std::size_t>()->default_value(10),
-         "number of timed steps of each case");
+         "number of timed steps of each case")
+
+        ("warmup", value<std::size_t>()->default_value(2),
+         "number of untimed steps of each case before the timed ones (a "
+         "step takes 0.1 to 0.3 s)");
     // clang-format on
 
     hpx::util::perftests_cfg(cmdline);
