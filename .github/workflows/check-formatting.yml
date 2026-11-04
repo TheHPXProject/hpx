@@ -149,6 +149,17 @@ jobs:
     steps:
     - uses: actions/checkout@v7
 
-    # runs 'reuse lint', see https://reuse.software/
+    # see https://reuse.software/
     - name: REUSE Compliance Check
-      uses: fsfe/reuse-action@v6
+      shell: bash
+      run: |
+        pipx install "reuse[charset-normalizer]==6.3.0"
+        reuse --version
+        reuse lint | tee /tmp/reuse_lint_report.txt
+
+    - name: Upload REUSE Compliance Artifacts
+      if: success() || failure()
+      uses: actions/upload-artifact@v7
+      with:
+        name: reuse-lint-report
+        path: /tmp/reuse_lint_report.txt
