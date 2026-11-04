@@ -4,8 +4,9 @@
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-// A collective operation on an invalid communicator violates the valid()
-// precondition of the noexcept communicator::get_info(). Nothing past the
+// Calling the noexcept communicator::get_info() on an invalid communicator
+// violates its valid() precondition (the collectives reject an invalid
+// communicator before getting here, see invalid_communicator). Nothing past the
 // violation is safe to run, so the handler ends the process, successfully only
 // if it was called for that precondition.
 
@@ -36,7 +37,8 @@ int hpx_main()
 {
     hpx::contracts::set_violation_handler(exiting_handler);
 
-    (void) all_gather(communicator{}, 42, this_site_arg(0), generation_arg(1));
+    communicator const invalid{};
+    (void) invalid.get_info();
 
     HPX_TEST_MSG(false, "the violation handler was not called");
 
