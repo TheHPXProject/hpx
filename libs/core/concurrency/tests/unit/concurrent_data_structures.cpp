@@ -426,7 +426,7 @@ void test_move_assignment()
         HPX_TEST_EQ(static_cast<int>(m2.at(2).get()), 20);
         HPX_TEST_EQ(static_cast<int>(m2.at(3).get()), 30);
 
-        m1.clear();
+        m1.clear();    // NOLINT(bugprone-use-after-move)
         m1.insert({4, 40});
         HPX_TEST_EQ(m1.size(), 1u);
         HPX_TEST_EQ(static_cast<int>(m1.at(4).get()), 40);
@@ -447,7 +447,7 @@ void test_move_assignment()
         HPX_TEST_EQ(s2.count(20), 1u);
         HPX_TEST_EQ(s2.count(30), 1u);
 
-        s1.clear();
+        s1.clear();    // NOLINT(bugprone-use-after-move)
         s1.insert(40);
         HPX_TEST_EQ(s1.size(), 1u);
         HPX_TEST_EQ(s1.count(40), 1u);
@@ -468,7 +468,7 @@ void test_move_assignment()
         HPX_TEST_EQ(static_cast<int>(v2[1].get()), 200);
         HPX_TEST_EQ(static_cast<int>(v2[2].get()), 300);
 
-        v1.clear();
+        v1.clear();    // NOLINT(bugprone-use-after-move)
         v1.push_back(400);
         HPX_TEST_EQ(v1.size(), 1u);
         HPX_TEST_EQ(static_cast<int>(v1[0].get()), 400);
