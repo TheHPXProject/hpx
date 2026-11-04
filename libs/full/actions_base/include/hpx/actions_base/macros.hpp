@@ -180,6 +180,24 @@
 /**/
 #endif
 
+///////////////////////////////////////////////////////////////////////////////
+#if defined(HPX_COMPUTE_DEVICE_CODE)
+#define HPX_ACTION_HAS_TASK_SIZE(action, size) /**/
+#else
+// Give an action a task size, which is the size of the function it binds.
+// Place it next to HPX_REGISTER_ACTION_DECLARATION, in a header, so that it is
+// visible wherever the action is registered or invoked.
+#define HPX_ACTION_HAS_TASK_SIZE(action, size)                                 \
+    namespace hpx::traits {                                                    \
+        template <>                                                            \
+        struct action_task_size<action>                                        \
+        {                                                                      \
+            static constexpr threads::task_size value = size;                  \
+        };                                                                     \
+    }                                                                          \
+    /**/
+#endif
+
 /// \endcond
 
 /// \def HPX_REGISTER_ACTION_DECLARATION(action)
