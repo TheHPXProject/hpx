@@ -297,6 +297,8 @@ namespace hpx::parallel::detail {
                     ++batch_end;
                 }
 
+                (void) hpx::wait_all_nothrow(segments);
+
                 for (std::size_t i = 0; i != segments.size(); ++i)
                 {
                     auto const& data = seg_data[batch_begin + i];
