@@ -136,15 +136,31 @@ def changes(series, position, threshold, window):
     return found
 
 
+def shared_prefix(names):
+    # The length of the part up to the last ' - ' that all names start with
+    # (ignoring case, e.g. 'Stream benchmark - '), 0 for a single name
+    if len(set(names)) < 2:
+        return 0
+    prefix = os.path.commonprefix([name.lower() for name in names])
+    return prefix.rfind(' - ') + 3 if ' - ' in prefix else 0
+
+
 def plot(benchmark, series, commits, position, args, path):
     nodes = {node for _, _, node in series}
     medians = [median for points in series.values() for _, median, _ in points]
     unit, factor = time_unit(min(medians))
 
+    # A prefix all lines share is said once, as the title of the legend
+    names = sorted(name for name, _, _ in series)
+    cut = shared_prefix(names)
+    title = names[0][:cut - 3] if cut else None
+
     fig, ax = plt.subplots(figsize=(graph_width, 4))
-    for (name, executor, node), points in sorted(series.items()):
+    # ignoring case, the names don't all start alike (e.g. 'stream benchmark')
+    for (name, executor, node), points in sorted(series.items(),
+            key=lambda item: (item[0][0].lower(), item[0][1:])):
         points = sorted(points, key=lambda point: position[point[0]])
-        label = f"{name} ({executor})"
+        label = f"{name[cut:]} ({executor})"
         if len(nodes) > 1:
             label += f", {node}"
         ax.plot([position[commit] for commit, _, _ in points],
@@ -206,8 +222,19 @@ def plot(benchmark, series, commits, position, args, path):
     ax.set_xlabel("master commit (pull request, or the commit without one)")
     ax.set_ylabel(f"median time [{unit}]")
     ax.set_title(benchmark, fontsize=10, pad=18)
-    ax.legend(fontsize=7, loc='upper center', bbox_to_anchor=(0.5, -0.28),
-        ncol=1 if len(series) < 6 else 2, frameon=False)
+    # The legend is centered below the image (the graph and the labels on its
+    # left). Two columns for many lines, if they fit into its width: a wider
+    # legend would widen the image, and GitHub would scale it down.
+    renderer = fig.canvas.get_renderer()
+    graph = ax.get_window_extent(renderer)
+    left = ax.get_tightbbox(renderer).x0
+    center = ((left + graph.x1) / 2 - graph.x0) / graph.width
+    for ncol in (1,) if len(series) < 6 else (2, 1):
+        legend = ax.legend(fontsize=7, loc='upper center',
+            bbox_to_anchor=(center, -0.28), ncol=ncol, frameon=False,
+            title=title, title_fontsize=7)
+        if legend.get_window_extent(renderer).width <= graph.x1 - left:
+            break
     fig.savefig(path, format='svg', bbox_inches='tight',
         metadata={'Date': None, 'Creator': None})
     plt.close(fig)
