@@ -1,0 +1,34 @@
+Keep nvcc on stdexec's nonvirtual diagnostic fallback.
+
+With stdexec commit 04de75de5807e73a229acf047c6976575e313359 and the other
+nvcc patches applied, algorithm_sender_cuda.cu fails at __then.hpp:213 with
+nvcc 12.8.93 and GCC 13.4.0: the then sender fails __well_formed_sender for
+the unique_any_sender/transfer/bulk/then chain. Kokkos_Core.cpp and
+Kokkos_Error.cpp fail the same constraint through HPX's host execution space.
+Restoring only this guard makes the existing algorithm_sender_cuda regression
+compile and pass with two host workers. It does not require a GPU.
+
+Keep this separate so FetchContent checkouts with the GCC 13 patch already
+applied can acquire it. The patch runner also accepts older checkouts where
+the diagnostics guard was part of HPX_StdexecNvccGcc13.patch.
+
+Tracking: https://github.com/TheHPXProject/hpx/pull/7711. Retest both
+stdexec_cuda and algorithm_sender_cuda before removing this workaround.
+
+Copyright (c) 2026 Dominic Marcello
+
+SPDX-License-Identifier: BSL-1.0
+Distributed under the Boost Software License, Version 1.0. (See accompanying
+file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+
+--- a/include/stdexec/__detail/__diagnostics.hpp
++++ b/include/stdexec/__detail/__diagnostics.hpp
+@@ -182,7 +182,7 @@
+   // constexpr stdlib exception types, https://wg21.link/p3378
+   using __exception = ::std::exception;
+ 
+-#  elif __cpp_constexpr >= 201907L && !STDEXEC_MSVC() && !STDEXEC_NVHPC()
++#  elif __cpp_constexpr >= 201907L && !STDEXEC_MSVC() && !STDEXEC_NVHPC() && !STDEXEC_NVCC()
+ 
+   // constexpr virtual functions
+   struct __exception

@@ -461,7 +461,7 @@ namespace hpx::execution::experimental::detail {
 
             auto hint =
                 hpx::execution::experimental::get_hint(op_state->scheduler);
-            if (hint.mode == hpx::threads::thread_schedule_hint_mode::none &&
+            if (hint.mode() == hpx::threads::thread_schedule_hint_mode::none &&
                 hint.hint == -1)
             {
                 // apply hint if none was given
@@ -962,3 +962,29 @@ namespace hpx::execution::experimental::detail {
 // Bulk operations are customized through the domain system in
 // thread_pool_scheduler.hpp. thread_pool_domain<Policy> intercepts bulk
 // operations and creates thread_pool_bulk_sender instances.
+
+// A worker's task runs its share of the elements of the shape, calling the
+// bulk function for each of them (bulk_chunked passes a range of them to a
+// call), so its size is derived from the size of that function.
+template <typename OperationState, hpx::threads::task_size Size>
+struct hpx::traits::get_task_size<
+    hpx::execution::experimental::detail::task_function<OperationState>, Size>
+{
+    static constexpr threads::task_size value = Size;
+
+    [[nodiscard]] static constexpr threads::task_size call(
+        hpx::execution::experimental::detail::task_function<
+            OperationState> const& f) noexcept
+    {
+        using function_type = std::decay_t<decltype(f.op_state->f)>;
+
+        std::size_t const num_threads = f.op_state->num_worker_threads;
+        std::size_t const size = f.op_state->size;
+        std::size_t const calls =
+            num_threads == 0 ? size : (size + num_threads - 1) / num_threads;
+
+        threads::task_size const derived = threads::bulk_task_size(
+            get_task_size<function_type>::call(f.op_state->f), calls);
+        return derived == threads::task_size::unknown ? Size : derived;
+    }
+};

@@ -57,6 +57,7 @@ set(functional_headers
     hpx/functional/traits/get_action_name.hpp
     hpx/functional/traits/get_function_address.hpp
     hpx/functional/traits/get_function_annotation.hpp
+    hpx/functional/traits/get_task_size.hpp
     hpx/functional/traits/is_action.hpp
     hpx/functional/traits/is_bind_expression.hpp
     hpx/functional/traits/is_placeholder.hpp

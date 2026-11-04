@@ -1,5 +1,5 @@
 //  Copyright (c) 2019-2020 ETH Zurich
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c) 2019 Agustin Berge
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -68,20 +68,25 @@ namespace hpx::parallel::execution::detail {
             if (hierarchical_threshold != 0 &&
                 part_size > hierarchical_threshold)
             {
+                // this task only spawns the tasks running f, and it may run
+                // after this iteration has ended, so it needs its own copy of
+                // the policy
                 hpx::detail::post_policy_dispatch<Launch>::call(post_policy,
                     desc, pool,
-                    [&, part_begin, part_end, part_size, f, it]() mutable {
-                        for (std::size_t part_i = part_begin;
-                            part_i != part_end; ++part_i)
-                        {
-                            results[part_i] =
-                                hpx::detail::async_launch_policy_dispatch<
-                                    Launch>::call(async_policy, desc, pool, f,
-                                    *it, ts...);
-                            ++it;
-                        }
-                        l.count_down(part_size);
-                    });
+                    hpx::threads::small_task(
+                        [&, async_policy, part_begin, part_end, part_size, f,
+                            it]() mutable {
+                            for (std::size_t part_i = part_begin;
+                                part_i != part_end; ++part_i)
+                            {
+                                results[part_i] =
+                                    hpx::detail::async_launch_policy_dispatch<
+                                        Launch>::call(async_policy, desc, pool,
+                                        f, *it, ts...);
+                                ++it;
+                            }
+                            l.count_down(part_size);
+                        }));
 
                 std::advance(it, part_size);
             }
@@ -119,100 +124,112 @@ namespace hpx::parallel::execution::detail {
     {
         HPX_ASSERT(pool);
 
-        return hpx::detail::async_launch_policy_dispatch<Launch>::call(
-            policy, desc, pool,
-            [](hpx::threads::thread_description const& desc,
-                threads::thread_pool_base* pool, std::size_t first_thread,
-                std::size_t num_threads, std::size_t hierarchical_threshold,
-                Launch policy, std::decay_t<F> f, S const& shape,
-                std::decay_t<Ts>... ts) {
-                std::size_t const size = hpx::util::size(shape);
-                auto post_policy = hpx::execution::experimental::with_stacksize(
-                    policy, threads::thread_stacksize::small_);
+        // this task only spawns the tasks running f and waits for them
+        return hpx::detail::async_launch_policy_dispatch<Launch>::call(policy,
+            desc, pool,
+            hpx::threads::small_task(
+                [](hpx::threads::thread_description const& desc,
+                    threads::thread_pool_base* pool, std::size_t first_thread,
+                    std::size_t num_threads, std::size_t hierarchical_threshold,
+                    Launch policy, std::decay_t<F> f, S const& shape,
+                    std::decay_t<Ts>... ts) {
+                    std::size_t const size = hpx::util::size(shape);
+                    auto post_policy =
+                        hpx::execution::experimental::with_stacksize(
+                            policy, threads::thread_stacksize::small_);
 
-                std::exception_ptr e;
-                hpx::spinlock mtx_e;
-                hpx::latch l(size + 1);
+                    std::exception_ptr e;
+                    hpx::spinlock mtx_e;
+                    hpx::latch l(size + 1);
 
-                auto wrapped = [&, f](auto&&... args) mutable {
-                    // properly handle all exceptions thrown from 'f'
-                    hpx::detail::try_catch_exception_ptr(
-                        [&]() {
-                            HPX_INVOKE(f, HPX_FORWARD(decltype(args), args)...);
-                        },
-                        [&](std::exception_ptr ep) {
-                            // store the first caught exception only
-                            std::lock_guard<hpx::spinlock> lg(mtx_e);
-                            if (!e)
-                                e = HPX_MOVE(ep);
-                        });
-                    l.count_down(1);
-                };
-
-                std::size_t begin = 0;
-                auto it = std::begin(shape);
-                for (std::size_t t = 0; t != num_threads; ++t)
-                {
-                    auto inner_hint =
-                        hpx::execution::experimental::get_hint(policy);
-                    inner_hint.schedule_hint(
-                        static_cast<std::int16_t>(first_thread + t));
-                    auto inner_post_policy =
-                        hpx::execution::experimental::with_hint(
-                            policy, inner_hint);
-
-                    std::size_t const end = ((t + 1) * size) / num_threads;
-                    std::size_t const part_size = end - begin;
-
-                    auto&& launcher = [&, wrapped, begin, end, it](
-                                          bool direct) mutable {
-                        // launch N-1 tasks
-                        auto iter = it;
-                        for (std::size_t i = begin + direct; i != end;
-                            (void) ++iter, ++i)
-                        {
-                            hpx::detail::post_policy_dispatch<Launch>::call(
-                                inner_post_policy, desc, pool, wrapped, *iter,
-                                ts...);
-                        }
-
-                        // execute last task directly, if needed
-                        if (direct)
-                        {
-                            HPX_INVOKE(wrapped, *iter, ts...);
-                        }
+                    auto wrapped = [&, f](auto&&... args) mutable {
+                        // properly handle all exceptions thrown from 'f'
+                        hpx::detail::try_catch_exception_ptr(
+                            [&]() {
+                                HPX_INVOKE(
+                                    f, HPX_FORWARD(decltype(args), args)...);
+                            },
+                            [&](std::exception_ptr ep) {
+                                // store the first caught exception only
+                                std::lock_guard<hpx::spinlock> lg(mtx_e);
+                                if (!e)
+                                    e = HPX_MOVE(ep);
+                            });
+                        l.count_down(1);
                     };
 
-                    // launch a special thread to schedule work for each core,
-                    // except the last one
-                    if (t != num_threads - 1 && hierarchical_threshold != 0 &&
-                        part_size > hierarchical_threshold)
+                    std::size_t begin = 0;
+                    auto it = std::begin(shape);
+                    for (std::size_t t = 0; t != num_threads; ++t)
                     {
-                        hpx::detail::post_policy_dispatch<Launch>::call(
-                            post_policy, desc, pool, HPX_MOVE(launcher), true);
-                        std::advance(it, part_size);
+                        auto inner_hint =
+                            hpx::execution::experimental::get_hint(policy);
+                        inner_hint.schedule_hint(
+                            static_cast<std::int16_t>(first_thread + t));
+                        auto inner_post_policy =
+                            hpx::execution::experimental::with_hint(
+                                policy, inner_hint);
+
+                        std::size_t const end = ((t + 1) * size) / num_threads;
+                        std::size_t const part_size = end - begin;
+
+                        // launcher may be posted and run after this
+                        // iteration has ended, so it takes the policy by value
+                        auto&& launcher = [&, inner_post_policy, wrapped, begin,
+                                              end, it](bool direct) mutable {
+                            // launch N-1 tasks
+                            auto iter = it;
+                            for (std::size_t i = begin + direct; i != end;
+                                (void) ++iter, ++i)
+                            {
+                                // each of these tasks runs f once
+                                hpx::detail::post_policy_dispatch<Launch>::call(
+                                    inner_post_policy, desc, pool,
+                                    hpx::threads::detail::with_task_size_of(
+                                        wrapped, f),
+                                    *iter, ts...);
+                            }
+
+                            // execute last task directly, if needed
+                            if (direct)
+                            {
+                                HPX_INVOKE(wrapped, *iter, ts...);
+                            }
+                        };
+
+                        // launch a special thread to schedule work for each
+                        // core, except the last one
+                        if (t != num_threads - 1 &&
+                            hierarchical_threshold != 0 &&
+                            part_size > hierarchical_threshold)
+                        {
+                            hpx::detail::post_policy_dispatch<Launch>::call(
+                                post_policy, desc, pool,
+                                hpx::threads::small_task(HPX_MOVE(launcher)),
+                                true);
+                            std::advance(it, part_size);
+                        }
+                        else if (part_size != 0)
+                        {
+                            launcher(t == num_threads - 1);
+                            std::advance(it, part_size);
+                        }
+
+                        begin = end;
                     }
-                    else if (part_size != 0)
+                    HPX_ASSERT(it == hpx::util::end(shape));
+
+                    l.arrive_and_wait();
+
+                    // rethrow any exceptions caught during processing the
+                    // bulk_execute, note that we don't need to acquire the
+                    // lock at this point as no other threads may access the
+                    // exception concurrently
+                    if (e)
                     {
-                        launcher(t == num_threads - 1);
-                        std::advance(it, part_size);
+                        std::rethrow_exception(HPX_MOVE(e));
                     }
-
-                    begin = end;
-                }
-                HPX_ASSERT(it == hpx::util::end(shape));
-
-                l.arrive_and_wait();
-
-                // rethrow any exceptions caught during processing the
-                // bulk_execute, note that we don't need to acquire the lock at
-                // this point as no other threads may access the exception
-                // concurrently
-                if (e)
-                {
-                    std::rethrow_exception(HPX_MOVE(e));
-                }
-            },
+                }),
             desc, pool, first_thread, num_threads, hierarchical_threshold,
             policy, HPX_FORWARD(F, f), shape, HPX_FORWARD(Ts, ts)...);
     }

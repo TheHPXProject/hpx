@@ -148,7 +148,15 @@ namespace hpx::supervision {
                     deadline - now);
         };
 
-        std::vector<discovered_peer> const peers = discover_peers(remaining());
+        // A candidate whose registry never resolves (e.g. a locality that
+        // just went away) holds discover_peers() for its whole timeout. Give
+        // it only half of the budget, so the peers that did resolve can still
+        // be joined. Round the half up so a positive budget never truncates
+        // to zero (a zero budget stays zero).
+        auto const budget = remaining().value();
+        std::vector<discovered_peer> const peers =
+            discover_peers(hpx::chrono::steady_duration(
+                (budget + std::chrono::steady_clock::duration{1}) / 2));
         std::vector<discovered_peer> joined =
             fan_out_join(local_registry, peers, remaining());
 

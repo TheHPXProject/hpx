@@ -37,6 +37,7 @@ jobs:
               -DHPX_WITH_TESTS=ON \
               -DHPX_WITH_TESTS_MAX_THREADS_PER_LOCALITY=2 \
               -DHPX_WITH_CHECK_MODULE_DEPENDENCIES=On \
+              -DHPX_WITH_GCC_VERSION_CHECK=OFF \
               -DHPX_WITH_CXX_STANDARD=20 \
               -DCMAKE_CXX_FLAGS=-march=armv8-a+sve \
               -DBOOST_ROOT=/opt/install/boost/release/boost \

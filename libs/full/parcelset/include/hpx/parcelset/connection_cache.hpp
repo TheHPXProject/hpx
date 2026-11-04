@@ -480,6 +480,25 @@ namespace hpx::util {
         ///       invariants.
         void clear(key_type const& l)
         {
+            // Clearing while connections are outstanding is a caller error
+            // that would corrupt connection counts.
+            if (!try_clear(l))
+            {
+                HPX_THROW_EXCEPTION(hpx::error::invalid_status,
+                    "connection_cache::clear",
+                    "clearing locality cache entry while connections "
+                    "are still checked out");
+            }
+        }
+
+        /// Destroys all connections for the given locality in the cache, reset
+        /// all associated counts, unless connections for this locality are
+        /// still checked out of the cache.
+        ///
+        /// \returns false (and leaves the cache unchanged) if connections for
+        ///          the given locality are still checked out, true otherwise.
+        bool try_clear(key_type const& l)
+        {
             std::unique_lock<mutex_type> lock(mtx_);
 
             // Check if this key already exists in the cache.
@@ -487,17 +506,11 @@ namespace hpx::util {
             if (it != cache_.end())
             {
                 // Verify that no connections are currently checked out for
-                // this locality. Clearing while connections are outstanding
-                // is a caller error that would corrupt connection counts.
+                // this locality.
                 if (cached_connections(it->second).size() <
                     num_existing_connections(it->second))
                 {
-                    lock.unlock();
-
-                    HPX_THROW_EXCEPTION(hpx::error::invalid_status,
-                        "connection_cache::clear",
-                        "clearing locality cache entry while connections "
-                        "are still checked out");
+                    return false;
                 }
 
                 // Remove from LRU meta data.
@@ -513,6 +526,7 @@ namespace hpx::util {
             }
 
             check_invariants();
+            return true;
         }
 
         /// Discards one checked-out connection or reserved connection slot.

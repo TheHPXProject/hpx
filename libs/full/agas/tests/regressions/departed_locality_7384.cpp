@@ -7,7 +7,8 @@
 
 // This test verifies that resolving (or dispatching an action to) a locality
 // that has already disconnected gracefully fails through the intended AGAS
-// error path (hpx::error::bad_parameter) instead of letting a
+// error path (hpx::error::locality_was_disconnected, or
+// hpx::error::bad_parameter right after the departure) instead of letting a
 // std::system_error raised by unique_lock::unlock escape (see #7384).
 
 #define HPX_HAVE_FORCE_NO_CXX_MODULES
@@ -280,14 +281,18 @@ int hpx_main(hpx::program_options::variables_map& vm)
     }
 
     // the non-throwing overload reports the intended error instead of
-    // letting the internal lock error escape
+    // letting the internal lock error escape: locality_was_disconnected once
+    // the console has recorded the departure, bad_parameter if it is resolved
+    // after the departed locality was unregistered but before that
     HPX_TEST(!caught_system_error);
     HPX_TEST(resolution_failed);
-    HPX_TEST_EQ(ec.value(), hpx::error::bad_parameter);
+    HPX_TEST(
+        ec.value() == static_cast<int>(hpx::error::locality_was_disconnected) ||
+        ec.value() == static_cast<int>(hpx::error::bad_parameter));
 
-    // Dispatching an action to the departed locality fails with the intended
-    // hpx::error::bad_parameter as well. Note that hpx::exception is derived
-    // from std::system_error, catch it first.
+    // Dispatching an action to the departed locality fails with one of these
+    // errors as well. Note that hpx::exception is derived from
+    // std::system_error, catch it first.
     bool caught_hpx_exception = false;
     hpx::error err = hpx::error::success;
     bool no_error = false;

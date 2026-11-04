@@ -20,6 +20,7 @@
 
 #include <hpx/supervision/supervision_api.hpp>
 
+#include <atomic>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -213,7 +214,27 @@ namespace hpx::supervision::server {
         /// reports an error and never fires any notification of its own for the
         /// "nothing to do" case. Local-only: unlike remove_target(), this is
         /// not exposed as a remote action.
+        ///
+        /// \note This is meant for teardown of this locality's supervision
+        ///       state at shutdown. After tidy() has been called, remote
+        ///       activity agents are no longer waited for or notified.
         void tidy();
+
+        /// \brief Invalidates every pending await_terminal() waiter.
+        ///
+        /// Drains all of waiters_, regardless of target or epoch, and sets
+        /// each drained promise to an hpx::error::invalid_status exception.
+        /// Unlike tidy(), this also reaches waiters registered for targets
+        /// this manager has no recorded state for (e.g. a peer locality
+        /// polled by a failure detector). Any await_terminal() call made
+        /// afterwards that would have to register a new waiter fails right
+        /// away with the same error. Run as a pre-shutdown function, so the
+        /// continuations attached to the drained futures still execute
+        /// while the runtime is active, instead of from this object's
+        /// destructor once it has stopped. Local-only, not exposed as a
+        /// remote action. Meant for runtime shutdown only, applications must
+        /// not call it.
+        void cancel_all_waiters();
 
         /// \brief Registers a locality-scoped activity observer.
         ///
@@ -284,7 +305,11 @@ namespace hpx::supervision::server {
         // cannot accumulate indefinitely. This is enforced by sweep_timer_
         // independently of any further activity for `target`, in addition to
         // the opportunistic sweep performed by this function and
-        // publish_event() as a fast path.
+        // publish_event() as a fast path. Once cancel_all_waiters() has run
+        // (as a pre-shutdown step), every pending waiter's future has been
+        // made exceptional with an `hpx::error::invalid_status` exception, and
+        // a call that would have to register a new waiter returns such a
+        // future right away.
         hpx::future<lifecycle_state> await_terminal(hpx::id_type const& target,
             std::uint64_t epoch = 0,
             std::chrono::steady_clock::duration timeout =
@@ -310,6 +335,13 @@ namespace hpx::supervision::server {
     protected:
         hpx::future<void> fire_events(hpx::id_type const& target,
             lifecycle_event_notification const& notification);
+
+        // Delivers `notification` to the single per-target observer `agent`,
+        // if it is still registered. If sending to a remote observer fails
+        // with locality_was_disconnected, or its locality was disconnected,
+        // the observer is unregistered and the returned future does not
+        // become exceptional. Any other failure (e.g. the callback threw,
+        // whatever the error) does, so the caller can record_error() it.
         hpx::future<void> fire_event(hpx::id_type const& target,
             hpx::id_type const& agent,
             lifecycle_event_notification notification);
@@ -342,6 +374,9 @@ namespace hpx::supervision::server {
         hpx::future<void> fire_activity_event(
             hpx::id_type const& agent, activity_notification notification);
 
+        // Records `target` as failed because delivering the notification with
+        // `expected_sequence_number` to one of its observers failed. Not
+        // called for an observer whose locality went away, see fire_event().
         void record_error(hpx::id_type const& target,
             std::uint64_t expected_sequence_number, hpx::error_code const& ec);
 
@@ -508,6 +543,10 @@ namespace hpx::supervision::server {
 
         mutable std::string instance_name_;
 
+        // Set once tidy() starts (it is only used for shutdown teardown);
+        // see fire_activity_event().
+        std::atomic<bool> tearing_down_{false};
+
         // registered events: targets -> states
         std::map<hpx::id_type, lifecycle_state> states_;
         // registered observers: targets -> observer entries (agent +
@@ -577,6 +616,16 @@ namespace hpx::supervision::server {
         std::chrono::steady_clock::time_point armed_deadline_ =
             (std::chrono::steady_clock::time_point::max) ();
 
+        // Set by cancel_all_waiters(), under mtx_, once all pending waiters
+        // have been drained for shutdown; checked by await_terminal() under
+        // mtx_ before it registers a new waiter, so no waiter can be added
+        // after the drain and be left for the destructor to break. Never
+        // reset: each runtime instance owns its own supervision_manager (a
+        // runtime started later gets a fresh one), and the pre-shutdown step
+        // setting this only runs once that runtime is going down, so there is
+        // no point after which await_terminal() would have to work again.
+        bool waiters_closed_ = false;
+
         // Set by the destructor, under mtx_, before waiting for any
         // sweep_timer_callback() invocation already in flight (tracked by
         // callbacks_in_flight_) to finish; checked by sweep_timer_callback()
@@ -593,7 +642,9 @@ namespace hpx::supervision::server {
         // setting shutting_down_, guaranteeing no invocation is still touching
         // mtx_/waiters_/etc. before the rest of this object's state starts
         // being destroyed. Mirrors agent_component::deactivate_and_wait() (see
-        // agent_server.cpp).
+        // agent_server.cpp). cancel_all_waiters() waits for it the same way
+        // after setting waiters_closed_, so that no waiter drained by an
+        // in-flight callback is still unresolved when it returns.
         std::size_t callbacks_in_flight_ = 0;
         hpx::lcos::local::detail::condition_variable shutdown_cv_;
     };

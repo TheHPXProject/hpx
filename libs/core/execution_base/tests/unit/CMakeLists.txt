@@ -22,8 +22,16 @@ if(HPX_WITH_CXX20_COROUTINES)
   set(tests ${tests} coroutine_traits coroutine_utils)
 endif()
 
+if(HPX_WITH_CUDA)
+  set(tests ${tests} stdexec_cuda)
+endif()
+
 foreach(test ${tests})
-  set(sources ${test}.cpp)
+  if(test STREQUAL "stdexec_cuda")
+    set(sources ${test}.cu)
+  else()
+    set(sources ${test}.cpp)
+  endif()
 
   source_group("Source Files" FILES ${sources})
 

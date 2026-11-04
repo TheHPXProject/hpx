@@ -443,6 +443,15 @@ peer's eviction from ``peers_``. Once evicted, the peer no longer appears in
 unregistered on the peer's locality so nothing is left listening for further
 events from a peer that has already reached a terminal state.
 
+A peer fenced by failure detection never reports a terminal event of its
+own, so no callback schedules its eviction. The failure-detection loop does
+it instead: its next sweep finds the peer's shadow already terminal and
+evicts the peer the same way, so it no longer appears in
+:hpx:func:`registry::snapshot_peers() <hpx::supervision::registry::snapshot_peers>` either. In both cases the terminal shadow is
+kept, so dispatch to the evicted peer stays fenced until it is joined again.
+The failure-detection loop does not wait for the eviction to unregister the
+observers on the peer's locality, since that locality may be gone.
+
 What this does and does not cover
 ---------------------------------
 
@@ -456,6 +465,25 @@ heartbeat/failure-detection pairing described earlier in this page -- the
 observer-based synchronization described here and the polling-with-timeout
 failure detection described earlier are complementary, not overlapping,
 mechanisms.
+
+The reverse case matters as well: the observers a joining locality
+registered live on the *peer's* locality, so they outlive the joining
+locality if it dies. When the peer next sends a notification to such an
+observer and the send fails with ``hpx::error::locality_was_disconnected``
+(or the joining locality was disconnected from the peer), the observer is
+unregistered on the peer, and the peer's own state is left alone, so it
+keeps admitting dispatch as before. A send that fails with any other error
+(for instance, a refused connection when the peer has to reconnect to the
+dead locality) is still recorded as the peer having failed, and fences it.
+
+The joining locality is not told that its observer was dropped. A single
+failed send is enough to drop it, so this can also happen to a joining
+locality that is still alive, for instance after a connection reset. Its
+shadow of the peer then stops advancing, and its failure detection treats
+that like any other silent peer:
+:hpx:func:`await_terminal() <hpx::supervision::await_terminal>` times out with an unchanged sequence number and the joining locality fences
+its own shadow of the peer. That only changes the joining locality's view;
+the peer's own state, and every other locality's view of it, is unaffected.
 
 Because ``observers_`` is keyed per target and holds a list rather than a
 single callback, this fan-out is genuinely one-to-many: if several

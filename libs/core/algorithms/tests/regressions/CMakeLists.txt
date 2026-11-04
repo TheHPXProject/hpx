@@ -16,6 +16,7 @@ set(tests
     for_loop_2281
     for_loop_5735
     for_loop_with_auto_chunk_size
+    includes_chunk_boundary
     includes_empty_ranges
     is_sorted_until_chunk_boundary
     minimal_findend
@@ -29,6 +30,7 @@ set(tests
     search_larger_2nd_range
     search_zerolength
     set_operations_3442
+    sort_depth_limit_fallback
     stable_merge_2964
     static_chunker_2282
     transform_inclusive_scan_4786

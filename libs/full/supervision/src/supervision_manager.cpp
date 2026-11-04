@@ -317,6 +317,29 @@ namespace hpx::supervision {
             });
     }
 
+    void supervision_manager::cancel_all_waiters(hpx::error_code& ec) const
+    {
+        if (!server_)
+        {
+            HPX_THROWS_IF(ec, hpx::error::invalid_status,
+                "hpx::supervision::supervision_manager::cancel_all_waiters",
+                "server is not registered");
+            return;
+        }
+
+        hpx::detail::try_catch_exception_ptr(
+            [&]() {
+                server_->cancel_all_waiters();
+                if (&ec != &throws)
+                    ec = make_success_code();
+            },
+            [&](std::exception_ptr const& ep) {
+                HPX_RETHROWS_IF(ec, ep,
+                    "hpx::supervision::supervision_manager::cancel_all_"
+                    "waiters");
+            });
+    }
+
     ///////////////////////////////////////////////////////////////////////////
     naming::gid_type supervision_manager::get_service_instance(
         std::uint32_t const service_locality_id)

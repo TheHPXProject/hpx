@@ -220,6 +220,15 @@ namespace hpx::threads::policies {
         }
 
         // ----------------------------------------------------------------
+        inline std::int64_t get_queue_length() const
+        {
+            std::int64_t len = 0;
+            for (auto& q : queues_)
+                len += q->get_queue_length();
+            return len;
+        }
+
+        // ----------------------------------------------------------------
         void abort_all_suspended_threads()
         {
             for (auto& q : queues_)

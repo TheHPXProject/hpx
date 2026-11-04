@@ -103,7 +103,12 @@ main_readme() {
         "master branch, measured by its Jenkins CI on the Rostam cluster at" \
         "LSU (see \`.jenkins/lsu-perftests\` and \`tools/perftests_ci\` in" \
         "the HPX repository). The graphs below show the median time of every" \
-        "measurement over the date of the commit; lower is faster."
+        "measurement over the master commits in their order, labeled with" \
+        "their pull requests (or the commits without one); lower is faster." \
+        "The table below each graph lists the commits after which a median" \
+        "changed, the numbered commits are marked on the graph, and the" \
+        "ringed points are the medians that changed (red slower, green" \
+        "faster)."
     echo
     echo "## Layout"
     echo
@@ -128,9 +133,9 @@ main_readme() {
     echo
     echo "## Performance over time"
     echo
-    # The links of the graphs are relative to timeline/
+    # The links of the graphs and the runs are relative to timeline/
     if [[ -s "${data}/timeline/README-timeline.md" ]]; then
-        sed 's|](\([^/)]*\.svg\))|](timeline/\1)|' \
+        sed -e 's|](\([^/)]*\.svg\))|](timeline/\1)|' -e 's|](\.\./|](|g' \
             "${data}/timeline/README-timeline.md"
     else
         echo "The graphs couldn't be drawn yet."
