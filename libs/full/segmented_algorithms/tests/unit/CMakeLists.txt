@@ -96,8 +96,8 @@ foreach(test ${tests})
   set(sources ${test}.cpp)
 
   set(${test}_FLAGS DEPENDENCIES partitioned_vector_component)
-  if(test STREQUAL "partitioned_vector_sort" OR test MATCHES
-                                                "^partitioned_vector_merge(_extended|_regressions)?$"
+  if(test STREQUAL "partitioned_vector_sort"
+     OR test MATCHES "^partitioned_vector_merge(_extended|_regressions)?$"
   )
     # Four localities exercise concurrent merges and remote transfers.
     set(test_localities 4)
