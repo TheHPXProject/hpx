@@ -18,6 +18,7 @@ set(benchmarks
     benchmark_partial_sort_parallel
     benchmark_partition
     benchmark_partition_copy
+    benchmark_radix_sort
     benchmark_reduce_deterministic
     benchmark_remove
     benchmark_remove_if
