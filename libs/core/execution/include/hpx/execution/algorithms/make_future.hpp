@@ -125,6 +125,103 @@ namespace hpx::execution::experimental {
             }
         };
 
+        struct run_loop_future_data_base
+        {
+            bool loop_operation_finished = false;
+        };
+
+        HPX_CXX_CORE_EXPORT template <typename T>
+        struct run_loop_future_receiver : future_receiver<T>
+        {
+            using base_type = future_receiver<T>;
+            hpx::execution::experimental::run_loop& loop;
+            run_loop_future_data_base* data;
+
+            run_loop_future_receiver(run_loop& loop,
+                run_loop_future_data_base* data,
+                hpx::lcos::detail::future_data_base<T>* base_ptr)
+              : base_type{{base_ptr}}
+              , loop(loop)
+              , data(data)
+            {
+            }
+
+            template <typename U>
+            void set_value(U&& u) && noexcept
+            {
+                auto data_keepalive = this->base_type::data;
+                auto* const l_data = data;
+                auto& l_loop = loop;
+                HPX_MOVE(*static_cast<base_type*>(this))
+                    .set_value(HPX_FORWARD(U, u));
+                l_loop.complete_operation(l_data->loop_operation_finished);
+            }
+
+            void set_error(std::exception_ptr ep) && noexcept
+            {
+                auto data_keepalive = this->base_type::data;
+                auto* const l_data = data;
+                auto& l_loop = loop;
+                HPX_MOVE(*static_cast<base_type*>(this))
+                    .set_error(HPX_MOVE(ep));
+                l_loop.complete_operation(l_data->loop_operation_finished);
+            }
+
+            void set_stopped() && noexcept
+            {
+                auto data_keepalive = this->base_type::data;
+                auto* const l_data = data;
+                auto& l_loop = loop;
+                base_type::set_stopped();
+                l_loop.complete_operation(l_data->loop_operation_finished);
+            }
+        };
+
+        template <>
+        struct run_loop_future_receiver<void> : future_receiver<void>
+        {
+            using base_type = future_receiver<void>;
+            hpx::execution::experimental::run_loop& loop;
+            run_loop_future_data_base* data;
+
+            run_loop_future_receiver(run_loop& loop,
+                run_loop_future_data_base* data,
+                hpx::lcos::detail::future_data_base<void>* base_ptr)
+              : base_type{{base_ptr}}
+              , loop(loop)
+              , data(data)
+            {
+            }
+
+            void set_value() && noexcept
+            {
+                auto data_keepalive = this->base_type::data;
+                auto* const l_data = data;
+                auto& l_loop = loop;
+                HPX_MOVE(*static_cast<base_type*>(this)).set_value();
+                l_loop.complete_operation(l_data->loop_operation_finished);
+            }
+
+            void set_error(std::exception_ptr ep) && noexcept
+            {
+                auto data_keepalive = this->base_type::data;
+                auto* const l_data = data;
+                auto& l_loop = loop;
+                HPX_MOVE(*static_cast<base_type*>(this))
+                    .set_error(HPX_MOVE(ep));
+                l_loop.complete_operation(l_data->loop_operation_finished);
+            }
+
+            void set_stopped() && noexcept
+            {
+                auto data_keepalive = this->base_type::data;
+                auto* const l_data = data;
+                auto& l_loop = loop;
+                base_type::set_stopped();
+                l_loop.complete_operation(l_data->loop_operation_finished);
+            }
+        };
+
 #if defined(HPX_GCC_VERSION) && HPX_GCC_VERSION >= 110000
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Warray-bounds"
@@ -166,6 +263,15 @@ namespace hpx::execution::experimental {
             {
                 detail::start_operation_state(op_state);
             }
+
+            template <typename Sender, typename ReceiverFactory>
+            future_data(init_no_addref no_addref, other_allocator const& alloc,
+                Sender&& sender, ReceiverFactory&& receiver_factory)
+              : base_type(no_addref, alloc)
+              , op_state(hpx::execution::experimental::connect(
+                    HPX_FORWARD(Sender, sender), receiver_factory(*this)))
+            {
+            }
             // NOLINTEND(bugprone-crtp-constructor-accessibility)
         };
 
@@ -174,6 +280,7 @@ namespace hpx::execution::experimental {
         struct future_data_with_run_loop
           : future_data<T, Allocator, OperationState,
                 future_data_with_run_loop<T, Allocator, OperationState>>
+          , run_loop_future_data_base
         {
             hpx::execution::experimental::run_loop& loop;
 
@@ -186,10 +293,15 @@ namespace hpx::execution::experimental {
             future_data_with_run_loop(init_no_addref no_addref,
                 other_allocator const& alloc,
                 run_loop_scheduler_type const& sched, Sender&& sender)
-              : base_type(no_addref, alloc, HPX_FORWARD(Sender, sender))
+              : base_type(no_addref, alloc, HPX_FORWARD(Sender, sender),
+                    [this, &sched](auto& self) {
+                        return run_loop_future_receiver<T>{
+                            get_run_loop_from_scheduler(sched), this, &self};
+                    })
+              , run_loop_future_data_base{}
               , loop(get_run_loop_from_scheduler(sched))
             {
-                this->set_on_completed([this]() { loop.finish(); });
+                detail::start_operation_state(this->op_state);
             }
 
             hpx::util::unused_type* get_result_void(
@@ -201,7 +313,8 @@ namespace hpx::execution::experimental {
 
             void execute_deferred(error_code& = throws) override
             {
-                loop.run();
+                loop.run_until(
+                    [this]() { return this->loop_operation_finished; });
             }
         };
 
@@ -261,7 +374,7 @@ namespace hpx::execution::experimental {
                 std::decay_t<detail::single_result_t<value_types>>;
             using operation_state_type = hpx::util::invoke_result_t<
                 hpx::execution::experimental::connect_t, Sender,
-                detail::future_receiver<result_type>>;
+                detail::run_loop_future_receiver<result_type>>;
 
             using shared_state = future_data_with_run_loop<result_type,
                 allocator_type, operation_state_type>;
