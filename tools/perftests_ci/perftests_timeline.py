@@ -24,7 +24,8 @@
 # change of the same measurement, so that a step is listed once. On the graph,
 # the points that moved are ringed (red slower, green faster), and the
 # --labels commits with the largest changes (default 8) are marked with a
-# dashed line and the number of their rows in the table.
+# dashed line and the number of their rows in the table. A solid line marks
+# each release (see releases below) before the first commit that has it.
 #
 # The graphs are SVG, so that the repository, which gets new versions of all of
 # them with every run, stores only their differences. They are reproducible:
@@ -59,6 +60,13 @@ max_commit_labels = 40
 max_date_labels = 8
 # The size of their text
 label_size = 7.5
+
+# The releases marked on the graphs: the name, and the first parent count of
+# the master commit that brought the release into master (the commit of the
+# tag itself is on the release branch)
+releases = (
+    ("v2.0.0", 14211),  # 7dbfb3a506, #7560 (release-2.0.X)
+)
 
 # GitHub shows a README at most about 830 pixels wide (on the start page of the
 # repository, next to its sidebar); a graph of this width (in inches) fills it,
@@ -163,11 +171,22 @@ def plot(benchmark, series, commits, position, args, path):
             fontsize=7, bbox={'boxstyle': 'circle,pad=0.2', 'fc': 'white',
                 'ec': '0.4', 'lw': 0.8})
 
+    # The releases, between the last commit without and the first with them
+    ordered = sorted(commits, key=lambda commit: position[commit])
+    for name, count in releases:
+        first = next((i for i, commit in enumerate(ordered)
+            if commits[commit][0] >= count), None)
+        if not first:
+            continue
+        ax.axvline(first - 0.5, color='tab:purple', linewidth=1, zorder=1)
+        ax.text(first - 0.5, 0.97, name, transform=top, rotation=90,
+            ha='center', va='top', fontsize=7, color='tab:purple', zorder=4,
+            bbox={'boxstyle': 'square,pad=0.15', 'fc': 'white', 'ec': 'none'})
+
     # Measurements of very different sizes share the graph on a log scale
     if max(medians) > 10 * min(medians):
         ax.set_yscale('log')
     # The commits on the x axis, the dates of some of them above the graph
-    ordered = sorted(commits, key=lambda commit: position[commit])
     step = math.ceil(len(ordered) / max_commit_labels)
     shown = ordered[::step]
     ax.set_xticks([position[commit] for commit in shown])
