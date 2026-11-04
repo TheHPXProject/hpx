@@ -261,7 +261,8 @@ void test_search_n_boundaries(ExPolicy policy)
 }
 
 // Contiguous arithmetic ranges must actually take the SIMD path.
-void test_search_n_uses_simd_path()
+template <typename ExPolicy>
+void test_search_n_uses_simd_path(ExPolicy policy)
 {
     std::atomic<int> pack_calls(0);
     auto pred = [&pack_calls](auto const& a, auto const& b) {
@@ -273,8 +274,8 @@ void test_search_n_uses_simd_path()
     std::vector<int> haystack(1000, 9);
     std::fill(haystack.begin() + 700, haystack.begin() + 703, 1);
 
-    auto const result = hpx::search_n(
-        hpx::execution::par_simd, haystack.begin(), haystack.end(), 3, 1, pred);
+    auto const result =
+        hpx::search_n(policy, haystack.begin(), haystack.end(), 3, 1, pred);
 
     HPX_TEST(result == haystack.begin() + 700);
     HPX_TEST(pack_calls > 0);
@@ -339,7 +340,8 @@ void search_n_boundary_tests()
 
     test_search_n_boundaries(simd);
     test_search_n_boundaries(par_simd);
-    test_search_n_uses_simd_path();
+    test_search_n_uses_simd_path(simd);
+    test_search_n_uses_simd_path(par_simd);
     test_search_n_non_contiguous();
     test_search_n_bool_returning_predicate();
 }
