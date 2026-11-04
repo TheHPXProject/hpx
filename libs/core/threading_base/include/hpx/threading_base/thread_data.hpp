@@ -583,9 +583,18 @@ namespace hpx::threads {
         // be run directly by a thread waiting for it. The thread is switched
         // to active while the flag is reset, so this can't interleave with
         // execute_thread claiming the thread for running it directly, which
-        // does the same switch. Does nothing if the thread isn't pending.
+        // does the same switch. Does nothing if the thread isn't pending or
+        // doesn't run as a child.
         void stop_running_as_child() noexcept
         {
+            // The flag is only set when the thread is created (or reused) and
+            // the thread is ours to send, so if it isn't set now it won't be.
+            // Most stolen tasks don't run as a child, skip the state switch.
+            if (!runs_as_child(std::memory_order_relaxed))
+            {
+                return;
+            }
+
             thread_state const state = get_state();
             if (state.state() != thread_schedule_state::pending)
             {

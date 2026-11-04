@@ -1031,6 +1031,12 @@ namespace hpx::threads::policies {
         {
             HPX_ASSERT(num_thread < num_queues_);
 
+            // requests_ has a single consumer, the scheduling loop of this
+            // core. Taking requests here is only fine because we run on the
+            // same core while that loop is waiting for us to return.
+            HPX_ASSERT(
+                num_thread == hpx::threads::detail::get_local_thread_num_tss());
+
             auto& d = data_[num_thread].data_;
             if (d.requests_->is_empty())
             {
