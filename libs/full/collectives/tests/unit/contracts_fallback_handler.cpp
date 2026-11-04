@@ -6,19 +6,21 @@
 
 // HPX_CONTRACT_ASSERT preconditions in the collectives module, checked through
 // a throwing violation handler: communicator::is_root() needs a valid
-// communicator, hierarchical_communicator element access needs idx < size(),
-// and hpx::distributed::latch needs count >= 0 and n >= 0. The noexcept
-// accessors are covered by contracts_invalid_communicator.
+// communicator, hierarchical_communicator element access needs idx < size()
+// on every site of the tree, and hpx::distributed::latch needs count >= 0 and
+// n >= 0. The noexcept accessors are covered by contracts_invalid_communicator.
 
 #include <hpx/config.hpp>
 
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
+#include <hpx/future.hpp>
 #include <hpx/hpx_init.hpp>
 #include <hpx/modules/collectives.hpp>
 #include <hpx/modules/contracts.hpp>
 #include <hpx/modules/testing.hpp>
 
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -83,18 +85,18 @@ void test_communicator()
     test_violation([&] { (void) invalid.is_root(); }, "valid()");
 }
 
-void test_hierarchical_communicator()
+void check_hierarchical_communicator(hierarchical_communicator const& comms)
 {
-    hierarchical_communicator comms = create_hierarchical_communicator(
-        "/test/contracts/hierarchical/", num_sites_arg(1), this_site_arg(0));
-
     int const count = handler_call_count;
 
     std::size_t const size = comms.size();
     HPX_TEST_NEQ(size, std::size_t(0));
-    HPX_TEST(comms.get(size - 1).valid());
-    (void) comms.site(size - 1);
-    (void) comms[size - 1];
+    for (std::size_t idx = 0; idx != size; ++idx)
+    {
+        HPX_TEST(comms.get(idx).valid());
+        (void) comms.site(idx);
+        (void) comms[idx];
+    }
     HPX_TEST(comms.back().valid());
     HPX_TEST_EQ(static_cast<std::size_t>(comms.last_site()),
         static_cast<std::size_t>(comms.site(size - 1)));
@@ -105,6 +107,49 @@ void test_hierarchical_communicator()
     test_violation([&] { (void) comms.get(size); }, condition);
     test_violation([&] { (void) comms.site(size); }, condition);
     test_violation([&] { (void) comms[size]; }, condition);
+}
+
+// All sites create their communicators concurrently, as in the other
+// hierarchical tests. The checks run afterwards on this thread, since the
+// handler is not thread safe.
+void test_hierarchical_communicator(
+    std::uint32_t const num_sites, int const arity)
+{
+    std::string const basename = "/test/contracts/hierarchical/" +
+        std::to_string(num_sites) + "/" + std::to_string(arity) + "/";
+
+    std::vector<hpx::future<hierarchical_communicator>> sites;
+    sites.reserve(num_sites);
+
+    for (std::uint32_t site = 0; site != num_sites; ++site)
+    {
+        sites.push_back(hpx::async([&basename, num_sites, arity, site]() {
+            return create_hierarchical_communicator(basename.c_str(),
+                num_sites_arg(num_sites), this_site_arg(site), arity_arg(arity),
+                generation_arg(), root_site_arg(0),
+                flat_fallback_threshold_arg(0));
+        }));
+    }
+
+    hpx::wait_all(sites);
+
+    std::vector<hierarchical_communicator> comms;
+    comms.reserve(num_sites);
+    for (auto& f : sites)
+    {
+        comms.push_back(f.get());
+    }
+
+    // only the root is guaranteed to be on more than one level of the tree
+    if (num_sites > static_cast<std::uint32_t>(arity))
+    {
+        HPX_TEST_LTE(std::size_t(2), comms[0].size());
+    }
+
+    for (auto const& c : comms)
+    {
+        check_hierarchical_communicator(c);
+    }
 }
 
 void test_distributed_latch()
@@ -138,7 +183,10 @@ int hpx_main()
     hpx::contracts::set_violation_handler(throwing_handler);
 
     test_communicator();
-    test_hierarchical_communicator();
+    // more sites than the arity gives a tree with several levels
+    test_hierarchical_communicator(1, 2);
+    test_hierarchical_communicator(5, 2);
+    test_hierarchical_communicator(9, 4);
     test_distributed_latch();
 
     hpx::contracts::set_violation_handler(nullptr);
