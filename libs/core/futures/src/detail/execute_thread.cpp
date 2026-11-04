@@ -86,6 +86,17 @@ namespace hpx::threads::detail {
             return false;
         }
 
+        // This worker doesn't get back to its scheduling loop while the
+        // current thread runs its children directly, so let the scheduler
+        // answer the steal requests of the other workers first. This may hand
+        // the given thread to another worker, in which case it isn't run as a
+        // child anymore (see #7789).
+        if (auto* self = get_self_id_data(); self != nullptr)
+        {
+            self->get_scheduler_base()->handle_steal_requests(
+                get_local_thread_num_tss());
+        }
+
         bool reschedule = false;
 
         // don't directly run any threads that have started running 'normally'
