@@ -43,4 +43,14 @@ namespace hpx::util {
 
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void perftests_print_times();
 #endif
+
+    /// Like the perftests_report above, but runs \a test (after \a pretest)
+    /// \a warmup times untimed before the \a steps timed runs, instead of the
+    /// default (40 times with nanobench, once without). For tests whose runs
+    /// take long, where the default warmup takes much longer than the timed
+    /// runs.
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void perftests_report(
+        std::string const& name, std::string const& exec,
+        std::size_t const steps, std::size_t const warmup,
+        hpx::function<void()>&& test, hpx::function<void()> pretest = nullptr);
 }    // namespace hpx::util
