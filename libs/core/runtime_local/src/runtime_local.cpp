@@ -193,25 +193,37 @@ namespace hpx {
             util::attach_debugger();
         }
 
+        // The stack trace below may still block on a lock held by the thread
+        // that received the signal (for instance in malloc), end the process
+        // anyway
+        hpx::threads::coroutines::start_signal_handler_watchdog();
+
         if (hpx::threads::coroutines::diagnostics_on_terminate)
         {
             int const verbosity = hpx::threads::coroutines::exception_verbosity;
-            char* reason = strsignal(signum);
+            char const* reason = strsignal(signum);
 
-            if (verbosity >= 2)
+            // built in set_error_handlers, building it here may need locks
+            // held by the thread that received the signal
+            std::string const& build_string =
+                hpx::threads::coroutines::build_string_on_terminate;
+            if (verbosity >= 2 && !build_string.empty())
             {
-                std::cerr << full_build_string() << "\n" << std::flush;
+                hpx::threads::coroutines::write_on_terminate(
+                    build_string.c_str());
+                hpx::threads::coroutines::write_on_terminate("\n");
             }
 
 #if defined(HPX_HAVE_STACKTRACES)
             if (verbosity >= 1)
             {
-                std::size_t const trace_depth =
-                    util::from_string<std::size_t>(get_config_entry(
-                        "hpx.trace_depth", HPX_HAVE_THREAD_BACKTRACE_DEPTH));
-                std::cerr << "{stack-trace}: " << hpx::util::trace(trace_depth)
-                          << "\n"
-                          << std::flush;
+                // set in set_error_handlers, reading the configuration here
+                // may need locks
+                std::string const trace =
+                    hpx::util::trace(hpx::threads::coroutines::trace_depth);
+                hpx::threads::coroutines::write_on_terminate("{stack-trace}: ");
+                hpx::threads::coroutines::write_on_terminate(trace.c_str());
+                hpx::threads::coroutines::write_on_terminate("\n");
             }
 #endif
 
@@ -220,9 +232,10 @@ namespace hpx {
             hpx::detail::try_log_runtime_threads();
 #endif
 
-            std::cerr << "{what}: " << (reason ? reason : "Unknown reason")
-                      << "\n"
-                      << std::flush;
+            hpx::threads::coroutines::write_on_terminate("{what}: ");
+            hpx::threads::coroutines::write_on_terminate(
+                reason ? reason : "Unknown reason");
+            hpx::threads::coroutines::write_on_terminate("\n");
         }
         std::abort();
     }
@@ -276,10 +289,9 @@ namespace hpx {
                 cfg, "hpx.diagnostics_on_terminate", "1") == "1";
         hpx::threads::coroutines::exception_verbosity =
             hpx::util::get_entry_as<int>(cfg, "hpx.exception_verbosity", 2);
-        hpx::threads::coroutines::exception_verbosity = 0;
 #if defined(HPX_HAVE_STACKTRACES) && defined(HPX_HAVE_THREAD_BACKTRACE_DEPTH)
-        hpx::threads::coroutines::exception_verbosity =
-            hpx::util::get_entry_as<int>(
+        hpx::threads::coroutines::trace_depth =
+            hpx::util::get_entry_as<std::size_t>(
                 cfg, "hpx.trace_depth", HPX_HAVE_THREAD_BACKTRACE_DEPTH);
 #endif
 
@@ -300,10 +312,16 @@ namespace hpx {
                 std::signal(SIGABRT, detail::on_abort);
             HPX_ASSERT(prev_signal != SIG_ERR);
 
+            // the handlers print it, but can't safely build it
+            hpx::threads::coroutines::build_string_on_terminate =
+                full_build_string();
+
             struct sigaction new_action;
             new_action.sa_handler = hpx::termination_handler;
             sigemptyset(&new_action.sa_mask);
-            new_action.sa_flags = 0;
+            // a second signal while printing the diagnostics ends the process
+            // instead of entering the handler again
+            new_action.sa_flags = SA_RESETHAND;
 
             sigaction(SIGINT, &new_action, nullptr);    // Interrupted
             sigaction(SIGBUS, &new_action, nullptr);    // Bus error
