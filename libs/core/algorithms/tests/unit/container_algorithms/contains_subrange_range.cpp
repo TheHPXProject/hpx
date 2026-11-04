@@ -15,6 +15,7 @@
 #include <numeric>
 #include <random>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "test_utils.hpp"
@@ -42,6 +43,12 @@ void test_contains_subrange(IteratorTag)
         iterator(std::end(c1)), iterator(std::begin(c2)),
         iterator(std::end(c2)));
     HPX_TEST_EQ(result, true);
+
+    std::vector<int> empty;
+    HPX_TEST(!hpx::ranges::contains_subrange(iterator(empty.begin()),
+        iterator(empty.end()), iterator(c2.begin()), iterator(c2.end())));
+    HPX_TEST(!hpx::ranges::contains_subrange(iterator(c2.begin()),
+        iterator(c2.end()), iterator(c1.begin()), iterator(c1.end())));
 }
 
 template <typename ExPolicy, typename IteratorTag>
@@ -65,6 +72,12 @@ void test_contains_subrange(ExPolicy&& policy, IteratorTag)
         iterator(std::begin(c1)), iterator(std::end(c1)),
         iterator(std::begin(c2)), iterator(std::end(c2)));
     HPX_TEST_EQ(result1, true);
+
+    std::vector<int> empty;
+    HPX_TEST(!hpx::ranges::contains_subrange(policy, iterator(empty.begin()),
+        iterator(empty.end()), iterator(c2.begin()), iterator(c2.end())));
+    HPX_TEST(!hpx::ranges::contains_subrange(policy, iterator(c2.begin()),
+        iterator(c2.end()), iterator(c1.begin()), iterator(c1.end())));
 }
 
 template <typename ExPolicy, typename IteratorTag>
@@ -90,6 +103,16 @@ void test_contains_subrange_async(ExPolicy&& policy, IteratorTag)
         iterator(std::begin(c2)), iterator(std::end(c2)));
     result.wait();
     HPX_TEST_EQ(result.get(), true);
+
+    std::vector<int> empty;
+    hpx::future<bool> empty_result =
+        hpx::ranges::contains_subrange(policy, iterator(empty.begin()),
+            iterator(empty.end()), iterator(c2.begin()), iterator(c2.end()));
+    HPX_TEST(!empty_result.get());
+    hpx::future<bool> longer_result =
+        hpx::ranges::contains_subrange(policy, iterator(c2.begin()),
+            iterator(c2.end()), iterator(c1.begin()), iterator(c1.end()));
+    HPX_TEST(!longer_result.get());
 }
 
 template <typename IteratorTag>
@@ -99,13 +122,16 @@ void test_contains_subrange()
 
     test_contains_subrange(IteratorTag());
 
-    test_contains_subrange(seq, IteratorTag());
-    test_contains_subrange(par, IteratorTag());
-    test_contains_subrange(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_contains_subrange(seq, IteratorTag());
+        test_contains_subrange(par, IteratorTag());
+        test_contains_subrange(par_unseq, IteratorTag());
 
-    test_contains_subrange_async(seq(task), IteratorTag());
-    test_contains_subrange_async(par(task), IteratorTag());
-    test_contains_subrange_async(par_unseq(task), IteratorTag());
+        test_contains_subrange_async(seq(task), IteratorTag());
+        test_contains_subrange_async(par(task), IteratorTag());
+        test_contains_subrange_async(par_unseq(task), IteratorTag());
+    }
 }
 
 void contains_subrange_test()
@@ -260,11 +286,14 @@ void test_contains_subrange_exception()
 
     test_contains_subrange_exception(IteratorTag());
 
-    test_contains_subrange_exception(seq, IteratorTag());
-    test_contains_subrange_exception(par, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_contains_subrange_exception(seq, IteratorTag());
+        test_contains_subrange_exception(par, IteratorTag());
 
-    test_contains_subrange_exception_async(seq(task), IteratorTag());
-    test_contains_subrange_exception_async(par(task), IteratorTag());
+        test_contains_subrange_exception_async(seq(task), IteratorTag());
+        test_contains_subrange_exception_async(par(task), IteratorTag());
+    }
 }
 
 void contains_subrange_exception_test()
@@ -366,11 +395,14 @@ void test_contains_subrange_bad_alloc()
 {
     using namespace hpx::execution;
 
-    test_contains_subrange_bad_alloc(seq, IteratorTag());
-    test_contains_subrange_bad_alloc(par, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_contains_subrange_bad_alloc(seq, IteratorTag());
+        test_contains_subrange_bad_alloc(par, IteratorTag());
 
-    test_contains_subrange_bad_alloc_async(seq(task), IteratorTag());
-    test_contains_subrange_bad_alloc_async(par(task), IteratorTag());
+        test_contains_subrange_bad_alloc_async(seq(task), IteratorTag());
+        test_contains_subrange_bad_alloc_async(par(task), IteratorTag());
+    }
 }
 
 void contains_subrange_bad_alloc_test()

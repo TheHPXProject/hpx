@@ -11,3 +11,25 @@
 |hpx| V2.1.0 (TBD)
 ==================
 
+Breaking changes
+================
+
+- The execution-policy overloads of ``hpx::ranges::all_of``, ``any_of``,
+  ``none_of``, ``count``, ``count_if``, ``contains``, ``equal``,
+  ``starts_with``, ``ends_with``, ``contains_subrange``, ``is_partitioned``,
+  and ``lexicographical_compare`` now follow P3179. Range arguments must model
+  ``std::ranges::random_access_range`` and ``std::ranges::sized_range``;
+  iterator/sentinel arguments must model ``std::random_access_iterator`` and
+  ``std::sized_sentinel_for``. Overloads without an execution policy retain
+  their existing constraints. In particular, the ``contains``
+  iterator/sentinel overload requires both types to model
+  ``std::input_iterator``.
+- The P3179-aligned overloads use standard ranges callable defaults and pass
+  predicates and projections by value. Their concept-based constraints may
+  produce different diagnostics than the previous iterator ``static_assert``
+  checks. Code that explicitly names HPX's former default callable types may
+  need to use the corresponding ``std::ranges`` callable types.
+- The ``count`` and ``contains`` task-policy overloads store an owned copy of
+  copyable search values in their asynchronous operation state. Noncopyable
+  lvalues, including arrays, are borrowed and must remain valid until the
+  returned future becomes ready, even if the future is discarded.

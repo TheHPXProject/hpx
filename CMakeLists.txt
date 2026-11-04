@@ -1333,7 +1333,8 @@ if(HPX_WITH_NETWORKING)
   endif()
 
   hpx_option(
-    HPX_WITH_PARCEL_PROFILING BOOL "Enable profiling data for parcels"
+    HPX_WITH_PARCEL_PROFILING BOOL
+    "Enable profiling data for parcels (used by the tracing backends)"
     ${_parcel_profiling_default}
     CATEGORY "Parcelport"
     ADVANCED

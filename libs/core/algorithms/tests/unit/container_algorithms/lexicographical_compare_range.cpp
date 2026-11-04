@@ -15,6 +15,7 @@
 #include <iterator>
 #include <random>
 #include <string>
+#include <type_traits>
 #include <unordered_set>
 #include <vector>
 
@@ -122,20 +123,20 @@ void test_lexicographical_compare_sent(ExPolicy policy)
     bool actual_result1 = std::lexicographical_compare(
         std::begin(c1), std::begin(c1) + 5, std::begin(c2), std::begin(c2) + 5);
     bool result1 = hpx::ranges::lexicographical_compare(policy, std::begin(c1),
-        sentinel<char>{*(std::begin(c1) + 5)}, std::begin(c2),
-        sentinel<char>{*(std::begin(c2) + 5)});
+        test::sized_sentinel_from_iterator(std::begin(c1) + 5), std::begin(c2),
+        test::sized_sentinel_from_iterator(std::begin(c2) + 5));
 
     bool actual_result2 = std::lexicographical_compare(
         std::begin(c2), std::begin(c2) + 5, std::begin(c1), std::begin(c1) + 5);
     bool result2 = hpx::ranges::lexicographical_compare(policy, std::begin(c2),
-        sentinel<char>{*(std::begin(c2) + 5)}, std::begin(c1),
-        sentinel<char>{*(std::begin(c1) + 5)});
+        test::sized_sentinel_from_iterator(std::begin(c2) + 5), std::begin(c1),
+        test::sized_sentinel_from_iterator(std::begin(c1) + 5));
 
     bool actual_result3 = std::lexicographical_compare(
         std::begin(c1), std::begin(c1) + 5, std::begin(c1), std::begin(c1) + 5);
     bool result3 = hpx::ranges::lexicographical_compare(policy, std::begin(c1),
-        sentinel<char>{*(std::begin(c1) + 5)}, std::begin(c1),
-        sentinel<char>{*(std::begin(c1) + 5)});
+        test::sized_sentinel_from_iterator(std::begin(c1) + 5), std::begin(c1),
+        test::sized_sentinel_from_iterator(std::begin(c1) + 5));
 
     HPX_TEST_EQ(actual_result1, result1);
     HPX_TEST_EQ(actual_result2, result2);
@@ -145,9 +146,11 @@ void test_lexicographical_compare_sent(ExPolicy policy)
     std::vector<char> c3 = {1, 1, 1, 1, 3, 2, 2, 8};
     std::vector<char> c4 = {1, 1, 1, 1, 3, 5, 5, 8};
     auto result4 = hpx::ranges::lexicographical_compare(policy, std::begin(c3),
-        sentinel<char>{3}, std::begin(c4), sentinel<char>{3});
+        test::sized_sentinel_from_iterator(std::begin(c3) + 4), std::begin(c4),
+        test::sized_sentinel_from_iterator(std::begin(c4) + 4));
     auto result5 = hpx::ranges::lexicographical_compare(policy, std::begin(c3),
-        sentinel<char>{8}, std::begin(c4), sentinel<char>{8});
+        test::sized_sentinel_from_iterator(std::begin(c3) + 7), std::begin(c4),
+        test::sized_sentinel_from_iterator(std::begin(c4) + 7));
 
     HPX_TEST_EQ(false, result4);
     HPX_TEST_EQ(true, result5);
@@ -256,17 +259,23 @@ void test_lexicographical_compare()
     using namespace hpx::execution;
 
     test_lexicographical_compare(IteratorTag());
-    test_lexicographical_compare(seq, IteratorTag());
-    test_lexicographical_compare(par, IteratorTag());
-    test_lexicographical_compare(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_lexicographical_compare(seq, IteratorTag());
+        test_lexicographical_compare(par, IteratorTag());
+        test_lexicographical_compare(par_unseq, IteratorTag());
 
-    test_lexicographical_compare_async(seq(task), IteratorTag());
-    test_lexicographical_compare_async(par(task), IteratorTag());
+        test_lexicographical_compare_async(seq(task), IteratorTag());
+        test_lexicographical_compare_async(par(task), IteratorTag());
+    }
 
     test_lexicographical_compare_sent();
-    test_lexicographical_compare_sent(seq);
-    test_lexicographical_compare_sent(par);
-    test_lexicographical_compare_sent(par_unseq);
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_lexicographical_compare_sent(seq);
+        test_lexicographical_compare_sent(par);
+        test_lexicographical_compare_sent(par_unseq);
+    }
 }
 
 void lexicographical_compare_test()
