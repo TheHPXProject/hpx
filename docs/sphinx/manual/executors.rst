@@ -624,7 +624,8 @@ types can have one, and a lambda has none, so it stays ``task_size::unknown``.
 Annotations are not inherited: a class derived from an annotated class has no
 size unless it is annotated itself. The same goes for a partial or explicit
 specialization of an annotated class template. Two different sizes on one type
-are a compile-time error.
+are a compile-time error when the size of that type is read, for example when
+it is posted.
 
 .. note::
 
