@@ -14,7 +14,7 @@
 #include <hpx/iostream/categories.hpp>
 
 #include <algorithm>
-#include <iosfwd>
+#include <ios>
 #include <type_traits>
 
 namespace hpx::iostream::detail {
