@@ -27,7 +27,7 @@ foreach(test ${tests})
 
   add_hpx_regression_test(
     "modules.parcelset" ${test} ${${test}_PARAMETERS}
-    TIMEOUT 900 --hpx:ini=hpx.parcel.tcp.max_message_size=0
+    TIMEOUT 900 --hpx:ini=hpx.parcel.tcp.max_message_size!=0
   )
 endforeach()
 
@@ -39,7 +39,7 @@ if(HPX_WITH_NETWORKING)
     TIMEOUT 900
     PSEUDO_DEPS_NAME
       very_big_parcel
-      ${very_big_parcel_PARAMETERS} --hpx:ini=hpx.parcel.tcp.max_message_size=0
-      --nbytes-add=1
+      ${very_big_parcel_PARAMETERS}
+      --hpx:ini=hpx.parcel.tcp.max_message_size!=0 --nbytes-add=1
   )
 endif()

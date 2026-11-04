@@ -71,6 +71,40 @@ namespace hpx::parcelset {
     namespace {
 
         ///////////////////////////////////////////////////////////////////////////
+        // these are the errors a send reports if the destination went away
+        bool is_peer_gone_error(std::error_code const& ec)
+        {
+            using ::asio::error::make_error_code;
+            return ec == make_error_code(::asio::error::connection_aborted) ||
+                ec == make_error_code(::asio::error::connection_reset) ||
+                ec == make_error_code(::asio::error::broken_pipe) ||
+                ec == make_error_code(::asio::error::not_connected) ||
+                ec == make_error_code(::asio::error::eof);
+        }
+
+        // error code to pass on to a user supplied write handler
+        std::error_code write_handler_error_code(
+            std::error_code const& ec, bool const handled)
+        {
+            // Report a destination that went away as disconnected, even if
+            // the error was handled. Passing on success would leave the
+            // caller waiting for a reply that never arrives.
+            if (is_peer_gone_error(ec))
+            {
+                return make_system_error_code(
+                    hpx::error::locality_was_disconnected,
+                    throwmode::lightweight);
+            }
+
+            if (handled)
+            {
+                // the error was handled, pass on a success code
+                return {0, std::generic_category()};
+            }
+            return ec;
+        }
+
+        ///////////////////////////////////////////////////////////////////////////
         // default callback for put_parcel
         bool default_parcel_write_handler(
             std::error_code const& ec, [[maybe_unused]] parcel const& p)
@@ -83,12 +117,7 @@ namespace hpx::parcelset {
             // If we are in a stopped state, ignore some errors
             if (hpx::is_stopped_or_shutting_down())
             {
-                using ::asio::error::make_error_code;
-                if (ec == make_error_code(::asio::error::connection_aborted) ||
-                    ec == make_error_code(::asio::error::connection_reset) ||
-                    ec == make_error_code(::asio::error::broken_pipe) ||
-                    ec == make_error_code(::asio::error::not_connected) ||
-                    ec == make_error_code(::asio::error::eof))
+                if (is_peer_gone_error(ec))
                 {
                     return true;
                 }
@@ -738,16 +767,9 @@ namespace hpx::parcelset {
 
         auto handler = [this, f = HPX_MOVE(f)](std::error_code const& ec,
                            parcelset::parcel const& pc) -> void {
-            if (invoke_write_handler(ec, pc))
-            {
-                // the error was handled, pass on a success code
-                std::error_code const ec1(0, std::generic_category());
-                invoke_if_not_default_handler(f, ec1, pc);
-            }
-            else
-            {
-                invoke_if_not_default_handler(f, ec, pc);
-            }
+            bool const handled = invoke_write_handler(ec, pc);
+            invoke_if_not_default_handler(
+                f, write_handler_error_code(ec, handled), pc);
 
             LPT_(debug).format(
                 "parcelhandler::put_parcel: handled: {}", pc.parcel_id());
@@ -924,16 +946,9 @@ namespace hpx::parcelset {
             handlers.emplace_back([this, f = HPX_MOVE(funcs[i])](
                                       std::error_code const& ec,
                                       parcel const& p) -> void {
-                if (invoke_write_handler(ec, p))
-                {
-                    // the error was handled, pass on a success code
-                    std::error_code const ec1(0, std::generic_category());
-                    invoke_if_not_default_handler(f, ec1, p);
-                }
-                else
-                {
-                    invoke_if_not_default_handler(f, ec, p);
-                }
+                bool const handled = invoke_write_handler(ec, p);
+                invoke_if_not_default_handler(
+                    f, write_handler_error_code(ec, handled), p);
 
                 LPT_(debug).format(
                     "parcelhandler::put_parcels: handled: {}", p.parcel_id());

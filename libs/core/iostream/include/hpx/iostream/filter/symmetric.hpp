@@ -50,7 +50,7 @@
 #include <hpx/iostream/traits.hpp>
 
 #include <cstdint>
-#include <iosfwd>
+#include <ios>
 #include <memory>
 #include <string>
 #include <type_traits>

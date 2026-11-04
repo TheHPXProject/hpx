@@ -16,7 +16,10 @@ import textwrap
 _logger = logging.getLogger('pyutils')
 _logger.setLevel(logging.DEBUG)
 
-_formatter = logging.Formatter('%(levelname)s %(asctime)s: %(message)s',
+# No colon after the time: CTest takes "<name>:<number>: <text>" for a
+# compiler error, so "12:34:56: text" would fail the build steps that run the
+# performance tests
+_formatter = logging.Formatter('%(levelname)s %(asctime)s - %(message)s',
                                '%Y-%m-%d %H:%M:%S')
 
 

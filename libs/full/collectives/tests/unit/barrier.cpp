@@ -1,5 +1,6 @@
 //  Copyright (c) 2007-2022 Hartmut Kaiser
 //  Copyright (c)      2011 Bryce Lelbach
+//  Copyright (c) 2026 Alexander Strack
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -267,11 +268,11 @@ void collectives_communicator_validation_tests()
             "/test/barrier/collectives/zero_hierarchical_num_sites/",
             num_sites_arg(0), this_site_arg(0));
     });
-    expect_bad_parameter("unsupported hierarchical communicator root", [] {
+    expect_bad_parameter("out-of-range hierarchical communicator root", [] {
         (void) create_hierarchical_communicator(
-            "/test/barrier/collectives/nonzero_hierarchical_root/",
+            "/test/barrier/collectives/out_of_range_hierarchical_root/",
             num_sites_arg(2), this_site_arg(0), arity_arg(2), generation_arg(),
-            root_site_arg(1));
+            root_site_arg(2));
     });
     expect_bad_parameter("invalid hierarchical communicator arity", [] {
         (void) create_hierarchical_communicator(

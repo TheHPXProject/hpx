@@ -74,16 +74,8 @@ namespace hpx::threads {
             HPX_ASSERT(get_state().state() == thread_schedule_state::active);
             HPX_ASSERT(this == coroutine_.get_thread_id().get());
 
-            coroutine_type::result_type result = coroutine_.invoke_directly(
+            return coroutine_.invoke_directly(
                 set_state_ex(thread_restart_state::signaled));
-
-            if (result.first == thread_schedule_state::terminated &&
-                runs_as_child(std::memory_order_relaxed))
-            {
-                result.first = thread_schedule_state::deleted;
-            }
-
-            return result;
         }
 
 #if defined(HPX_DEBUG)

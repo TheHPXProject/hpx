@@ -422,6 +422,43 @@ namespace hpx::parallel::detail {
     };
 }    // namespace hpx::parallel::detail
 
+// The operations above run for about a nanosecond on builtin types.
+#define HPX_TASK_SIZE_BUILTIN_OPERATION(op)                                    \
+    template <>                                                                \
+    struct hpx::traits::is_transparent_builtin_operation<                      \
+        hpx::parallel::detail::op> : std::true_type                            \
+    {                                                                          \
+    } /**/
+
+HPX_TASK_SIZE_BUILTIN_OPERATION(equal_to);
+HPX_TASK_SIZE_BUILTIN_OPERATION(not_equal_to);
+HPX_TASK_SIZE_BUILTIN_OPERATION(less);
+HPX_TASK_SIZE_BUILTIN_OPERATION(greater);
+HPX_TASK_SIZE_BUILTIN_OPERATION(greater_equal);
+HPX_TASK_SIZE_BUILTIN_OPERATION(less_equal);
+HPX_TASK_SIZE_BUILTIN_OPERATION(plus);
+HPX_TASK_SIZE_BUILTIN_OPERATION(minus);
+HPX_TASK_SIZE_BUILTIN_OPERATION(multiplies);
+HPX_TASK_SIZE_BUILTIN_OPERATION(divides);
+
+#undef HPX_TASK_SIZE_BUILTIN_OPERATION
+
+template <typename T>
+    requires(!std::is_void_v<T>)
+struct hpx::traits::typed_builtin_operation_operand<
+    hpx::parallel::detail::min_of<T>>
+{
+    using type = T;
+};
+
+template <typename T>
+    requires(!std::is_void_v<T>)
+struct hpx::traits::typed_builtin_operation_operand<
+    hpx::parallel::detail::max_of<T>>
+{
+    using type = T;
+};
+
 namespace hpx::ranges {
 
     ///////////////////////////////////////////////////////////////////////////

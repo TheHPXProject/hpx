@@ -34,7 +34,7 @@ def load(envfile):
 
 
 try:
-    from pyutils import buildinfo
+    import buildinfo
 except ImportError:
     pass
 else:

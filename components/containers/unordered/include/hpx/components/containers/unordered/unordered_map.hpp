@@ -102,8 +102,10 @@ namespace hpx { namespace server {
     };
 }}    // namespace hpx::server
 
+/// \cond NOINTERNAL
 HPX_DISTRIBUTED_METADATA_DECLARATION(hpx::server::unordered_map_config_data,
     hpx_server_unordered_map_config_data)
+/// \endcond
 
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx {
@@ -648,6 +650,7 @@ namespace hpx {
         /// Returns the element at position \a pos in the unordered_map container.
         ///
         /// \param pos Position of the element in the unordered_map
+        /// \param erase Whether to erase the element after retrieving it.
         ///
         /// \return Returns the value of the element at position represented by
         ///         \a pos.
@@ -662,6 +665,7 @@ namespace hpx {
         ///
         /// \param part  Sequence number of the partition
         /// \param pos   Position of the element in the partition
+        /// \param erase Whether to erase the element after retrieving it.
         ///
         /// \return Returns the value of the element at position represented by
         ///         \a pos.
@@ -683,6 +687,7 @@ namespace hpx {
         /// asynchronously.
         ///
         /// \param pos Position of the element in the unordered_map
+        /// \param erase Whether to erase the element after retrieving it.
         ///
         /// \return Returns the hpx::future to value of the element at position
         ///         represented by \a pos.
@@ -697,6 +702,7 @@ namespace hpx {
         ///
         /// \param part  Sequence number of the partition
         /// \param pos   Position of the element in the partition
+        /// \param erase Whether to erase the element after retrieving it.
         ///
         /// \return Returns the hpx::future to value of the element at position
         ///         represented by \a pos.

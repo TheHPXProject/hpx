@@ -186,12 +186,15 @@ namespace hpx::detail {
     static void list_symbolic_name(std::string const&, hpx::id_type const&);
     static void list_component_type(
         std::string const&, components::component_type);
+    static int force_disconnect_on_console(hpx::id_type const&);
 }    // namespace hpx::detail
 
 HPX_PLAIN_ACTION_ID(hpx::detail::console_print, console_print_action,
     hpx::actions::console_print_action_id)
 HPX_PLAIN_ACTION_ID(hpx::detail::list_component_type,
     list_component_type_action, hpx::actions::list_component_type_action_id)
+HPX_PLAIN_ACTION_ID(hpx::detail::force_disconnect_on_console,
+    force_disconnect_action, hpx::actions::force_disconnect_action_id)
 
 using bound_list_component_type_action =
     hpx::detail::bound_action<list_component_type_action,
@@ -364,6 +367,13 @@ namespace hpx::detail {
         hpx::id_type console(agas::get_console_locality());
         naming::get_agas_client().iterate_types(
             hpx::bind<list_component_type_action>(console, _1, _2));
+    }
+
+    ///////////////////////////////////////////////////////////////////////////
+    // disconnect a locality on behalf of a non-console locality
+    int force_disconnect_on_console(hpx::id_type const& locality)
+    {
+        return hpx::force_disconnect(locality);
     }
 
     ///////////////////////////////////////////////////////////////////////////
@@ -1217,11 +1227,26 @@ namespace hpx {
 
         if (!agas::is_console())
         {
-            HPX_THROWS_IF(ec, hpx::error::invalid_status,
-                "hpx::force_disconnect",
-                "hpx::force_disconnect should be called on the console "
-                "locality only.");
-            return -1;
+            if (locality == hpx::find_here())
+            {
+                HPX_THROWS_IF(ec, hpx::error::bad_parameter,
+                    "hpx::force_disconnect",
+                    "hpx::force_disconnect cannot be used to disconnect the "
+                    "calling locality itself, use hpx::disconnect instead.");
+                return -1;
+            }
+
+            // only the console can remove a locality, ask it to do so; it
+            // performs all remaining checks
+            hpx::id_type const console = agas::get_console_locality(ec);
+            if (ec)
+            {
+                return -1;
+            }
+
+            int const result =
+                hpx::async<force_disconnect_action>(console, locality).get(ec);
+            return ec ? -1 : result;
         }
 
         if (locality == hpx::find_here())

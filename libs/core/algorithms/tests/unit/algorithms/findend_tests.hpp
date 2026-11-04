@@ -13,6 +13,7 @@
 #include <hpx/modules/algorithms.hpp>
 #include <hpx/modules/testing.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <functional>
 #include <iostream>
@@ -465,6 +466,63 @@ void test_find_end4_async(ExPolicy&& p, IteratorTag)
         [](auto v1, auto v2) { return !(v1 != v2); });
 
     HPX_TEST(f.get() == test_index);
+}
+
+template <typename ExPolicy, typename IteratorTag>
+void test_find_end5(ExPolicy&& policy, IteratorTag)
+{
+    static_assert(hpx::is_execution_policy<ExPolicy>::value,
+        "hpx::is_execution_policy<ExPolicy>::value");
+
+    typedef std::vector<int>::iterator base_iterator;
+    typedef test::test_iterator<base_iterator, IteratorTag> iterator;
+
+    // fill vector with random values above 2
+    std::vector<int> c(10007);
+    std::fill(std::begin(c), std::end(c), dis(gen));
+
+    // create a subsequence whose values are not consecutive in the middle of
+    // the vector, followed by a lone first element that does not start a match
+    c[c.size() / 2] = 2;
+    c[c.size() / 2 + 1] = 1;
+    c[c.size() / 2 + 3] = 2;
+
+    int h[] = {2, 1};
+
+    iterator index = hpx::find_end(policy, iterator(std::begin(c)),
+        iterator(std::end(c)), std::begin(h), std::end(h));
+
+    iterator test_index = std::find_end(iterator(std::begin(c)),
+        iterator(std::end(c)), std::begin(h), std::end(h));
+
+    HPX_TEST(index == test_index);
+
+    // and one more at the very end of the vector
+    c[c.size() - 2] = 2;
+    c[c.size() - 1] = 1;
+
+    index = hpx::find_end(policy, iterator(std::begin(c)),
+        iterator(std::end(c)), std::begin(h), std::end(h));
+
+    test_index = std::find_end(iterator(std::begin(c)), iterator(std::end(c)),
+        std::begin(h), std::end(h));
+
+    HPX_TEST(index == test_index);
+
+    // elements that can't be incremented
+    std::vector<std::string> s(c.size());
+    std::transform(std::begin(c), std::end(c), std::begin(s),
+        [](int i) { return std::to_string(i); });
+
+    std::string hs[] = {"2", "1"};
+
+    auto sindex = hpx::find_end(
+        policy, std::begin(s), std::end(s), std::begin(hs), std::end(hs));
+
+    auto test_sindex =
+        std::find_end(std::begin(s), std::end(s), std::begin(hs), std::end(hs));
+
+    HPX_TEST(sindex == test_sindex);
 }
 
 ///////////////////////////////////////////////////////////////////////////////

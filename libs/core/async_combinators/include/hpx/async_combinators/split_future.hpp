@@ -36,6 +36,11 @@ namespace hpx {
     ///             here the returned futures are directly representing the
     ///             futures which were passed to the function.
     ///
+    /// \note       Passing an invalid future to split_future does not throw
+    ///             immediately. Instead, it returns futures that carry an
+    ///             `hpx::error::no_state` exception, which will throw upon calling
+    ///             `.get()`.
+    ///
     template <typename... Ts>
     inline tuple<future<Ts>...> split_future(future<tuple<Ts...>>&& f);
 
@@ -121,6 +126,14 @@ namespace hpx {
                 hpx::intrusive_ptr<split_nth_continuation> this_(this);
                 shared_state_ptr const& state =
                     hpx::traits::detail::get_shared_state(future);
+
+                if (!state)
+                {
+                    this->base_type::set_exception(HPX_GET_EXCEPTION(
+                        hpx::error::no_state, "split_nth_continuation::attach",
+                        "the future has no valid shared state"));
+                    return;
+                }
 
                 state->execute_deferred();
                 state->set_on_completed(util::deferred_call(
@@ -259,6 +272,14 @@ namespace hpx {
                 shared_state_ptr const& state =
                     hpx::traits::detail::get_shared_state(future);
 
+                if (!state)
+                {
+                    this->base_type::set_exception(HPX_GET_EXCEPTION(
+                        hpx::error::no_state, "split_continuation::attach",
+                        "the future has no valid shared state"));
+                    return;
+                }
+
                 state->execute_deferred();
                 state->set_on_completed(
                     util::deferred_call(&split_continuation::on_ready<Future>,
@@ -309,6 +330,9 @@ namespace hpx {
     }    // namespace detail
 
     ///////////////////////////////////////////////////////////////////////////
+    /// Note: Passing an invalid future to split_future does not throw
+    /// immediately. Instead, it returns futures that carry an
+    /// `hpx::error::no_state` exception, which will throw upon calling `.get()`.
     HPX_CXX_CORE_EXPORT template <typename... Ts>
     HPX_FORCEINLINE hpx::tuple<hpx::future<Ts>...> split_future(
         hpx::future<hpx::tuple<Ts...>>&& f)

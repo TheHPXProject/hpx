@@ -80,6 +80,13 @@ namespace hpx {
     }    // namespace util
 
     ///////////////////////////////////////////////////////////////////////////
+    /// \brief Return whether NUMA-sensitive scheduling is configured.
+    ///
+    /// This returns true when the configured \c hpx.numa_sensitive level is
+    /// nonzero.
+    ///
+    /// \throws hpx::exception with \a hpx::error::invalid_status if the runtime
+    /// has not finished initialization.
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT bool is_scheduler_numa_sensitive();
 
     ///////////////////////////////////////////////////////////////////////////

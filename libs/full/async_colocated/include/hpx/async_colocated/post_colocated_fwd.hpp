@@ -12,6 +12,7 @@
 
 #include <type_traits>
 
+/// \cond NOINTERNAL
 namespace hpx::detail {
 
     ///////////////////////////////////////////////////////////////////////////
@@ -37,3 +38,4 @@ namespace hpx::detail {
         hpx::actions::basic_action<Component, Signature, Derived> /*act*/,
         hpx::id_type const& id, Ts&&... vs);
 }    // namespace hpx::detail
+/// \endcond

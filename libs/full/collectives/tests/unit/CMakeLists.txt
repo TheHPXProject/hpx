@@ -1,4 +1,5 @@
 # Copyright (c) 2019-2025 Hartmut Kaiser
+# Copyright (c) 2026 Alexander Strack
 #
 # SPDX-License-Identifier: BSL-1.0
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -60,6 +61,24 @@ if(HPX_WITH_NETWORKING)
   )
   foreach(test ${tests})
     set(${test}_PARAMETERS LOCALITIES 2)
+  endforeach()
+
+  # Four localities with arity two give a tree with several levels, so that the
+  # non-zero roots are exercised across real localities.
+  foreach(
+    test
+    all_gather_hierarchical
+    all_reduce_hierarchical
+    all_to_all_hierarchical
+    barrier_hierarchical
+    broadcast_hierarchical
+    exclusive_scan_hierarchical
+    gather_hierarchical
+    inclusive_scan_hierarchical
+    reduce_hierarchical
+    scatter_hierarchical
+  )
+    set(${test}_PARAMETERS LOCALITIES 4)
   endforeach()
 
   # Five localities with arity two force an uneven, three-level tree and a

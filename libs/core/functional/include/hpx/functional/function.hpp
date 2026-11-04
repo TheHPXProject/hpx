@@ -1,5 +1,5 @@
 //  Copyright (c) 2011 Thomas Heller
-//  Copyright (c) 2013-2025 Hartmut Kaiser
+//  Copyright (c) 2013-2026 Hartmut Kaiser
 //  Copyright (c) 2014-2015 Agustin Berge
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -17,6 +17,7 @@
 #include <hpx/functional/detail/function_registration.hpp>
 #include <hpx/functional/traits/get_function_address.hpp>
 #include <hpx/functional/traits/get_function_annotation.hpp>
+#include <hpx/functional/traits/get_task_size.hpp>
 #include <hpx/modules/tracing.hpp>
 
 #include <cstddef>
@@ -129,3 +130,20 @@ namespace hpx::traits {
     };
 }    // namespace hpx::traits
 #endif
+
+namespace hpx::traits {
+
+    // the size of the function stored in it, known at run time only
+    template <typename Sig, bool Serializable, threads::task_size Size>
+    struct get_task_size<hpx::function<Sig, Serializable>, Size>
+    {
+        static constexpr threads::task_size value = Size;
+
+        [[nodiscard]] static threads::task_size call(
+            hpx::function<Sig, Serializable> const& f) noexcept
+        {
+            auto const size = f.get_task_size();
+            return size != threads::task_size::unknown ? size : Size;
+        }
+    };
+}    // namespace hpx::traits

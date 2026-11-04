@@ -255,6 +255,25 @@ function(hpx_filter_language_flags cflag_list)
   string(REGEX REPLACE "\\$<\\$<COMPILE_LANGUAGE:[^>]*>:([^>]*)>?" ""
                        _cflag_list "${_cflag_list}"
   )
+  # $<COMPILE_LANG_AND_ID:...> (used e.g. by FindMPI and FindThreads to wrap
+  # -pthread for CUDA) can only be evaluated for a binary target, not by
+  # file(GENERATE), so evaluate it here for CXX and the current compiler
+  string(REGEX MATCHALL "\\$<COMPILE_LANG_AND_ID:[^>]*>" _lang_and_id_exprs
+               "${_cflag_list}"
+  )
+  list(REMOVE_DUPLICATES _lang_and_id_exprs)
+  foreach(_expr IN LISTS _lang_and_id_exprs)
+    string(REGEX REPLACE "^\\$<COMPILE_LANG_AND_ID:(.*)>$" "\\1" _args
+                         "${_expr}"
+    )
+    string(REPLACE "," ";" _args "${_args}")
+    list(POP_FRONT _args _lang)
+    set(_value 0)
+    if(_lang STREQUAL "CXX" AND CMAKE_CXX_COMPILER_ID IN_LIST _args)
+      set(_value 1)
+    endif()
+    string(REPLACE "${_expr}" "${_value}" _cflag_list "${_cflag_list}")
+  endforeach()
 
   set(${cflag_list}
       ${_cflag_list}
@@ -311,6 +330,10 @@ function(hpx_construct_library_list link_libraries link_options library_list)
     endif()
   endforeach()
   foreach(option IN LISTS ${link_options})
+    # $<HOST_LINK:...> (used by FindMPI for the MPI wrapper's link flags) can
+    # only be evaluated for a binary target, not by file(GENERATE)
+    string(REPLACE "$<HOST_LINK:SHELL:" "$<1:" option "${option}")
+    string(REPLACE "$<HOST_LINK:" "$<1:" option "${option}")
     set(_library_list "${_library_list} ${option}")
   endforeach()
   set(${library_list}

@@ -154,6 +154,13 @@ namespace hpx::parcelset {
                 return false;
             }
 
+            static std::size_t max_header_receives(
+                util::runtime_configuration const& ini)
+            {
+                return hpx::util::get_entry_as<std::size_t>(
+                    ini, "hpx.parcel.mpi.max_header_receives", 0);
+            }
+
         public:
             using sender_type = sender;
             parcelport(util::runtime_configuration const& ini,
@@ -165,6 +172,7 @@ namespace hpx::parcelset {
               , multi_threaded_mpi_(multi_threaded_mpi(ini))
               , enable_send_immediate_(enable_send_immediate(ini))
               , enable_ack_handshakes_(enable_ack_handshakes(ini))
+              , max_header_receives_(max_header_receives(ini))
             {
             }
 
@@ -276,6 +284,11 @@ namespace hpx::parcelset {
                 return enable_send_immediate_;
             }
 
+            constexpr std::size_t get_max_header_receives() const noexcept
+            {
+                return max_header_receives_;
+            }
+
             bool send_immediate(parcelset::parcelport* pp,
                 parcelset::locality const& dest,
                 sender::parcel_buffer_type buffer,
@@ -306,7 +319,7 @@ namespace hpx::parcelset {
                     threads::thread_stacksize::default_, state, true);
 
                 auto const id = hpx::threads::register_thread(data, ec);
-                if (!ec)
+                if (ec)
                     return false;
 
                 if (state == threads::thread_schedule_state::suspended)
@@ -353,6 +366,7 @@ namespace hpx::parcelset {
             bool multi_threaded_mpi_;
             bool enable_send_immediate_;
             bool enable_ack_handshakes_;
+            std::size_t max_header_receives_;
         };
     }    // namespace policies::mpi
 }    // namespace hpx::parcelset
@@ -415,7 +429,10 @@ struct hpx::traits::plugin_config_data<
             // number of cores that do background work, default: all
             "background_threads = "
             "${HPX_HAVE_PARCELPORT_MPI_BACKGROUND_THREADS:-1}\n"
-            "sendimm = 0\n";
+            "sendimm = 0\n"
+            "ack_handshake = 0\n"
+            "max_header_receives = "
+            "${HPX_HAVE_PARCELPORT_MPI_MAX_HEADER_RECEIVES:0}\n";
     }
 };    // namespace hpx::traits
 

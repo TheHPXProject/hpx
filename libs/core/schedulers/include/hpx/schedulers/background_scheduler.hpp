@@ -60,8 +60,8 @@ namespace hpx::threads::policies {
             return "background_scheduler";
         }
 
-        void set_scheduler_mode(scheduler_mode mode,
-            hpx::threads::mask_cref_type mask) noexcept override
+        scheduler_mode adjust_scheduler_mode(
+            scheduler_mode mode) noexcept override
         {
             // this scheduler does not support stealing or numa stealing, but
             // needs to enable background work
@@ -69,9 +69,8 @@ namespace hpx::threads::policies {
                 mode & ~scheduler_mode::enable_stealing);
             mode = static_cast<scheduler_mode>(
                 mode & ~scheduler_mode::enable_stealing_numa);
-            mode = mode | scheduler_mode::do_background_work;
-            mode = mode | scheduler_mode::do_background_work_only;
-            scheduler_base::set_scheduler_mode(mode, mask);
+            return mode | scheduler_mode::do_background_work |
+                scheduler_mode::do_background_work_only;
         }
 
         // Return the next thread to be executed, return false if none is

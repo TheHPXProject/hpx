@@ -8,8 +8,8 @@
 // times by force_disconnect.cpp (see process::launch_connecting_locality()
 // there), each time connecting to the running test as an additional locality.
 // Each instance simply keeps the runtime alive and is force-disconnected by
-// the console locality (via hpx::force_disconnect); it never waits on a latch
-// or initiates its own disconnection.
+// the console locality or by another worker (via hpx::force_disconnect); it
+// never waits on a latch or initiates its own disconnection.
 
 #include <hpx/config.hpp>
 
@@ -45,6 +45,20 @@ std::uint32_t sleep_locality(int const ms)
     return hpx::get_locality_id();
 }
 HPX_PLAIN_ACTION(sleep_locality, sleep_locality_action)
+
+// Used to call hpx::force_disconnect from this locality instead of the console.
+// Returns the error it reported, or zero if it succeeded.
+int force_disconnect_from_here(hpx::id_type const& locality)
+{
+    hpx::error_code ec(hpx::throwmode::lightweight);
+    int const result = hpx::force_disconnect(locality, ec);
+    if (result != 0 && !ec)
+    {
+        return -1;
+    }
+    return ec.value();
+}
+HPX_PLAIN_ACTION(force_disconnect_from_here, force_disconnect_from_here_action)
 
 int hpx_main()
 {

@@ -69,8 +69,9 @@ def build(build_type, environment, target, source_dir, build_dir, install_dir,
 
 
 try:
-    from pyutils import buildinfo
-except ImportError:
+    import buildinfo
+except ImportError as e:
+    print(e)
     buildinfo = None
 
 if buildinfo:
@@ -116,27 +117,34 @@ def perftest():
 
 
 if buildinfo:
+    import argparse
 
     @perftest.command(description='run performance tests')
     @args.arg('--local',
-              default=False,
-              help='run without slurm')
+                default=False,
+                help='run without slurm')
     @args.arg('--run_output',
-              '-o',
-              required=True,
-              help='output file path, extension .json is added if not given')
-    @args.arg('--targets-and-opts',
-              nargs='+',
-              type=str,
-              help='extra arguments to pass to the test\nWarning prefer = to \
-              space to assign values to hpx options')
+                '-o',
+                required=True,
+                help='output file path, extension .json is added if not given')
     @args.arg('--n_executions',
-              default=1,
-              type=int,
-              help='number of executions of the benchmark executable, whose \
-              results are then merged together')
+                default=1,
+                type=int,
+                help='number of executions of the benchmark executable, whose \
+                results are then merged together')
+    @args.arg('--timeout',
+                default=None,
+                type=float,
+                help='seconds after which a single execution of the \
+                benchmark executable is stopped and the run fails')
     @args.arg('--environment', '-e', nargs='?', help='path to environment file')
-    def run(local, run_output, targets_and_opts, n_executions, environment):
+    @args.arg('--targets-and-opts',
+                nargs=argparse.REMAINDER,
+                type=str,
+                help='extra arguments to pass to the test\nWarning prefer = to \
+                space to assign values to hpx options')
+    def run(local, run_output, targets_and_opts, n_executions, timeout,
+            environment):
 
         if environment:
             env.load(environment)
@@ -150,7 +158,7 @@ if buildinfo:
         mkdirp(run_output)
 
         import perftest
-        data = perftest.run(local, targets_and_opts, n_executions)
+        data = perftest.run(local, targets_and_opts, n_executions, timeout)
         with open(run_output, 'w') as outfile:
             json.dump(data, outfile, indent='  ')
             log.info(f'Successfully saved perftests output to {run_output}')

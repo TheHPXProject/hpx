@@ -85,6 +85,7 @@ namespace hpx::tracing {
     };
 
     ////////////////////////////////////////////////////////////////////////////
+    /// \cond NOINTERNAL
     HPX_CXX_CORE_EXPORT struct [[maybe_unused]] lock_context
     {
         constexpr explicit lock_context(
@@ -109,6 +110,7 @@ namespace hpx::tracing {
 
         constexpr void after_unlock() const noexcept {}
     };
+    /// \endcond
 
     ////////////////////////////////////////////////////////////////////////////
     namespace detail {
@@ -181,6 +183,7 @@ namespace hpx::tracing {
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void update_task_timer(
         task_timer_data& timer, char const* new_name);
 
+    /// \cond NOINTERNAL
     HPX_CXX_CORE_EXPORT struct HPX_CORE_EXPORT scoped_task_timer
     {
         explicit scoped_task_timer(task_timer_data data) noexcept;
@@ -210,6 +213,7 @@ namespace hpx::tracing {
         bool stopped_;
         task_timer_data data_;
     };
+    /// \endcond
 
     HPX_CXX_CORE_EXPORT constexpr void task_staged(
         char const*, void const* = nullptr) noexcept

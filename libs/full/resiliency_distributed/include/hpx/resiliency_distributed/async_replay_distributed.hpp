@@ -140,7 +140,7 @@ namespace hpx::resiliency::experimental {
     /// replaying on the next locality on error (aborts on
     /// abort_replay_exception).
     ///
-    /// \param tag     CPO tag (async_replay_t).
+    /// The CPO tag is \c async_replay_t.
     /// \param ids     Target localities to try in order.
     /// \param action  Action to invoke on each locality.
     /// \param ts      Arguments forwarded to \a action.
@@ -170,7 +170,7 @@ namespace hpx::resiliency::experimental {
     /// validating results with \a pred. Replays on the next locality on
     /// error (aborts on abort_replay_exception).
     ///
-    /// \param tag     CPO tag (async_replay_validate_t).
+    /// The CPO tag is \c async_replay_validate_t.
     /// \param ids     Target localities to try in order.
     /// \param pred    Predicate validating each invocation result.
     /// \param action  Action to invoke on each locality.

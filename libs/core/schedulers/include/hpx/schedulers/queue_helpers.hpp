@@ -16,11 +16,51 @@
 #include <hpx/modules/type_support.hpp>
 #include <hpx/schedulers/deadlock_detection.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <utility>
+#include <vector>
 
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx::threads::policies::detail {
+
+    HPX_CXX_CORE_EXPORT template <typename GetDistance>
+    std::vector<std::size_t> get_numa_stealing_domains(numa_sensitive_mode mode,
+        std::size_t current_domain, std::size_t num_domains,
+        bool is_boundary_worker, GetDistance&& get_distance)
+    {
+        if (mode == numa_sensitive_mode::strict ||
+            (mode == numa_sensitive_mode::boundary && !is_boundary_worker))
+        {
+            return {};
+        }
+
+        std::vector<std::pair<std::size_t, std::size_t>> distances;
+        distances.reserve(num_domains > 0 ? num_domains - 1 : 0);
+        for (std::size_t domain = 0; domain != num_domains; ++domain)
+        {
+            if (domain != current_domain)
+            {
+                distances.emplace_back(
+                    get_distance(current_domain, domain), domain);
+            }
+        }
+        std::sort(distances.begin(), distances.end());
+
+        std::vector<std::size_t> domains;
+        domains.reserve(distances.size());
+        for (auto const& [distance, domain] : distances)
+        {
+            if (mode == numa_sensitive_mode::boundary &&
+                distance != distances.front().first)
+            {
+                break;
+            }
+            domains.push_back(domain);
+        }
+        return domains;
+    }
 
     ///////////////////////////////////////////////////////////////////////////
     // debug helper function, logs all suspended threads this returns true

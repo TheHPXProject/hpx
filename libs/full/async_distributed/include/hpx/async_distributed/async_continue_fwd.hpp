@@ -21,6 +21,7 @@
 namespace hpx {
 
     ///////////////////////////////////////////////////////////////////////////
+    /// \cond NOINTERNAL
     namespace detail {
 
         template <typename Action, typename Cont>
@@ -38,6 +39,7 @@ namespace hpx {
             typename result_of_async_continue<Action, Cont>::type>::type>
         async_continue_r(Cont&& cont, Target const& target, Ts&&... vs);
     }    // namespace detail
+    /// \endcond
 
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_EXPORT template <typename Action, typename Cont, typename... Ts>

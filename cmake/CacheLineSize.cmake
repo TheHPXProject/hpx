@@ -1,4 +1,4 @@
-# Copyright (c) 2024 Hartmut Kaiser
+# Copyright (c) 2024-2026 Hartmut Kaiser
 #
 # SPDX-License-Identifier: BSL-1.0
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -60,8 +60,56 @@ function(cache_line_size output_var)
     set(CACHE_LINE_SIZE ${HPX_INTERNAL_CACHE_LINE_SIZE_DETECT})
   endif()
 
+  # the cache line size is used as an alignment (alignas), so it has to be a
+  # power of two, written as a decimal number without leading zeros (C++ would
+  # read 064 as an octal number)
+  if(NOT CACHE_LINE_SIZE MATCHES "^[1-9][0-9]*$")
+    hpx_error(
+      "The cache line size is not a positive decimal number: ${CACHE_LINE_SIZE}"
+    )
+  endif()
+  math(EXPR cache_line_size_mask
+       "${CACHE_LINE_SIZE} & (${CACHE_LINE_SIZE} - 1)"
+  )
+  if(NOT cache_line_size_mask EQUAL 0)
+    hpx_error(
+      "The cache line size is not a power of two: ${CACHE_LINE_SIZE} (set by HPX_INTERNAL_CACHE_LINE_SIZE_DETECT)"
+    )
+  endif()
+
   set(${output_var}
       "${CACHE_LINE_SIZE}"
+      PARENT_SCOPE
+  )
+endfunction()
+
+# The minimal distance between data written by different cores
+# (threads::get_destructive_interference_size()).
+# HPX_WITH_DESTRUCTIVE_INTERFERENCE_SIZE overrides the default chosen by the
+# target architecture in the generated header; an empty value selects that
+# default.
+function(destructive_interference_size cache_line_size output_var)
+  set(size 0)
+  if(NOT "${HPX_WITH_DESTRUCTIVE_INTERFERENCE_SIZE}" STREQUAL "")
+    set(size ${HPX_WITH_DESTRUCTIVE_INTERFERENCE_SIZE})
+    if(NOT size MATCHES "^[1-9][0-9]*$")
+      hpx_error(
+        "The destructive interference size is not a positive decimal number: ${size}"
+      )
+    endif()
+    math(EXPR size_mask "${size} & (${size} - 1)")
+    if(NOT size_mask EQUAL 0 OR size LESS cache_line_size)
+      hpx_error(
+        "The destructive interference size must be a power of two and at least the cache line size (${cache_line_size}): ${size}"
+      )
+    endif()
+  endif()
+  set(HPX_INTERNAL_DESTRUCTIVE_INTERFERENCE_SIZE
+      ${size}
+      CACHE INTERNAL ""
+  )
+  set(${output_var}
+      "${size}"
       PARENT_SCOPE
   )
 endfunction()

@@ -317,7 +317,9 @@ namespace hpx {
     HPX_CXX_CORE_EXPORT [[nodiscard]] HPX_CORE_EXPORT error get_error(
         hpx::exception const& e);
 
-    /// \copydoc get_error(hpx::exception const& e)
+    /// \brief Returns the error stored in an error code.
+    ///
+    /// \param e The error code from which to retrieve the error.
     HPX_CXX_CORE_EXPORT [[nodiscard]] HPX_CORE_EXPORT error get_error(
         hpx::error_code const& e);
 

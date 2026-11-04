@@ -1334,6 +1334,7 @@ namespace hpx::execution {
         }
 
         ///////////////////////////////////////////////////////////////////////
+        /// \cond NOINTERNAL
         template <template <class, class> typename Derived, typename Executor,
             typename Parameters, typename Category>
         template <typename Tag, typename Enable>
@@ -1343,6 +1344,7 @@ namespace hpx::execution {
         {
             return tag(derived());
         }
+        /// \endcond
     }    // namespace detail
 }    // namespace hpx::execution
 

@@ -403,10 +403,13 @@ namespace hpx {
     /// The function \a hpx::force_disconnect can be used to disconnect a
     /// locality from a running HPX application.
     ///
-    /// This function should be used from the console locality only to force the
-    /// disconnect of a different (i.e. the given) locality. It should not be
-    /// used by a locality to disconnect itself (use \a hpx::disconnect()
-    /// without the locality argument for this purpose).
+    /// This function can be called on any locality to force the disconnect of
+    /// a different (i.e. the given) locality. Only the console locality removes
+    /// localities, so when called on another locality it asks the console to
+    /// remove the given locality and waits for the result. It cannot be used
+    /// by a locality to disconnect itself (use \a hpx::disconnect() without
+    /// the locality argument for this purpose), nor to disconnect the console
+    /// locality; it fails with \a hpx::error::bad_parameter in both cases.
     ///
     /// Only a locality that connected late can be removed this way. The
     /// function fails with \a hpx::error::bad_parameter if the given locality

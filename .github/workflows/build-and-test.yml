@@ -57,6 +57,8 @@ jobs:
             -DHPX_WITH_TOOLS=On \
             -DCMAKE_CXX_FLAGS="-fcolor-diagnostics" \
             -DHPX_WITH_TESTS_HEADERS=On \
+            -DHPX_WITH_TESTS_BENCHMARKS=ON \
+            -DHPX_WITH_TESTS_RUN_BENCHMARKS=ON \
             -DHPX_WITH_COMPILER_WARNINGS=On \
             -DHPX_WITH_COMPILER_WARNINGS_AS_ERRORS=On \
             -DHPX_WITH_DEPRECATION_WARNINGS=On \

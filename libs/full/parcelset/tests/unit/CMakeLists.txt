@@ -1,4 +1,4 @@
-# Copyright (c) 2007-2023 Hartmut Kaiser
+# Copyright (c) 2007-2026 Hartmut Kaiser
 # Copyright (c)      2014 Thomas Heller
 # Copyright (c) 2011-2012 Bryce Adelstein-Lelbach
 #
@@ -43,7 +43,7 @@ add_hpx_unit_test(
   EXECUTABLE zero_copy_parcel
   PSEUDO_DEPS_NAME zero_copy_parcel ${zero_copy_parcel_PARAMETERS}
   RUN_SERIAL
-  ARGS --hpx:ini=hpx.parcel.array_optimization=0
+  ARGS --hpx:ini=hpx.parcel.array_optimization!=0
 )
 
 add_hpx_unit_test(
@@ -51,7 +51,7 @@ add_hpx_unit_test(
   EXECUTABLE zero_copy_parcel
   PSEUDO_DEPS_NAME zero_copy_parcel ${zero_copy_parcel_PARAMETERS}
   RUN_SERIAL
-  ARGS --hpx:ini=hpx.parcel.zero_copy_optimization=0
+  ARGS --hpx:ini=hpx.parcel.zero_copy_optimization!=0
 )
 
 add_hpx_unit_test(
@@ -59,5 +59,5 @@ add_hpx_unit_test(
   EXECUTABLE zero_copy_parcel
   PSEUDO_DEPS_NAME zero_copy_parcel ${zero_copy_parcel_PARAMETERS}
   RUN_SERIAL
-  ARGS --hpx:ini=hpx.parcel.zero_copy_receive_optimization=0
+  ARGS --hpx:ini=hpx.parcel.zero_copy_receive_optimization!=0
 )

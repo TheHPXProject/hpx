@@ -18,6 +18,12 @@ configuration_name=${5}
 build_id=${6}
 context=${7}
 
+# The CDash link is optional: leave it out when there is no CDash build.
+target_url=""
+if [[ -n "${build_id}" ]]; then
+    target_url="\"target_url\": \"https://cdash.rostam.cct.lsu.edu/build/${build_id}\","
+fi
+
 # A moved endpoint is an error: use the canonical repository instead of
 # forwarding a credential-bearing POST to an unexpected redirect target.
 # Retry transient failures at most twice, with bounded connection/transfer time.
@@ -31,7 +37,7 @@ http_status=$(curl --disable --silent --show-error --fail \
     --header "authorization: Bearer ${github_token}" \
     --data "{
         \"state\": \"${commit_status}\",
-        \"target_url\": \"https://cdash.rostam.cct.lsu.edu/build/${build_id}\",
+        ${target_url}
         \"description\": \"Jenkins\",
         \"context\": \"${context}/${configuration_name}\"
     }")

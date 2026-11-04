@@ -1,4 +1,5 @@
 //  Copyright (c) 2026 Anshuman Agrawal
+//  Copyright (c) 2026 Alexander Strack
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -47,26 +48,28 @@ namespace hpx::collectives::detail {
         hierarchical_communicator const& communicators, this_site_arg this_site,
         char const* operation);
 
-    // The tree hardcodes site 0 as the root at every level, so the root-side
-    // entry points (broadcast_to, gather_here, reduce_here, scatter_to) may
-    // only be called from site 0, and the non-root entry points only from the
-    // other sites. `root_operation` names the root-side operation for the
-    // resulting error message.
+    // The root-side entry points (broadcast_to, gather_here, reduce_here,
+    // scatter_to) may only be called from the root site of the communicator,
+    // and the non-root entry points only from the other sites.
+    // `root_operation` names the root-side operation for the resulting error
+    // message.
     [[nodiscard]] HPX_EXPORT std::exception_ptr
-    validate_hierarchical_root_caller(this_site_arg this_site,
+    validate_hierarchical_root_caller(
+        hierarchical_communicator const& communicators, this_site_arg this_site,
         char const* operation, char const* root_operation);
 
     [[nodiscard]] HPX_EXPORT std::exception_ptr
-    validate_hierarchical_non_root_caller(this_site_arg this_site,
+    validate_hierarchical_non_root_caller(
+        hierarchical_communicator const& communicators, this_site_arg this_site,
         char const* operation, char const* root_operation);
 
-    // A non-zero root site is not supported by any of the hierarchical
-    // implementations (the tree designates site 0 as the root).
-    // `operation_name` is the plain operation name (e.g. "barrier") used in
-    // the resulting error message.
+    // The composite operations take a root_site argument for symmetry with
+    // the flat ones. It may be left at its default or must name the root site
+    // the communicator was created with. `operation_name` is the plain
+    // operation name (e.g. "barrier") used in the resulting error message.
     [[nodiscard]] HPX_EXPORT std::exception_ptr validate_hierarchical_root_site(
-        root_site_arg root_site, char const* operation,
-        char const* operation_name);
+        hierarchical_communicator const& communicators, root_site_arg root_site,
+        char const* operation, char const* operation_name);
 
     template <typename ValueType, typename Data>
     constexpr decltype(auto) handle_bool(Data&& data) noexcept
@@ -173,14 +176,25 @@ namespace hpx::collectives::detail {
     HPX_CXX_EXPORT [[nodiscard]] HPX_EXPORT std::ptrdiff_t classify_site(
         std::size_t this_site, std::size_t num_sites, std::size_t arity);
 
-    HPX_CXX_EXPORT [[nodiscard]] HPX_EXPORT bool is_top_level_rep(
-        std::size_t this_site, std::size_t num_sites, std::size_t arity);
+    // The leader of the range [left, right] of sites is the root site if the
+    // range contains it, and its leftmost site otherwise. Leaders nest: the
+    // leader of a range also leads the part of the range it is in. A top-level
+    // group is represented by its leader.
+    [[nodiscard]] constexpr std::size_t range_leader(
+        std::size_t left, std::size_t right, std::size_t root) noexcept
+    {
+        return (left <= root && root <= right) ? root : left;
+    }
 
-    // Overload for callers that have already classified this_site; avoids
-    // repeating the classify_site scan. Only referenced from within the
-    // module purview, hence no HPX_CXX_EXPORT.
+    HPX_CXX_EXPORT [[nodiscard]] HPX_EXPORT bool is_top_level_rep(
+        std::size_t this_site, std::size_t num_sites, std::size_t arity,
+        std::size_t root);
+
+    // Overload for callers that have already classified this_site. Only
+    // referenced from within the module purview, hence no HPX_CXX_EXPORT.
     [[nodiscard]] HPX_EXPORT bool is_top_level_rep(std::ptrdiff_t group,
-        std::size_t this_site, std::size_t num_sites, std::size_t arity);
+        std::size_t this_site, std::size_t num_sites, std::size_t arity,
+        std::size_t root);
 
     template <typename T, typename F>
     std::vector<T> make_inclusive_scan_results(std::vector<T>&& values, F&& op)

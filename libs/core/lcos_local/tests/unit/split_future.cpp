@@ -11,6 +11,7 @@
 
 #include <array>
 #include <chrono>
+#include <cstddef>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -194,6 +195,84 @@ void test_split_future_vector()
     HPX_TEST_EQ(result[2].get(), 44);
 }
 
+void test_split_invalid_future()
+{
+    auto check_no_state = [](auto& f) {
+        try
+        {
+            f.get();
+            HPX_TEST(false);
+        }
+        catch (hpx::exception const& e)
+        {
+            HPX_TEST_EQ(e.get_error(), hpx::error::no_state);
+        }
+        catch (...)
+        {
+            HPX_TEST(false);
+        }
+    };
+
+    // Test split_nth_continuation
+    {
+        hpx::future<hpx::tuple<int, int>> f_tuple;
+        HPX_TEST(!f_tuple.valid());
+
+        auto result_tuple = hpx::split_future(HPX_MOVE(f_tuple));
+
+        check_no_state(hpx::get<0>(result_tuple));
+        check_no_state(hpx::get<1>(result_tuple));
+    }
+
+#if defined(HPX_DATASTRUCTURES_HAVE_ADAPT_STD_TUPLE)
+    {
+        hpx::future<std::tuple<int, int>> f_tuple;
+        HPX_TEST(!f_tuple.valid());
+
+        auto result_tuple = hpx::split_future(HPX_MOVE(f_tuple));
+
+        check_no_state(std::get<0>(result_tuple));
+        check_no_state(std::get<1>(result_tuple));
+    }
+#endif
+
+    // Test std::pair
+    {
+        hpx::future<std::pair<int, int>> f_pair;
+        HPX_TEST(!f_pair.valid());
+
+        auto result_pair = hpx::split_future(HPX_MOVE(f_pair));
+
+        check_no_state(result_pair.first);
+        check_no_state(result_pair.second);
+    }
+
+    // Test std::array
+    {
+        hpx::future<std::array<int, 2>> f_array;
+        HPX_TEST(!f_array.valid());
+
+        auto result_array = hpx::split_future(HPX_MOVE(f_array));
+
+        check_no_state(result_array[0]);
+        check_no_state(result_array[1]);
+    }
+
+    // Test split_continuation
+    {
+        hpx::future<std::vector<int>> f_vector;
+        HPX_TEST(!f_vector.valid());
+
+        auto result_vector = hpx::split_future(HPX_MOVE(f_vector), 2);
+        HPX_TEST_EQ(result_vector.size(), std::size_t(2));
+
+        for (auto& f : result_vector)
+        {
+            check_no_state(f);
+        }
+    }
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 int hpx_main()
 {
@@ -212,6 +291,8 @@ int hpx_main()
     test_split_future_array();
 
     test_split_future_vector();
+
+    test_split_invalid_future();
 
     hpx::local::finalize();
     return hpx::util::report_errors();

@@ -51,7 +51,8 @@ namespace hpx::lcos::local::detail {
             // fall through so the while predicate is re-evaluated.
             if (cond_.wait_until(
                     l, abs_time, "counting_semaphore::wait_until") ==
-                threads::thread_restart_state::timeout)
+                    threads::thread_restart_state::timeout &&
+                value_ < count)
             {
                 return false;
             }

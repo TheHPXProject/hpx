@@ -150,6 +150,7 @@ namespace hpx::tracing {
     // so that a lock announced while disconnected keeps skipping its
     // per-cycle events even if a client connects mid-lifetime -- announce
     // and per-cycle events stay consistent.
+    /// \cond NOINTERNAL
     HPX_CXX_CORE_EXPORT struct [[maybe_unused]] lock_context
     {
         HPX_CORE_EXPORT explicit lock_context(
@@ -172,6 +173,7 @@ namespace hpx::tracing {
         bool active_;
         hpx::tracy::lock_data impl;
     };
+    /// \endcond
 
     ////////////////////////////////////////////////////////////////////////////
     namespace detail {
@@ -233,6 +235,7 @@ namespace hpx::tracing {
     {
     }
 
+    /// \cond NOINTERNAL
     HPX_CXX_CORE_EXPORT struct [[maybe_unused]] scoped_task_timer
     {
         constexpr explicit scoped_task_timer(task_timer_data) noexcept {}
@@ -249,6 +252,7 @@ namespace hpx::tracing {
             }
         }
     };
+    /// \endcond
 
     namespace detail {
 #if defined(HPX_HAVE_TRACING_LIFECYCLE_EVENTS)
