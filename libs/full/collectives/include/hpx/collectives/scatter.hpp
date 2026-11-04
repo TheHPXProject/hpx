@@ -545,6 +545,13 @@ namespace hpx::collectives {
                     hpx::error::bad_parameter, "hpx::collectives::scatter_from",
                     "the generation number shouldn't be zero"));
             }
+            if (!fid.valid())
+            {
+                return hpx::make_exceptional_future<T>(
+                    HPX_GET_EXCEPTION(hpx::error::invalid_status,
+                        "hpx::collectives::scatter_from",
+                        "the communicator is not valid"));
+            }
 
             auto scatter_from_data = [this_site, generation, num_generations](
                                          communicator&& c) -> hpx::future<T> {
@@ -830,6 +837,12 @@ namespace hpx::collectives {
                 return hpx::make_exceptional_future<Result>(HPX_GET_EXCEPTION(
                     hpx::error::bad_parameter, "hpx::collectives::scatter_to",
                     "the generation number shouldn't be zero"));
+            }
+            if (!fid.valid())
+            {
+                return hpx::make_exceptional_future<Result>(HPX_GET_EXCEPTION(
+                    hpx::error::invalid_status, "hpx::collectives::scatter_to",
+                    "the communicator is not valid"));
             }
 
             auto [num_sites, comm_site] = fid.get_info();

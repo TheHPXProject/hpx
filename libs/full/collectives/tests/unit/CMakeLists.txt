@@ -26,6 +26,7 @@ set(tests
     fold
     global_spmd_block
     hierarchical_helpers
+    invalid_communicator
     pairwise_all_to_all
     reduce_direct
     remote_latch
