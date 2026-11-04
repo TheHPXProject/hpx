@@ -1,0 +1,81 @@
+#  Copyright (c) 2026 Hartmut Kaiser
+#
+#  SPDX-License-Identifier: BSL-1.0
+#  Distributed under the Boost Software License, Version 1.0. (See accompanying
+#  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+
+# Copyright and licensing information for files that can't carry a comment
+# header (images, data, generated reference results, JSON, templates). Files
+# that carry their own SPDX header take precedence over this file. See
+# https://reuse.software/spec-3.3/ for details.
+
+version = 1
+SPDX-PackageName = "HPX"
+SPDX-PackageDownloadLocation = "https://github.com/TheHPXProject/hpx"
+
+# The license text referenced by the file headers throughout HPX
+[[annotations]]
+path = "LICENSE_1_0.txt"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "NONE"
+SPDX-License-Identifier = "BSL-1.0"
+
+# Documentation images, papers, and bibliographies
+[[annotations]]
+path = [
+    "docs/sphinx/_static/images/**",
+    "docs/sphinx/references.bib",
+    "docs/joss_paper/**",
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "The HPX Project contributors"
+SPDX-License-Identifier = "BSL-1.0"
+
+# Repository, CI, and packaging configuration and data
+[[annotations]]
+path = [
+    ".github/ISSUE_TEMPLATE.md",
+    ".github/PULL_REQUEST_TEMPLATE.md",
+    ".github/vcpkg/vcpkg.json",
+    "CMakePresets.json",
+    "cmake/packaging/rpm/Changelog.txt",
+    "tools/.codespell_whitelist",
+    "tools/inspect/hpx-no-inspect",
+    "tools/perftests_ci/build/__init__.py",
+    "tools/perftests_ci/perftest/references/*.tar.gz",
+    "tools/valgrind/memcheck.supp",
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "The HPX Project contributors"
+SPDX-License-Identifier = "BSL-1.0"
+
+# Example inputs
+[[annotations]]
+path = [
+    "examples/1d_stencil/README.APEX",
+    "examples/heartbeat/hpx_counters.rc",
+    "examples/interpolate1d/sine.h5",
+    "libs/core/program_options/examples/response_file.rsp",
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "The HPX Project contributors"
+SPDX-License-Identifier = "BSL-1.0"
+
+# Documentation of the inspect tool, taken from Boost
+[[annotations]]
+path = "tools/inspect/doc/inspect.qbk"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2003-2006 Beman Dawes, Rene Rivera"
+SPDX-License-Identifier = "BSL-1.0"
+
+# Spell checker example inputs: the 5desk word list from Alan Beale's 12dicts
+# package and an excerpt of W. D. Ross' translation (1908) of Aristotle's
+# Nicomachean Ethics, both in the public domain
+[[annotations]]
+path = [
+    "examples/spell_check/5desk.txt",
+    "examples/spell_check/example_text.txt",
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "NONE"
+SPDX-License-Identifier = "LicenseRef-PublicDomain"
