@@ -97,6 +97,21 @@ void test_execute()
     loop.run();
 }
 
+void test_run_loop_finish_race_7890()
+{
+    ex::run_loop loop;
+    auto sched = loop.get_scheduler();
+    std::atomic<bool> executed{false};
+
+    loop.finish();
+    ex::start_detached(ex::schedule(sched) | ex::then([&]() noexcept {
+        executed.store(true, std::memory_order_relaxed);
+    }));
+
+    loop.run();
+    HPX_TEST(executed.load(std::memory_order_relaxed));
+}
+
 struct check_context_receiver
 {
     using receiver_concept = ex::receiver_t;
@@ -2138,6 +2153,7 @@ int hpx_main()
 {
     RUN_TEST(test_concepts);
     RUN_TEST(test_execute);
+    RUN_TEST(test_run_loop_finish_race_7890);
     RUN_TEST(test_sender_receiver_basic);
     RUN_TEST(test_sender_receiver_then);
     RUN_TEST(test_sender_receiver_then_wait);
