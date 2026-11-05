@@ -104,22 +104,35 @@ namespace hpx::threads::policies {
     namespace detail {
 
         ////////////////////////////////////////////////////////////////////////
-        inline std::size_t select_numa_worker(
+        HPX_CXX_CORE_EXPORT template <typename IsWorkerActive>
+        std::size_t select_numa_worker(
             std::vector<std::size_t> const& thread_numa_domain,
             std::size_t num_queues, std::size_t requested_domain,
-            std::size_t start) noexcept
+            std::size_t start, IsWorkerActive&& is_worker_active) noexcept(std::
+                is_nothrow_invocable_r_v<bool, IsWorkerActive&, std::size_t>)
         {
             HPX_ASSERT(num_queues != 0);
             HPX_ASSERT(num_queues <= thread_numa_domain.size());
             for (std::size_t i = 0; i != num_queues; ++i)
             {
                 std::size_t const idx = (start + i) % num_queues;
-                if (thread_numa_domain[idx] == requested_domain)
+                if (thread_numa_domain[idx] == requested_domain &&
+                    is_worker_active(idx))
                 {
                     return idx;
                 }
             }
             return start;
+        }
+
+        HPX_CXX_CORE_EXPORT inline std::size_t select_numa_worker(
+            std::vector<std::size_t> const& thread_numa_domain,
+            std::size_t num_queues, std::size_t requested_domain,
+            std::size_t start) noexcept
+        {
+            return select_numa_worker(thread_numa_domain, num_queues,
+                requested_domain, start,
+                [](std::size_t) noexcept { return true; });
         }
 
         ////////////////////////////////////////////////////////////////////////
@@ -2308,8 +2321,14 @@ namespace hpx::threads::policies {
                 std::size_t const hint_queues =
                     high_priority ? num_high_priority_queues_ : num_queues_;
                 std::size_t const start = curr_queue_++ % hint_queues;
-                return detail::select_numa_worker(
-                    thread_numa_domain_, hint_queues, requested_domain, start);
+                return detail::select_numa_worker(thread_numa_domain_,
+                    hint_queues, requested_domain, start,
+                    [this](std::size_t worker) noexcept {
+                        return !has_scheduler_mode(
+                                   scheduler_mode::enable_elasticity, worker) ||
+                            get_state(worker).load(std::memory_order_relaxed) <=
+                            hpx::state::suspended;
+                    });
             }
 
             return static_cast<std::size_t>(-1);

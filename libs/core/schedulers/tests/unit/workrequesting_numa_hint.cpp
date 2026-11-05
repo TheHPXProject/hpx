@@ -50,6 +50,13 @@ void test_numa_worker_selection()
     HPX_TEST_EQ(hpx::threads::policies::detail::select_numa_worker(
                     ineligible_domain, 2, 1, 1),
         std::size_t(1));
+
+    // Skip an inactive worker if another eligible worker belongs to the
+    // requested domain.
+    HPX_TEST_EQ(hpx::threads::policies::detail::select_numa_worker(domains,
+                    domains.size(), 1, 2,
+                    [](std::size_t worker) noexcept { return worker != 2; }),
+        std::size_t(3));
 }
 
 int hpx_main()
