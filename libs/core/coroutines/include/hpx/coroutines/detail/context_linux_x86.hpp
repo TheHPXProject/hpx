@@ -34,6 +34,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <stdexcept>
+#include <string>
 #include <sys/param.h>
 
 // Fix for musl. Use linux/param.h for EXEC_PAGESIZE

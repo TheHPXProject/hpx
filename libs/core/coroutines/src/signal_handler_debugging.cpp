@@ -54,7 +54,14 @@ namespace hpx::threads::coroutines {
 
     void start_signal_handler_watchdog() noexcept
     {
+        // the default action of SIGALRM ends the process; unblock it on the
+        // thread running the handler, so that the alarm is delivered even if
+        // the application blocks SIGALRM
         ::signal(SIGALRM, SIG_DFL);
+        sigset_t alarm_set;
+        sigemptyset(&alarm_set);
+        sigaddset(&alarm_set, SIGALRM);
+        ::pthread_sigmask(SIG_UNBLOCK, &alarm_set, nullptr);
         ::alarm(10);
     }
 #endif
