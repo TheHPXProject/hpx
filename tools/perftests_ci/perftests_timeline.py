@@ -136,18 +136,41 @@ def changes(series, position, threshold, window):
     return found
 
 
+def shared_prefix(names):
+    # The length of the part up to the last ' - ' that all names start with
+    # (ignoring case, e.g. 'Stream benchmark - '), 0 for a single name. The
+    # characters are compared one by one, since lower() may change the length
+    if len(set(names)) < 2:
+        return 0
+    length = 0
+    for chars in zip(*names):
+        if len({char.lower() for char in chars}) > 1:
+            break
+        length += 1
+    prefix = names[0][:length]
+    return prefix.rfind(' - ') + 3 if ' - ' in prefix else 0
+
+
 def plot(benchmark, series, commits, position, args, path):
     nodes = {node for _, _, node in series}
     medians = [median for points in series.values() for _, median, _ in points]
     unit, factor = time_unit(min(medians))
 
+    # A prefix all lines share is said once, as the title of the legend
+    names = sorted(name for name, _, _ in series)
+    cut = shared_prefix(names)
+    title = names[0][:cut - 3] if cut else None
+
     fig, ax = plt.subplots(figsize=(graph_width, 4))
-    for (name, executor, node), points in sorted(series.items()):
+    lines = []
+    # ignoring case, the names don't all start alike (e.g. 'stream benchmark')
+    for (name, executor, node), points in sorted(series.items(),
+            key=lambda item: (item[0][0].lower(), item[0][1:])):
         points = sorted(points, key=lambda point: position[point[0]])
-        label = f"{name} ({executor})"
+        label = f"{name[cut:]} ({executor})"
         if len(nodes) > 1:
             label += f", {node}"
-        ax.plot([position[commit] for commit, _, _ in points],
+        lines += ax.plot([position[commit] for commit, _, _ in points],
             [median * factor for _, median, _ in points],
             marker='o', markersize=3, linewidth=1, label=label)
 
@@ -206,8 +229,21 @@ def plot(benchmark, series, commits, position, args, path):
     ax.set_xlabel("master commit (pull request, or the commit without one)")
     ax.set_ylabel(f"median time [{unit}]")
     ax.set_title(benchmark, fontsize=10, pad=18)
-    ax.legend(fontsize=7, loc='upper center', bbox_to_anchor=(0.5, -0.28),
-        ncol=1 if len(series) < 6 else 2, frameon=False)
+    # The legend is centered below the image (the graph and the labels on its
+    # left). Two columns for many lines, if they fit into its width: a wider
+    # legend would widen the image, and GitHub would scale it down.
+    renderer = fig.canvas.get_renderer()
+    graph = ax.get_window_extent(renderer)
+    left = ax.get_tightbbox(renderer).x0
+    center = ((left + graph.x1) / 2 - graph.x0) / graph.width
+    for ncol in (1,) if len(series) < 6 else (2, 1):
+        # the lines are passed, since a label that starts with '_' (after the
+        # prefix is cut) would otherwise be left out of the legend
+        legend = ax.legend(lines, [line.get_label() for line in lines],
+            fontsize=7, loc='upper center', bbox_to_anchor=(center, -0.28),
+            ncol=ncol, frameon=False, title=title, title_fontsize=7)
+        if legend.get_window_extent(renderer).width <= graph.x1 - left:
+            break
     fig.savefig(path, format='svg', bbox_inches='tight',
         metadata={'Date': None, 'Creator': None})
     plt.close(fig)
