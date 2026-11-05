@@ -49,6 +49,14 @@ foreach(test ${tests})
   add_hpx_regression_test("modules.futures" ${test} ${${test}_PARAMETERS})
 endforeach()
 
+add_hpx_regression_test(
+  "modules.futures" continuation_launch_policy_7799_shared_priority
+  EXECUTABLE continuation_launch_policy_7799
+  PSEUDO_DEPS_NAME continuation_launch_policy_7799
+  THREADS_PER_LOCALITY 2
+  ARGS --hpx:queuing=shared-priority
+)
+
 # with more workers a leftover queue entry can also be dequeued while the parent
 # is still running the child
 add_hpx_regression_test(

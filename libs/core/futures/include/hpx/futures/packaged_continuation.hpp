@@ -380,6 +380,11 @@ namespace hpx::lcos::detail {
             std::chrono::steady_clock::time_point const& abs_time,
             error_code& ec = throws) override
         {
+            if (abs_time <= std::chrono::steady_clock::now())
+            {
+                return base_type::wait_until(abs_time, ec);
+            }
+
             this->execute_thread();
             return base_type::wait_until(abs_time, ec);
         }
