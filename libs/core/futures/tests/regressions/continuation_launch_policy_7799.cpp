@@ -7,6 +7,7 @@
 #include <hpx/future.hpp>
 #include <hpx/init.hpp>
 #include <hpx/modules/testing.hpp>
+#include <hpx/modules/threading_base.hpp>
 #include <hpx/thread.hpp>
 
 #include <atomic>
@@ -54,6 +55,13 @@ namespace {
 
     void test_run_as_child()
     {
+        if (!hpx::threads::detail::get_self_or_default_pool()
+                ->get_scheduler()
+                ->supports_direct_execution())
+        {
+            return;
+        }
+
         std::atomic<bool> blocker_started(false);
         std::atomic<bool> release_blocker(false);
 
@@ -100,6 +108,53 @@ namespace {
 
         HPX_TEST(ran_inline);
     }
+
+    void test_expired_wait_does_not_run_child()
+    {
+        std::atomic<bool> blocker_started(false);
+        std::atomic<bool> release_blocker(false);
+        std::atomic<bool> continuation_started(false);
+
+        hpx::future<void> blocker = hpx::async(
+            make_policy(1, hpx::threads::thread_execution_hint::none), [&] {
+                blocker_started.store(true, std::memory_order_release);
+                while (!release_blocker.load(std::memory_order_acquire))
+                {
+                }
+            });
+
+        while (!blocker_started.load(std::memory_order_acquire))
+        {
+            hpx::this_thread::yield();
+        }
+
+        hpx::future<bool> result = hpx::async(
+            make_policy(0, hpx::threads::thread_execution_hint::none), [&] {
+                hpx::future<void> continuation = hpx::make_ready_future().then(
+                    make_policy(
+                        1, hpx::threads::thread_execution_hint::run_as_child),
+                    [&](hpx::future<void>&& predecessor) {
+                        predecessor.get();
+                        continuation_started.store(
+                            true, std::memory_order_release);
+                    });
+
+                hpx::future_status const status =
+                    continuation.wait_for(std::chrono::milliseconds(0));
+                bool const timed_out_without_running =
+                    status == hpx::future_status::timeout &&
+                    !continuation_started.load(std::memory_order_acquire);
+
+                release_blocker.store(true, std::memory_order_release);
+                continuation.get();
+                return timed_out_without_running;
+            });
+
+        bool const timed_out_without_running = result.get();
+        blocker.get();
+
+        HPX_TEST(timed_out_without_running);
+    }
 }    // namespace
 
 int hpx_main()
@@ -108,6 +163,7 @@ int hpx_main()
 
     test_launch_properties();
     test_run_as_child();
+    test_expired_wait_does_not_run_child();
 
     return hpx::local::finalize();
 }
