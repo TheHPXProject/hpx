@@ -48,6 +48,16 @@ namespace hpx::io::experimental::detail {
                 std::error_code const& error) { callback(error); });
     }
 
+    void timer_operation::async_wait(
+        std::chrono::steady_clock::duration const duration,
+        callback_type callback)
+    {
+        impl_->timer.expires_after(duration);
+        impl_->timer.async_wait(
+            [callback = HPX_MOVE(callback)](
+                std::error_code const& error) { callback(error); });
+    }
+
     std::exception_ptr timer_operation::cancel() noexcept
     {
         try

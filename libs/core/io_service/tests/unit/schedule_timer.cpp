@@ -152,6 +152,31 @@ namespace {
         HPX_TEST(!state.stopped);
     }
 
+    void test_schedule_after_max_duration()
+    {
+        ::asio::io_context context;
+        completion_state state;
+        ex::inplace_stop_source stop_source;
+
+        auto operation =
+            ex::connect(hpx::io::experimental::schedule_after(context,
+                            std::chrono::steady_clock::duration::max()),
+                timer_receiver{state, stop_source.get_token()});
+        ex::start(operation);
+
+        context.run_for(std::chrono::milliseconds(10));
+        HPX_TEST(!state.value);
+        HPX_TEST(!state.error);
+        HPX_TEST(!state.stopped);
+
+        stop_source.request_stop();
+        context.restart();
+        HPX_TEST(context.run() != 0);
+        HPX_TEST(!state.value);
+        HPX_TEST(!state.error);
+        HPX_TEST(state.stopped);
+    }
+
     void test_schedule_at()
     {
         ::asio::io_context context;
@@ -272,6 +297,7 @@ namespace {
 int main()
 {
     test_schedule_after();
+    test_schedule_after_max_duration();
     test_schedule_at();
     test_default_environment();
     test_composition();

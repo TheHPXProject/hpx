@@ -40,6 +40,8 @@ namespace hpx::io::experimental {
 
             void async_wait(std::chrono::steady_clock::time_point time_point,
                 callback_type callback);
+            void async_wait(std::chrono::steady_clock::duration duration,
+                callback_type callback);
             [[nodiscard]] std::exception_ptr cancel() noexcept;
 
             [[nodiscard]] static bool is_operation_aborted(
@@ -87,19 +89,8 @@ namespace hpx::io::experimental {
 
                 try
                 {
-                    std::chrono::steady_clock::time_point time_point;
-                    if constexpr (std::is_same_v<Expiry,
-                                      std::chrono::steady_clock::time_point>)
-                    {
-                        time_point = expiry_;
-                    }
-                    else
-                    {
-                        time_point = std::chrono::steady_clock::now() + expiry_;
-                    }
-
                     timer_.async_wait(
-                        time_point, [state](std::error_code const& error) {
+                        expiry_, [state](std::error_code const& error) {
                             state->complete(error);
                         });
 
