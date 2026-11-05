@@ -1626,18 +1626,6 @@ hpx_option(
 if(HPX_WITH_EXAMPLES_OPENMP)
   find_package(OpenMP REQUIRED)
 endif()
-hpx_option(
-  HPX_WITH_EXAMPLES_QTHREADS BOOL
-  "Enable examples requiring QThreads support (default: OFF)." OFF
-  CATEGORY "Build Targets"
-  ADVANCED
-)
-if(HPX_WITH_EXAMPLES_QTHREADS)
-  find_package(QThreads)
-  if(NOT Qthreads_FOUND)
-    set(HPX_WITH_EXAMPLES_QTHREADS OFF)
-  endif()
-endif()
 
 hpx_option(
   HPX_WITH_EXAMPLES_TASKBENCH
