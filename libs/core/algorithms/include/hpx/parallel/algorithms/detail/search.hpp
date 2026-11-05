@@ -142,18 +142,53 @@ namespace hpx::parallel::detail {
             FwdIter2 s_first, Sent2 s_last, Pred&& op, Proj1&& proj1,
             Proj2&& proj2)
         {
-            for (;; ++first)
+            if constexpr (hpx::is_vectorpack_execution_policy_v<ExPolicy> &&
+                std::random_access_iterator<FwdIter>)
             {
-                FwdIter it1 = first;
-                for (FwdIter2 it2 = s_first;; (void) ++it1, ++it2)
+                // Run the chunk kernel over the whole range as a single
+                // partition, so that simd policies use the datapar search.
+                using difference_type =
+                    typename std::iterator_traits<FwdIter>::difference_type;
+
+                auto const diff = static_cast<difference_type>(
+                    hpx::parallel::detail::distance(s_first, s_last));
+                if (diff <= 0)
+                    return first;
+
+                difference_type const count =
+                    hpx::parallel::detail::distance(first, last);
+                if (diff > count)
                 {
-                    if (it2 == s_last)
-                        return first;
-                    if (it1 == last)
-                        return it1;
-                    if (!HPX_INVOKE(op, HPX_INVOKE(proj1, *it1),
-                            HPX_INVOKE(proj2, *it2)))
-                        break;
+                    std::advance(first, count);
+                    return first;
+                }
+
+                hpx::parallel::util::cancellation_token<difference_type> tok(
+                    count);
+                sequential_search_t<std::decay_t<ExPolicy>>{}(first, s_first, 0,
+                    static_cast<std::size_t>(count - (diff - 1)),
+                    static_cast<std::size_t>(diff),
+                    static_cast<std::size_t>(count), tok, HPX_FORWARD(Pred, op),
+                    HPX_FORWARD(Proj1, proj1), HPX_FORWARD(Proj2, proj2));
+
+                std::advance(first, tok.get_data());
+                return first;
+            }
+            else
+            {
+                for (;; ++first)
+                {
+                    FwdIter it1 = first;
+                    for (FwdIter2 it2 = s_first;; (void) ++it1, ++it2)
+                    {
+                        if (it2 == s_last)
+                            return first;
+                        if (it1 == last)
+                            return it1;
+                        if (!HPX_INVOKE(op, HPX_INVOKE(proj1, *it1),
+                                HPX_INVOKE(proj2, *it2)))
+                            break;
+                    }
                 }
             }
         }
@@ -279,26 +314,52 @@ namespace hpx::parallel::detail {
 
             auto value_proj = proj(value);
 
-            FwdIter it = first;
-            FwdIter end = first;
-            std::advance(end, n - static_cast<difference_type>(count) + 1);
-
-            for (; it != end; ++it)
+            if constexpr (hpx::is_vectorpack_execution_policy_v<ExPolicy> &&
+                std::random_access_iterator<FwdIter>)
             {
-                FwdIter curr = it;
-                Size matched = 0;
+                // Run the chunk kernel over the whole range as a single
+                // partition, so that simd policies use the datapar search_n.
+                difference_type const max_start =
+                    n - static_cast<difference_type>(count) + 1;
 
-                while (matched < count && pred(proj(*curr), value_proj))
+                hpx::parallel::util::cancellation_token<difference_type> tok(
+                    max_start);
+                sequential_search_n_t<std::decay_t<ExPolicy>>{}(first, 0,
+                    static_cast<std::size_t>(max_start),
+                    static_cast<std::ptrdiff_t>(max_start), count, value_proj,
+                    tok, HPX_FORWARD(Pred, pred), HPX_FORWARD(Proj, proj));
+
+                difference_type const idx = tok.get_data();
+                if (idx == max_start)
+                    return hpx::parallel::detail::advance_to_sentinel(
+                        first, last);
+
+                std::advance(first, idx);
+                return first;
+            }
+            else
+            {
+                FwdIter it = first;
+                FwdIter end = first;
+                std::advance(end, n - static_cast<difference_type>(count) + 1);
+
+                for (; it != end; ++it)
                 {
-                    ++curr;
-                    ++matched;
+                    FwdIter curr = it;
+                    Size matched = 0;
+
+                    while (matched < count && pred(proj(*curr), value_proj))
+                    {
+                        ++curr;
+                        ++matched;
+                    }
+
+                    if (matched == count)
+                        return it;
                 }
 
-                if (matched == count)
-                    return it;
+                return hpx::parallel::detail::advance_to_sentinel(first, last);
             }
-
-            return hpx::parallel::detail::advance_to_sentinel(first, last);
         }
         template <typename ExPolicy, typename Size, typename T, typename Pred,
             typename Proj>
