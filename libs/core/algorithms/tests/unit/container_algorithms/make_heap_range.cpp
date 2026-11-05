@@ -14,6 +14,7 @@
 #include <iterator>
 #include <numeric>
 #include <random>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -22,6 +23,34 @@
 ///////////////////////////////////////////////////////////////////////////
 unsigned int seed = std::random_device{}();
 std::mt19937 gen(seed);
+
+template <typename Iterator>
+struct throwing_sentinel
+{
+    throwing_sentinel() = default;
+
+    explicit throwing_sentinel(Iterator) {}
+
+    friend bool operator==(Iterator const&, throwing_sentinel const&)
+    {
+        throw std::runtime_error("test");
+    }
+
+    friend bool operator==(throwing_sentinel const&, Iterator const&)
+    {
+        throw std::runtime_error("test");
+    }
+
+    friend bool operator!=(Iterator const&, throwing_sentinel const&)
+    {
+        throw std::runtime_error("test");
+    }
+
+    friend bool operator!=(throwing_sentinel const&, Iterator const&)
+    {
+        throw std::runtime_error("test");
+    }
+};
 
 ///////////////////////////////////////////////////////////////////////////
 template <typename IteratorTag>
@@ -166,6 +195,57 @@ void make_heap_sentinel_test()
     test_make_heap_sentinel(par);
     test_make_heap_sentinel_async(seq(task));
     test_make_heap_sentinel_async(par(task));
+}
+
+template <typename ExPolicy>
+void test_make_heap_sentinel_exception(ExPolicy policy)
+{
+    using iterator = test::test_iterator<std::vector<std::size_t>::iterator,
+        std::random_access_iterator_tag>;
+
+    std::vector<std::size_t> c(2);
+    bool caught_exception = false;
+    bool returned_from_algorithm = false;
+
+    try
+    {
+        iterator const first(c.begin());
+        throwing_sentinel<iterator> const last(iterator(c.end()));
+
+        if constexpr (hpx::is_async_execution_policy_v<ExPolicy>)
+        {
+            auto result = hpx::ranges::make_heap(policy, first, last);
+            returned_from_algorithm = true;
+            result.get();
+        }
+        else
+        {
+            hpx::ranges::make_heap(policy, first, last);
+        }
+        HPX_TEST(false);
+    }
+    catch (hpx::exception_list const&)
+    {
+        caught_exception = true;
+    }
+    catch (...)
+    {
+        HPX_TEST(false);
+    }
+
+    HPX_TEST(caught_exception);
+    if constexpr (hpx::is_async_execution_policy_v<ExPolicy>)
+    {
+        HPX_TEST(returned_from_algorithm);
+    }
+}
+
+void make_heap_sentinel_exception_test()
+{
+    using namespace hpx::execution;
+
+    test_make_heap_sentinel_exception(par);
+    test_make_heap_sentinel_exception(par(task));
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -501,6 +581,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
 
     make_heap_test1();
     make_heap_sentinel_test();
+    make_heap_sentinel_exception_test();
     make_heap_test2();
     make_heap_exception_test();
     make_heap_bad_alloc_test();

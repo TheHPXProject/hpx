@@ -342,62 +342,63 @@ namespace hpx::parallel {
                 Comp&& comp, Proj&& proj)
             {
                 RndIter end = first;
-                typename std::iterator_traits<RndIter>::difference_type n =
-                    detail::advance_and_get_distance(end, last);
-                if (n <= 1)
-                {
-                    return util::detail::algorithm_result<ExPolicy,
-                        RndIter>::get(HPX_MOVE(end));
-                }
-
-                using execution_policy = std::decay_t<ExPolicy>;
-                using parameters_type =
-                    typename execution_policy::executor_parameters_type;
-                using executor_type = typename execution_policy::executor_type;
-
-                using scoped_executor_parameters =
-                    util::detail::scoped_executor_parameters_ref<
-                        parameters_type, executor_type>;
-
-                scoped_executor_parameters scoped_params(
-                    policy.parameters(), policy.executor());
-
                 std::list<std::exception_ptr> errors;
-
-                using tuple_type = hpx::tuple<RndIter, std::size_t>;
-
-                auto op = [=](tuple_type const& t) {
-                    sift_down_range(first, comp, proj,
-                        static_cast<std::size_t>(n), hpx::get<0>(t),
-                        hpx::get<1>(t));
-                };
-
-                std::size_t const cores =
-                    hpx::execution::experimental::processing_units_count(
-                        policy.parameters(), policy.executor(),
-                        hpx::chrono::null_duration, n);
-
-                // Take a standard chunk size (amount of work / cores), and only
-                // take a quarter of that. If our chunk size is too large a LOT
-                // of the work will be done sequentially due to the level
-                // barrier of heap parallelism. 1/4 of the standard chunk size
-                // is an estimate to lower the average number of levels done
-                // sequentially
-                std::size_t chunk_size =
-                    hpx::execution::experimental::get_chunk_size(
-                        policy.parameters(), policy.executor(),
-                        hpx::chrono::null_duration, cores, n);
-                chunk_size /= 4;
-
-                std::size_t max_chunks =
-                    hpx::execution::experimental::maximal_number_of_chunks(
-                        policy.parameters(), policy.executor(), cores, n);
-
-                util::detail::adjust_chunk_size_and_max_chunks(
-                    cores, n, chunk_size, max_chunks);
 
                 try
                 {
+                    typename std::iterator_traits<RndIter>::difference_type n =
+                        detail::advance_and_get_distance(end, last);
+                    if (n <= 1)
+                    {
+                        return util::detail::algorithm_result<ExPolicy,
+                            RndIter>::get(HPX_MOVE(end));
+                    }
+
+                    using execution_policy = std::decay_t<ExPolicy>;
+                    using parameters_type =
+                        typename execution_policy::executor_parameters_type;
+                    using executor_type =
+                        typename execution_policy::executor_type;
+
+                    using scoped_executor_parameters =
+                        util::detail::scoped_executor_parameters_ref<
+                            parameters_type, executor_type>;
+
+                    scoped_executor_parameters scoped_params(
+                        policy.parameters(), policy.executor());
+
+                    using tuple_type = hpx::tuple<RndIter, std::size_t>;
+
+                    auto op = [=](tuple_type const& t) {
+                        sift_down_range(first, comp, proj,
+                            static_cast<std::size_t>(n), hpx::get<0>(t),
+                            hpx::get<1>(t));
+                    };
+
+                    std::size_t const cores =
+                        hpx::execution::experimental::processing_units_count(
+                            policy.parameters(), policy.executor(),
+                            hpx::chrono::null_duration, n);
+
+                    // Take a standard chunk size (amount of work / cores), and only
+                    // take a quarter of that. If our chunk size is too large a LOT
+                    // of the work will be done sequentially due to the level
+                    // barrier of heap parallelism. 1/4 of the standard chunk size
+                    // is an estimate to lower the average number of levels done
+                    // sequentially
+                    std::size_t chunk_size =
+                        hpx::execution::experimental::get_chunk_size(
+                            policy.parameters(), policy.executor(),
+                            hpx::chrono::null_duration, cores, n);
+                    chunk_size /= 4;
+
+                    std::size_t max_chunks =
+                        hpx::execution::experimental::maximal_number_of_chunks(
+                            policy.parameters(), policy.executor(), cores, n);
+
+                    util::detail::adjust_chunk_size_and_max_chunks(
+                        cores, n, chunk_size, max_chunks);
+
                     // parent of last node
                     // last node has index (n-1)
                     // parent of x is floor of (x-1)/2
