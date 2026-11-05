@@ -53,7 +53,7 @@ jobs:
           cmake --build build --config Debug \
           --target autolink_test auto_wrap_main_test \
           --target chunk_size_iterator_test chunk_size_idx_iterator_test \
-          --target tests.regressions.modules.pack_traversal.unwrap_nested_containers_7945 \
+          --target unwrap_nested_containers_7945_test \
           -- -maxcpucount:2 -verbosity:minimal -nologo
     - name: Install
       shell: bash

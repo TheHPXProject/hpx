@@ -59,7 +59,7 @@ jobs:
           -- -maxcpucount:2 -verbosity:minimal -nologo
           cmake --build build --config Release \
           --target chunk_size_iterator_test chunk_size_idx_iterator_test \
-          --target tests.regressions.modules.pack_traversal.unwrap_nested_containers_7945 \
+          --target unwrap_nested_containers_7945_test \
           -- -maxcpucount:2 -verbosity:minimal -nologo
     # HPX_WITH_MALLOC used to be silently ignored on MSVC (the allocator was
     # not linked), make sure the HPX core library really uses mimalloc
