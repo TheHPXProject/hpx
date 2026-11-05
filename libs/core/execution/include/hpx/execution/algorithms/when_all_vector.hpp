@@ -236,7 +236,8 @@ namespace hpx::when_all_vector_detail {
 
             // Number of predecessor senders that have not yet called any of
             // the set signals.
-            std::atomic<std::size_t> predecessors_remaining{num_predecessors};
+            std::atomic<std::size_t> predecessors_remaining{
+                num_predecessors + 1};
 
             // The values sent by the predecessor senders are stored in a
             // vector of optional or the dummy type void_value_type if the
@@ -382,6 +383,8 @@ namespace hpx::when_all_vector_detail {
             {
                 if (--predecessors_remaining == 0)
                 {
+                    on_stop_.reset();
+
                     if (!set_stopped_error_called.load(
                             std::memory_order_acquire))
                     {
@@ -445,6 +448,7 @@ namespace hpx::when_all_vector_detail {
                 // the child operations.
                 if (stop_source_.stop_requested())
                 {
+                    on_stop_.reset();
                     hpx::execution::experimental::set_stopped(
                         HPX_FORWARD(Receiver, receiver));
                     return;
@@ -454,6 +458,7 @@ namespace hpx::when_all_vector_detail {
                 // continuation as soon as start is called.
                 if (num_predecessors == 0)
                 {
+                    on_stop_.reset();
                     // If the predecessor sender type sends nothing, we also
                     // send nothing to the continuation.
                     if constexpr (is_void_value_type)
@@ -486,6 +491,8 @@ namespace hpx::when_all_vector_detail {
 #pragma clang diagnostic pop
 #endif
                     }
+
+                    finish();
                 }
             }
         };
