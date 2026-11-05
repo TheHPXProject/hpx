@@ -607,6 +607,25 @@ size. ``hpx::traits::get_task_size<F>::call(f)`` reads it from the function
 object ``f``, which also finds the size of a function stored in an
 ``hpx::function`` or an ``hpx::move_only_function``, known at run time only.
 
+If the compiler supports C++26 reflection and annotations, a class type can
+also give its size with an annotation:
+
+.. code-block:: c++
+
+   struct [[=hpx::task_size::large]] solver_step
+   {
+       void operator()() const;
+   };
+
+   hpx::post(solver_step{});    // runs as a large task
+
+A size given with ``hpx::with_task_size`` wins over the annotation. Only class
+types can have one, and a lambda has none, so it stays ``task_size::unknown``.
+Annotations are not inherited: a class derived from an annotated class has no
+size unless it is annotated itself. Two different sizes on one type are a
+compile-time error when the size of that type is read, for example when it is
+posted.
+
 .. note::
 
    As a rule of thumb, a nano task runs for about a nanosecond, a small task

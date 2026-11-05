@@ -18,6 +18,7 @@
 #include <hpx/modules/async_distributed.hpp>
 #include <hpx/modules/components.hpp>
 #include <hpx/modules/components_base.hpp>
+#include <hpx/modules/contracts.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/format.hpp>
 #include <hpx/modules/lock_registration.hpp>
@@ -169,6 +170,8 @@ namespace hpx::collectives {
     void communicator::set_info(num_sites_arg num_sites,
         this_site_arg this_site, root_site_arg root_site) noexcept
     {
+        HPX_CONTRACT_ASSERT(valid());
+
         auto& [num_sites_, this_site_, root_site_] =
             get_extra_data<detail::communicator_data>();
 
@@ -180,6 +183,8 @@ namespace hpx::collectives {
     std::pair<num_sites_arg, this_site_arg> communicator::get_info()
         const noexcept
     {
+        HPX_CONTRACT_ASSERT(valid());
+
         auto const* client_data =
             try_get_extra_data<detail::communicator_data>();
 
@@ -195,6 +200,8 @@ namespace hpx::collectives {
     std::tuple<num_sites_arg, this_site_arg, root_site_arg>
     communicator::get_info_ex() const noexcept
     {
+        HPX_CONTRACT_ASSERT(valid());
+
         auto const* client_data =
             try_get_extra_data<detail::communicator_data>();
 

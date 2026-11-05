@@ -1,5 +1,11 @@
 Workarounds for building stdexec with nvcc as the CUDA compiler.
 
+Copyright (c) 2026 Hartmut Kaiser
+
+SPDX-License-Identifier: BSL-1.0
+Distributed under the Boost Software License, Version 1.0. (See accompanying
+file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+
 stdexec's own GPU CI covers clang-CUDA and nvc++ only, and current stdexec
 main does not compile under nvcc. These changes make the headers acceptable
 to nvcc 12.9 with a gcc 12 host compiler:

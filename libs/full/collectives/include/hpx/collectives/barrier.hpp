@@ -162,6 +162,12 @@ namespace hpx::collectives {
                 hpx::error::bad_parameter, "hpx::collectives::barrier",
                 "the generation number shouldn't be zero"));
         }
+        if (!fid.valid())
+        {
+            return hpx::make_exceptional_future<void>(HPX_GET_EXCEPTION(
+                hpx::error::invalid_status, "hpx::collectives::barrier",
+                "the communicator is not valid"));
+        }
 
         // Handle operation right away if there is only one site.
         if ([[maybe_unused]] auto const [num_sites, _] = fid.get_info();
