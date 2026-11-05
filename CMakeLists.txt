@@ -1333,7 +1333,8 @@ if(HPX_WITH_NETWORKING)
   endif()
 
   hpx_option(
-    HPX_WITH_PARCEL_PROFILING BOOL "Enable profiling data for parcels"
+    HPX_WITH_PARCEL_PROFILING BOOL
+    "Enable profiling data for parcels (used by the tracing backends)"
     ${_parcel_profiling_default}
     CATEGORY "Parcelport"
     ADVANCED
@@ -1562,9 +1563,6 @@ if((HPX_WITH_NETWORKING AND HPX_WITH_PARCELPORT_MPI)
     # hpx_add_compile_flag() below does not add the extra options to the top
     # level directory
     hpx_add_config_define(OMPI_IMPORTS)
-    if(HPX_WITH_CUDA)
-      hpx_add_config_cond_define(NOMINMAX)
-    endif()
   endif()
 endif()
 
@@ -3041,6 +3039,13 @@ install(
 install(
   FILES "${PROJECT_SOURCE_DIR}/LICENSE_1_0.txt"
   DESTINATION ${CMAKE_INSTALL_DATADIR}/hpx
+  COMPONENT license
+)
+
+# license text in the location defined by REUSE (https://reuse.software/)
+install(
+  FILES "${PROJECT_SOURCE_DIR}/LICENSES/BSL-1.0.txt"
+  DESTINATION ${CMAKE_INSTALL_DATADIR}/hpx/LICENSES
   COMPONENT license
 )
 
