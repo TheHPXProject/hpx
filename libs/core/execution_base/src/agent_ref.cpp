@@ -45,6 +45,11 @@ namespace hpx::execution_base {
         impl_->suspend(desc);
     }
 
+    void agent_ref::prepare_wait(char const* desc) const
+    {
+        impl_->prepare_wait(desc);
+    }
+
     void agent_ref::resume(
         hpx::threads::thread_priority priority, char const* desc) const
     {

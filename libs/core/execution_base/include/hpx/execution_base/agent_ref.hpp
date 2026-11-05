@@ -57,6 +57,8 @@ namespace hpx::execution_base {
             char const* desc = "hpx::execution_base::agent_ref::resume") const;
         void abort(
             char const* desc = "hpx::execution_base::agent_ref::abort") const;
+        void prepare_wait(
+            char const* desc = "hpx::execution_base::agent_ref::prepare_wait") const;
 
         template <typename Rep, typename Period>
         threads::thread_restart_state sleep_for(

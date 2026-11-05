@@ -358,6 +358,7 @@ namespace hpx::lcos::local::detail {
 
         // enqueue the request and block this thread
         auto const this_ctx = hpx::execution_base::this_thread::agent();
+        this_ctx.prepare_wait(description);
         queue_entry f(this_ctx, &queue_);
         queue_.push_back(f);
 
@@ -410,6 +411,7 @@ namespace hpx::lcos::local::detail {
 
         // enqueue the request and block this thread
         auto const this_ctx = hpx::execution_base::this_thread::agent();
+        this_ctx.prepare_wait(description);
         queue_entry f(this_ctx, &queue_);
         queue_.push_back(f);
 
