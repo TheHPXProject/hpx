@@ -362,6 +362,7 @@ namespace hpx { namespace collectives {
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/async_distributed.hpp>
 #include <hpx/modules/components_base.hpp>
+#include <hpx/modules/errors.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/type_support.hpp>
 
@@ -457,6 +458,13 @@ namespace hpx::collectives {
                 return hpx::make_exceptional_future<arg_type>(HPX_GET_EXCEPTION(
                     hpx::error::bad_parameter, "hpx::collectives::broadcast_to",
                     "the generation number shouldn't be zero"));
+            }
+            if (!fid.valid())
+            {
+                return hpx::make_exceptional_future<arg_type>(
+                    HPX_GET_EXCEPTION(hpx::error::invalid_status,
+                        "hpx::collectives::broadcast_to",
+                        "the communicator is not valid"));
             }
 
             // Handle operation right away if there is only one value.
@@ -664,6 +672,13 @@ namespace hpx::collectives {
                         "hpx::collectives::broadcast_from",
                         "the generation number shouldn't be zero"));
             }
+            if (!fid.valid())
+            {
+                return hpx::make_exceptional_future<T>(
+                    HPX_GET_EXCEPTION(hpx::error::invalid_status,
+                        "hpx::collectives::broadcast_from",
+                        "the communicator is not valid"));
+            }
 
             auto broadcast_data = [this_site, generation, num_generations](
                                       communicator&& c) -> hpx::future<T> {
@@ -853,6 +868,11 @@ namespace hpx::collectives {
         if (this_site.is_default())
         {
             this_site = agas::get_locality_id();
+        }
+        if (!comm.valid())
+        {
+            HPX_THROW_EXCEPTION(hpx::error::invalid_status,
+                "hpx::collectives::broadcast", "the communicator is not valid");
         }
 
         comm.wait();    // make sure communicator was created
