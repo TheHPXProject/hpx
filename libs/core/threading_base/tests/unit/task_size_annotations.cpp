@@ -73,8 +73,14 @@ namespace {
 
     using annotated_alias = annotated;
 
-    // an explicit unknown is the size of the type, not a missing size
+    // an explicit unknown counts as no annotation
     struct[[= hpx::task_size::unknown]] annotated_unknown
+    {
+    };
+
+    // so it doesn't conflict with a known size either
+    struct[[= hpx::task_size::unknown, = hpx::task_size::large]]
+        annotated_unknown_and_large
     {
     };
 
@@ -179,8 +185,13 @@ void test_types()
     // the annotation wins over the default
     static_assert(
         get_task_size_v<annotated, task_size::medium> == task_size::large);
+
+    // an explicit unknown doesn't, and gives way to a known size
+    static_assert(get_task_size_v<annotated_unknown> == task_size::unknown);
     static_assert(get_task_size_v<annotated_unknown, task_size::medium> ==
-        task_size::unknown);
+        task_size::medium);
+    static_assert(
+        get_task_size_v<annotated_unknown_and_large> == task_size::large);
 
     // the same value twice is fine
     static_assert(get_task_size_v<annotated_twice> == task_size::small_);

@@ -116,7 +116,7 @@ namespace hpx::traits {
 
         // Only class types have a declaration to annotate. Annotations are not
         // inherited, so a derived type has to be annotated itself and the base
-        // classes are not scanned.
+        // classes are not scanned. An unknown size counts as no annotation.
         HPX_CXX_CORE_EXPORT consteval task_size_annotation
         find_task_size_annotation(std::meta::info const type)
         {
@@ -133,6 +133,11 @@ namespace hpx::traits {
                 }
 
                 auto const size = std::meta::extract<threads::task_size>(a);
+                if (size == threads::task_size::unknown)
+                {
+                    continue;
+                }
+
                 if (result.found && size != result.size)
                     result.conflicting = true;
                 result.found = true;
