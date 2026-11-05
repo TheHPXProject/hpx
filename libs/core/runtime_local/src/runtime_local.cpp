@@ -312,9 +312,14 @@ namespace hpx {
                 std::signal(SIGABRT, detail::on_abort);
             HPX_ASSERT(prev_signal != SIG_ERR);
 
-            // the handlers print it, but can't safely build it
-            hpx::threads::coroutines::build_string_on_terminate =
-                full_build_string();
+            // the handlers print it, but can't safely build it. Set it only
+            // once: on a restart of the runtime the handlers of the first
+            // start are still installed and may read it at any time.
+            if (hpx::threads::coroutines::build_string_on_terminate.empty())
+            {
+                hpx::threads::coroutines::build_string_on_terminate =
+                    full_build_string();
+            }
 
             struct sigaction new_action;
             new_action.sa_handler = hpx::termination_handler;
