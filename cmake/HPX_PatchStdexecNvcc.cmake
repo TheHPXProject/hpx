@@ -9,6 +9,8 @@
 # stdexec sources in HPX_STDEXEC_SOURCE_DIR. HPX_SetupStdexec.cmake runs this
 # script once for each of these patches (see each patch file for the details):
 #
+# * HPX_StdexecNestedSenderCtad.patch: lets GCC 11 parse nested sender types and
+#   sequence transformations
 # * HPX_StdexecNvccWorkarounds.patch: lets nvcc parse the HPX execution headers
 #   (stdexec's own GPU CI covers clang-CUDA and nvc++ only)
 # * HPX_StdexecAsyncScopeNvcc.patch: exec::async_scope::on_empty() under nvcc
@@ -25,6 +27,35 @@ endif()
 
 if(NOT DEFINED HPX_STDEXEC_PATCH_FILE)
   message(FATAL_ERROR "HPX_STDEXEC_PATCH_FILE must be defined")
+endif()
+
+if(DEFINED HPX_STDEXEC_PATCH_PROBE_FILE OR DEFINED
+                                           HPX_STDEXEC_PATCH_PROBE_STRING
+)
+  if(NOT DEFINED HPX_STDEXEC_PATCH_PROBE_FILE OR NOT DEFINED
+                                                 HPX_STDEXEC_PATCH_PROBE_STRING
+  )
+    message(
+      FATAL_ERROR
+        "HPX_STDEXEC_PATCH_PROBE_FILE and HPX_STDEXEC_PATCH_PROBE_STRING "
+        "must be defined together"
+    )
+  endif()
+
+  # A probe makes a compatibility patch optional for revisions that do not
+  # contain the affected code. A missing file likewise means that the selected
+  # revision does not need the patch.
+  if(NOT EXISTS "${HPX_STDEXEC_PATCH_PROBE_FILE}")
+    return()
+  endif()
+
+  file(READ "${HPX_STDEXEC_PATCH_PROBE_FILE}" _hpx_stdexec_patch_probe_contents)
+  string(FIND "${_hpx_stdexec_patch_probe_contents}"
+              "${HPX_STDEXEC_PATCH_PROBE_STRING}" _hpx_stdexec_patch_probe_pos
+  )
+  if(_hpx_stdexec_patch_probe_pos EQUAL -1)
+    return()
+  endif()
 endif()
 
 # HPX_STDEXEC_PATCH_REQUIRED says whether the selected configuration needs this

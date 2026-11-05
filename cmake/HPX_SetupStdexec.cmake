@@ -29,6 +29,18 @@ if(HPX_WITH_FETCH_STDEXEC)
   if(HPX_WITH_CUDA AND CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA")
     set(_hpx_stdexec_nvcc_patch_required ON)
   endif()
+  set(_hpx_stdexec_gcc11_patch_required OFF)
+  if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION
+                                              VERSION_LESS 12
+  )
+    set(_hpx_stdexec_gcc11_patch_required ON)
+  endif()
+  set(_hpx_stdexec_nested_sender_ctad_patch
+      "${CMAKE_CURRENT_LIST_DIR}/HPX_StdexecNestedSenderCtad.patch"
+  )
+  set(_hpx_stdexec_nested_sender_ctad_probe
+      "STDEXEC_HOST_DEVICE_DEDUCTION_GUIDE __sender(just_t"
+  )
   set(_hpx_stdexec_async_scope_nvcc_patch
       "${CMAKE_CURRENT_LIST_DIR}/HPX_StdexecAsyncScopeNvcc.patch"
   )
@@ -57,6 +69,12 @@ if(HPX_WITH_FETCH_STDEXEC)
       ${CMAKE_COMMAND}
       "-DHPX_STDEXEC_SPIN_LOOP_PAUSE_FILE=<SOURCE_DIR>/include/stdexec/__detail/__spin_loop_pause.hpp"
       -P ${CMAKE_CURRENT_LIST_DIR}/HPX_PatchStdexecSpinLoopPause.cmake COMMAND
+      ${CMAKE_COMMAND} "-DHPX_STDEXEC_SOURCE_DIR=<SOURCE_DIR>"
+      "-DHPX_STDEXEC_PATCH_FILE=${_hpx_stdexec_nested_sender_ctad_patch}"
+      "-DHPX_STDEXEC_PATCH_REQUIRED=${_hpx_stdexec_gcc11_patch_required}"
+      "-DHPX_STDEXEC_PATCH_PROBE_FILE=<SOURCE_DIR>/include/stdexec/__detail/__just.hpp"
+      "-DHPX_STDEXEC_PATCH_PROBE_STRING=${_hpx_stdexec_nested_sender_ctad_probe}"
+      -P ${CMAKE_CURRENT_LIST_DIR}/HPX_PatchStdexecNvcc.cmake COMMAND
       ${CMAKE_COMMAND} "-DHPX_STDEXEC_SOURCE_DIR=<SOURCE_DIR>"
       "-DHPX_STDEXEC_PATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/HPX_StdexecNvccWorkarounds.patch"
       "-DHPX_STDEXEC_PATCH_REQUIRED=${_hpx_stdexec_nvcc_patch_required}" -P
