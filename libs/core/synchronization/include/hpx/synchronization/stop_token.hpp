@@ -402,12 +402,15 @@ namespace hpx {
 
         stop_source& operator=(stop_source const& rhs) noexcept
         {
-            state_ = rhs.state_;
-            if (state_)
-                state_->add_source_count();
+            stop_source(rhs).swap(*this);
             return *this;
         }
-        stop_source& operator=(stop_source&&) noexcept = default;
+
+        stop_source& operator=(stop_source&& rhs) noexcept
+        {
+            stop_source(std::move(rhs)).swap(*this);
+            return *this;
+        }
 
         // Effects: Releases ownership of the stop state, if any.
         ~stop_source()

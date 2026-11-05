@@ -435,6 +435,52 @@ void test_stop_callback_destruction_on_os_threads()
     HPX_TEST(finished_before_destructor_returned.load());
 }
 
+void test_stop_source_assignment()
+{
+    // copy assignment: the previous stop state has to give up its source
+    {
+        hpx::stop_source a;
+        hpx::stop_token old_token = a.get_token();
+        HPX_TEST(old_token.stop_possible());
+
+        hpx::stop_source b;
+        a = b;
+
+        HPX_TEST(!old_token.stop_possible());
+        HPX_TEST(a.stop_possible());
+    }
+
+    // move assignment: same requirement, and the moved-from source is empty
+    {
+        hpx::stop_source a;
+        hpx::stop_token old_token = a.get_token();
+
+        hpx::stop_source b;
+        a = std::move(b);
+
+        HPX_TEST(!old_token.stop_possible());
+        HPX_TEST(a.stop_possible());
+        HPX_TEST(!b.stop_possible());
+    }
+
+    // self assignment must not change the source count
+    {
+        hpx::stop_token token;
+        {
+            hpx::stop_source a;
+            token = a.get_token();
+
+            hpx::stop_source& ref = a;
+            a = ref;
+
+            HPX_TEST(a.stop_possible());
+            HPX_TEST(token.stop_possible());
+        }
+        // the only source is gone and no stop was requested
+        HPX_TEST(!token.stop_possible());
+    }
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 int hpx_main()
 {
@@ -446,6 +492,7 @@ int hpx_main()
     test_stop_callback_destruction_on_os_threads<
         hpx::experimental::in_place_stop_source,
         hpx::experimental::in_place_stop_callback>();
+    test_stop_source_assignment();
     test_stoken(std::chrono::seconds{0});
     test_stoken(std::chrono::milliseconds{500});
 
