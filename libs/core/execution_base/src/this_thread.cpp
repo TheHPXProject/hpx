@@ -81,6 +81,7 @@ namespace hpx::execution_base {
             void resume(hpx::threads::thread_priority priority,
                 char const* desc) override;
             void abort(char const* desc) override;
+            void prepare_wait(char const* desc) override;
             threads::thread_restart_state sleep_for(
                 hpx::chrono::steady_duration const& sleep_duration,
                 hpx::move_only_function<bool()>&& wait_cond,
@@ -193,6 +194,14 @@ namespace hpx::execution_base {
             suspend_cv_.notify_one();
         }
 
+        void default_agent::prepare_wait(char const* /* desc */)
+        {
+            // A wakeup for a wait that is about to be published must not
+            // consume the completion of an earlier wait on this agent.
+            std::lock_guard<std::mutex> l(mtx_);
+            wait_over_ = false;
+        }
+
         threads::thread_restart_state default_agent::sleep_for(
             hpx::chrono::steady_duration const& sleep_duration,
             hpx::move_only_function<bool()>&& wait_cond, char const* desc)
@@ -219,10 +228,26 @@ namespace hpx::execution_base {
             auto set_wait_over = hpx::experimental::scope_exit([this] {
                 {
                     std::lock_guard<std::mutex> l(mtx_);
+                    // defensive: if wait_for ever threw mid-chunk, running_
+                    // would stay false and the next wait would trip
+                    // HPX_ASSERT(running_)
+                    running_ = true;
                     wait_over_ = true;
                 }
                 resume_cv_.notify_all();
             });
+            // A previous abort is latched; report it before waiting again
+            // (suspend() does the same after waking).
+            {
+                std::lock_guard<std::mutex> l(mtx_);
+                if (aborted_)
+                {
+                    HPX_THROW_EXCEPTION(hpx::error::yield_aborted, desc,
+                        "std::thread({}) aborted (sleep_until returned "
+                        "wait_abort)",
+                        id_);
+                }
+            }
 
             for (;;)
             {

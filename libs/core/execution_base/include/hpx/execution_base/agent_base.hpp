@@ -32,6 +32,14 @@ namespace hpx::execution_base {
         virtual void resume(
             hpx::threads::thread_priority priority, char const* desc) = 0;
         virtual void abort(char const* desc) = 0;
+        // Called by synchronization primitives before a new wait is
+        // published to notifiers, so a completion left over from an
+        // earlier wait on the same (thread-local) agent cannot be
+        // consumed by a wakeup for the new wait. The default does
+        // nothing; agents that keep wait state across waits override it.
+        virtual void prepare_wait(char const* /* desc */)
+        {
+        }
         virtual threads::thread_restart_state sleep_for(
             hpx::chrono::steady_duration const& sleep_duration,
             hpx::move_only_function<bool()>&& wait_cond, char const* desc) = 0;
