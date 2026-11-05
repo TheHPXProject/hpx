@@ -190,6 +190,8 @@ function(write_config_defines_file)
 
   # if the user has not specified a template, generate a proper header file
   if(NOT OPTION_TEMPLATE)
+    # The preamble below is the header of the generated file, not of this one.
+    # REUSE-IgnoreStart
     set(PREAMBLE
         "//  Copyright (c) 2019-@HPX_COPYRIGHT_YEAR@ STE||AR Group\n"
         "//\n"
@@ -201,6 +203,7 @@ function(write_config_defines_file)
         "\n"
         "#pragma once\n"
     )
+    # REUSE-IgnoreEnd
     file(WRITE ${TEMP_FILENAME} ${PREAMBLE} ${hpx_config_defines} "\n")
     hpx_configure_if_changed(
       INPUT "${TEMP_FILENAME}"

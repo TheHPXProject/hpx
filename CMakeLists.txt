@@ -3045,6 +3045,13 @@ install(
   COMPONENT license
 )
 
+# license text in the location defined by REUSE (https://reuse.software/)
+install(
+  FILES "${PROJECT_SOURCE_DIR}/LICENSES/BSL-1.0.txt"
+  DESTINATION ${CMAKE_INSTALL_DATADIR}/hpx/LICENSES
+  COMPONENT license
+)
+
 if(HPX_WITH_DOCUMENTATION)
   install(
     FILES "${PROJECT_SOURCE_DIR}/docs/index.html"

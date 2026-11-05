@@ -142,3 +142,24 @@ jobs:
       with:
         name: spelling-suggestions
         path: /tmp/spelling_suggestions.txt
+
+  reuse-lint:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v7
+
+    # see https://reuse.software/
+    - name: REUSE Compliance Check
+      shell: bash
+      run: |
+        pipx install "reuse[charset-normalizer]==6.3.0"
+        reuse --version
+        reuse lint | tee /tmp/reuse_lint_report.txt
+
+    - name: Upload REUSE Compliance Artifacts
+      if: success() || failure()
+      uses: actions/upload-artifact@v7
+      with:
+        name: reuse-lint-report
+        path: /tmp/reuse_lint_report.txt
