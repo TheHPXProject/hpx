@@ -287,10 +287,14 @@ namespace hpx::parallel {
                     using result =
                         util::detail::algorithm_result<ExPolicy, result_type>;
 
+                    // like the sequential version, return the end of both
+                    // inputs
                     if (first1 == last1 || first2 == last2)
                     {
-                        return result::get(result_type{HPX_MOVE(first1),
-                            HPX_MOVE(first2), HPX_MOVE(dest)});
+                        return result::get(result_type{
+                            detail::advance_to_sentinel(first1, last1),
+                            detail::advance_to_sentinel(first2, last2),
+                            HPX_MOVE(dest)});
                     }
                 }
 
