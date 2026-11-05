@@ -8,7 +8,9 @@
 // different length returned the end of both inputs as in1 and in2 instead of
 // the position where the shorter range ran out. hpx::ranges::set_intersection
 // returned the position where the loop stopped instead of the end of both
-// inputs. Both now match std::ranges.
+// inputs. With a parallel policy, set_intersection returned the beginning of
+// both inputs when one of them was empty. All of these now match
+// std::ranges.
 
 #include <hpx/algorithm.hpp>
 #include <hpx/execution.hpp>
@@ -68,6 +70,23 @@ void test_set_intersection(Container const& a, Container const& b)
         std::distance(d1.begin(), expected.out));
 }
 
+// The parallel version takes an early exit when one of the inputs is empty.
+// Inputs of different length that are both non-empty go through
+// set_operation() and are not covered here. Inputs that are not random access,
+// such as std::list, use the sequential version even with a parallel policy.
+template <typename Container>
+void test_set_intersection_par_empty(Container const& a, Container const& b)
+{
+    std::vector<int> d(a.size() + b.size());
+
+    auto result =
+        hpx::ranges::set_intersection(hpx::execution::par, a, b, d.begin());
+
+    HPX_TEST(result.in1 == a.end());
+    HPX_TEST(result.in2 == b.end());
+    HPX_TEST(result.out == d.begin());
+}
+
 template <typename Container>
 void test_all()
 {
@@ -86,6 +105,10 @@ void test_all()
     test_set_intersection(empty, longer);
     test_set_intersection(longer, empty);
     test_set_intersection(Container{1, 2, 3, 4, 5, 6, 7, 8}, Container{9});
+
+    test_set_intersection_par_empty(empty, longer);
+    test_set_intersection_par_empty(longer, empty);
+    test_set_intersection_par_empty(empty, empty);
 }
 
 int hpx_main()
