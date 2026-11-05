@@ -24,6 +24,7 @@ set(tests
     num_cores
     prefetching_iterator
     reduce_3641
+    reduce_with_auto_chunk_size
     reverse_rotate_copy_result
     scan_different_inits
     scan_non_commutative
