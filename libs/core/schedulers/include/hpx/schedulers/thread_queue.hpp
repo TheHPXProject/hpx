@@ -1082,7 +1082,7 @@ namespace hpx::threads::policies {
             }
 
             // the result is bounded by max_items, so it fits a std::size_t
-            std::size_t const work_items_count =
+            [[maybe_unused]] std::size_t const work_items_count =
                 static_cast<std::size_t>((std::min) (pending_count,
                     static_cast<std::uint64_t>(max_items)));
 
