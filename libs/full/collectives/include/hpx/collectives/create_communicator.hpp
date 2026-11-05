@@ -180,8 +180,10 @@ namespace hpx { namespace collectives {
     ///                     communicator collapses to a single flat
     ///                     communicator spanning all sites (strict
     ///                     comparison: num_sites < threshold). The default
-    ///                     is 16; pass 0 to disable the fallback and always
-    ///                     build a tree.
+    ///                     is 16; pass 0 to disable the fallback. The
+    ///                     communicator is still a single flat communicator
+    ///                     if \a arity is not smaller than the number of
+    ///                     sites.
     ///
     /// \note   The sub-communicators of a hierarchical_communicator share one
     ///         generation sequence per registered name. Every hierarchical

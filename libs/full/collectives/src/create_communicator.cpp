@@ -595,7 +595,8 @@ namespace hpx::collectives {
         // produces a single flat communicator spanning all sites; the
         // hierarchical collectives dispatch on the same arity >= num_sites
         // condition and collapse to a direct flat call. Pass threshold == 0
-        // to disable this fallback and always build a tree.
+        // to disable this fallback; an arity that is not smaller than
+        // num_sites still gives a single flat communicator.
         if (num_sites < threshold)
         {
             arity = static_cast<std::size_t>(num_sites);

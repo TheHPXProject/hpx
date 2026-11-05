@@ -19,10 +19,12 @@
 #include <hpx/modules/collectives.hpp>
 #include <hpx/modules/program_options.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <iostream>
+#include <ranges>
 #include <string>
 #include <vector>
 
@@ -100,18 +102,13 @@ int hpx_main(hpx::program_options::variables_map& vm)
     //]
 
     // Check the results on every site.
-    std::uint32_t expected_sum = 0;
-    for (std::uint32_t i = 0; i != num_localities; ++i)
-    {
-        expected_sum += i;
-    }
+    auto const expected_squares =
+        std::views::iota(std::uint32_t(0), num_localities) |
+        std::views::transform([](std::uint32_t i) { return i * i; });
 
-    bool ok = sum == expected_sum && squares.size() == num_localities &&
+    bool const ok = sum == num_localities * (num_localities - 1) / 2 &&
+        std::ranges::equal(squares, expected_squares) &&
         message == "hello from the root";
-    for (std::uint32_t i = 0; ok && i != squares.size(); ++i)
-    {
-        ok = squares[i] == i * i;
-    }
 
     if (!ok)
     {
