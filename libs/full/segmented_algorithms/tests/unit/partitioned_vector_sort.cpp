@@ -31,7 +31,7 @@
 #include <vector>
 
 ///////////////////////////////////////////////////////////////////////////////
-#define SIZE 64
+#define HPX_SEGMENTED_SORT_TEST_SIZE 64
 #define LARGE_SIZE 2048
 
 template <typename T>
@@ -101,15 +101,17 @@ void verify_sorted(hpx::partitioned_vector<T> const& values,
 template <typename T>
 void initialize_reverse(hpx::partitioned_vector<T>& values)
 {
-    initialize_values(
-        values, [](int i) { return make_sort_value<T>(SIZE - i); });
+    initialize_values(values, [](int i) {
+        return make_sort_value<T>(HPX_SEGMENTED_SORT_TEST_SIZE - i);
+    });
 }
 
 template <typename T>
 void initialize_mixed(hpx::partitioned_vector<T>& values)
 {
-    initialize_values(
-        values, [](int i) { return make_sort_value<T>((i * 17 + 3) % SIZE); });
+    initialize_values(values, [](int i) {
+        return make_sort_value<T>((i * 17 + 3) % HPX_SEGMENTED_SORT_TEST_SIZE);
+    });
 }
 
 template <typename T>
@@ -221,7 +223,7 @@ template <typename T>
 void test_sort_throwing(std::vector<hpx::id_type>& localities)
 {
     hpx::partitioned_vector<T> values(
-        SIZE, T{}, hpx::container_layout(localities));
+        HPX_SEGMENTED_SORT_TEST_SIZE, T{}, hpx::container_layout(localities));
     initialize_mixed(values);
 
     throwing_less comp;
@@ -254,7 +256,7 @@ template <typename T>
 void run_cases(std::vector<hpx::id_type>& localities)
 {
     hpx::partitioned_vector<T> values(
-        SIZE, T{}, hpx::container_layout(localities));
+        HPX_SEGMENTED_SORT_TEST_SIZE, T{}, hpx::container_layout(localities));
 
     initialize_reverse(values);
     test_sort_once(values);
