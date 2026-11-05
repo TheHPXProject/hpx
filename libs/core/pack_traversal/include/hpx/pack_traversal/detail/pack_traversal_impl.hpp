@@ -445,21 +445,6 @@ namespace hpx::util::detail {
         using dereferenced_of_t =
             std::conditional_t<std::is_reference_v<T>, std::decay_t<T>, T>;
 
-        /// Deduces the mapped type resulting from applying the mapping M to
-        /// an element of type T, falling back to T if M is not invocable.
-        template <typename M, typename T, typename Enable = void>
-        struct mapped_type_from
-        {
-            using type = T;
-        };
-
-        template <typename M, typename T>
-        struct mapped_type_from<M, T,
-            std::enable_if_t<hpx::is_invocable_v<M, T>>>
-        {
-            using type = hpx::util::invoke_result_t<M, T>;
-        };
-
         /// Returns the type which is resulting if the mapping is applied to an
         /// element in the container.
         ///
@@ -467,12 +452,12 @@ namespace hpx::util::detail {
         /// references we try to construct the container from a copied version.
         template <typename Container, typename Mapping>
         using mapped_type_from_t = dereferenced_of_t<spreading::unpacked_of_t<
-            typename mapped_type_from<Mapping, element_of_t<Container>>::type>>;
+            hpx::util::invoke_result_t<Mapping, element_of_t<Container>>>>;
 
         /// Deduces to a true_type if the mapping maps to zero elements.
         template <typename T, typename M>
         using is_empty_mapped = spreading::is_empty_spread<
-            std::decay_t<typename mapped_type_from<M, element_of_t<T>>::type>>;
+            std::decay_t<hpx::util::invoke_result_t<M, element_of_t<T>>>>;
 
         template <typename T, typename M>
         inline constexpr bool is_empty_mapped_v = is_empty_mapped<T, M>::value;
@@ -577,8 +562,8 @@ namespace hpx::util::detail {
         /// Remaps the content of the given container with type T, to a
         /// container of the same type which may contain different types.
         template <typename T, typename M>
-        auto remap(strategy_remap_tag, T&& container, M&& mapper,
-            std::enable_if_t<is_effective_v<M, element_of_t<T>>>* = nullptr)
+            requires is_effective_v<M, element_of_t<T>>
+        auto remap(strategy_remap_tag, T&& container, M&& mapper)
             -> decltype(remap_container(container_mapping_tag_of_t<T, M>{},
                 HPX_FORWARD(M, mapper), HPX_FORWARD(T, container)))
         {
@@ -588,8 +573,8 @@ namespace hpx::util::detail {
 
         /// Just call the visitor with the content of the container
         template <typename T, typename M>
-        void remap(strategy_traverse_tag, T&& container, M&& mapper,
-            std::enable_if_t<is_effective_v<M, element_of_t<T>>>* = nullptr)
+            requires is_effective_v<M, element_of_t<T>>
+        void remap(strategy_traverse_tag, T&& container, M&& mapper)
         {
             // CUDA needs std::forward here
             for (auto&& element : std::forward<T>(container))
