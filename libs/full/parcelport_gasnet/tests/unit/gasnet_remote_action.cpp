@@ -48,8 +48,8 @@ void test_remote(hpx::id_type const& target, std::uint32_t target_id)
     std::iota(data.begin(), data.end(), std::uint64_t(0));
     std::uint64_t const expected =
         std::accumulate(data.begin(), data.end(), std::uint64_t(0)) + target_id;
-    HPX_TEST_EQ(hpx::async<sum_and_locality_action>(target, data).get(),
-        expected);
+    HPX_TEST_EQ(
+        hpx::async<sum_and_locality_action>(target, data).get(), expected);
 }
 
 // Parcels that nobody waits for: they may still be in flight when the runtime
