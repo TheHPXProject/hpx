@@ -304,10 +304,14 @@ namespace hpx {
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/type_support.hpp>
+#if defined(HPX_HAVE_DATAPAR)
+#include <hpx/executors/datapar/execution_policy_mappings.hpp>
+#endif
 #include <hpx/parallel/algorithms/detail/advance_and_get_distance.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
+#include <hpx/parallel/algorithms/detail/unique.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/clear_container.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
@@ -331,35 +335,6 @@ namespace hpx::parallel {
     namespace detail {
         /// \cond NOINTERNAL
 
-        // sequential unique with projection function
-        HPX_CXX_CORE_EXPORT template <typename FwdIter, typename Sent,
-            typename Pred, typename Proj>
-        constexpr FwdIter sequential_unique(
-            FwdIter first, Sent last, Pred&& pred, Proj&& proj)
-        {
-            if (first == last)
-                return first;
-
-            using projected_type = std::decay_t<std::invoke_result_t<Proj,
-                typename std::iterator_traits<FwdIter>::reference>>;
-
-            FwdIter result = first;
-            projected_type result_projected = HPX_INVOKE(proj, *result);
-            while (++first != last)
-            {
-                if (!HPX_INVOKE(
-                        pred, result_projected, HPX_INVOKE(proj, *first)))
-                {
-                    if (++result != first)
-                    {
-                        *result = std::ranges::iter_move(first);
-                    }
-                    result_projected = HPX_INVOKE(proj, *result);
-                }
-            }
-            return ++result;
-        }
-
         HPX_CXX_CORE_EXPORT template <typename Iter>
         struct unique : public algorithm<unique<Iter>, Iter>
         {
@@ -373,8 +348,8 @@ namespace hpx::parallel {
             static constexpr InIter sequential(
                 ExPolicy, InIter first, Sent last, Pred&& pred, Proj&& proj)
             {
-                return sequential_unique(first, last, HPX_FORWARD(Pred, pred),
-                    HPX_FORWARD(Proj, proj));
+                return sequential_unique<ExPolicy>(first, last,
+                    HPX_FORWARD(Pred, pred), HPX_FORWARD(Proj, proj));
             }
 
             template <typename ExPolicy, typename FwdIter, typename Sent,
@@ -407,26 +382,14 @@ namespace hpx::parallel {
 
                 using hpx::get;
 
+                using policy_type = std::decay_t<ExPolicy>;
+
                 auto f1 = [pred = HPX_FORWARD(Pred, pred),
                               proj = HPX_FORWARD(Proj, proj)](
                               zip_iterator part_begin,
                               std::size_t part_size) -> void {
-                    FwdIter base = get<0>(part_begin.get_iterator_tuple());
-
-                    // Note: replacing the invoke() with HPX_INVOKE()
-                    // below makes gcc generate errors
-
-                    // MSVC complains if pred or proj is captured by ref below
-                    util::const_loop_n<std::decay_t<ExPolicy>>(++part_begin,
-                        part_size,
-                        [base, pred, proj](zip_iterator it) mutable -> void {
-                            bool r = hpx::invoke(pred, hpx::invoke(proj, *base),
-                                hpx::invoke(proj, get<0>(*it)));
-
-                            // NOLINTNEXTLINE(bugprone-assignment-in-if-condition)
-                            if (!((get<1>(*it) = r)))
-                                base = get<0>(it.get_iterator_tuple());
-                        });
+                    sequential_unique<policy_type>(
+                        part_begin, part_size, pred, proj);
                 };
 
                 auto f2 = [flags, first, count](auto&&...) mutable -> FwdIter {
@@ -434,7 +397,13 @@ namespace hpx::parallel {
                     auto dest = first;
                     auto part_size = count;
 
+#if defined(HPX_HAVE_DATAPAR)
+                    using execution_policy_type =
+                        decltype(hpx::execution::experimental::to_non_simd(
+                            std::declval<ExPolicy>()));
+#else
                     using execution_policy_type = std::decay_t<ExPolicy>;
+#endif
                     if (dest == get<0>(part_begin.get_iterator_tuple()))
                     {
                         // Self-assignment must be detected.
@@ -487,73 +456,6 @@ namespace hpx::parallel {
     // unique_copy
     namespace detail {
         /// \cond NOINTERNAL
-
-        // sequential unique_copy with projection function
-        HPX_CXX_CORE_EXPORT template <typename FwdIter, typename Sent,
-            typename OutIter, typename Pred, typename Proj>
-        constexpr unique_copy_result<FwdIter, OutIter> sequential_unique_copy(
-            FwdIter first, Sent last, OutIter dest, Pred&& pred, Proj&& proj,
-            std::true_type)
-        {
-            if (first == last)
-            {
-                return unique_copy_result<FwdIter, OutIter>{
-                    HPX_MOVE(first), HPX_MOVE(dest)};
-            }
-
-            using projected_type = std::decay_t<std::invoke_result_t<Proj,
-                typename std::iterator_traits<FwdIter>::reference>>;
-
-            FwdIter base = first;
-            *dest++ = *first;
-            projected_type base_projected = HPX_INVOKE(proj, *base);
-
-            while (++first != last)
-            {
-                if (!HPX_INVOKE(pred, base_projected, HPX_INVOKE(proj, *first)))
-                {
-                    base = first;
-                    *dest++ = *first;
-                    base_projected = HPX_INVOKE(proj, *base);
-                }
-            }
-            return unique_copy_result<FwdIter, OutIter>{
-                HPX_MOVE(first), HPX_MOVE(dest)};
-        }
-
-        // sequential unique_copy with projection function
-        HPX_CXX_CORE_EXPORT template <typename InIter, typename Sent,
-            typename OutIter, typename Pred, typename Proj>
-        constexpr unique_copy_result<InIter, OutIter> sequential_unique_copy(
-            InIter first, Sent last, OutIter dest, Pred&& pred, Proj&& proj,
-            std::false_type)
-        {
-            if (first == last)
-                return unique_copy_result<InIter, OutIter>{
-                    HPX_MOVE(first), HPX_MOVE(dest)};
-
-            using element_type =
-                typename std::iterator_traits<InIter>::value_type;
-            using projected_type = std::decay_t<std::invoke_result_t<Proj,
-                typename std::iterator_traits<InIter>::reference>>;
-            element_type base_val = *first;
-            projected_type base_projected = HPX_INVOKE(proj, base_val);
-
-            *dest++ = base_val;
-
-            while (++first != last)
-            {
-                if (!HPX_INVOKE(pred, base_projected, HPX_INVOKE(proj, *first)))
-                {
-                    base_val = *first;
-                    *dest++ = base_val;
-                    base_projected = HPX_INVOKE(proj, base_val);
-                }
-            }
-            return unique_copy_result<InIter, OutIter>{
-                HPX_MOVE(first), HPX_MOVE(dest)};
-        }
-
         HPX_CXX_CORE_EXPORT template <typename IterPair>
         struct unique_copy : public algorithm<unique_copy<IterPair>, IterPair>
         {
@@ -570,7 +472,7 @@ namespace hpx::parallel {
             {
                 using type = std::bool_constant<std::forward_iterator<InIter>>;
 
-                return sequential_unique_copy(first, last, dest,
+                return sequential_unique_copy<ExPolicy>(first, last, dest,
                     HPX_FORWARD(Pred, pred), HPX_FORWARD(Proj, proj), type());
             }
 
@@ -615,35 +517,28 @@ namespace hpx::parallel {
                 using scan_partitioner_type = util::scan_partitioner<ExPolicy,
                     unique_copy_result<FwdIter1, FwdIter2>, std::size_t>;
 
+                using policy_type = std::decay_t<ExPolicy>;
+
                 auto f1 = [pred = HPX_FORWARD(Pred, pred),
                               proj = HPX_FORWARD(Proj, proj)](
                               zip_iterator part_begin,
                               std::size_t part_size) -> std::size_t {
-                    FwdIter1 base = get<0>(part_begin.get_iterator_tuple());
-                    std::size_t curr = 0;
-
-                    // MSVC complains if pred or proj is captured by ref below
-                    util::const_loop_n<std::decay_t<ExPolicy>>(
-                        ++part_begin, part_size, [&](zip_iterator it) mutable {
-                            bool r = HPX_INVOKE(pred, HPX_INVOKE(proj, *base),
-                                HPX_INVOKE(proj, get<0>(*it)));
-
-                            // NOLINTNEXTLINE(bugprone-assignment-in-if-condition)
-                            if (!((get<1>(*it) = r)))
-                            {
-                                base = get<0>(it.get_iterator_tuple());
-                                ++curr;
-                            }
-                        });
-
-                    return curr;
+                    return sequential_unique_copy<policy_type>(
+                        part_begin, part_size, pred, proj);
                 };
                 auto f3 = [dest, flags](zip_iterator part_begin,
                               std::size_t part_size,
                               std::size_t val) mutable -> void {
                     HPX_UNUSED(flags);
                     std::advance(dest, val);
-                    util::const_loop_n<std::decay_t<ExPolicy>>(++part_begin,
+#if defined(HPX_HAVE_DATAPAR)
+                    using execution_policy_type =
+                        decltype(hpx::execution::experimental::to_non_simd(
+                            std::declval<ExPolicy>()));
+#else
+                    using execution_policy_type = std::decay_t<ExPolicy>;
+#endif
+                    util::const_loop_n<execution_policy_type>(++part_begin,
                         part_size, [&dest](zip_iterator it) mutable {
                             if (!get<1>(*it))
                                 *dest++ = get<0>(*it);
