@@ -208,9 +208,11 @@ namespace hpx::parallel::detail {
                 while (batch_end != seg_data.size())
                 {
                     auto const& data = seg_data[batch_end];
-                    difference_type const count =
-                        traits1::get_id(std::get<0>(data)) ==
-                            traits2::get_id(std::get<1>(data)) ?
+                    hpx::id_type const id1 = traits1::get_id(std::get<0>(data));
+                    hpx::id_type const id2 = traits2::get_id(std::get<1>(data));
+                    bool const same_locality = get_partition_locality(id1) ==
+                        get_partition_locality(id2);
+                    difference_type const count = same_locality ?
                         0 :
                         static_cast<difference_type>(std::distance(
                             std::get<2>(data), std::get<4>(data)));
@@ -221,11 +223,10 @@ namespace hpx::parallel::detail {
                         break;
                     }
 
-                    segments.push_back(dispatch_comparison_async(
-                        traits1::get_id(std::get<0>(data)),
-                        traits2::get_id(std::get<1>(data)), algo, policy,
-                        forced_seq(), std::get<2>(data), std::get<4>(data),
-                        std::get<3>(data), pred));
+                    segments.push_back(
+                        dispatch_comparison_async(id1, id2, same_locality, algo,
+                            policy, forced_seq(), std::get<2>(data),
+                            std::get<4>(data), std::get<3>(data), pred));
                     batch_elements += count;
                     ++batch_end;
                 }
