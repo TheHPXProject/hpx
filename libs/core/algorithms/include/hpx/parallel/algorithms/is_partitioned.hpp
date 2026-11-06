@@ -182,9 +182,26 @@ namespace hpx::parallel {
             static constexpr bool sequential(
                 ExPolicy, InIter first, InSent last, Pred&& pred, Proj&& proj)
             {
-                return std::is_partitioned(first, last,
-                    util::invoke_projected<Pred, Proj>(
-                        HPX_FORWARD(Pred, pred), HPX_FORWARD(Proj, proj)));
+                util::invoke_projected<Pred, Proj> pred_projected{
+                    HPX_FORWARD(Pred, pred), HPX_FORWARD(Proj, proj)};
+
+                for (; first != last; ++first)
+                {
+                    if (!HPX_INVOKE(pred_projected, *first))
+                        break;
+                }
+
+                if (first != last)
+                {
+                    ++first;
+                }
+
+                for (; first != last; ++first)
+                {
+                    if (HPX_INVOKE(pred_projected, *first))
+                        return false;
+                }
+                return true;
             }
 
             template <typename ExPolicy, typename Iter_, typename Sent_,
