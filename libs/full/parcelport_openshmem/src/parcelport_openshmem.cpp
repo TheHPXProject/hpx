@@ -213,14 +213,20 @@ namespace hpx::parcelset {
               : base_type(ini, here(0), notifier)
               , ini_(ini)
               , stopped_(false)
-              , num_pes_(static_cast<std::size_t>(shmem_n_pes()))
-              , my_pe_(static_cast<std::size_t>(shmem_my_pe()))
+              , num_pes_(static_cast<std::size_t>(
+                    util::openshmem_environment::enabled() ? shmem_n_pes() : 1))
+              , my_pe_(static_cast<std::size_t>(
+                    util::openshmem_environment::enabled() ? shmem_my_pe() : 0))
               , mtu_(mtu(ini, num_pes_, slots(ini)))
               , slots_(slots(ini))
               , stop_timeout_(stop_timeout(ini))
-              , mailboxes_(num_pes_, my_pe_, mtu_, slots_,
-                symmetric_memory_size(ini), checksum(ini),
-                scan_window(ini))
+              // a parcelport that is compiled in but not selected for this
+              // run (another one is) has no OpenSHMEM runtime to carve from
+              , mailboxes_(util::openshmem_environment::enabled() ?
+                        mailbox_array(num_pes_, my_pe_, mtu_, slots_,
+                            symmetric_memory_size(ini), checksum(ini),
+                            scan_window(ini)) :
+                        mailbox_array())
               , sender_(&mailboxes_)
               , receiver_(*this)
             {
@@ -722,6 +728,11 @@ struct hpx::traits::plugin_config_data<
     static void init(int* argc, char*** argv, util::command_line_handling& cfg)
     {
         util::openshmem_environment::init(argc, argv, cfg.rtcfg_);
+
+        // another parcelport (or this one being disabled) leaves the
+        // openshmem runtime uninitialised; do not query it then
+        if (!util::openshmem_environment::enabled())
+            return;
 
         // Zero-copy chunks travel in the same page stream as the serialized
         // data (see sender_connection::prepare()).
