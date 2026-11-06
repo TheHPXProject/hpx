@@ -234,9 +234,9 @@ namespace hpx::parcelset {
                 detail::g_io_stats_on.store(
                     hpx::util::get_entry_as<int>(
                         ini, "hpx.parcel.openshmem.stats", 0) != 0);
-                worker_progress_ = hpx::util::get_entry_as<int>(
-                                       ini, "hpx.parcel.openshmem.worker_progress", 0) !=
-                    0;
+                worker_progress_ =
+                    hpx::util::get_entry_as<int>(
+                        ini, "hpx.parcel.openshmem.worker_progress", 0) != 0;
 
                 if (uniform_check(ini))
                 {
@@ -762,13 +762,13 @@ struct hpx::traits::plugin_config_data<
                // shows the pass; setting it to 0 removes the corruption
                // tripwire and must be identical on every PE.
                "checksum = 1\n"
-// Cross-PE wire-protocol uniformity check at startup.  Off by
-                // default until the symmetric-fingerprint rework is validated
-                // on a real oshrun job: it now reuses the mailbox_array carve
-                // (no collective shmem_malloc in do_run()), but the check still
-                // costs one barrier on every launch.  Enable with
-                // uniform_check=1 when launching a homogeneous job.
-                "uniform_check = 0\n"
+               // Cross-PE wire-protocol uniformity check at startup.  Off by
+               // default until the symmetric-fingerprint rework is validated
+               // on a real oshrun job: it now reuses the mailbox_array carve
+               // (no collective shmem_malloc in do_run()), but the check still
+               // costs one barrier on every launch.  Enable with
+               // uniform_check=1 when launching a homogeneous job.
+               "uniform_check = 0\n"
                // Max source PEs probed per receive-scan pass (0 = all).
                // Bounds the per-pass remote round-trip cost at large n.
                "scan_window = 8\n"
