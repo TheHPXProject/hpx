@@ -159,6 +159,24 @@ The shown code defines an action type ``some_global_action`` inside the namespac
    to comprise a globally unique C++ identifier representing the action. This is
    used for serialization purposes.
 
+A global function can also be invoked without defining an action type for it
+by passing a pointer to the function as the template argument of ``hpx::async``::
+
+    namespace app
+    {
+        double square(double d)
+        {
+            return d * d;
+        }
+    }
+
+    hpx::future<double> f = hpx::async<&app::square>(target, 2.0);
+
+This creates the action for ``app::square`` internally. It relies on the action
+being registered automatically, which is the default. If |hpx| was configured
+with ``HPX_WITH_AUTOMATIC_SERIALIZATION_REGISTRATION=OFF``, use
+:c:macro:`HPX_PLAIN_ACTION` instead.
+
 For member functions of objects which have been registered with AGAS
 (e.g., 'components'), a different registration macro
 :c:macro:`HPX_DEFINE_COMPONENT_ACTION` has to be utilized. Any component needs
@@ -207,6 +225,16 @@ functions, they should still be manageable.
 The most important macro invocation is the :c:macro:`HPX_DEFINE_COMPONENT_ACTION` in the header file
 as this defines the action type we need to invoke the member function. For a
 complete example of a simple component action see :download:`component_in_executable.cpp <../../examples/quickstart/component_in_executable.cpp>`.
+
+Member functions of components can also be invoked without defining an action
+type for them, the same way as global functions::
+
+    hpx::future<int> f =
+        hpx::async<&app::some_component::some_member_function>(
+            component_id, std::string("42"));
+
+The component itself still has to be registered using
+:c:macro:`HPX_REGISTER_COMPONENT`, only the action macros are not needed.
 
 .. _reflection_based_component_actions:
 

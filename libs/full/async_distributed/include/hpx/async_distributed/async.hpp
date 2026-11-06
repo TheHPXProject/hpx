@@ -257,6 +257,92 @@ namespace hpx {
             HPX_FORWARD(Ts, ts)...);
     }
 #endif    // HPX_HAVE_CXX26_REFLECTION
+
+    /// \cond NOINTERNAL
+    namespace detail {
+
+        // Actions that were not registered using HPX_REGISTER_ACTION can be
+        // sent to other localities only if they are registered automatically.
+        template <typename Action>
+        inline constexpr bool is_action_registered_automatically_v =
+#if defined(HPX_HAVE_NETWORKING) &&                                            \
+    !defined(HPX_HAVE_AUTOMATIC_SERIALIZATION_REGISTRATION)
+            false;
+#else
+            true;
+#endif
+
+        // free functions become plain actions, member functions become
+        // component actions
+        template <auto F>
+        inline constexpr bool is_action_function_v =
+            (std::is_pointer_v<decltype(F)> &&
+                std::is_function_v<std::remove_pointer_t<decltype(F)>>) ||
+            std::is_member_function_pointer_v<decltype(F)>;
+    }    // namespace detail
+    /// \endcond
+
+    /// \brief Invoke a function on the given target without defining an
+    ///        action type for it.
+    ///
+    /// Allows calling hpx::async<&func>(target, ...) for free functions and
+    /// hpx::async<&component::func>(target, ...) for member functions of
+    /// components directly. Internally creates the plain or component action
+    /// for \a F and delegates to the existing async machinery. The action
+    /// does not need to be registered using HPX_REGISTER_ACTION. This
+    /// requires HPX_WITH_AUTOMATIC_SERIALIZATION_REGISTRATION=ON.
+    ///
+    /// \tparam F      A pointer to a free function or to a member function of
+    ///                a component.
+    /// \tparam Target id_type, client, or distribution policy.
+    /// \tparam Ts     Additional arguments to pass to the function.
+    // clang-format off
+    HPX_CXX_EXPORT template <auto F, typename Target, typename... Ts>
+        requires(detail::is_action_function_v<F> &&
+            (std::is_same_v<std::decay_t<Target>, hpx::id_type> ||
+                hpx::traits::is_client_v<std::decay_t<Target>> ||
+                hpx::traits::is_distribution_policy_v<std::decay_t<Target>>))
+    HPX_FORCEINLINE auto async(Target&& target, Ts&&... ts)
+    // clang-format on
+    {
+        using action_type = hpx::actions::make_action_t<decltype(F), F>;
+        static_assert(detail::is_action_registered_automatically_v<action_type>,
+            "hpx::async<&func> requires "
+            "HPX_WITH_AUTOMATIC_SERIALIZATION_REGISTRATION=ON, use "
+            "HPX_PLAIN_ACTION otherwise");
+
+        return hpx::async(
+            action_type{}, HPX_FORWARD(Target, target), HPX_FORWARD(Ts, ts)...);
+    }
+
+    /// \brief Invoke a function on the given target using the given launch
+    ///        policy without defining an action type for it.
+    ///
+    /// \tparam F      A pointer to a free function or to a member function of
+    ///                a component.
+    /// \tparam Policy The launch policy to use.
+    /// \tparam Target id_type, client, or distribution policy.
+    /// \tparam Ts     Additional arguments to pass to the function.
+    // clang-format off
+    HPX_CXX_EXPORT template <auto F, typename Policy, typename Target,
+        typename... Ts>
+        requires(detail::is_action_function_v<F> &&
+            traits::is_launch_policy_v<Policy> &&
+            (std::is_same_v<std::decay_t<Target>, hpx::id_type> ||
+                hpx::traits::is_client_v<std::decay_t<Target>> ||
+                hpx::traits::is_distribution_policy_v<std::decay_t<Target>>))
+    HPX_FORCEINLINE auto async(Policy&& policy, Target&& target, Ts&&... ts)
+    // clang-format on
+    {
+        using action_type = hpx::actions::make_action_t<decltype(F), F>;
+        static_assert(detail::is_action_registered_automatically_v<action_type>,
+            "hpx::async<&func> requires "
+            "HPX_WITH_AUTOMATIC_SERIALIZATION_REGISTRATION=ON, use "
+            "HPX_PLAIN_ACTION otherwise");
+
+        return hpx::async(action_type{}, HPX_FORWARD(Policy, policy),
+            HPX_FORWARD(Target, target), HPX_FORWARD(Ts, ts)...);
+    }
 }    // namespace hpx
 
 ///////////////////////////////////////////////////////////////////////////////
