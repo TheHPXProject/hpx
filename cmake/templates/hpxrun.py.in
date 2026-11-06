@@ -305,13 +305,20 @@ def build_cmd(options, args):
         cmd += [arg]
 
     if options.localities > 1:
-        # Selecting the parcelport for hpx via hpx ini configuration
+        # Selecting the parcelport for hpx via hpx ini configuration.
+        # openshmem: parcels are injected from the parcelport's io thread and
+        # do not wake an idle HPX worker thread, which adds ~80 ms per message
+        # hop and makes round-trip heavy tests (collectives, migration) exceed
+        # their timeouts; max_idle_loop_count=0 keeps idle workers polling.
+        # The other parcelports are switched off: in a build that also has MPI,
+        # LCI or LCW they would call MPI_Init a second time, after the
+        # OpenSHMEM runtime already initialised MPI, and abort.
         select_parcelport = (lambda pp:
             ['--hpx:ini=hpx.parcel.mpi.priority=1000', '--hpx:ini=hpx.parcel.mpi.enable=1', '--hpx:ini=hpx.parcel.bootstrap=mpi'] if pp == 'mpi'
             else ['--hpx:ini=hpx.parcel.lci.priority=1000', '--hpx:ini=hpx.parcel.lci.enable=1', '--hpx:ini=hpx.parcel.bootstrap=lci'] if pp == 'lci'
             else ['--hpx:ini=hpx.parcel.lcw.priority=1000', '--hpx:ini=hpx.parcel.lcw.enable=1', '--hpx:ini=hpx.parcel.bootstrap=lcw'] if pp == 'lcw'
             else ['--hpx:ini=hpx.parcel.gasnet.priority=1000', '--hpx:ini=hpx.parcel.gasnet.enable=1', '--hpx:ini=hpx.parcel.bootstrap=gasnet'] if pp == 'gasnet'
-            else ['--hpx:ini=hpx.parcel.openshmem.priority=1000', '--hpx:ini=hpx.parcel.openshmem.enable=1'] if pp == 'openshmem'
+            else ['--hpx:ini=hpx.parcel.openshmem.priority=1000', '--hpx:ini=hpx.parcel.openshmem.enable=1', '--hpx:ini=hpx.max_idle_loop_count=0', '--hpx:ini=hpx.parcel.mpi.enable=0', '--hpx:ini=hpx.parcel.lci.enable=0', '--hpx:ini=hpx.parcel.lcw.enable=0', '--hpx:ini=hpx.parcel.tcp.enable=0'] if pp == 'openshmem'
             else ['--hpx:ini=hpx.parcel.tcp.priority=1000', '--hpx:ini=hpx.parcel.tcp.enable=1'] if pp == 'tcp'
             else [])
         cmd += select_parcelport(options.parcelport)
