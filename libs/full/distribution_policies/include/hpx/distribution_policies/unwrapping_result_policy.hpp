@@ -39,6 +39,7 @@ namespace hpx::components {
         {
         }
 
+        /// Defines the local result type for an asynchronously invoked action.
         template <typename Action>
         struct async_result
         {

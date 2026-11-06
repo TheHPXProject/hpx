@@ -49,6 +49,7 @@
 namespace hpx::components::server {
 
     ///////////////////////////////////////////////////////////////////////////
+    /// Implements runtime-support operations on a locality.
     HPX_CXX_EXPORT class runtime_support
     {
     private:

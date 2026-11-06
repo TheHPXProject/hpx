@@ -49,7 +49,7 @@ namespace hpx {
         std::ostream& os, id_type const& id);
 
     ///////////////////////////////////////////////////////////////////////////
-    // the local gid is actually just a wrapper around the real thing
+    /// Represents the globally unique identifier of an HPX component.
     HPX_CXX_EXPORT struct id_type
     {
     private:

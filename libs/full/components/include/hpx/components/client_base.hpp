@@ -714,6 +714,7 @@ namespace hpx::components {
     };
 
     ///////////////////////////////////////////////////////////////////////////
+    /// Compares the identifiers held by two client bases for equality.
     HPX_CXX_EXPORT template <typename Derived, typename Stub, typename Data>
     [[nodiscard]] bool operator==(client_base<Derived, Stub, Data> const& lhs,
         client_base<Derived, Stub, Data> const& rhs)
@@ -721,6 +722,7 @@ namespace hpx::components {
         return lhs.get() == rhs.get();
     }
 
+    /// Orders two client bases by their held identifiers.
     HPX_CXX_EXPORT template <typename Derived, typename Stub, typename Data>
     [[nodiscard]] bool operator<(client_base<Derived, Stub, Data> const& lhs,
         client_base<Derived, Stub, Data> const& rhs)

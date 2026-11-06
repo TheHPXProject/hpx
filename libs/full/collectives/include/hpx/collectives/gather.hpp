@@ -295,7 +295,8 @@ namespace hpx { namespace collectives {
     ///             directly returns the result.
     ///
     template <typename T>
-    decltype(auto) gather_here(hpx::launch::sync_policy, communicator comm,
+    std::vector<std::decay_t<T>>
+    gather_here(hpx::launch::sync_policy, communicator comm,
         T&& result, generation_arg generation,
         this_site_arg this_site = this_site_arg());
 

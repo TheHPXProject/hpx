@@ -24,6 +24,7 @@
 namespace hpx::supervision {
 
     ////////////////////////////////////////////////////////////////////////////
+    /// Coordinates supervised components across the HPX runtime.
     class supervision_manager
     {
     public:

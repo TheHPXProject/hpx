@@ -30,8 +30,7 @@
 namespace hpx::actions {
 
     ///////////////////////////////////////////////////////////////////////////
-    // Continuations are polymorphic objects encapsulating the
-    // id_type of the destination where the result has to be sent.
+    /// A polymorphic object that stores the destination for an action result.
     HPX_CXX_EXPORT class HPX_EXPORT continuation
     {
     public:

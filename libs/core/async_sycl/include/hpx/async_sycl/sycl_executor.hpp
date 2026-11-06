@@ -38,6 +38,7 @@ namespace hpx::sycl::experimental {
         };
     }    // namespace detail
 
+    /// An executor for submitting work to a SYCL queue.
     struct sycl_executor
     {
         using future_type = hpx::future<void>;

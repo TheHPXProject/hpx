@@ -42,6 +42,7 @@ namespace hpx::agas {
     HPX_CXX_EXPORT HPX_EXPORT void destroy_big_boot_barrier();
 #endif
 
+    /// Provides address resolution and registration services for AGAS.
     HPX_CXX_EXPORT struct addressing_service
     {
     public:
