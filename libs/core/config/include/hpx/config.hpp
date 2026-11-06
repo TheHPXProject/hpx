@@ -111,10 +111,6 @@
 #  define HPX_HAVE_PARCELPORT_MPI_BACKGROUND_THREADS std::size_t(-1)
 #endif
 
-#if !defined(HPX_PARCEL_OPENSHMEM_MTU)
-#  define HPX_PARCEL_OPENSHMEM_MTU 65536
-#endif
-
 #if !defined(HPX_PARCEL_GASNET_MTU)
 #  define HPX_PARCEL_GASNET_MTU 65536
 #endif
@@ -162,6 +158,10 @@
 // parcel.
 #if !defined(HPX_PARCEL_SERIALIZATION_OVERHEAD)
 #   define HPX_PARCEL_SERIALIZATION_OVERHEAD 512
+#endif
+
+#if !defined(HPX_PARCEL_OPENSHMEM_MTU)
+#  define HPX_PARCEL_OPENSHMEM_MTU 65536
 #endif
 
 /// This defines the number of AGAS address translations kept in the local
