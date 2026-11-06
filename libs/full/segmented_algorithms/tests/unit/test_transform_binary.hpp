@@ -241,6 +241,10 @@ void transform_binary_tests(std::vector<hpx::id_type>& localities)
     {
         constexpr std::size_t n = 6;
         std::vector<hpx::id_type> owners(2, hpx::find_here());
+        if (localities.size() > 1)
+        {
+            owners[1] = localities[1];
+        }
         hpx::partitioned_vector<T> v(
             n, hpx::explicit_container_layout({2, 4}, owners));
         hpx::partitioned_vector<U> w(
@@ -280,6 +284,14 @@ void transform_binary_tests(std::vector<hpx::id_type>& localities)
         verify(hpx::transform(
             hpx::execution::par, v.begin(), v.end(), w.begin(), x.begin(),
             add<V>()));
+        reset_output();
+        verify(hpx::transform(hpx::execution::seq(hpx::execution::task),
+                   v.begin(), v.end(), w.begin(), x.begin(), add<V>())
+                   .get());
+        reset_output();
+        verify(hpx::transform(hpx::execution::par(hpx::execution::task),
+                   v.begin(), v.end(), w.begin(), x.begin(), add<V>())
+                   .get());
 
         reset_output();
         verify(hpx::transform(hpx::execution::seq, v.begin(), v.end(),
@@ -287,6 +299,16 @@ void transform_binary_tests(std::vector<hpx::id_type>& localities)
         reset_output();
         verify(hpx::transform(hpx::execution::par, v.begin(), v.end(),
             w.begin(), w.end(), x.begin(), add<V>()));
+        reset_output();
+        verify(hpx::transform(hpx::execution::seq(hpx::execution::task),
+                   v.begin(), v.end(), w.begin(), w.end(), x.begin(),
+                   add<V>())
+                   .get());
+        reset_output();
+        verify(hpx::transform(hpx::execution::par(hpx::execution::task),
+                   v.begin(), v.end(), w.begin(), w.end(), x.begin(),
+                   add<V>())
+                   .get());
     }
 }
 #endif
