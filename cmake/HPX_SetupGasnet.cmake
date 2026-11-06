@@ -65,6 +65,34 @@ macro(hpx_setup_gasnet)
       target_link_libraries(PkgConfig::GASNET INTERFACE Mpi::mpi)
     endif()
 
+    # GASNet's pkg-config files list its own compiler tuning flags such as
+    # "--param name=value" in both the compile and the link flags. pkg-config
+    # splits them into two list elements, and CMake de-duplicates the repeated
+    # "--param" tokens, which leaves a bare "name=value" behind that the
+    # compiler and linker take for an input file. These flags only tune the
+    # GASNet build itself, so drop the pairs from both properties here, in
+    # one place.
+    foreach(_gasnet_prop INTERFACE_COMPILE_OPTIONS INTERFACE_LINK_OPTIONS)
+      get_target_property(_gasnet_opts PkgConfig::GASNET ${_gasnet_prop})
+      if(_gasnet_opts)
+        set(_gasnet_filtered_opts)
+        set(_gasnet_skip_next FALSE)
+        foreach(_gasnet_opt IN LISTS _gasnet_opts)
+          if(_gasnet_skip_next)
+            set(_gasnet_skip_next FALSE)
+          elseif("${_gasnet_opt}" STREQUAL "--param")
+            set(_gasnet_skip_next TRUE)
+          else()
+            list(APPEND _gasnet_filtered_opts "${_gasnet_opt}")
+          endif()
+        endforeach()
+        set_property(
+          TARGET PkgConfig::GASNET PROPERTY ${_gasnet_prop}
+                                            "${_gasnet_filtered_opts}"
+        )
+      endif()
+    endforeach()
+
     # Validate the GASNet build configuration. HPX requires a GASNet built in
     # PAR threading mode with the mpi conduit, with position-independent code
     # (GASNet is consumed as a static archive; -fPIC is what makes it
@@ -229,41 +257,6 @@ ${GASNET_BUILD_GASNET_CXX}")
       message(STATUS "GASNet built with PMI spawner support.")
     else()
       message(STATUS "GASNet built without PMI spawner support.")
-    endif()
-
-    # GASNet's .pc emits GCC's '--param <name>=<value>' as two whitespace-
-    # separated tokens.  pkg_check_module splits Cflags on whitespace, so the
-    # bare value ('inline-unit-growth=10000', 'large-function-growth=200000')
-    # becomes a separate list element and is passed to the compiler as a
-    # positional input filename -- g++ then fails with "linker input file not
-    # found".  Re-join each such pair into a single SHELL: token so it reaches
-    # the compiler as one flag.
-    if(GASNET_CFLAGS)
-      set(GASNET_BUILD_CFLAGS "")
-      set(GASNET_BUILD_PARAM "")
-      foreach(_flag IN LISTS GASNET_CFLAGS)
-        if(GASNET_BUILD_PARAM)
-          list(APPEND GASNET_BUILD_CFLAGS
-               "SHELL:${GASNET_BUILD_PARAM} ${_flag}")
-          set(GASNET_BUILD_PARAM "")
-        elseif("${_flag}" STREQUAL "--param" OR "${_flag}" STREQUAL "-param")
-          set(GASNET_BUILD_PARAM "${_flag}")
-        else()
-          list(APPEND GASNET_BUILD_CFLAGS "${_flag}")
-        endif()
-      endforeach()
-      # A trailing '--param' with no value would otherwise be dropped.
-      if(GASNET_BUILD_PARAM)
-        list(APPEND GASNET_BUILD_CFLAGS "${GASNET_BUILD_PARAM}")
-      endif()
-    endif()
-
-    if(GASNET_BUILD_CFLAGS)
-      message(STATUS "GASNet compile flags: ${GASNET_BUILD_CFLAGS}")
-      set_target_properties(
-        PkgConfig::GASNET PROPERTIES INTERFACE_COMPILE_OPTIONS
-                                     "${GASNET_BUILD_CFLAGS}"
-      )
     endif()
 
     # Link libraries, link options and link directories come straight from the

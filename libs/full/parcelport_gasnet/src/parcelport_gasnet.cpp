@@ -196,14 +196,21 @@ namespace hpx::parcelset {
               , sender_(&mailboxes_)
               , receiver_(*this)
             {
+                // The flag is process-global; a runtime started again in
+                // the same process must receive messages again.
+                detail::g_discard_received.store(
+                    false, std::memory_order_release);
                 here_ = here(my_pe_);
                 receiver_.set_poll_interval(static_cast<std::uint32_t>(
                     hpx::util::get_entry_as<int>(
                         ini, "hpx.parcel.gasnet.progress_interval", 1)));
-                // 0: only the io drivers progress; 1: every worker thread;
-                // N>1: worker threads 0..N-1 only
+                // 0: only the io drivers progress (default); 1: every worker
+                // thread; N>1: worker threads 0..N-1 only.  Progress from HPX
+                // worker threads is opt-in: it is known to hang multi-threaded
+                // runs (the partitioned_vector min/max_element tests with 4
+                // threads per locality); the cause is not understood yet.
                 worker_progress_ = hpx::util::get_entry_as<int>(
-                    ini, "hpx.parcel.gasnet.worker_progress", 1);
+                    ini, "hpx.parcel.gasnet.worker_progress", 0);
             }
 
             parcelport(parcelport const&) = delete;
@@ -368,6 +375,8 @@ namespace hpx::parcelset {
                 // credit (or never publishes) again.  Transfer activity is
                 // measured via mailbox_array::transfer_count(), which changes
                 // exactly as often as pages move.
+                detail::g_discard_received.store(
+                    true, std::memory_order_release);
                 auto last_change = std::chrono::steady_clock::now();
                 std::uint64_t last_count = mailboxes_.transfer_count();
 
@@ -412,7 +421,12 @@ namespace hpx::parcelset {
                 // corrupted, exactly like the stall-timeout abort above.
                 util::gasnet_environment::barrier();
 
-                stopped_.store(true, std::memory_order_release);
+                stopped_.store(true, std::memory_order_seq_cst);
+                while (workers_in_progress_.load(std::memory_order_seq_cst) !=
+                    0)
+                {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                }
             }
 
             std::string get_locality_name() const override
@@ -462,11 +476,12 @@ namespace hpx::parcelset {
             }
 
             // All GASNet calls happen here (and in the io_service drivers).
-            // Every HPX thread may drive progress: GASNet-EX teams are
-            // thread-multiple, so there is no serialization gate (unlike the
-            // OpenSHMEM port).  The thread processes the send queue and the
-            // receive arena selected by its OS-thread identifier (num_thread
-            // modulo the io pool size).
+            // HPX worker threads only drive progress when worker_progress is
+            // enabled (off by default, see the constructor).  GASNet-EX teams
+            // are thread-multiple, so there is no serialization gate (unlike
+            // the OpenSHMEM port).  The thread processes the send queue and
+            // the receive arena selected by its OS-thread identifier
+            // (num_thread modulo the io pool size).
             bool background_work(
                 std::size_t num_thread, parcelport_background_mode mode)
             {
@@ -482,6 +497,17 @@ namespace hpx::parcelset {
                 if (worker_progress_ <= 0 ||
                     (worker_progress_ > 1 &&
                         num_thread >= static_cast<std::size_t>(worker_progress_)))
+                {
+                    return false;
+                }
+
+                // Register as an in-flight caller *before* re-checking
+                // 'stopped_' (seq_cst on both sides pairs with do_stop()):
+                // either we see the stop flag and leave, or do_stop() sees
+                // our count and waits, so no worker is still inside the
+                // transport when it is torn down.
+                in_flight_guard const guard(workers_in_progress_);
+                if (stopped_.load(std::memory_order_seq_cst))
                 {
                     return false;
                 }
@@ -548,6 +574,28 @@ namespace hpx::parcelset {
             util::runtime_configuration const& ini_;
 
             std::atomic<bool> stopped_;
+            std::atomic<std::size_t> workers_in_progress_{0};
+
+            // Counts a worker as being inside the transport for the lifetime
+            // of the guard, whatever way the scope is left.
+            struct in_flight_guard
+            {
+                explicit in_flight_guard(
+                    std::atomic<std::size_t>& counter) noexcept
+                  : counter_(counter)
+                {
+                    counter_.fetch_add(1, std::memory_order_seq_cst);
+                }
+                ~in_flight_guard()
+                {
+                    counter_.fetch_sub(1, std::memory_order_seq_cst);
+                }
+                in_flight_guard(in_flight_guard const&) = delete;
+                in_flight_guard& operator=(in_flight_guard const&) = delete;
+
+            private:
+                std::atomic<std::size_t>& counter_;
+            };
             int worker_progress_ = 0;
 
             std::size_t num_pes_;
@@ -610,8 +658,11 @@ struct hpx::traits::plugin_config_data<
                // An empty that keeps transferring pages waits as long as it
                // needs; only a genuine stall terminates early.
                "stop_timeout = 30\n"
-               // 1 lets every HPX worker thread progress the transport too
-               "worker_progress = 1\n"
+               // 0: only the io drivers progress the transport (default).
+               // 1: every HPX worker thread does too, N>1: worker threads
+               // 0..N-1 only.  Known to hang multi-threaded runs, see the
+               // parcelport constructor.
+               "worker_progress = 0\n"
                // AM poll every Nth receive pass (1 = every pass)
                "progress_interval = 1\n"
                // CRC32 guard over received pages.  Leave on unless profiling

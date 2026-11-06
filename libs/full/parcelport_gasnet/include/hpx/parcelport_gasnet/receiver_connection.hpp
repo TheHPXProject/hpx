@@ -11,6 +11,7 @@
 #if defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_PARCELPORT_GASNET)
 #include <hpx/assert.hpp>
 #include <hpx/modules/logging.hpp>
+#include <hpx/modules/runtime_local.hpp>
 #include <hpx/parcelport_gasnet/mailbox_array.hpp>
 #include <hpx/parcelset/decode_parcels.hpp>
 #include <hpx/parcelset/parcel_buffer.hpp>
@@ -18,9 +19,11 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <exception>
 #include <memory>
+#include <string>
 #include <algorithm>
 #include <utility>
 #include <vector>
@@ -470,7 +473,9 @@ namespace hpx::parcelset::policies::gasnet {
                 return true;
             }
 
-            if (pp_->allow_zero_copy_receive_optimizations())
+            bool optimize = pp_->allow_zero_copy_receive_optimizations() &&
+                !detail::g_discard_received.load(std::memory_order_acquire);
+            if (optimize)
             {
                 buffer_.chunks_.resize(nzc);
                 for (std::size_t i = 0; i != nzc; ++i)
@@ -479,14 +484,31 @@ namespace hpx::parcelset::policies::gasnet {
                         nullptr, static_cast<std::size_t>(
                                      buffer_.transmission_chunks_[i].second));
                 }
-                parcels_ = hpx::parcelset::decode_parcels_zero_copy(
-                    *pp_, buffer_, static_cast<std::size_t>(-1));
-                // buffer_.chunks_ now holds entries for all chunks, including
-                // the non-zero-copy (index) ones
-                optimized_ = true;
+                try
+                {
+                    parcels_ = hpx::parcelset::decode_parcels_zero_copy(
+                        *pp_, buffer_, static_cast<std::size_t>(-1));
+                    // buffer_.chunks_ now holds entries for all chunks,
+                    // including the non-zero-copy (index) ones
+                    optimized_ = true;
+                }
+                catch (...)
+                {
+                    // Decoding schedules the actions, which throws once the
+                    // runtime is shutting down.  Any other failure is a real
+                    // error and is fatal.  Still consume the chunk bytes
+                    // (into scratch buffers) so the stream stays in sync, and
+                    // drop the message in finish_message().
+                    drop_or_abort("decoding a parcel");
+                    parcels_.clear();
+                    buffer_.chunks_.clear();
+                    dropped_ = true;
+                    optimize = false;
+                }
             }
-            else
+            if (!optimize)
             {
+                buffer_.chunks_.clear();
                 buffer_.chunks_.resize(nzc);
                 chunk_buffers_.resize(nzc);
                 for (std::size_t i = 0; i != nzc; ++i)
@@ -540,40 +562,45 @@ namespace hpx::parcelset::policies::gasnet {
                 return false;
             }
 
-            try {
-            if (optimized_)
+            if (dropped_ ||
+                detail::g_discard_received.load(std::memory_order_acquire))
             {
-                hpx::parcelset::handle_received_parcels(
-                    HPX_MOVE(parcels_), static_cast<std::size_t>(-1));
+                parcels_.clear();
                 buffer_ = buffer_type{};
+                chunk_buffers_.clear();
             }
             else
             {
-                std::vector<parcel> parcels = hpx::parcelset::decode_parcels(
-                    *pp_, HPX_MOVE(buffer_), static_cast<std::size_t>(-1));
-                hpx::parcelset::handle_received_parcels(
-                    HPX_MOVE(parcels), static_cast<std::size_t>(-1));
-                chunk_buffers_.clear();
-            }
-            } catch (std::exception const& e) {
-                // A malformed or truncated parcel must not take down the
-                // whole job: report it, discard the message, and let the
-                // connection retire as failed.  The stream itself is still
-                // aligned (every page was consumed), so only this message is
-                // lost.
-                LPT_(error)
-                    << "PE " << mailboxes_.my_pe() << ": decode of "
-                    << total_size_ << "-byte message from src " << src_
-                    << " failed: " << e.what() << " (nzc=" << counts_[0]
-                    << " nnzc=" << counts_[1]
-                    << " tchunks=" << buffer_.transmission_chunks_.size()
-                    << " data=" << buffer_.data_.size() << ")";
-                parcels_.clear();
-                chunk_buffers_.clear();
-                buffer_ = buffer_type{};
-                post_credit_state_ = connection_state::failed;
-                state_ = connection_state::reaping_credit;
-                return false;
+                // A parcel can complete while the runtime is already shutting
+                // down (e.g. a late AGAS credit decrement): scheduling its
+                // action then throws.  Letting that escape this noexcept
+                // function would terminate the process, so drop the message
+                // instead; during shutdown nobody can use it anyway.
+                try
+                {
+                    if (optimized_)
+                    {
+                        hpx::parcelset::handle_received_parcels(
+                            HPX_MOVE(parcels_), static_cast<std::size_t>(-1));
+                        buffer_ = buffer_type{};
+                    }
+                    else
+                    {
+                        std::vector<parcel> parcels =
+                            hpx::parcelset::decode_parcels(*pp_,
+                                HPX_MOVE(buffer_),
+                                static_cast<std::size_t>(-1));
+                        hpx::parcelset::handle_received_parcels(
+                            HPX_MOVE(parcels), static_cast<std::size_t>(-1));
+                        chunk_buffers_.clear();
+                    }
+                }
+                catch (...)
+                {
+                    drop_or_abort("dispatching a parcel");
+                    parcels_.clear();
+                    chunk_buffers_.clear();
+                }
             }
 
             // The final page's credit-return region is still in flight; wait
@@ -584,6 +611,46 @@ namespace hpx::parcelset::policies::gasnet {
             post_credit_state_ = connection_state::decoded;
             state_ = connection_state::reaping_credit;
             return false;
+        }
+
+        // A message may only be dropped while the runtime is shutting down
+        // (a late parcel, e.g. an AGAS credit decrement, can no longer be
+        // dispatched then).  A failure at any other time is a real error: say
+        // what happened and abort instead of losing the parcel silently.
+        // Must be called from inside a catch handler.
+        void drop_or_abort(char const* what) const
+        {
+            if (detail::g_discard_received.load(std::memory_order_acquire) ||
+                hpx::is_stopped_or_shutting_down())
+            {
+                if (detail::verbose_drops())
+                {
+                    std::fprintf(stderr,
+                        "gasnet: PE %zu: dropped a message from src %d while "
+                        "%s (runtime shutting down)\n",
+                        mailboxes_.my_pe(), src_, what);
+                }
+                return;
+            }
+
+            std::string reason = "unknown exception";
+            try
+            {
+                throw;
+            }
+            catch (std::exception const& e)
+            {
+                reason = e.what();
+            }
+            catch (...)
+            {
+            }
+            std::fprintf(stderr,
+                "gasnet: PE %zu: failed while %s: %s (src=%d size=%zu "
+                "nzc=%u nnzc=%u)\n",
+                mailboxes_.my_pe(), what, reason.c_str(), src_, total_size_,
+                counts_[0], counts_[1]);
+            std::abort();
         }
 
         connection_state state_;
@@ -599,6 +666,7 @@ namespace hpx::parcelset::policies::gasnet {
         std::size_t zc_idx_ = 0;
         std::size_t zc_seen_ = 0;
         bool optimized_ = false;
+        bool dropped_ = false;
         std::vector<parcelset::parcel> parcels_;
         std::vector<std::unique_ptr<char[]>> chunk_buffers_;
         std::uint32_t expected_chunks_;
