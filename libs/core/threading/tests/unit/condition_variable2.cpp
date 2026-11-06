@@ -576,7 +576,7 @@ void check_cv_any_stop_from_pred(
     int calls = 0;
     bool ready = false;
 
-    bool const result = wait(source.get_token(), [&, &lock] {
+    bool const result = wait(source.get_token(), [&, &lock, &cv] {
         ++calls;
         if (calls == 1)
         {
