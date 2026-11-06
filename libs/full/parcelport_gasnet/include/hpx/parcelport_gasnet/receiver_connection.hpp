@@ -16,6 +16,7 @@
 #include <hpx/parcelset/decode_parcels.hpp>
 #include <hpx/parcelset/parcel_buffer.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -24,7 +25,6 @@
 #include <exception>
 #include <memory>
 #include <string>
-#include <algorithm>
 #include <utility>
 #include <vector>
 

@@ -422,8 +422,8 @@ namespace hpx::parcelset {
                 util::gasnet_environment::barrier();
 
                 stopped_.store(true, std::memory_order_seq_cst);
-                while (workers_in_progress_.load(std::memory_order_seq_cst) !=
-                    0)
+                while (
+                    workers_in_progress_.load(std::memory_order_seq_cst) != 0)
                 {
                     std::this_thread::sleep_for(std::chrono::milliseconds(1));
                 }
