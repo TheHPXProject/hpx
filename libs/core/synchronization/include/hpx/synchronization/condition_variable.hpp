@@ -1109,24 +1109,31 @@ namespace hpx {
 
             while (!pred())
             {
-                [[maybe_unused]] util::ignore_all_while_checking const
-                    ignore_lock;
-
-                std::unique_lock<mutex_type> l(data->mtx_);
-                if (stoken.stop_requested())
+                bool stop_requested;
                 {
-                    l.unlock();
-                    return pred();
+                    [[maybe_unused]] util::ignore_all_while_checking const
+                        ignore_lock;
+
+                    std::unique_lock<mutex_type> l(data->mtx_);
+                    stop_requested = stoken.stop_requested();
+                    if (!stop_requested)
+                    {
+                        unlock_guard<Lock> unlock(lock);
+
+                        // The following ensures that the inner lock will be
+                        // unlocked before the outer to avoid deadlock (fixes
+                        // issue #3608)
+                        std::lock_guard<std::unique_lock<mutex_type>>
+                            unlock_next(l, std::adopt_lock);
+
+                        data->cond_.wait(l, ec);
+                    }
                 }
 
-                unlock_guard<Lock> unlock(lock);
-
-                // The following ensures that the inner lock will be unlocked
-                // before the outer to avoid deadlock (fixes issue #3608)
-                std::lock_guard<std::unique_lock<mutex_type>> unlock_next(
-                    l, std::adopt_lock);
-
-                data->cond_.wait(l, ec);
+                if (stop_requested)
+                {
+                    return pred();
+                }
             }
 
             return true;
@@ -1207,36 +1214,37 @@ namespace hpx {
                         ignore_lock;
 
                     std::unique_lock<mutex_type> l(data->mtx_);
-                    if (stoken.stop_requested())
+                    should_stop = stoken.stop_requested();
+                    if (!should_stop)
                     {
-                        l.unlock();
-                        return pred();
+                        unlock_guard<Lock> unlock(lock);
+
+                        // The following ensures that the inner lock will be
+                        // unlocked before the outer to avoid deadlock (fixes
+                        // issue #3608)
+                        std::lock_guard<std::unique_lock<mutex_type>>
+                            unlock_next(l, std::adopt_lock);
+
+                        threads::thread_restart_state const reason =
+                            data->cond_.wait_until(
+                                l, abs_time,
+                                [&]() {
+                                    // re-acquire the outer lock to make sure
+                                    // that the user-supplied predicate is
+                                    // protected
+                                    relock_guard<Lock> relock(unlock);
+                                    return pred();
+                                },
+                                "condition_variable::wait_until_stoken", ec);
+
+                        if (ec)
+                            return false;
+
+                        should_stop =
+                            (reason ==
+                                threads::thread_restart_state::timeout) ||
+                            stoken.stop_requested();
                     }
-
-                    unlock_guard<Lock> unlock(lock);
-
-                    // The following ensures that the inner lock will be unlocked
-                    // before the outer to avoid deadlock (fixes issue #3608)
-                    std::lock_guard<std::unique_lock<mutex_type>> unlock_next(
-                        l, std::adopt_lock);
-
-                    threads::thread_restart_state const reason =
-                        data->cond_.wait_until(
-                            l, abs_time,
-                            [&]() {
-                                // re-acquire the outer lock to make sure that
-                                // the user-supplied predicate is protected
-                                relock_guard<Lock> relock(unlock);
-                                return pred();
-                            },
-                            "condition_variable::wait_until_stoken", ec);
-
-                    if (ec)
-                        return false;
-
-                    should_stop =
-                        (reason == threads::thread_restart_state::timeout) ||
-                        stoken.stop_requested();
                 }
 
                 if (should_stop)

@@ -584,8 +584,7 @@ void check_cv_any_stop_from_pred(
             source.request_stop();
             return false;
         }
-        // The final evaluation still holds the user lock. Notifying this
-        // condition variable must not deadlock on its internal mutex.
+        HPX_TEST(lock.owns_lock());
         cv.notify_all();
         return ready;
     });
@@ -603,26 +602,26 @@ void test_cv_any_stop_from_pred()
 
     check_cv_any_stop_from_pred(
         cv,
-        [&](hpx::stop_token st, auto&& pred) {
+        [&](hpx::stop_token st, auto pred) {
             return cv.wait(lock, std::move(st), std::move(pred));
         },
         true);
     check_cv_any_stop_from_pred(
         cv,
-        [&](hpx::stop_token st, auto&& pred) {
+        [&](hpx::stop_token st, auto pred) {
             return cv.wait(lock, std::move(st), std::move(pred));
         },
         false);
     check_cv_any_stop_from_pred(
         cv,
-        [&](hpx::stop_token st, auto&& pred) {
+        [&](hpx::stop_token st, auto pred) {
             return cv.wait_for(
                 lock, std::move(st), std::chrono::seconds(60), std::move(pred));
         },
         true);
     check_cv_any_stop_from_pred(
         cv,
-        [&](hpx::stop_token st, auto&& pred) {
+        [&](hpx::stop_token st, auto pred) {
             return cv.wait_until(lock, std::move(st),
                 std::chrono::steady_clock::now() + std::chrono::seconds(60),
                 std::move(pred));
