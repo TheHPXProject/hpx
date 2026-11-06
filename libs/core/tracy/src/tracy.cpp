@@ -93,14 +93,16 @@ namespace hpx::tracy {
     void message(
         char const* text, std::size_t size, std::uint32_t color) noexcept
     {
-        if (color == 0)
-        {
-            TracyCMessageS(text, size, 10);
-        }
-        else
-        {
-            TracyCMessageCS(text, size, color, 10);
-        }
+        // A call stack on every message slows down programs with many tasks, so
+        // it is opt-in. A nonzero depth marks the message as having a call
+        // stack even when Tracy cannot capture one, which a Debug Tracy server
+        // asserts on.
+#if defined(HPX_HAVE_TRACING_MESSAGE_CALLSTACKS) && !defined(TRACY_NO_CALLSTACK)
+        constexpr std::int32_t callstack_depth = 10;
+#else
+        constexpr std::int32_t callstack_depth = 0;
+#endif
+        TracyCMessageCS(text, size, color, callstack_depth);
     }
 
     void frame_mark(char const* name) noexcept

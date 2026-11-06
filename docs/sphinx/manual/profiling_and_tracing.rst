@@ -239,8 +239,9 @@ executors, and ``send_parcel`` / ``recv_parcel`` / ``parcel_scheduled`` in the
 parcel layer.
 
 The zones that |hpx| opens do not record call stacks. For task zones the call
-stack would show the same scheduler frames for every task. Messages do record
-call stacks (see `Messages`_).
+stack would show the same scheduler frames for every task. Messages record
+call stacks only if :option:`HPX_WITH_TRACING_MESSAGE_CALLSTACKS` is ``ON``
+(see `Messages`_).
 
 Task fibers
 ~~~~~~~~~~~
@@ -260,10 +261,12 @@ Messages
 
 |hpx| sends short text messages for important events. They appear as marks on
 the timeline and in the *Messages* window of the profiler, where you can search
-them. On platforms where Tracy can collect call stacks, each message also
-records the call stack where it was sent, up to 10 frames deep. In the
-messages, ``<id>`` is the address of the |hpx| thread and ``W<n>`` or ``W#<n>``
-is the number of a worker thread.
+them. With :option:`HPX_WITH_TRACING_MESSAGE_CALLSTACKS` set to ``ON``, each
+message also records the call stack where it was sent, up to 10 frames deep,
+on platforms where Tracy can collect call stacks. The option is ``OFF`` by
+default, because a call stack makes every message slower. In the messages,
+``<id>`` is the address of the |hpx| thread and ``W<n>`` or ``W#<n>`` is the
+number of a worker thread.
 
 .. list-table::
    :header-rows: 1
@@ -414,9 +417,11 @@ Reducing the overhead
 
 When no profiler is connected, most tracing hooks only check whether a
 profiler is connected and return. While a profiler is connected,
-|hpx| sends a few messages for every task, and each message records a call
-stack. For programs with many small tasks this can slow down the run. There are
-two ways to reduce it.
+|hpx| sends a few messages for every task. For programs with many small tasks
+this can slow down the run. If you turned on
+:option:`HPX_WITH_TRACING_MESSAGE_CALLSTACKS`, turn it off again, because a
+call stack makes every message slower. Beyond that, there are two ways to
+reduce the cost.
 
 Event classes can be compiled out one by one:
 :option:`HPX_WITH_TRACING_LIFECYCLE_EVENTS`,

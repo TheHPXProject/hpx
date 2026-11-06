@@ -1267,6 +1267,17 @@ if(HPX_WITH_TRACY)
     hpx_add_config_define(HPX_HAVE_TRACING_CAUSAL_EVENTS)
   endif()
 
+  hpx_option(
+    HPX_WITH_TRACING_MESSAGE_CALLSTACKS
+    BOOL
+    "Record a call stack of up to 10 frames with every message HPX sends to Tracy. Tracy backend only. Default: OFF."
+    OFF
+    CATEGORY "Profiling"
+  )
+  if(HPX_WITH_TRACING_MESSAGE_CALLSTACKS)
+    hpx_add_config_define(HPX_HAVE_TRACING_MESSAGE_CALLSTACKS)
+  endif()
+
   # 1-in-N task sampling for the Tracy lifecycle hooks. APEX treats every
   # lifecycle hook as a constexpr no-op and the ITTNotify backend emits every
   # task unconditionally, so sampling is meaningful only for Tracy.
