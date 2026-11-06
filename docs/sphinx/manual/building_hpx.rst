@@ -158,6 +158,14 @@ used CMake options.
    only sent when ITTNotify is enabled at runtime. With this ``OFF``, locks have no tracing code at
    all. Applies to Tracy and ITTNotify builds; the other backends do not record locks.
 
+.. option:: HPX_WITH_TRACING_MESSAGE_CALLSTACKS
+
+   Record the call stack, up to 10 frames deep, with every message that |hpx| sends to Tracy.
+   Defaults to ``OFF``, because a call stack makes every message slower while a profiler is
+   connected, and |hpx| sends a few messages for every task. If Tracy is configured with
+   ``-DTRACY_NO_CALLSTACK=ON``, messages have no call stacks even with this ``ON``. Applies to
+   Tracy builds only.
+
 .. option:: HPX_WITH_TRACING_SAMPLE_RATE
 
    1-in-N sampling rate for the per-task lifecycle events on Tracy builds. Defaults to ``1``
