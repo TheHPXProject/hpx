@@ -49,7 +49,7 @@ namespace hpx {
     ///           well, it will disable any timeout, each connected
     ///           locality will wait for all existing HPX-threads to terminate.
     ///
-    /// \param localwait This parameter allows to specify a local wait time
+    /// \param local_wait This parameter allows to specify a local wait time
     ///           (in microseconds) before the connected localities will be
     ///           notified and the overall shutdown process starts.
     ///
@@ -82,7 +82,7 @@ namespace hpx {
     HPX_CXX_EXPORT HPX_DEPRECATED_V(2, 0,
         "hpx::finalize with double timeout arguments is deprecated, use "
         "the overload taking hpx::chrono::steady_duration arguments instead")
-        HPX_EXPORT int finalize(double shutdown_timeout, double localwait,
+        HPX_EXPORT int finalize(double shutdown_timeout, double local_wait,
             hpx::error_code& ec = throws);
 
     /// \brief Main function to gracefully terminate the HPX runtime system.
