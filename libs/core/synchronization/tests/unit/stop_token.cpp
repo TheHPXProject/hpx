@@ -460,6 +460,7 @@ void test_stop_source_assignment()
 
         HPX_TEST(!old_token.stop_possible());
         HPX_TEST(a.stop_possible());
+        // NOLINTNEXTLINE(bugprone-use-after-move)
         HPX_TEST(!b.stop_possible());
     }
 
