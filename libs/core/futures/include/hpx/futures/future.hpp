@@ -887,23 +887,25 @@ namespace hpx {
     }
 
     ///////////////////////////////////////////////////////////////////////////
-    // Default bound for waiting on a future.
+    /// The initial default timeout for timeout-aware future waits, such as
+    /// \c wait_or_handle_timeout.
     HPX_CXX_CORE_EXPORT inline constexpr std::chrono::milliseconds
         default_future_timeout{30000};
 
-    /// \brief Returns the current process-wide timeout used when waiting on a
-    ///        future.
+    /// \brief Returns the current process-wide timeout used by timeout-aware
+    ///        future waits.
     ///
     /// \return The timeout duration. Defaults to \a default_future_timeout (30
     ///         seconds) unless changed via \a set_future_timeout.
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT std::chrono::milliseconds
     get_future_timeout() noexcept;
 
-    /// \brief Sets the process-wide timeout used when waiting on a future.
+    /// \brief Sets the process-wide timeout used by timeout-aware future
+    ///        waits.
     ///
-    /// \param timeout The new timeout value applied to all subsequent future
-    ///                waits (e.g. via \a wait_or_handle_timeout) unless a
-    ///                different timeout is passed explicitly.
+    /// \param timeout The new timeout value used by subsequent calls to
+    ///                \c wait_or_handle_timeout unless a different timeout is
+    ///                passed explicitly.
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void set_future_timeout(
         hpx::chrono::steady_duration const& timeout) noexcept;
 
@@ -1442,6 +1444,7 @@ namespace hpx {
     }
 
     // Extension (see wg21.link/P0319)
+#if !defined(DOXYGEN)
     /// \brief Creates a pre-initialized void future object.
     HPX_CXX_CORE_EXPORT template <typename T>
     HPX_FORCEINLINE std::enable_if_t<std::is_void_v<T>, future<void>>
@@ -1449,10 +1452,13 @@ namespace hpx {
     {
         return hpx::make_ready_future();
     }
+#endif
 
     // extension: create a pre-initialized future object which gets ready at
     // a given point in time
     /// \copydoc make_ready_future_at(hpx::chrono::steady_time_point const& abs_time, T&& init)
+    /// \note The explicit template form \c make_ready_future_at<void>(abs_time)
+    ///       is also supported.
     HPX_CXX_CORE_EXPORT inline future<void> make_ready_future_at(
         hpx::chrono::steady_time_point const& abs_time)
     {
@@ -1467,35 +1473,33 @@ namespace hpx {
         return hpx::traits::future_access<future<void>>::create(HPX_MOVE(p));
     }
 
-    /// \brief Creates a pre-initialized void future object that becomes ready
-    ///        at the given time.
-    ///
-    /// \param abs_time The time at which the future becomes ready.
+#if !defined(DOXYGEN)
     HPX_CXX_CORE_EXPORT template <typename T>
     std::enable_if_t<std::is_void_v<T>, future<void>> make_ready_future_at(
         hpx::chrono::steady_time_point const& abs_time)
     {
         return hpx::make_ready_future_at(abs_time);
     }
+#endif
 
     ///////////////////////////////////////////////////////////////////////////
     /// \copydoc make_ready_future_after(hpx::chrono::steady_duration const& rel_time, T&& init)
+    /// \note The explicit template form \c make_ready_future_after<void>(rel_time)
+    ///       is also supported.
     HPX_CXX_CORE_EXPORT inline future<void> make_ready_future_after(
         hpx::chrono::steady_duration const& rel_time)
     {
         return hpx::make_ready_future_at(rel_time.from_now());
     }
 
-    /// \brief Creates a pre-initialized void future object that becomes ready
-    ///        after the given duration.
-    ///
-    /// \param rel_time The duration after which the future becomes ready.
+#if !defined(DOXYGEN)
     HPX_CXX_CORE_EXPORT template <typename T>
     std::enable_if_t<std::is_void_v<T>, future<void>> make_ready_future_after(
         hpx::chrono::steady_duration const& rel_time)
     {
         return hpx::make_ready_future_at(rel_time.from_now());
     }
+#endif
 }    // namespace hpx
 
 namespace hpx::lcos::detail {
@@ -1617,6 +1621,7 @@ namespace hpx::lcos::detail {
 
 namespace hpx::serialization {
 
+    /// Serializes a future.
     HPX_CXX_CORE_EXPORT template <typename Archive, typename T>
     HPX_FORCEINLINE void serialize(
         Archive& ar, ::hpx::future<T>& f, unsigned version)
@@ -1624,6 +1629,7 @@ namespace hpx::serialization {
         hpx::lcos::detail::serialize_future(ar, f, version);
     }
 
+    /// Serializes a shared future.
     HPX_CXX_CORE_EXPORT template <typename Archive, typename T>
     HPX_FORCEINLINE void serialize(
         Archive& ar, ::hpx::shared_future<T>& f, unsigned version)
