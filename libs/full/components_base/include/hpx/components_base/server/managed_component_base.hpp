@@ -183,6 +183,7 @@ namespace hpx::components {
         };
     }    // namespace detail
 
+    /// Provides lifetime management for managed component instances.
     HPX_CXX_EXPORT template <typename Component, typename Wrapper,
         typename CtorPolicy, typename DtorPolicy>
     // NOLINTNEXTLINE(bugprone-crtp-constructor-accessibility)

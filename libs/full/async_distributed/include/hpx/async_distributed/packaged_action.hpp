@@ -146,6 +146,7 @@ namespace hpx::lcos {
     class packaged_action;
 
     ///////////////////////////////////////////////////////////////////////////
+    /// A packaged action that is executed asynchronously.
     template <typename Action, typename Result>
     class packaged_action<Action, Result, /*DirectExecute=*/false>
       : public hpx::distributed::promise<Result,

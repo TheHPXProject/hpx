@@ -216,7 +216,7 @@ namespace hpx { namespace collectives {
     ///             executes synchronously and directly returns the result.
     ///
     template <typename T, typename F>
-    decltype(auto) all_reduce(hpx::launch::sync_policy policy,
+    std::decay_t<T> all_reduce(hpx::launch::sync_policy policy,
         communicator comm, T&& result, F&& op, generation_arg generation,
         this_site_arg this_site = this_site_arg());
 }}    // namespace hpx::collectives

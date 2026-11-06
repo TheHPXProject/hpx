@@ -15,6 +15,7 @@
 namespace hpx::util::cache::statistics {
 
     ///////////////////////////////////////////////////////////////////////////
+    /// Collects cache statistics locally.
     HPX_CXX_CORE_EXPORT class local_statistics : public no_statistics
     {
     private:

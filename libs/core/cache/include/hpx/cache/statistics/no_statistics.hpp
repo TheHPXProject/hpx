@@ -22,6 +22,7 @@ namespace hpx::util::cache::statistics {
     };
 
     ///////////////////////////////////////////////////////////////////////////
+    /// Provides a cache-statistics policy that records no statistics.
     HPX_CXX_CORE_EXPORT class no_statistics
     {
     public:

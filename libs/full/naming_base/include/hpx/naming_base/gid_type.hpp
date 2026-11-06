@@ -765,6 +765,7 @@ namespace hpx::naming {
 ///////////////////////////////////////////////////////////////////////////////
 namespace std {
 
+    /// \cond NOINTERNAL
     // specialize std::hash for hpx::naming::gid_type
     template <>
     struct hash<hpx::naming::gid_type>
@@ -779,6 +780,7 @@ namespace std {
             return h1 ^ (h2 << 1);
         }
     };
+    /// \endcond
 }    // namespace std
 
 #include <hpx/config/warnings_suffix.hpp>
