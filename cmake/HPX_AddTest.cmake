@@ -275,19 +275,25 @@ function(add_hpx_test category name)
       endif()
       if(_add_test)
         set(_full_name "${category}.distributed.gasnet.${name}")
-        add_test(NAME "${_full_name}" COMMAND ${cmd} "-p" "gasnet" "-r"
-                                              "gasnet-smp" ${args}
-        )
-        set_tests_properties(
-          "${_full_name}"
-          PROPERTIES
-            RUN_SERIAL TRUE ENVIRONMENT
-            "PATH=${PROJECT_BINARY_DIR}/_deps/gasnet-src/install/bin:$ENV{PATH}"
-        )
-        if(${name}_TIMEOUT)
-          set_tests_properties(
-            "${_full_name}" PROPERTIES TIMEOUT ${${name}_TIMEOUT}
+        # The smp conduit forks its own PEs; the mpi conduit is started through
+        # mpiexec. The other conduits have their own launchers, which hpxrun.py
+        # does not support, so no tests are registered for them.
+        set(_gasnet_runwrapper "")
+        if("${HPX_WITH_PARCELPORT_GASNET_CONDUIT}" STREQUAL "smp")
+          set(_gasnet_runwrapper "gasnet-smp")
+        elseif("${HPX_WITH_PARCELPORT_GASNET_CONDUIT}" STREQUAL "mpi")
+          set(_gasnet_runwrapper "gasnet")
+        endif()
+        if(_gasnet_runwrapper)
+          add_test(NAME "${_full_name}" COMMAND ${cmd} "-p" "gasnet" "-r"
+                                                "${_gasnet_runwrapper}" ${args}
           )
+          set_tests_properties("${_full_name}" PROPERTIES RUN_SERIAL TRUE)
+          if(${name}_TIMEOUT)
+            set_tests_properties(
+              "${_full_name}" PROPERTIES TIMEOUT ${${name}_TIMEOUT}
+            )
+          endif()
         endif()
       endif()
     endif()
