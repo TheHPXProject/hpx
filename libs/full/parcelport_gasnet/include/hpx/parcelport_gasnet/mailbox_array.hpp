@@ -403,6 +403,20 @@ namespace hpx::parcelset::policies::gasnet {
             return !use_checksum || header.checksum ==
                 crc32(page + header_size, chunk_size);
         }
+
+        // Set by parcelport::do_stop(): by then the HPX scheduler and AGAS are
+        // gone, so a parcel still completing on an io driver can no longer be
+        // decoded or dispatched.  The receiver keeps draining pages (so
+        // credits keep flowing and peers can finish) but discards messages.
+        inline std::atomic<bool> g_discard_received{false};
+
+        // Whether dropped messages are reported (GASNET_PP_VERBOSE), read once.
+        inline bool verbose_drops() noexcept
+        {
+            static bool const verbose =
+                std::getenv("GASNET_PP_VERBOSE") != nullptr;
+            return verbose;
+        }
     }    // namespace detail
 
     class HPX_EXPORT mailbox_array
