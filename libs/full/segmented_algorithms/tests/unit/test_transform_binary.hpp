@@ -247,8 +247,10 @@ void transform_binary_tests(std::vector<hpx::id_type>& localities)
         }
         hpx::partitioned_vector<T> v(
             n, hpx::explicit_container_layout({2, 4}, owners));
+        std::vector<hpx::id_type> input2_owners{
+            owners[0], owners[0], owners[1]};
         hpx::partitioned_vector<U> w(
-            n, hpx::explicit_container_layout({3, 3}, owners));
+            n, hpx::explicit_container_layout({3, 0, 3}, input2_owners));
         hpx::partitioned_vector<V> x(
             n, hpx::explicit_container_layout({2, 4}, owners));
 
@@ -277,21 +279,19 @@ void transform_binary_tests(std::vector<hpx::id_type>& localities)
         };
 
         reset_output();
-        verify(hpx::transform(
-            hpx::execution::seq, v.begin(), v.end(), w.begin(), x.begin(),
-            add<V>()));
+        verify(hpx::transform(hpx::execution::seq, v.begin(), v.end(),
+            w.begin(), x.begin(), add<V>()));
         reset_output();
-        verify(hpx::transform(
-            hpx::execution::par, v.begin(), v.end(), w.begin(), x.begin(),
-            add<V>()));
+        verify(hpx::transform(hpx::execution::par, v.begin(), v.end(),
+            w.begin(), x.begin(), add<V>()));
         reset_output();
         verify(hpx::transform(hpx::execution::seq(hpx::execution::task),
-                   v.begin(), v.end(), w.begin(), x.begin(), add<V>())
-                   .get());
+            v.begin(), v.end(), w.begin(), x.begin(), add<V>())
+                .get());
         reset_output();
         verify(hpx::transform(hpx::execution::par(hpx::execution::task),
-                   v.begin(), v.end(), w.begin(), x.begin(), add<V>())
-                   .get());
+            v.begin(), v.end(), w.begin(), x.begin(), add<V>())
+                .get());
 
         reset_output();
         verify(hpx::transform(hpx::execution::seq, v.begin(), v.end(),
@@ -301,14 +301,37 @@ void transform_binary_tests(std::vector<hpx::id_type>& localities)
             w.begin(), w.end(), x.begin(), add<V>()));
         reset_output();
         verify(hpx::transform(hpx::execution::seq(hpx::execution::task),
-                   v.begin(), v.end(), w.begin(), w.end(), x.begin(),
-                   add<V>())
-                   .get());
+            v.begin(), v.end(), w.begin(), w.end(), x.begin(), add<V>())
+                .get());
         reset_output();
         verify(hpx::transform(hpx::execution::par(hpx::execution::task),
-                   v.begin(), v.end(), w.begin(), w.end(), x.begin(),
-                   add<V>())
-                   .get());
+            v.begin(), v.end(), w.begin(), w.end(), x.begin(), add<V>())
+                .get());
+
+        auto first2 = w.begin() + 3;
+        auto last1 = v.begin() + 3;
+        auto last2 = w.end();
+        auto verify_boundary = [&](auto const& result) {
+            auto it = x.begin();
+            for (std::size_t i = 0; i != 3; ++i, ++it)
+            {
+                HPX_TEST_EQ(*it, V(14 + 2 * i));
+            }
+            for (; it != x.end(); ++it)
+            {
+                HPX_TEST_EQ(*it, V(-1));
+            }
+            HPX_TEST(result.in1 == last1);
+            HPX_TEST(result.in2 == last2);
+            HPX_TEST(result.out == x.begin() + 3);
+        };
+
+        reset_output();
+        verify_boundary(hpx::transform(hpx::execution::seq, v.begin(), last1,
+            first2, x.begin(), add<V>()));
+        reset_output();
+        verify_boundary(hpx::transform(hpx::execution::par, v.begin(), last1,
+            first2, last2, x.begin(), add<V>()));
     }
 }
 #endif

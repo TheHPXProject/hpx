@@ -216,7 +216,7 @@ namespace hpx::parallel::detail {
         using value_type2 =
             typename std::iterator_traits<LocalIterator2>::value_type;
 
-        return static_cast<Difference>((std::max)(std::size_t{1},
+        return static_cast<Difference>((std::max) (std::size_t{1},
             max_capture_batch_elements<value_type1, value_type2>() / 2));
     }
 
@@ -260,8 +260,9 @@ namespace hpx::parallel::detail {
             Iter2 last2, Iter3 dest, F&& f, Proj1&& proj1, Proj2&& proj2)
         {
             using local_result = util::in_in_out_result<Iter1, Iter2, Iter3>;
-            using captured_result = util::in_in_out_result<
-                hpx::util::unused_type, hpx::util::unused_type, Iter3>;
+            using captured_result =
+                util::in_in_out_result<hpx::util::unused_type,
+                    hpx::util::unused_type, Iter3>;
             auto operation = transform_binary2<local_result>{}.call(
                 HPX_FORWARD(ExPolicy, policy), first1, last1, first2, last2,
                 dest, HPX_FORWARD(F, f), HPX_FORWARD(Proj1, proj1),
@@ -300,24 +301,25 @@ namespace hpx::parallel::detail {
             typename std::iterator_traits<LocalIterator2>::value_type;
         using ranges1 = std::vector<partition_range<LocalIterator1>>;
         using ranges2 = std::vector<partition_range<LocalIterator2>>;
-        using chunk_type = capture_dispatch_chunk<ranges1, ranges2, OutIterator>;
+        using chunk_type =
+            capture_dispatch_chunk<ranges1, ranges2, OutIterator>;
 
         std::vector<chunk_type> chunks;
-        chunks.push_back(chunk_type{
-            static_cast<std::size_t>(std::distance(first1, last1)),
-            static_cast<std::size_t>(std::distance(first2, last2)),
-            ranges1{{input1_id, first1, last1}},
-            ranges2{{input2_id, first2, last2}}, HPX_MOVE(dest)});
+        chunks.push_back(
+            chunk_type{static_cast<std::size_t>(std::distance(first1, last1)),
+                static_cast<std::size_t>(std::distance(first2, last2)),
+                ranges1{{input1_id, first1, last1}},
+                ranges2{{input2_id, first2, last2}}, HPX_MOVE(dest)});
 
-        return capture_dispatch_batch_async<value_type1, value_type2>(
-                   output_id, captured_transform<OutIterator>{},
-                   HPX_MOVE(policy), is_seq, HPX_MOVE(chunks), HPX_MOVE(f),
-                   HPX_MOVE(proj1), HPX_MOVE(proj2))
-            .then([](hpx::future<std::vector<OutIterator>> ready)
-                      -> OutIterator {
-                auto results = get_capture_result<ExPolicy>(HPX_MOVE(ready));
-                return HPX_MOVE(results.front());
-            });
+        return capture_dispatch_batch_async<value_type1, value_type2>(output_id,
+            captured_transform<OutIterator>{}, HPX_MOVE(policy), is_seq,
+            HPX_MOVE(chunks), HPX_MOVE(f), HPX_MOVE(proj1), HPX_MOVE(proj2))
+            .then(
+                [](hpx::future<std::vector<OutIterator>> ready) -> OutIterator {
+                    auto results =
+                        get_capture_result<ExPolicy>(HPX_MOVE(ready));
+                    return HPX_MOVE(results.front());
+                });
     }
 
     // Binary transform
@@ -362,25 +364,25 @@ namespace hpx::parallel::detail {
 
         while (remaining != 0)
         {
-            local_iterator_type1 end1 = sit1 == send1 ?
-                traits1::local(last1) : traits1::end(sit1);
-            local_iterator_type2 end2 = sit2 == send2 ?
-                traits2::local(last2) : traits2::end(sit2);
+            local_iterator_type1 end1 =
+                sit1 == send1 ? traits1::local(last1) : traits1::end(sit1);
+            local_iterator_type2 end2 =
+                sit2 == send2 ? traits2::local(last2) : traits2::end(sit2);
             local_iterator_type3 end_dest = traits3::end(sdest);
 
             while (beg1 == end1 && sit1 != send1)
             {
                 ++sit1;
                 beg1 = traits1::begin(sit1);
-                end1 = sit1 == send1 ?
-                    traits1::local(last1) : traits1::end(sit1);
+                end1 =
+                    sit1 == send1 ? traits1::local(last1) : traits1::end(sit1);
             }
             while (beg2 == end2 && sit2 != send2)
             {
                 ++sit2;
                 beg2 = traits2::begin(sit2);
-                end2 = sit2 == send2 ?
-                    traits2::local(last2) : traits2::end(sit2);
+                end2 =
+                    sit2 == send2 ? traits2::local(last2) : traits2::end(sit2);
             }
             while (ldest == end_dest)
             {
@@ -396,7 +398,7 @@ namespace hpx::parallel::detail {
             difference_type const count3 =
                 static_cast<difference_type>(std::distance(ldest, end_dest));
             difference_type count =
-                (std::min)((std::min)(count1, count2), count3);
+                (std::min) ((std::min) (count1, count2), count3);
             HPX_ASSERT(count > 0);
             if (count == 0)
             {
@@ -412,7 +414,7 @@ namespace hpx::parallel::detail {
                 get_partition_locality(input2_id) == output_locality;
             if (!same_locality)
             {
-                count = (std::min)(count,
+                count = (std::min) (count,
                     max_transform_capture_count<difference_type,
                         local_iterator_type1, local_iterator_type2>());
             }
@@ -429,10 +431,11 @@ namespace hpx::parallel::detail {
             }
             else
             {
-                ldest = get_capture_result<ExPolicy>(capture_transform_async(
-                    input1_id, input2_id, output_id, policy,
-                    std::true_type{}, beg1, chunk_end1, beg2, chunk_end2,
-                    ldest, f, proj1, proj2));
+                auto captured = capture_transform_async(input1_id, input2_id,
+                    output_id, policy, std::true_type{}, beg1, chunk_end1, beg2,
+                    chunk_end2, ldest, f, proj1, proj2);
+                captured.wait();
+                ldest = get_capture_result<ExPolicy>(HPX_MOVE(captured));
             }
             beg1 = chunk_end1;
             beg2 = chunk_end2;
@@ -496,25 +499,25 @@ namespace hpx::parallel::detail {
 
         while (remaining != 0)
         {
-            local_iterator_type1 end1 = sit1 == send1 ?
-                traits1::local(last1) : traits1::end(sit1);
-            local_iterator_type2 end2 = sit2 == send2 ?
-                traits2::local(last2) : traits2::end(sit2);
+            local_iterator_type1 end1 =
+                sit1 == send1 ? traits1::local(last1) : traits1::end(sit1);
+            local_iterator_type2 end2 =
+                sit2 == send2 ? traits2::local(last2) : traits2::end(sit2);
             local_iterator_type3 end_dest = traits3::end(sdest);
 
             while (beg1 == end1 && sit1 != send1)
             {
                 ++sit1;
                 beg1 = traits1::begin(sit1);
-                end1 = sit1 == send1 ?
-                    traits1::local(last1) : traits1::end(sit1);
+                end1 =
+                    sit1 == send1 ? traits1::local(last1) : traits1::end(sit1);
             }
             while (beg2 == end2 && sit2 != send2)
             {
                 ++sit2;
                 beg2 = traits2::begin(sit2);
-                end2 = sit2 == send2 ?
-                    traits2::local(last2) : traits2::end(sit2);
+                end2 =
+                    sit2 == send2 ? traits2::local(last2) : traits2::end(sit2);
             }
             while (ldest == end_dest)
             {
@@ -530,7 +533,7 @@ namespace hpx::parallel::detail {
             difference_type const count3 =
                 static_cast<difference_type>(std::distance(ldest, end_dest));
             difference_type count =
-                (std::min)((std::min)(count1, count2), count3);
+                (std::min) ((std::min) (count1, count2), count3);
             HPX_ASSERT(count > 0);
             if (count == 0)
             {
@@ -546,7 +549,7 @@ namespace hpx::parallel::detail {
                 get_partition_locality(input2_id) == output_locality;
             if (!same_locality)
             {
-                count = (std::min)(count,
+                count = (std::min) (count,
                     max_transform_capture_count<difference_type,
                         local_iterator_type1, local_iterator_type2>());
             }
@@ -558,8 +561,8 @@ namespace hpx::parallel::detail {
             if (same_locality)
             {
                 segments.push_back(
-                    dispatch_async(output_id, algo, policy, forced_seq(),
-                        beg1, chunk_end1, beg2, ldest, f, proj1, proj2)
+                    dispatch_async(output_id, algo, policy, forced_seq(), beg1,
+                        chunk_end1, beg2, ldest, f, proj1, proj2)
                         .then([](auto ready) { ready.get(); }));
             }
             else
@@ -569,9 +572,8 @@ namespace hpx::parallel::detail {
                         -> hpx::future<void> {
                         previous.get();
                         return capture_transform_async(input1_id, input2_id,
-                                   output_id, policy, forced_seq(), beg1,
-                                   chunk_end1, beg2, chunk_end2, ldest, f,
-                                   proj1, proj2)
+                            output_id, policy, forced_seq(), beg1, chunk_end1,
+                            beg2, chunk_end2, ldest, f, proj1, proj2)
                             .then([](auto ready) { ready.get(); });
                     });
             }
@@ -628,8 +630,8 @@ namespace hpx::parallel::detail {
 
         using difference_type =
             typename std::iterator_traits<InIter1>::difference_type;
-        difference_type remaining = (std::min)(
-            std::distance(first1, last1), std::distance(first2, last2));
+        difference_type remaining = (std::min) (std::distance(first1, last1),
+            std::distance(first2, last2));
 
         segment_iterator1 sit1 = traits1::segment(first1);
         segment_iterator1 send1 = traits1::segment(last1);
@@ -642,25 +644,25 @@ namespace hpx::parallel::detail {
 
         while (remaining != 0)
         {
-            local_iterator_type1 end1 = sit1 == send1 ?
-                traits1::local(last1) : traits1::end(sit1);
-            local_iterator_type2 end2 = sit2 == send2 ?
-                traits2::local(last2) : traits2::end(sit2);
+            local_iterator_type1 end1 =
+                sit1 == send1 ? traits1::local(last1) : traits1::end(sit1);
+            local_iterator_type2 end2 =
+                sit2 == send2 ? traits2::local(last2) : traits2::end(sit2);
             local_iterator_type3 end_dest = traits3::end(sdest);
 
             while (beg1 == end1 && sit1 != send1)
             {
                 ++sit1;
                 beg1 = traits1::begin(sit1);
-                end1 = sit1 == send1 ?
-                    traits1::local(last1) : traits1::end(sit1);
+                end1 =
+                    sit1 == send1 ? traits1::local(last1) : traits1::end(sit1);
             }
             while (beg2 == end2 && sit2 != send2)
             {
                 ++sit2;
                 beg2 = traits2::begin(sit2);
-                end2 = sit2 == send2 ?
-                    traits2::local(last2) : traits2::end(sit2);
+                end2 =
+                    sit2 == send2 ? traits2::local(last2) : traits2::end(sit2);
             }
             while (ldest == end_dest)
             {
@@ -676,7 +678,7 @@ namespace hpx::parallel::detail {
             difference_type const count3 =
                 static_cast<difference_type>(std::distance(ldest, end_dest));
             difference_type count =
-                (std::min)((std::min)(count1, count2), count3);
+                (std::min) ((std::min) (count1, count2), count3);
             HPX_ASSERT(count > 0);
             if (count == 0)
             {
@@ -692,7 +694,7 @@ namespace hpx::parallel::detail {
                 get_partition_locality(input2_id) == output_locality;
             if (!same_locality)
             {
-                count = (std::min)(count,
+                count = (std::min) (count,
                     max_transform_capture_count<difference_type,
                         local_iterator_type1, local_iterator_type2>());
             }
@@ -704,16 +706,16 @@ namespace hpx::parallel::detail {
             if (same_locality)
             {
                 auto out = dispatch(output_id, algo, policy, std::true_type(),
-                    beg1, chunk_end1, beg2, chunk_end2, ldest, f, proj1,
-                    proj2);
+                    beg1, chunk_end1, beg2, chunk_end2, ldest, f, proj1, proj2);
                 ldest = out.out;
             }
             else
             {
-                ldest = get_capture_result<ExPolicy>(capture_transform_async(
-                    input1_id, input2_id, output_id, policy,
-                    std::true_type{}, beg1, chunk_end1, beg2, chunk_end2,
-                    ldest, f, proj1, proj2));
+                auto captured = capture_transform_async(input1_id, input2_id,
+                    output_id, policy, std::true_type{}, beg1, chunk_end1, beg2,
+                    chunk_end2, ldest, f, proj1, proj2);
+                captured.wait();
+                ldest = get_capture_result<ExPolicy>(HPX_MOVE(captured));
             }
             beg1 = chunk_end1;
             beg2 = chunk_end2;
@@ -756,8 +758,8 @@ namespace hpx::parallel::detail {
 
         using difference_type =
             typename std::iterator_traits<InIter1>::difference_type;
-        difference_type remaining = (std::min)(
-            std::distance(first1, last1), std::distance(first2, last2));
+        difference_type remaining = (std::min) (std::distance(first1, last1),
+            std::distance(first2, last2));
 
         segment_iterator1 sit1 = traits1::segment(first1);
         segment_iterator1 send1 = traits1::segment(last1);
@@ -775,25 +777,25 @@ namespace hpx::parallel::detail {
 
         while (remaining != 0)
         {
-            local_iterator_type1 end1 = sit1 == send1 ?
-                traits1::local(last1) : traits1::end(sit1);
-            local_iterator_type2 end2 = sit2 == send2 ?
-                traits2::local(last2) : traits2::end(sit2);
+            local_iterator_type1 end1 =
+                sit1 == send1 ? traits1::local(last1) : traits1::end(sit1);
+            local_iterator_type2 end2 =
+                sit2 == send2 ? traits2::local(last2) : traits2::end(sit2);
             local_iterator_type3 end_dest = traits3::end(sdest);
 
             while (beg1 == end1 && sit1 != send1)
             {
                 ++sit1;
                 beg1 = traits1::begin(sit1);
-                end1 = sit1 == send1 ?
-                    traits1::local(last1) : traits1::end(sit1);
+                end1 =
+                    sit1 == send1 ? traits1::local(last1) : traits1::end(sit1);
             }
             while (beg2 == end2 && sit2 != send2)
             {
                 ++sit2;
                 beg2 = traits2::begin(sit2);
-                end2 = sit2 == send2 ?
-                    traits2::local(last2) : traits2::end(sit2);
+                end2 =
+                    sit2 == send2 ? traits2::local(last2) : traits2::end(sit2);
             }
             while (ldest == end_dest)
             {
@@ -809,7 +811,7 @@ namespace hpx::parallel::detail {
             difference_type const count3 =
                 static_cast<difference_type>(std::distance(ldest, end_dest));
             difference_type count =
-                (std::min)((std::min)(count1, count2), count3);
+                (std::min) ((std::min) (count1, count2), count3);
             HPX_ASSERT(count > 0);
             if (count == 0)
             {
@@ -825,7 +827,7 @@ namespace hpx::parallel::detail {
                 get_partition_locality(input2_id) == output_locality;
             if (!same_locality)
             {
-                count = (std::min)(count,
+                count = (std::min) (count,
                     max_transform_capture_count<difference_type,
                         local_iterator_type1, local_iterator_type2>());
             }
@@ -837,9 +839,8 @@ namespace hpx::parallel::detail {
             if (same_locality)
             {
                 segments.push_back(
-                    dispatch_async(output_id, algo, policy, forced_seq(),
-                        beg1, chunk_end1, beg2, chunk_end2, ldest, f, proj1,
-                        proj2)
+                    dispatch_async(output_id, algo, policy, forced_seq(), beg1,
+                        chunk_end1, beg2, chunk_end2, ldest, f, proj1, proj2)
                         .then([](auto ready) { ready.get(); }));
             }
             else
@@ -849,9 +850,8 @@ namespace hpx::parallel::detail {
                         -> hpx::future<void> {
                         previous.get();
                         return capture_transform_async(input1_id, input2_id,
-                                   output_id, policy, forced_seq(), beg1,
-                                   chunk_end1, beg2, chunk_end2, ldest, f,
-                                   proj1, proj2)
+                            output_id, policy, forced_seq(), beg1, chunk_end1,
+                            beg2, chunk_end2, ldest, f, proj1, proj2)
                             .then([](auto ready) { ready.get(); });
                     });
             }
