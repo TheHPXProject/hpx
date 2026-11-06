@@ -165,6 +165,8 @@ namespace hpx::parallel::detail {
         FwdIter2 output_position = dest;
         std::size_t remaining = static_cast<std::size_t>(total_size);
         std::size_t chunk_index = 0;
+        // *first and *last_position are synchronous segmented iterator reads,
+        // possibly from a remote locality.
         value_type1 previous = *first;
         std::size_t const max_chunk_size =
             max_capture_batch_elements<value_type1, value_type1>();
@@ -350,6 +352,8 @@ namespace hpx::parallel::detail {
         FwdIter1 input_position = first;
         std::size_t remaining = static_cast<std::size_t>(total_size);
         std::size_t chunk_index = 0;
+        // *first, *last_position, and *input_position are synchronous segmented
+        // iterator reads, possibly from a remote locality.
         value_type1 previous = *first;
         std::size_t const max_chunk_size =
             max_capture_batch_elements<value_type1, value_type1>();
