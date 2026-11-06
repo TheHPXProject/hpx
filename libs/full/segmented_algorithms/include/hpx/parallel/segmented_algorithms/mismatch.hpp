@@ -130,8 +130,9 @@ namespace hpx::parallel::detail {
                 static_cast<difference_type>(std::distance(beg1, end1));
             difference_type const count2 =
                 static_cast<difference_type>(std::distance(beg2, end2));
-            difference_type const count = (std::min)((std::min)(count1, count2),
-                static_cast<difference_type>(max_chunk_size));
+            difference_type const count =
+                (std::min) ((std::min) (count1, count2),
+                    static_cast<difference_type>(max_chunk_size));
             auto chunk_end1 = std::next(beg1, count);
 
             if (count != 0)
@@ -230,8 +231,9 @@ namespace hpx::parallel::detail {
                 static_cast<difference_type>(std::distance(beg1, end1));
             difference_type const count2 =
                 static_cast<difference_type>(std::distance(beg2, end2));
-            difference_type const count = (std::min)((std::min)(count1, count2),
-                static_cast<difference_type>(max_chunk_size));
+            difference_type const count =
+                (std::min) ((std::min) (count1, count2),
+                    static_cast<difference_type>(max_chunk_size));
             auto chunk_end1 = std::next(beg1, count);
 
             if (count != 0)
@@ -279,8 +281,12 @@ namespace hpx::parallel::detail {
                 while (batch_end != seg_data.size())
                 {
                     auto const& data = seg_data[batch_end];
-                    difference_type const count = static_cast<difference_type>(
-                        std::distance(std::get<2>(data), std::get<4>(data)));
+                    difference_type const count =
+                        traits1::get_id(std::get<0>(data)) ==
+                            traits2::get_id(std::get<1>(data)) ?
+                        0 :
+                        static_cast<difference_type>(std::distance(
+                            std::get<2>(data), std::get<4>(data)));
                     if (!segments.empty() &&
                         count > static_cast<difference_type>(max_chunk_size) -
                                 batch_elements)
