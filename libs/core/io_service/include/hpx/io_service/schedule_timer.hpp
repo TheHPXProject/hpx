@@ -100,10 +100,11 @@ namespace hpx::io::experimental {
                 }
                 catch (...)
                 {
+                    std::exception_ptr error = std::current_exception();
                     completed_ = true;
+                    static_cast<void>(timer_.cancel());
                     lock.unlock();
-                    ex::set_error(
-                        HPX_MOVE(receiver_), std::current_exception());
+                    ex::set_error(HPX_MOVE(receiver_), HPX_MOVE(error));
                 }
             }
 
@@ -237,6 +238,32 @@ namespace hpx::io::experimental {
             std::reference_wrapper<::asio::io_context> context_;
             Expiry expiry_;
         };
+
+        HPX_CXX_CORE_EXPORT template <typename Rep, typename Period>
+        [[nodiscard]] std::chrono::steady_clock::duration
+        to_steady_clock_duration(
+            std::chrono::duration<Rep, Period> const duration) noexcept
+        {
+            using duration_type = std::chrono::steady_clock::duration;
+            using floating_duration_type =
+                std::chrono::duration<long double, duration_type::period>;
+
+            floating_duration_type const converted =
+                std::chrono::duration_cast<floating_duration_type>(duration);
+            floating_duration_type const maximum((duration_type::max) ());
+            floating_duration_type const minimum((duration_type::min) ());
+
+            if (converted >= maximum)
+            {
+                return (duration_type::max) ();
+            }
+            if (converted <= minimum)
+            {
+                return (duration_type::min) ();
+            }
+            return duration_type(
+                static_cast<duration_type::rep>(converted.count()));
+        }
     }    // namespace detail
 
     /// Return a sender that completes after the supplied duration has elapsed.
@@ -255,9 +282,7 @@ namespace hpx::io::experimental {
         std::chrono::duration<Rep, Period> const duration) noexcept
     {
         return detail::timer_sender<std::chrono::steady_clock::duration>(
-            context,
-            std::chrono::duration_cast<std::chrono::steady_clock::duration>(
-                duration));
+            context, detail::to_steady_clock_duration(duration));
     }
 
     /// Return a sender that completes at the supplied time point.
