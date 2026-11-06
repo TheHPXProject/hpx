@@ -214,7 +214,8 @@ namespace hpx::parallel::detail {
             hpx::id_type const destination_id = traits2::get_id(sdest);
             bool const has_previous = chunk_index != 0;
 
-            if (source_id == destination_id)
+            if (get_partition_locality(source_id) ==
+                get_partition_locality(destination_id))
             {
                 if (has_previous)
                 {
@@ -398,7 +399,8 @@ namespace hpx::parallel::detail {
             hpx::id_type const source_id = traits1::get_id(sit);
             hpx::id_type const destination_id = traits2::get_id(sdest);
 
-            if (source_id == destination_id)
+            if (get_partition_locality(source_id) ==
+                get_partition_locality(destination_id))
             {
                 if (has_previous)
                 {
