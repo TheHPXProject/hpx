@@ -14,6 +14,7 @@
 
 #include <cstddef>
 #include <iterator>
+#include <utility>
 #include <vector>
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -34,6 +35,24 @@ struct add
     U operator()(T1 const& v1, T2 const& v2) const
     {
         return U(v1 + v2);
+    }
+};
+
+struct constness_add
+{
+    double operator()(int const& v1, int& v2) const
+    {
+        return v1 + v2 + 100;
+    }
+
+    double operator()(int& v1, int const& v2) const
+    {
+        return v1 + v2 + 200;
+    }
+
+    double operator()(int& v1, int& v2) const
+    {
+        return v1 + v2;
     }
 };
 
@@ -236,6 +255,131 @@ void transform_binary_tests(std::vector<hpx::id_type>& localities)
             first2, dest, add<V>())
             .get();
         verify_subrange_result();
+    }
+
+    {
+        constexpr std::size_t n = 6;
+        std::vector<hpx::id_type> owners(2, hpx::find_here());
+        if (localities.size() > 1)
+        {
+            owners[1] = localities[1];
+        }
+        hpx::partitioned_vector<T> v(
+            n, hpx::explicit_container_layout({2, 4}, owners));
+        std::vector<hpx::id_type> input2_owners{
+            owners[0], owners[0], owners[1]};
+        hpx::partitioned_vector<U> w(
+            n, hpx::explicit_container_layout({3, 0, 3}, input2_owners));
+        hpx::partitioned_vector<V> x(
+            n, hpx::explicit_container_layout({2, 4}, owners));
+
+        auto itv = v.begin();
+        auto itw = w.begin();
+        for (std::size_t i = 0; i != n; ++i, ++itv, ++itw)
+        {
+            *itv = T(i + 1);
+            *itw = U(i + 10);
+        }
+
+        auto verify = [&](auto const& result) {
+            std::size_t i = 0;
+            for (auto it = x.begin(); it != x.end(); ++it, ++i)
+            {
+                HPX_TEST_EQ(*it, V(11 + 2 * i));
+            }
+            HPX_TEST_EQ(i, n);
+            HPX_TEST(result.in1 == v.end());
+            HPX_TEST(result.in2 == w.end());
+            HPX_TEST(result.out == x.end());
+        };
+
+        auto reset_output = [&]() {
+            hpx::fill(hpx::execution::seq, x.begin(), x.end(), V(-1));
+        };
+
+        reset_output();
+        verify(hpx::transform(hpx::execution::seq, v.begin(), v.end(),
+            w.begin(), x.begin(), add<V>()));
+        reset_output();
+        verify(hpx::transform(hpx::execution::par, v.begin(), v.end(),
+            w.begin(), x.begin(), add<V>()));
+        reset_output();
+        verify(hpx::transform(hpx::execution::seq(hpx::execution::task),
+            v.begin(), v.end(), w.begin(), x.begin(), add<V>())
+                .get());
+        reset_output();
+        verify(hpx::transform(hpx::execution::par(hpx::execution::task),
+            v.begin(), v.end(), w.begin(), x.begin(), add<V>())
+                .get());
+
+        reset_output();
+        verify(hpx::transform(hpx::execution::seq, v.begin(), v.end(),
+            w.begin(), w.end(), x.begin(), add<V>()));
+        reset_output();
+        verify(hpx::transform(hpx::execution::par, v.begin(), v.end(),
+            w.begin(), w.end(), x.begin(), add<V>()));
+        reset_output();
+        verify(hpx::transform(hpx::execution::seq(hpx::execution::task),
+            v.begin(), v.end(), w.begin(), w.end(), x.begin(), add<V>())
+                .get());
+        reset_output();
+        verify(hpx::transform(hpx::execution::par(hpx::execution::task),
+            v.begin(), v.end(), w.begin(), w.end(), x.begin(), add<V>())
+                .get());
+
+        auto first2 = w.begin() + 3;
+        auto last1 = v.begin() + 3;
+        auto last2 = w.end();
+        auto verify_boundary = [&](auto const& result) {
+            auto it = x.begin();
+            for (std::size_t i = 0; i != 3; ++i, ++it)
+            {
+                HPX_TEST_EQ(*it, V(14 + 2 * i));
+            }
+            for (; it != x.end(); ++it)
+            {
+                HPX_TEST_EQ(*it, V(-1));
+            }
+            HPX_TEST(result.in1 == last1);
+            HPX_TEST(result.in2 == last2);
+            HPX_TEST(result.out == x.begin() + 3);
+        };
+
+        reset_output();
+        verify_boundary(hpx::transform(hpx::execution::seq, v.begin(), last1,
+            first2, x.begin(), add<V>()));
+        reset_output();
+        verify_boundary(hpx::transform(hpx::execution::par, v.begin(), last1,
+            first2, last2, x.begin(), add<V>()));
+
+        auto verify_constness = [&](V offset) {
+            std::size_t i = 0;
+            for (auto it = x.begin(); it != x.end(); ++it, ++i)
+            {
+                HPX_TEST_EQ(*it, V(11 + 2 * i) + offset);
+            }
+        };
+
+        reset_output();
+        hpx::transform(hpx::execution::seq, std::as_const(v).begin(),
+            std::as_const(v).end(), w.begin(), x.begin(), constness_add{});
+        verify_constness(V(100));
+        reset_output();
+        hpx::transform(hpx::execution::par, v.begin(), v.end(),
+            std::as_const(w).begin(), std::as_const(w).end(), x.begin(),
+            constness_add{});
+        verify_constness(V(200));
+        reset_output();
+        hpx::transform(hpx::execution::seq(hpx::execution::task),
+            std::as_const(v).begin(), std::as_const(v).end(), w.begin(),
+            w.end(), x.begin(), constness_add{})
+            .get();
+        verify_constness(V(100));
+        reset_output();
+        hpx::transform(hpx::execution::par(hpx::execution::task), v.begin(),
+            v.end(), std::as_const(w).begin(), x.begin(), constness_add{})
+            .get();
+        verify_constness(V(200));
     }
 }
 #endif
