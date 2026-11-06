@@ -497,19 +497,21 @@ The ``hpx.thread_queue`` configuration section
      * The value of this property defines the number of consecutive empty
        scheduling loop iterations after which a worker thread starts stealing
        staged |hpx| tasks from other worker threads (local priority queue
-       scheduler only; values above ``hpx.max_idle_loop_count / 2`` are limited
-       to it. The local and shared priority schedulers steal staged tasks right
-       away, the work-requesting schedulers do not steal staged tasks). It has
-       no effect if fast idle mode is on, which steals staged tasks right away.
+       and work-requesting schedulers only; values above
+       ``hpx.max_idle_loop_count / 2`` are limited to it). The local and shared
+       priority schedulers steal staged tasks right away. Fast idle mode makes
+       the local priority queue scheduler steal staged tasks right away, but
+       does not bypass this threshold for work-requesting schedulers.
        See :ref:`thread_scheduler_staged_steal`.
    * * ``hpx.thread_queue.min_tasks_to_steal_staged_early``
      * The value of this property defines the number of staged |hpx| tasks that
        need to be available before other worker threads are allowed to steal
-       them (local priority queue scheduler only, not in fast idle mode).
-       Leaving a few staged tasks to the worker thread they were placed on
-       keeps them close to the data in that core's caches. The minimum is
-       ignored for a worker that doesn't get to its few staged tasks. See
-       :ref:`thread_scheduler_staged_steal`.
+       them (local priority queue and work-requesting schedulers only). Fast
+       idle mode disables this minimum for the local priority queue scheduler,
+       but not for work-requesting schedulers. Leaving a few staged tasks to
+       the worker thread they were placed on keeps them close to the data in
+       that core's caches. The minimum is ignored for a worker that doesn't get
+       to its few staged tasks. See :ref:`thread_scheduler_staged_steal`.
    * * ``hpx.thread_queue.min_add_new_count``
      * The value of this property defines the minimal number of staged tasks
        converted into |hpx| threads at a time, see
