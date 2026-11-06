@@ -4,7 +4,7 @@
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-set(tests set_thread_state thread_affinity thread_stacksize)
+set(tests action_task_size set_thread_state thread_affinity thread_stacksize)
 
 if(HPX_WITH_NETWORKING)
   set(tests ${tests} serialize_buffer zero_copy_serialization)

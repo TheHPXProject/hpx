@@ -26,6 +26,7 @@
 
 #include <cstdint>
 #include <exception>
+#include <ios>
 #include <iterator>
 #include <list>
 #include <memory>

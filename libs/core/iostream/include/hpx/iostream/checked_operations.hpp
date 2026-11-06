@@ -23,6 +23,8 @@
 #include <hpx/iostream/traits.hpp>
 #include <hpx/iostream/write.hpp>
 
+#include <ios>
+
 #include <hpx/config/warnings_prefix.hpp>
 
 namespace hpx::iostream {

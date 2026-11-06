@@ -14,6 +14,7 @@
 #include <iostream>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 void test_concurrent_vector()
@@ -408,6 +409,72 @@ void test_concurrent_unordered_set_for_each_break()
     HPX_TEST_EQ(count.load(), 50);
 }
 
+void test_move_assignment()
+{
+    // concurrent_unordered_map
+    {
+        hpx::concurrent::concurrent_unordered_map<int, int> m1;
+        m1.insert({1, 10});
+        m1.insert({2, 20});
+        m1.insert({3, 30});
+
+        hpx::concurrent::concurrent_unordered_map<int, int> m2;
+        m2 = std::move(m1);
+
+        HPX_TEST_EQ(m2.size(), 3u);
+        HPX_TEST_EQ(static_cast<int>(m2.at(1).get()), 10);
+        HPX_TEST_EQ(static_cast<int>(m2.at(2).get()), 20);
+        HPX_TEST_EQ(static_cast<int>(m2.at(3).get()), 30);
+
+        m1.clear();    // NOLINT(bugprone-use-after-move)
+        m1.insert({4, 40});
+        HPX_TEST_EQ(m1.size(), 1u);
+        HPX_TEST_EQ(static_cast<int>(m1.at(4).get()), 40);
+    }
+
+    // concurrent_unordered_set
+    {
+        hpx::concurrent::concurrent_unordered_set<int> s1;
+        s1.insert(10);
+        s1.insert(20);
+        s1.insert(30);
+
+        hpx::concurrent::concurrent_unordered_set<int> s2;
+        s2 = std::move(s1);
+
+        HPX_TEST_EQ(s2.size(), 3u);
+        HPX_TEST_EQ(s2.count(10), 1u);
+        HPX_TEST_EQ(s2.count(20), 1u);
+        HPX_TEST_EQ(s2.count(30), 1u);
+
+        s1.clear();    // NOLINT(bugprone-use-after-move)
+        s1.insert(40);
+        HPX_TEST_EQ(s1.size(), 1u);
+        HPX_TEST_EQ(s1.count(40), 1u);
+    }
+
+    // concurrent_vector
+    {
+        hpx::concurrent::concurrent_vector<int> v1;
+        v1.push_back(100);
+        v1.push_back(200);
+        v1.push_back(300);
+
+        hpx::concurrent::concurrent_vector<int> v2;
+        v2 = std::move(v1);
+
+        HPX_TEST_EQ(v2.size(), 3u);
+        HPX_TEST_EQ(static_cast<int>(v2[0].get()), 100);
+        HPX_TEST_EQ(static_cast<int>(v2[1].get()), 200);
+        HPX_TEST_EQ(static_cast<int>(v2[2].get()), 300);
+
+        v1.clear();    // NOLINT(bugprone-use-after-move)
+        v1.push_back(400);
+        HPX_TEST_EQ(v1.size(), 1u);
+        HPX_TEST_EQ(static_cast<int>(v1[0].get()), 400);
+    }
+}
+
 int hpx_main(hpx::program_options::variables_map&)
 {
     test_concurrent_vector();
@@ -424,6 +491,7 @@ int hpx_main(hpx::program_options::variables_map&)
     test_concurrent_unordered_set_for_each_break();
 
     test_concurrent_queue();
+    test_move_assignment();
 
     std::cout << "All concurrent data structure tests PASSED!" << std::endl;
 
