@@ -14,6 +14,7 @@
 
 #include <cstddef>
 #include <iterator>
+#include <utility>
 #include <vector>
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -34,6 +35,24 @@ struct add
     U operator()(T1 const& v1, T2 const& v2) const
     {
         return U(v1 + v2);
+    }
+};
+
+struct constness_add
+{
+    double operator()(int const& v1, int& v2) const
+    {
+        return v1 + v2 + 100;
+    }
+
+    double operator()(int& v1, int const& v2) const
+    {
+        return v1 + v2 + 200;
+    }
+
+    double operator()(int& v1, int& v2) const
+    {
+        return v1 + v2;
     }
 };
 
@@ -332,6 +351,35 @@ void transform_binary_tests(std::vector<hpx::id_type>& localities)
         reset_output();
         verify_boundary(hpx::transform(hpx::execution::par, v.begin(), last1,
             first2, last2, x.begin(), add<V>()));
+
+        auto verify_constness = [&](V offset) {
+            std::size_t i = 0;
+            for (auto it = x.begin(); it != x.end(); ++it, ++i)
+            {
+                HPX_TEST_EQ(*it, V(11 + 2 * i) + offset);
+            }
+        };
+
+        reset_output();
+        hpx::transform(hpx::execution::seq, std::as_const(v).begin(),
+            std::as_const(v).end(), w.begin(), x.begin(), constness_add{});
+        verify_constness(V(100));
+        reset_output();
+        hpx::transform(hpx::execution::par, v.begin(), v.end(),
+            std::as_const(w).begin(), std::as_const(w).end(), x.begin(),
+            constness_add{});
+        verify_constness(V(200));
+        reset_output();
+        hpx::transform(hpx::execution::seq(hpx::execution::task),
+            std::as_const(v).begin(), std::as_const(v).end(), w.begin(),
+            w.end(), x.begin(), constness_add{})
+            .get();
+        verify_constness(V(100));
+        reset_output();
+        hpx::transform(hpx::execution::par(hpx::execution::task), v.begin(),
+            v.end(), std::as_const(w).begin(), x.begin(), constness_add{})
+            .get();
+        verify_constness(V(200));
     }
 }
 #endif
