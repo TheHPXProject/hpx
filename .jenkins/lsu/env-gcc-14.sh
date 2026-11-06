@@ -14,8 +14,14 @@ module load openmpi
 module load likwid/5.4.1
 
 export HPXRUN_RUNWRAPPER=srun
+
+# liboshmem and libmpi live in the Open MPI library directory, which is not on
+# the default linker search path; oshrun launches the OpenSHMEM parcelport tests
+openmpi_prefix="$(dirname "$(dirname "$(which mpirun)")")"
+export LIBRARY_PATH=${openmpi_prefix}/lib:$LIBRARY_PATH
+export HPXRUN_OSHRUN=oshrun
 export CXX_STD="23"
-export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:$PKG_CONFIG_PATH
+export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:${openmpi_prefix}/lib/pkgconfig:$PKG_CONFIG_PATH
 
 configure_extra_options+=" -DCMAKE_BUILD_TYPE=${build_type}"
 configure_extra_options+=" -DHPX_WITH_CXX_STANDARD=${CXX_STD}"
@@ -27,6 +33,7 @@ configure_extra_options+=" -DHPX_WITH_PARCELPORT_MPI=ON"
 configure_extra_options+=" -DHPX_WITH_PARCELPORT_LCI=ON"
 configure_extra_options+=" -DHPX_WITH_FETCH_LCI=ON"
 configure_extra_options+=" -DHPX_WITH_LCI_BOOTSTRAP_MPI=ON"
+configure_extra_options+=" -DHPX_WITH_PARCELPORT_OPENSHMEM=ON"
 configure_extra_options+=" -DHPX_WITH_PARCELPORT_LCW=ON"
 configure_extra_options+=" -DHPX_WITH_FETCH_LCW=ON"
 configure_extra_options+=" -DCMAKE_C_COMPILER=gcc"
