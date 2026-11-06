@@ -170,18 +170,39 @@ namespace hpx::when_all_vector_detail {
         template <typename Self,
             typename Env = hpx::execution::experimental::empty_env>
         static consteval auto
-        get_completion_signatures() noexcept -> decltype(hpx::execution::
-                experimental::transform_completion_signatures(
-                    hpx::execution::experimental::completion_signatures_of_t<
-                        Sender, Env>{},
-                    transformed_comp_sigs_identity_fn{}, decay_set_error_fn{},
-                    hpx::execution::experimental::keep_completion<
-                        hpx::execution::experimental::set_stopped_t>{},
-                    hpx::execution::experimental::completion_signatures<
-                        hpx::execution::experimental::set_error_t(
-                            std::exception_ptr)>{}))
+        get_completion_signatures() noexcept
         {
-            return {};
+            if constexpr (!hpx::execution::experimental::unstoppable_token<
+                              hpx::execution::experimental::stop_token_of_t<
+                                  Env>>)
+            {
+                return hpx::execution::experimental::
+                    transform_completion_signatures(
+                        hpx::execution::experimental::
+                            completion_signatures_of_t<Sender, Env>{},
+                        transformed_comp_sigs_identity_fn{},
+                        decay_set_error_fn{},
+                        hpx::execution::experimental::keep_completion<
+                            hpx::execution::experimental::set_stopped_t>{},
+                        hpx::execution::experimental::completion_signatures<
+                            hpx::execution::experimental::set_error_t(
+                                std::exception_ptr),
+                            hpx::execution::experimental::set_stopped_t()>{});
+            }
+            else
+            {
+                return hpx::execution::experimental::
+                    transform_completion_signatures(
+                        hpx::execution::experimental::
+                            completion_signatures_of_t<Sender, Env>{},
+                        transformed_comp_sigs_identity_fn{},
+                        decay_set_error_fn{},
+                        hpx::execution::experimental::keep_completion<
+                            hpx::execution::experimental::set_stopped_t>{},
+                        hpx::execution::experimental::completion_signatures<
+                            hpx::execution::experimental::set_error_t(
+                                std::exception_ptr)>{});
+            }
         }
 
         template <typename Receiver>
