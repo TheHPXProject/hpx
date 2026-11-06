@@ -264,11 +264,11 @@ namespace hpx::parallel::detail {
     constexpr std::size_t max_capture_batch_elements() noexcept
     {
         constexpr std::size_t element_bytes =
-            (std::max)(sizeof(Value1), sizeof(Value2));
+            (std::max) (sizeof(Value1), sizeof(Value2));
 
         constexpr std::size_t count = max_capture_batch_bytes / element_bytes;
 
-        return (std::max)(std::size_t(1), count);
+        return (std::max) (std::size_t(1), count);
     }
 
     HPX_CXX_EXPORT template <typename LocalIterator>

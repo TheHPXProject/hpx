@@ -107,6 +107,47 @@ void equal_empty_tests()
 }
 
 template <typename T>
+void equal_zero_count_tests()
+{
+    using namespace hpx::execution;
+
+    hpx::partitioned_vector<T> first(3,
+        hpx::explicit_container_layout(std::vector<std::size_t>{1, 2},
+            {hpx::find_here(), hpx::find_here()}));
+    hpx::partitioned_vector<T> second_with_empty_partition(3,
+        hpx::explicit_container_layout(std::vector<std::size_t>{1, 0, 2},
+            {hpx::find_here(), hpx::find_here(), hpx::find_here()}));
+    iota_vector(first, T(0));
+    iota_vector(second_with_empty_partition, T(0));
+
+    HPX_TEST(hpx::equal(
+        seq, first.begin(), first.end(), second_with_empty_partition.begin()));
+    HPX_TEST(hpx::equal(
+        par, first.begin(), first.end(), second_with_empty_partition.begin()));
+    HPX_TEST(hpx::equal(seq(task), first.begin(), first.end(),
+        second_with_empty_partition.begin())
+            .get());
+    HPX_TEST(hpx::equal(par(task), first.begin(), first.end(),
+        second_with_empty_partition.begin())
+            .get());
+
+    hpx::partitioned_vector<T> second_at_boundary(3,
+        hpx::explicit_container_layout(std::vector<std::size_t>{1, 2},
+            {hpx::find_here(), hpx::find_here()}));
+    iota_vector(second_at_boundary, T(0));
+    auto first2 = std::next(second_at_boundary.begin());
+    auto last1 = std::next(first.begin(), 2);
+    auto compare_offset = [](T left, T right) { return left + T(1) == right; };
+
+    HPX_TEST(hpx::equal(seq, first.begin(), last1, first2, compare_offset));
+    HPX_TEST(hpx::equal(par, first.begin(), last1, first2, compare_offset));
+    HPX_TEST(hpx::equal(seq(task), first.begin(), last1, first2, compare_offset)
+            .get());
+    HPX_TEST(hpx::equal(par(task), first.begin(), last1, first2, compare_offset)
+            .get());
+}
+
+template <typename T>
 void equal_subrange_tests(std::size_t first_partitions,
     std::size_t second_partitions, std::ptrdiff_t first_offset,
     std::ptrdiff_t second_offset,
@@ -154,22 +195,23 @@ template <typename T>
 void equal_tests()
 {
     equal_empty_tests<T>();
+    equal_zero_count_tests<T>();
     auto check_subranges =
         [](std::vector<hpx::id_type> const& first_localities,
             std::vector<hpx::id_type> const& second_localities) {
-        equal_subrange_tests<T>(
-            2, 2, 0, 0, first_localities, second_localities);
-        equal_subrange_tests<T>(
-            2, 2, 1, 0, first_localities, second_localities);
-        equal_subrange_tests<T>(
-            2, 2, 0, 1, first_localities, second_localities);
-        equal_subrange_tests<T>(
-            1, 3, 1, 0, first_localities, second_localities);
-        equal_subrange_tests<T>(
-            3, 1, 0, 1, first_localities, second_localities);
-        equal_subrange_tests<T>(
-            3, 2, 1, 0, first_localities, second_localities);
-    };
+            equal_subrange_tests<T>(
+                2, 2, 0, 0, first_localities, second_localities);
+            equal_subrange_tests<T>(
+                2, 2, 1, 0, first_localities, second_localities);
+            equal_subrange_tests<T>(
+                2, 2, 0, 1, first_localities, second_localities);
+            equal_subrange_tests<T>(
+                1, 3, 1, 0, first_localities, second_localities);
+            equal_subrange_tests<T>(
+                3, 1, 0, 1, first_localities, second_localities);
+            equal_subrange_tests<T>(
+                3, 2, 1, 0, first_localities, second_localities);
+        };
     check_subranges({hpx::find_here()}, {hpx::find_here()});
 
     std::size_t const length = 64;

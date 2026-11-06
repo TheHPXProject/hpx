@@ -18,6 +18,7 @@
 #include <iterator>
 #include <list>
 #include <numeric>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -40,6 +41,8 @@ namespace hpx::parallel::detail {
         typedef hpx::traits::segmented_iterator_traits<SegIter1> traits1;
         typedef typename traits1::segment_iterator segment_iterator1;
         typedef typename traits1::local_iterator local_iterator_type1;
+        using difference_type =
+            typename std::iterator_traits<SegIter1>::difference_type;
 
         // Traits for Vector B
         typedef hpx::traits::segmented_iterator_traits<SegIter2> traits2;
@@ -59,27 +62,29 @@ namespace hpx::parallel::detail {
 
         local_iterator_type1 beg1 = traits1::local(first1);
         local_iterator_type2 beg2 = traits2::local(first2);
-        auto remaining = detail::distance(first1, last1);
+        difference_type remaining =
+            static_cast<difference_type>(detail::distance(first1, last1));
 
         while (remaining != 0)
         {
-            local_iterator_type1 end1 = sit1 == send1 ?
-                traits1::local(last1) : traits1::end(sit1);
+            local_iterator_type1 end1 =
+                sit1 == send1 ? traits1::local(last1) : traits1::end(sit1);
             local_iterator_type2 end2 = traits2::end(sit2);
 
-            auto const count1 = std::distance(beg1, end1);
-            auto const count2 = std::distance(beg2, end2);
-
-            auto const count = (std::min)(
-                static_cast<std::size_t>(count1 < count2 ? count1 : count2),
-                max_chunk_size);
+            difference_type const count1 =
+                static_cast<difference_type>(std::distance(beg1, end1));
+            difference_type const count2 =
+                static_cast<difference_type>(std::distance(beg2, end2));
+            difference_type const count =
+                (std::min) ((std::min) (count1, count2),
+                    static_cast<difference_type>(max_chunk_size));
 
             auto chunk_end1 = std::next(beg1, count);
 
             if (count != 0 &&
                 !get_capture_result<ExPolicy>(dispatch_comparison_async(
-                    traits1::get_id(sit1), traits2::get_id(sit2), algo,
-                    policy, std::true_type(), beg1, chunk_end1, beg2, pred)))
+                    traits1::get_id(sit1), traits2::get_id(sit2), algo, policy,
+                    std::true_type(), beg1, chunk_end1, beg2, pred)))
             {
                 return result::get(false);
             }
@@ -118,6 +123,8 @@ namespace hpx::parallel::detail {
         typedef hpx::traits::segmented_iterator_traits<SegIter1> traits1;
         typedef typename traits1::segment_iterator segment_iterator1;
         typedef typename traits1::local_iterator local_iterator_type1;
+        using difference_type =
+            typename std::iterator_traits<SegIter1>::difference_type;
 
         // Traits for Vector B
         typedef hpx::traits::segmented_iterator_traits<SegIter2> traits2;
@@ -138,30 +145,33 @@ namespace hpx::parallel::detail {
         segment_iterator1 send1 = traits1::segment(last1);
         segment_iterator2 sit2 = traits2::segment(first2);
 
-        std::vector<hpx::shared_future<bool>> segments;
-        segments.reserve(detail::distance(sit1, send1));
+        std::vector<std::tuple<segment_iterator1, segment_iterator2,
+            local_iterator_type1, local_iterator_type2, local_iterator_type1>>
+            seg_data;
+        seg_data.reserve(detail::distance(sit1, send1));
 
         local_iterator_type1 beg1 = traits1::local(first1);
         local_iterator_type2 beg2 = traits2::local(first2);
-        auto remaining = detail::distance(first1, last1);
+        difference_type remaining =
+            static_cast<difference_type>(detail::distance(first1, last1));
 
         while (remaining != 0)
         {
-            local_iterator_type1 end1 = sit1 == send1 ?
-                traits1::local(last1) : traits1::end(sit1);
+            local_iterator_type1 end1 =
+                sit1 == send1 ? traits1::local(last1) : traits1::end(sit1);
             local_iterator_type2 end2 = traits2::end(sit2);
-            auto const count1 = std::distance(beg1, end1);
-            auto const count2 = std::distance(beg2, end2);
-            auto const count = (std::min)(
-                static_cast<std::size_t>(count1 < count2 ? count1 : count2),
-                max_chunk_size);
+            difference_type const count1 =
+                static_cast<difference_type>(std::distance(beg1, end1));
+            difference_type const count2 =
+                static_cast<difference_type>(std::distance(beg2, end2));
+            difference_type const count =
+                (std::min) ((std::min) (count1, count2),
+                    static_cast<difference_type>(max_chunk_size));
             auto chunk_end1 = std::next(beg1, count);
 
             if (count != 0)
             {
-                segments.push_back(dispatch_comparison_async(
-                    traits1::get_id(sit1), traits2::get_id(sit2), algo,
-                    policy, forced_seq(), beg1, chunk_end1, beg2, pred));
+                seg_data.emplace_back(sit1, sit2, beg1, beg2, chunk_end1);
             }
 
             beg1 = chunk_end1;
@@ -184,10 +194,60 @@ namespace hpx::parallel::detail {
             }
         }
 
-        return result::get(dataflow(hpx::unwrapping([=](std::vector<bool>&& r) {
-            return std::all_of(r.begin(), r.end(), [](bool v) { return v; });
-        }),
-            HPX_MOVE(segments)));
+        return result::get(hpx::async([seg_data = HPX_MOVE(seg_data), policy,
+                                          pred = HPX_FORWARD(Pred, pred),
+                                          algo = HPX_FORWARD(
+                                              Algo, algo)]() mutable {
+            std::size_t batch_begin = 0;
+            while (batch_begin != seg_data.size())
+            {
+                std::vector<hpx::future<bool>> segments;
+                difference_type batch_elements = 0;
+                std::size_t batch_end = batch_begin;
+
+                while (batch_end != seg_data.size())
+                {
+                    auto const& data = seg_data[batch_end];
+                    difference_type const count =
+                        traits1::get_id(std::get<0>(data)) ==
+                            traits2::get_id(std::get<1>(data)) ?
+                        0 :
+                        static_cast<difference_type>(std::distance(
+                            std::get<2>(data), std::get<4>(data)));
+                    if (!segments.empty() &&
+                        count > static_cast<difference_type>(max_chunk_size) -
+                                batch_elements)
+                    {
+                        break;
+                    }
+
+                    segments.push_back(dispatch_comparison_async(
+                        traits1::get_id(std::get<0>(data)),
+                        traits2::get_id(std::get<1>(data)), algo, policy,
+                        forced_seq(), std::get<2>(data), std::get<4>(data),
+                        std::get<3>(data), pred));
+                    batch_elements += count;
+                    ++batch_end;
+                }
+
+                (void) hpx::wait_all_nothrow(segments);
+                bool batch_equal = true;
+                for (auto& segment : segments)
+                {
+                    batch_equal =
+                        get_capture_result<ExPolicy>(HPX_MOVE(segment)) &&
+                        batch_equal;
+                }
+                if (!batch_equal)
+                {
+                    return false;
+                }
+
+                batch_begin = batch_end;
+            }
+
+            return true;
+        }));
     }
     /// \endcond
 }    // namespace hpx::parallel::detail
