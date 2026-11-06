@@ -169,8 +169,7 @@ namespace hpx::when_all_vector_detail {
 
         template <typename Self,
             typename Env = hpx::execution::experimental::empty_env>
-        static consteval auto
-        get_completion_signatures() noexcept
+        static consteval auto get_completion_signatures() noexcept
         {
             if constexpr (!hpx::execution::experimental::unstoppable_token<
                               hpx::execution::experimental::stop_token_of_t<
