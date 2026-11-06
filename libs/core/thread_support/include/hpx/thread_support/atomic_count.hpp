@@ -34,6 +34,12 @@ namespace hpx::util {
             return *this;
         }
 
+        void store(long value,
+            std::memory_order mo = std::memory_order_relaxed) noexcept
+        {
+            value_.store(value, mo);
+        }
+
         // Incrementing reference counts can be done with relaxed semantics,
         // because the object is not at risk of being destroyed, and any memory
         // operations that occur after the increment may as well have occurred

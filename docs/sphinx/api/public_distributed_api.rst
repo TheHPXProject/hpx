@@ -62,27 +62,31 @@ Classes
 
 .. table:: `hpx` classes of header ``hpx/collectives.hpp``
 
-   +-----------------------------------------------------+
-   | Class                                               |
-   +=====================================================+
-   | :hpx:struct:`hpx::collectives::num_sites_arg`       |
-   +-----------------------------------------------------+
-   | :hpx:struct:`hpx::collectives::this_site_arg`       |
-   +-----------------------------------------------------+
-   | :hpx:struct:`hpx::collectives::that_site_arg`       |
-   +-----------------------------------------------------+
-   | :hpx:struct:`hpx::collectives::generation_arg`      |
-   +-----------------------------------------------------+
-   | :hpx:struct:`hpx::collectives::root_site_arg`       |
-   +-----------------------------------------------------+
-   | :hpx:struct:`hpx::collectives::tag_arg`             |
-   +-----------------------------------------------------+
-   | :hpx:struct:`hpx::collectives::arity_arg`           |
-   +-----------------------------------------------------+
-   | :hpx:struct:`hpx::collectives::communicator`        |
-   +-----------------------------------------------------+
-   | :hpx:class:`hpx::collectives::channel_communicator` |
-   +-----------------------------------------------------+
+   +-------------------------------------------------------------+
+   | Class                                                       |
+   +=============================================================+
+   | :hpx:struct:`hpx::collectives::num_sites_arg`               |
+   +-------------------------------------------------------------+
+   | :hpx:struct:`hpx::collectives::this_site_arg`               |
+   +-------------------------------------------------------------+
+   | :hpx:struct:`hpx::collectives::that_site_arg`               |
+   +-------------------------------------------------------------+
+   | :hpx:struct:`hpx::collectives::generation_arg`              |
+   +-------------------------------------------------------------+
+   | :hpx:struct:`hpx::collectives::root_site_arg`               |
+   +-------------------------------------------------------------+
+   | :hpx:struct:`hpx::collectives::tag_arg`                     |
+   +-------------------------------------------------------------+
+   | :hpx:struct:`hpx::collectives::arity_arg`                   |
+   +-------------------------------------------------------------+
+   | :hpx:struct:`hpx::collectives::flat_fallback_threshold_arg` |
+   +-------------------------------------------------------------+
+   | :hpx:struct:`hpx::collectives::communicator`                |
+   +-------------------------------------------------------------+
+   | :hpx:struct:`hpx::collectives::hierarchical_communicator`   |
+   +-------------------------------------------------------------+
+   | :hpx:class:`hpx::collectives::channel_communicator`         |
+   +-------------------------------------------------------------+
 
 Functions
 ---------

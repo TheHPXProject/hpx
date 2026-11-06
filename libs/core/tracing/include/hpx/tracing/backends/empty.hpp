@@ -15,6 +15,8 @@
 #include <string>
 #include <string_view>
 
+#include <hpx/tracing/backends/empty_lock_context.hpp>
+
 namespace hpx::tracing {
 
     HPX_CXX_CORE_EXPORT using enable_parent_task_handler_type = bool (*)();
@@ -85,34 +87,6 @@ namespace hpx::tracing {
     {
         constexpr explicit background_work_region(std::size_t = 0) noexcept {}
     };
-
-    ////////////////////////////////////////////////////////////////////////////
-    /// \cond NOINTERNAL
-    HPX_CXX_CORE_EXPORT struct [[maybe_unused]] lock_context
-    {
-        constexpr explicit lock_context(
-            char const* = nullptr, void const* = nullptr) noexcept
-        {
-        }
-        constexpr explicit lock_context(
-            char const*, char const*, void const* = nullptr) noexcept
-        {
-        }
-
-        constexpr bool before_lock() const noexcept
-        {
-            return false;
-        }
-
-        constexpr void after_lock() const noexcept {}
-
-        constexpr void after_try_lock(bool) const noexcept {}
-
-        constexpr void before_unlock() const noexcept {}
-
-        constexpr void after_unlock() const noexcept {}
-    };
-    /// \endcond
 
     ////////////////////////////////////////////////////////////////////////////
     namespace detail {

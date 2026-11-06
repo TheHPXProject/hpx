@@ -17,6 +17,10 @@
 
 #include <hpx/modules/itt_notify.hpp>
 
+#if !defined(HPX_HAVE_TRACING_LOCK_EVENTS)
+#include <hpx/tracing/backends/empty_lock_context.hpp>
+#endif
+
 namespace hpx::tracing {
 
     HPX_CXX_CORE_EXPORT using enable_parent_task_handler_type = bool (*)();
@@ -134,6 +138,9 @@ namespace hpx::tracing {
         util::itt::task task_;
     };
 
+    // Off by default, as for Tracy, so that a build without the option has no
+    // ITT calls in hpx::mutex and the spinlocks.
+#if defined(HPX_HAVE_TRACING_LOCK_EVENTS)
     ////////////////////////////////////////////////////////////////////////////
     /// \cond NOINTERNAL
     HPX_CXX_CORE_EXPORT struct [[maybe_unused]] lock_context
@@ -201,6 +208,7 @@ namespace hpx::tracing {
         void const* addr_ = nullptr;
     };
     /// \endcond
+#endif    // HPX_HAVE_TRACING_LOCK_EVENTS
 
     ////////////////////////////////////////////////////////////////////////////
     namespace detail {
