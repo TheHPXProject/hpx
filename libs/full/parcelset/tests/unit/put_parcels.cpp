@@ -249,6 +249,7 @@ struct handler_state
 {
     hpx::promise<void> done;
     std::error_code got;
+    int calls = 0;
 };
 
 hpx::naming::gid_type missing_locality_gid()
@@ -359,8 +360,10 @@ void test_put_parcel_unknown_locality_rescheduled()
 void test_put_parcels_unknown_locality_rescheduled()
 {
     auto state = std::make_shared<handler_state>();
+    auto other_state = std::make_shared<handler_state>();
 
     std::vector<hpx::parcelset::parcel> parcels;
+    parcels.push_back(generate_missing_locality_parcel());
     parcels.push_back(generate_missing_locality_parcel());
 
     using handler_type = hpx::parcelset::parcelhandler::write_handler_type;
@@ -368,10 +371,22 @@ void test_put_parcels_unknown_locality_rescheduled()
     handlers.emplace_back(
         [state](std::error_code const& ec, hpx::parcelset::parcel const&) {
             state->got = ec;
-            state->done.set_value();
+            if (++state->calls == 1)
+            {
+                state->done.set_value();
+            }
         });
+    handlers.emplace_back([other_state](std::error_code const& ec,
+                              hpx::parcelset::parcel const&) {
+        other_state->got = ec;
+        if (++other_state->calls == 1)
+        {
+            other_state->done.set_value();
+        }
+    });
 
     hpx::future<void> f = state->done.get_future();
+    hpx::future<void> other_f = other_state->done.get_future();
 
     std::thread os_thread([parcels = std::move(parcels),
                               handlers = std::move(handlers)]() mutable {
@@ -381,16 +396,26 @@ void test_put_parcels_unknown_locality_rescheduled()
     os_thread.join();
 
     HPX_TEST(f.wait_for(std::chrono::seconds(10)) == hpx::future_status::ready);
+    HPX_TEST(other_f.wait_for(std::chrono::seconds(10)) ==
+        hpx::future_status::ready);
     if (f.is_ready())
     {
         f.get();
+    }
+    if (other_f.is_ready())
+    {
+        other_f.get();
+    }
+    for (auto const& handler : {state, other_state})
+    {
+        HPX_TEST_EQ(handler->calls, 1);
         if (hpx::tolerate_node_faults())
         {
-            HPX_TEST_EQ(state->got.value(), expected_tolerated_error());
+            HPX_TEST_EQ(handler->got.value(), expected_tolerated_error());
         }
         else
         {
-            HPX_TEST_EQ(state->got.value(),
+            HPX_TEST_EQ(handler->got.value(),
                 static_cast<int>(hpx::error::bad_parameter));
         }
     }

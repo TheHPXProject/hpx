@@ -1069,6 +1069,20 @@ namespace hpx::parcelset {
         nonresolved_handlers.reserve(num_parcels);
 
         naming::gid_type dest_locality;
+        if (num_parcels != 0)
+        {
+            dest_locality = parcels[0].destination_locality();
+            for (std::size_t i = 1; i != num_parcels; ++i)
+            {
+                if (dest_locality != parcels[i].destination_locality())
+                {
+                    HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
+                        "parcelhandler::put_parcels",
+                        "mismatched destinations, all parcels are expected to "
+                        "target the same locality");
+                }
+            }
+        }
         for (std::size_t i = 0; i != num_parcels; ++i)
         {
             parcel& p = parcels[i];
@@ -1086,19 +1100,6 @@ namespace hpx::parcelset {
 
             write_handler_type f = hpx::bind_front(
                 &detail::parcel_sent_handler, HPX_MOVE(handlers[i]));
-
-            // make sure all parcels go to the same locality
-            if (i == 0)
-            {
-                dest_locality = p.destination_locality();
-            }
-            else if (dest_locality != p.destination_locality())
-            {
-                HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
-                    "parcelhandler::put_parcels",
-                    "mismatched destinations, all parcels are expected to "
-                    "target the same locality");
-            }
 
             // If we were able to resolve the address(es) locally we would send
             // the parcel directly to the destination.
