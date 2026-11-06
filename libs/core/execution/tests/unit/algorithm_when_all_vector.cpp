@@ -710,7 +710,7 @@ int main()
 
     test_when_all_vector_lifecycle();
 
-    return 0;
+    return hpx::util::report_errors();
 }
 
 #if defined(HPX_CLANG_VERSION)
