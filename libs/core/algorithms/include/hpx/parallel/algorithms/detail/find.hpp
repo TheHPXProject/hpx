@@ -252,7 +252,9 @@ namespace hpx::parallel::detail {
                 }
                 if (it1 == last1)
                 {
-                    return last1;
+                    // it1 is at the end of the range (last1 may be a
+                    // sentinel of a different type)
+                    return it1;
                 }
                 if (!HPX_INVOKE(
                         op, HPX_INVOKE(proj1, *it1), HPX_INVOKE(proj2, *it2)))
@@ -278,7 +280,8 @@ namespace hpx::parallel::detail {
                 return detail::advance_to_sentinel(first1, last1);
             }
 
-            Iter1 result = last1;
+            bool found = false;
+            Iter1 result = first1;
             while (true)
             {
                 Iter1 new_result = sequential_search(
@@ -290,10 +293,18 @@ namespace hpx::parallel::detail {
                 }
                 else
                 {
+                    found = true;
                     result = new_result;
                     first1 = result;
                     ++first1;
                 }
+            }
+
+            // without a match, return an iterator to the end of the range
+            // (last1 may be a sentinel of a different type)
+            if (!found)
+            {
+                return detail::advance_to_sentinel(result, last1);
             }
             return result;
         }
@@ -381,14 +392,14 @@ namespace hpx::parallel::detail {
       : hpx::detail::tag_dispatch<sequential_find_first_of_t<ExPolicy>,
             hpx::detail::no_base>
     {
-        template <typename InIter1, typename InIter2, typename Pred,
-            typename Proj1, typename Proj2>
+        template <typename InIter1, typename Sent1, typename InIter2,
+            typename Sent2, typename Pred, typename Proj1, typename Proj2>
         static inline constexpr InIter1 invoke_default(InIter1 first,
-            InIter1 last, InIter2 s_first, InIter2 s_last, Pred&& op,
-            Proj1&& proj1, Proj2&& proj2)
+            Sent1 last, InIter2 s_first, Sent2 s_last, Pred&& op, Proj1&& proj1,
+            Proj2&& proj2)
         {
             if (first == last)
-                return last;
+                return first;
 
             util::compare_projected<Pred, Proj1, Proj2> cmp(
                 HPX_FORWARD(Pred, op), HPX_FORWARD(Proj1, proj1),
@@ -404,13 +415,13 @@ namespace hpx::parallel::detail {
                     }
                 }
             }
-            return last;
+            return first;
         }
 
-        template <typename FwdIter, typename FwdIter2, typename Token,
-            typename Pred, typename Proj1, typename Proj2>
+        template <typename FwdIter, typename FwdIter2, typename Sent2,
+            typename Token, typename Pred, typename Proj1, typename Proj2>
         static inline constexpr void invoke_default(FwdIter it,
-            FwdIter2 s_first, FwdIter2 s_last, std::size_t base_idx,
+            FwdIter2 s_first, Sent2 s_last, std::size_t base_idx,
             std::size_t part_size, Token& tok, Pred&& op, Proj1&& proj1,
             Proj2&& proj2)
         {
@@ -440,9 +451,10 @@ namespace hpx::parallel::detail {
         sequential_find_first_of = sequential_find_first_of_t<ExPolicy>{};
 #else
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename InIter1,
-        typename InIter2, typename Pred, typename Proj1, typename Proj2>
+        typename Sent1, typename InIter2, typename Sent2, typename Pred,
+        typename Proj1, typename Proj2>
     HPX_HOST_DEVICE HPX_FORCEINLINE InIter1 sequential_find_first_of(
-        InIter1 first, InIter1 last, InIter2 s_first, InIter2 s_last, Pred&& op,
+        InIter1 first, Sent1 last, InIter2 s_first, Sent2 s_last, Pred&& op,
         Proj1&& proj1, Proj2&& proj2)
     {
         return sequential_find_first_of_t<ExPolicy>{}(first, last, s_first,
@@ -451,10 +463,10 @@ namespace hpx::parallel::detail {
     }
 
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename FwdIter,
-        typename FwdIter2, typename Token, typename Pred, typename Proj1,
-        typename Proj2>
+        typename FwdIter2, typename Sent2, typename Token, typename Pred,
+        typename Proj1, typename Proj2>
     HPX_HOST_DEVICE HPX_FORCEINLINE void sequential_find_first_of(FwdIter it,
-        FwdIter2 s_first, FwdIter2 s_last, std::size_t base_idx,
+        FwdIter2 s_first, Sent2 s_last, std::size_t base_idx,
         std::size_t part_size, Token& tok, Pred&& op, Proj1&& proj1,
         Proj2&& proj2)
     {
