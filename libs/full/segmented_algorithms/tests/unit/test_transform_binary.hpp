@@ -237,5 +237,56 @@ void transform_binary_tests(std::vector<hpx::id_type>& localities)
             .get();
         verify_subrange_result();
     }
+
+    {
+        constexpr std::size_t n = 6;
+        std::vector<hpx::id_type> owners(2, hpx::find_here());
+        hpx::partitioned_vector<T> v(
+            n, hpx::explicit_container_layout({2, 4}, owners));
+        hpx::partitioned_vector<U> w(
+            n, hpx::explicit_container_layout({3, 3}, owners));
+        hpx::partitioned_vector<V> x(
+            n, hpx::explicit_container_layout({2, 4}, owners));
+
+        auto itv = v.begin();
+        auto itw = w.begin();
+        for (std::size_t i = 0; i != n; ++i, ++itv, ++itw)
+        {
+            *itv = T(i + 1);
+            *itw = U(i + 10);
+        }
+
+        auto verify = [&](auto const& result) {
+            std::size_t i = 0;
+            for (auto it = x.begin(); it != x.end(); ++it, ++i)
+            {
+                HPX_TEST_EQ(*it, V(11 + 2 * i));
+            }
+            HPX_TEST_EQ(i, n);
+            HPX_TEST(result.in1 == v.end());
+            HPX_TEST(result.in2 == w.end());
+            HPX_TEST(result.out == x.end());
+        };
+
+        auto reset_output = [&]() {
+            hpx::fill(hpx::execution::seq, x.begin(), x.end(), V(-1));
+        };
+
+        reset_output();
+        verify(hpx::transform(
+            hpx::execution::seq, v.begin(), v.end(), w.begin(), x.begin(),
+            add<V>()));
+        reset_output();
+        verify(hpx::transform(
+            hpx::execution::par, v.begin(), v.end(), w.begin(), x.begin(),
+            add<V>()));
+
+        reset_output();
+        verify(hpx::transform(hpx::execution::seq, v.begin(), v.end(),
+            w.begin(), w.end(), x.begin(), add<V>()));
+        reset_output();
+        verify(hpx::transform(hpx::execution::par, v.begin(), v.end(),
+            w.begin(), w.end(), x.begin(), add<V>()));
+    }
 }
 #endif
