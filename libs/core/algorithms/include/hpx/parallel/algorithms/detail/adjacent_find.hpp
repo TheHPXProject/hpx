@@ -25,8 +25,23 @@ namespace hpx::parallel::detail {
         static inline InIter invoke_default(
             InIter first, Sent_ last, PredProj&& pred_projected)
         {
-            return std::adjacent_find(
-                first, last, HPX_FORWARD(PredProj, pred_projected));
+            if (first == last)
+            {
+                return first;
+            }
+
+            // std::adjacent_find requires last to be an iterator of the same
+            // type as first, so walk the range directly
+            InIter next = first;
+            while (++next != last)
+            {
+                if (HPX_INVOKE(pred_projected, *first, *next))
+                {
+                    return first;
+                }
+                first = next;
+            }
+            return next;
         }
 
         template <typename ZipIter, typename Token, typename PredProj>

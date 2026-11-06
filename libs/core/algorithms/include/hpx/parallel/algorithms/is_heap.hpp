@@ -472,14 +472,16 @@ namespace hpx::parallel {
                 Iter second;
                 if (count <= 1)
                 {
+                    // an empty or single element range is a heap: return its end
+                    // (last may be a sentinel of a different type)
                     if constexpr (has_scheduler_executor)
                     {
+                        second = std::next(first, count);
                         count = static_cast<difference_type>(0);
-                        second = last;
                     }
                     else
                     {
-                        return result::get(HPX_MOVE(last));
+                        return result::get(std::next(first, count));
                     }
                 }
                 else
