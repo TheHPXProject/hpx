@@ -110,6 +110,7 @@ namespace hpx::tracing {
 
     background_work_region::~background_work_region() = default;
 
+#if defined(HPX_HAVE_TRACING_LOCK_EVENTS)
     ////////////////////////////////////////////////////////////////////////////
     // lock_context -- see rationale in header.
 
@@ -161,6 +162,7 @@ namespace hpx::tracing {
             return;
         hpx::tracy::lock_released(impl);
     }
+#endif    // HPX_HAVE_TRACING_LOCK_EVENTS
 
     ////////////////////////////////////////////////////////////////////////////
     // set_thread_name

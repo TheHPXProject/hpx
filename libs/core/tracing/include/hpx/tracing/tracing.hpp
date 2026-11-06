@@ -102,8 +102,9 @@ namespace hpx::tracing {
     /// \brief Context for annotating lock acquisitions and releases.
     ///
     /// This struct is used to provide tracing annotations for synchronization
-    /// primitives such as spinlocks and mutexes. It registers the creation,
-    /// acquisition, and release of locks to the active tracing backend.
+    /// primitives such as spinlocks and mutexes. With
+    /// HPX_WITH_TRACING_LOCK_EVENTS=ON, it registers the creation,
+    /// acquisition, and release of locks with the Tracy or ITT backend.
     struct lock_context
     {
         /// \brief Constructs a lock context.

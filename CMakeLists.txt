@@ -1216,10 +1216,10 @@ if(HPX_WITH_TRACY)
   )
 endif()
 
-# Per-subsystem tracing gates, compiled out when OFF so a user profiling one
-# subsystem does not pay for the others. Lifecycle and work-stealing are honored
-# by both the Tracy and the ITTNotify backends; causal events remain Tracy-only
-# since ITT has no causal hooks. Defaults keep current behavior: all on.
+# Per-subsystem tracing gates (Tracy and ITTNotify; causal is Tracy-only),
+# compiled out when OFF so profiling one subsystem does not pay for the others.
+# Lock events are off by default because with them on, Tracy announces every
+# lock even when no profiler is attached.
 if(HPX_WITH_TRACY OR HPX_WITH_ITTNOTIFY)
   hpx_option(
     HPX_WITH_TRACING_LIFECYCLE_EVENTS
@@ -1241,6 +1241,17 @@ if(HPX_WITH_TRACY OR HPX_WITH_ITTNOTIFY)
   )
   if(HPX_WITH_TRACING_WORK_STEALING_EVENTS)
     hpx_add_config_define(HPX_HAVE_TRACING_WORK_STEALING_EVENTS)
+  endif()
+
+  hpx_option(
+    HPX_WITH_TRACING_LOCK_EVENTS
+    BOOL
+    "Emit lock events (create, acquire, release, destroy) for hpx::mutex, hpx::spinlock and hpx::util::spinlock. Tracy and ITTNotify backends. Default: OFF."
+    OFF
+    CATEGORY "Profiling"
+  )
+  if(HPX_WITH_TRACING_LOCK_EVENTS)
+    hpx_add_config_define(HPX_HAVE_TRACING_LOCK_EVENTS)
   endif()
 endif()
 
