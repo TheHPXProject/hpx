@@ -220,9 +220,9 @@ namespace hpx::parallel::detail {
             max_capture_batch_elements<value_type1, value_type2>() / 2));
     }
 
-    template <typename OutIterator>
+    template <typename OutIterator, bool ConstInput1, bool ConstInput2>
     struct captured_transform
-      : algorithm<captured_transform<OutIterator>,
+      : algorithm<captured_transform<OutIterator, ConstInput1, ConstInput2>,
             util::in_in_out_result<hpx::util::unused_type,
                 hpx::util::unused_type, OutIterator>>
     {
@@ -230,9 +230,24 @@ namespace hpx::parallel::detail {
             hpx::util::unused_type, OutIterator>;
 
         captured_transform()
-          : algorithm<captured_transform<OutIterator>, result_type>(
-                "captured_transform")
+          : algorithm<captured_transform<OutIterator, ConstInput1, ConstInput2>,
+                result_type>("captured_transform")
         {
+        }
+
+        template <bool IsConst, typename Iter>
+        static auto input_iterator(Iter it)
+        {
+            if constexpr (IsConst)
+            {
+                using value_type =
+                    typename std::iterator_traits<Iter>::value_type;
+                return typename std::vector<value_type>::const_iterator(it);
+            }
+            else
+            {
+                return it;
+            }
         }
 
         template <typename ExPolicy, typename Iter1, typename Iter2,
@@ -242,11 +257,16 @@ namespace hpx::parallel::detail {
         sequential(ExPolicy&& policy, Iter1 first1, Iter1 last1, Iter2 first2,
             Iter2 last2, Iter3 dest, F&& f, Proj1&& proj1, Proj2&& proj2)
         {
-            using local_result = util::in_in_out_result<Iter1, Iter2, Iter3>;
+            auto input_first1 = input_iterator<ConstInput1>(first1);
+            auto input_last1 = input_iterator<ConstInput1>(last1);
+            auto input_first2 = input_iterator<ConstInput2>(first2);
+            auto input_last2 = input_iterator<ConstInput2>(last2);
+            using local_result = util::in_in_out_result<decltype(input_first1),
+                decltype(input_first2), Iter3>;
             auto result = transform_binary2<local_result>::sequential(
-                HPX_FORWARD(ExPolicy, policy), first1, last1, first2, last2,
-                dest, HPX_FORWARD(F, f), HPX_FORWARD(Proj1, proj1),
-                HPX_FORWARD(Proj2, proj2));
+                HPX_FORWARD(ExPolicy, policy), input_first1, input_last1,
+                input_first2, input_last2, dest, HPX_FORWARD(F, f),
+                HPX_FORWARD(Proj1, proj1), HPX_FORWARD(Proj2, proj2));
             return {hpx::util::unused_type{}, hpx::util::unused_type{},
                 HPX_MOVE(result.out)};
         }
@@ -259,14 +279,19 @@ namespace hpx::parallel::detail {
         parallel(ExPolicy&& policy, Iter1 first1, Iter1 last1, Iter2 first2,
             Iter2 last2, Iter3 dest, F&& f, Proj1&& proj1, Proj2&& proj2)
         {
-            using local_result = util::in_in_out_result<Iter1, Iter2, Iter3>;
+            auto input_first1 = input_iterator<ConstInput1>(first1);
+            auto input_last1 = input_iterator<ConstInput1>(last1);
+            auto input_first2 = input_iterator<ConstInput2>(first2);
+            auto input_last2 = input_iterator<ConstInput2>(last2);
+            using local_result = util::in_in_out_result<decltype(input_first1),
+                decltype(input_first2), Iter3>;
             using captured_result =
                 util::in_in_out_result<hpx::util::unused_type,
                     hpx::util::unused_type, Iter3>;
             auto operation = transform_binary2<local_result>{}.call(
-                HPX_FORWARD(ExPolicy, policy), first1, last1, first2, last2,
-                dest, HPX_FORWARD(F, f), HPX_FORWARD(Proj1, proj1),
-                HPX_FORWARD(Proj2, proj2));
+                HPX_FORWARD(ExPolicy, policy), input_first1, input_last1,
+                input_first2, input_last2, dest, HPX_FORWARD(F, f),
+                HPX_FORWARD(Proj1, proj1), HPX_FORWARD(Proj2, proj2));
 
             if constexpr (hpx::is_async_execution_policy_v<
                               std::decay_t<ExPolicy>>)
@@ -303,6 +328,16 @@ namespace hpx::parallel::detail {
         using ranges2 = std::vector<partition_range<LocalIterator2>>;
         using chunk_type =
             capture_dispatch_chunk<ranges1, ranges2, OutIterator>;
+        using raw_iterator1 =
+            typename hpx::traits::segmented_local_iterator_traits<
+                LocalIterator1>::local_raw_iterator;
+        using raw_iterator2 =
+            typename hpx::traits::segmented_local_iterator_traits<
+                LocalIterator2>::local_raw_iterator;
+        constexpr bool const_input1 = std::is_const_v<std::remove_reference_t<
+            typename std::iterator_traits<raw_iterator1>::reference>>;
+        constexpr bool const_input2 = std::is_const_v<std::remove_reference_t<
+            typename std::iterator_traits<raw_iterator2>::reference>>;
 
         std::vector<chunk_type> chunks;
         chunks.push_back(
@@ -312,8 +347,9 @@ namespace hpx::parallel::detail {
                 ranges2{{input2_id, first2, last2}}, HPX_MOVE(dest)});
 
         return capture_dispatch_batch_async<value_type1, value_type2>(output_id,
-            captured_transform<OutIterator>{}, HPX_MOVE(policy), is_seq,
-            HPX_MOVE(chunks), HPX_MOVE(f), HPX_MOVE(proj1), HPX_MOVE(proj2))
+            captured_transform<OutIterator, const_input1, const_input2>{},
+            HPX_MOVE(policy), is_seq, HPX_MOVE(chunks), HPX_MOVE(f),
+            HPX_MOVE(proj1), HPX_MOVE(proj2))
             .then(
                 [](hpx::future<std::vector<OutIterator>> ready) -> OutIterator {
                     auto results =
@@ -429,6 +465,7 @@ namespace hpx::parallel::detail {
                     beg1, chunk_end1, beg2, ldest, f, proj1, proj2);
                 ldest = out.out;
             }
+#if defined(HPX_HAVE_NETWORKING)
             else
             {
                 auto captured = capture_transform_async(input1_id, input2_id,
@@ -437,6 +474,7 @@ namespace hpx::parallel::detail {
                 captured.wait();
                 ldest = get_capture_result<ExPolicy>(HPX_MOVE(captured));
             }
+#endif
             beg1 = chunk_end1;
             beg2 = chunk_end2;
             std::advance(first1, count);
@@ -565,6 +603,7 @@ namespace hpx::parallel::detail {
                         chunk_end1, beg2, ldest, f, proj1, proj2)
                         .then([](auto ready) { ready.get(); }));
             }
+#if defined(HPX_HAVE_NETWORKING)
             else
             {
                 captures = HPX_MOVE(captures).then(
@@ -577,6 +616,7 @@ namespace hpx::parallel::detail {
                             .then([](auto ready) { ready.get(); });
                     });
             }
+#endif
 
             std::advance(first1, count);
             std::advance(first2, count);
@@ -628,10 +668,14 @@ namespace hpx::parallel::detail {
             util::in_in_out_result<InIter1, InIter2, OutIter>>
             result;
 
-        using difference_type =
-            typename std::iterator_traits<InIter1>::difference_type;
-        difference_type remaining = (std::min) (std::distance(first1, last1),
-            std::distance(first2, last2));
+        using difference_type = std::common_type_t<
+            typename std::iterator_traits<InIter1>::difference_type,
+            typename std::iterator_traits<InIter2>::difference_type>;
+        difference_type const length1 =
+            static_cast<difference_type>(std::distance(first1, last1));
+        difference_type const length2 =
+            static_cast<difference_type>(std::distance(first2, last2));
+        difference_type remaining = (std::min) (length1, length2);
 
         segment_iterator1 sit1 = traits1::segment(first1);
         segment_iterator1 send1 = traits1::segment(last1);
@@ -709,6 +753,7 @@ namespace hpx::parallel::detail {
                     beg1, chunk_end1, beg2, chunk_end2, ldest, f, proj1, proj2);
                 ldest = out.out;
             }
+#if defined(HPX_HAVE_NETWORKING)
             else
             {
                 auto captured = capture_transform_async(input1_id, input2_id,
@@ -717,6 +762,7 @@ namespace hpx::parallel::detail {
                 captured.wait();
                 ldest = get_capture_result<ExPolicy>(HPX_MOVE(captured));
             }
+#endif
             beg1 = chunk_end1;
             beg2 = chunk_end2;
             std::advance(first1, count);
@@ -756,10 +802,14 @@ namespace hpx::parallel::detail {
             !std::forward_iterator<InIter1> || !std::forward_iterator<InIter2>>
             forced_seq;
 
-        using difference_type =
-            typename std::iterator_traits<InIter1>::difference_type;
-        difference_type remaining = (std::min) (std::distance(first1, last1),
-            std::distance(first2, last2));
+        using difference_type = std::common_type_t<
+            typename std::iterator_traits<InIter1>::difference_type,
+            typename std::iterator_traits<InIter2>::difference_type>;
+        difference_type const length1 =
+            static_cast<difference_type>(std::distance(first1, last1));
+        difference_type const length2 =
+            static_cast<difference_type>(std::distance(first2, last2));
+        difference_type remaining = (std::min) (length1, length2);
 
         segment_iterator1 sit1 = traits1::segment(first1);
         segment_iterator1 send1 = traits1::segment(last1);
@@ -843,6 +893,7 @@ namespace hpx::parallel::detail {
                         chunk_end1, beg2, chunk_end2, ldest, f, proj1, proj2)
                         .then([](auto ready) { ready.get(); }));
             }
+#if defined(HPX_HAVE_NETWORKING)
             else
             {
                 captures = HPX_MOVE(captures).then(
@@ -855,6 +906,7 @@ namespace hpx::parallel::detail {
                             .then([](auto ready) { ready.get(); });
                     });
             }
+#endif
 
             std::advance(first1, count);
             std::advance(first2, count);
