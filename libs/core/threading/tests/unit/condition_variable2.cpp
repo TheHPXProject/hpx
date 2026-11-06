@@ -576,18 +576,19 @@ void check_cv_any_stop_from_pred(
     int calls = 0;
     bool ready = false;
 
-    bool const result = wait(source.get_token(), [&, &lock, &cv] {
-        ++calls;
-        if (calls == 1)
-        {
-            ready = become_ready;
-            source.request_stop();
-            return false;
-        }
-        HPX_TEST(lock.owns_lock());
-        cv.notify_all();
-        return ready;
-    });
+    bool const result = wait(source.get_token(),
+        [&source, &calls, &ready, become_ready, &lock, &cv] {
+            ++calls;
+            if (calls == 1)
+            {
+                ready = become_ready;
+                source.request_stop();
+                return false;
+            }
+            HPX_TEST(lock.owns_lock());
+            cv.notify_all();
+            return ready;
+        });
 
     HPX_TEST_EQ(result, become_ready);
     HPX_TEST_EQ(calls, 2);
