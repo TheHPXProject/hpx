@@ -161,7 +161,7 @@ namespace hpx::threads::policies {
             std::uint16_t num_thread_;
             // preserve queue precedence when stored priority differs
             bool from_high_priority_queue_;
-            hpx::detail::small_vector<thread_id_ref_type, 1> tasks_;
+            hpx::detail::small_vector<thread_id_ref_type, 32> tasks_;
         };
 
         using workrequesting_task_channel =
@@ -905,7 +905,13 @@ namespace hpx::threads::policies {
                 }
 
                 // the pending queue length is never negative
-                return static_cast<std::size_t>(pending_count / 2);
+                std::size_t half = static_cast<std::size_t>(pending_count / 2);
+                if (half == 0)
+                {
+                    half = 1;
+                }
+                // Cap steal batches at 32 to avoid heap allocation in tasks_
+                return (std::min) (std::size_t(32), half);
             };
 
             thread_queue_type* high_priority_queue = req.steal_high_priority_ &&
