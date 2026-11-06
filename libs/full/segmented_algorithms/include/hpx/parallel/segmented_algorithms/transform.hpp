@@ -231,81 +231,81 @@ namespace hpx::parallel::detail {
             util::in_in_out_result<InIter1, InIter2, OutIter>>
             result;
 
+        using difference_type =
+            typename std::iterator_traits<InIter1>::difference_type;
+        difference_type remaining = std::distance(first1, last1);
         auto last2 = first2;
-        detail::advance(last2, std::distance(first1, last1));
-
+        detail::advance(last2, remaining);
         segment_iterator1 sit1 = traits1::segment(first1);
         segment_iterator1 send1 = traits1::segment(last1);
         segment_iterator2 sit2 = traits2::segment(first2);
         segment_iterator2 send2 = traits2::segment(last2);
         segment_iterator3 sdest = traits3::segment(dest);
-        if (sit1 == send1)
-        {
-            // all elements are on the same partition
-            local_iterator_type1 beg1 = traits1::local(first1);
-            local_iterator_type1 end1 = traits1::local(last1);
-            local_iterator_type2 beg2 = traits2::local(first2);
-            local_iterator_type3 ldest = traits3::local(dest);
-            if (beg1 != end1)
-            {
-                util::in_in_out_result<local_iterator_type1,
-                    local_iterator_type2, local_iterator_type3>
-                    out = dispatch(traits1::get_id(sit1), algo, policy,
-                        std::true_type(), beg1, end1, beg2, ldest, f, proj1,
-                        proj2);
-                last1 = traits1::compose(send1, out.in1);
-                last2 = traits2::compose(send2, out.in2);
-                dest = traits3::compose(sdest, out.out);
-            }
-        }
-        else
-        {
-            // handle the remaining part of the first partition
-            local_iterator_type1 beg1 = traits1::local(first1);
-            local_iterator_type1 end1 = traits1::end(sit1);
-            local_iterator_type2 beg2 = traits2::local(first2);
-            local_iterator_type3 ldest = traits3::local(dest);
-            util::in_in_out_result<local_iterator_type1, local_iterator_type2,
-                local_iterator_type3>
-                out;
-            if (beg1 != end1)
-            {
-                out = dispatch(traits1::get_id(sit1), algo, policy,
-                    std::true_type(), beg1, end1, beg2, ldest, f, proj1, proj2);
-            }
+        local_iterator_type1 beg1 = traits1::local(first1);
+        local_iterator_type2 beg2 = traits2::local(first2);
+        local_iterator_type3 ldest = traits3::local(dest);
 
-            // handle all of the full partitions
-            for (++sit1, ++sit2, ++sdest; sit1 != send1;
-                ++sit1, ++sit2, ++sdest)
+        while (remaining != 0)
+        {
+            local_iterator_type1 end1 = sit1 == send1 ?
+                traits1::local(last1) : traits1::end(sit1);
+            local_iterator_type2 end2 = sit2 == send2 ?
+                traits2::local(last2) : traits2::end(sit2);
+            local_iterator_type3 end_dest = traits3::end(sdest);
+
+            while (beg1 == end1 && sit1 != send1)
             {
+                ++sit1;
                 beg1 = traits1::begin(sit1);
-                end1 = traits1::end(sit1);
+                end1 = sit1 == send1 ?
+                    traits1::local(last1) : traits1::end(sit1);
+            }
+            while (beg2 == end2 && sit2 != send2)
+            {
+                ++sit2;
                 beg2 = traits2::begin(sit2);
+                end2 = sit2 == send2 ?
+                    traits2::local(last2) : traits2::end(sit2);
+            }
+            while (ldest == end_dest)
+            {
+                ++sdest;
                 ldest = traits3::begin(sdest);
-                if (beg1 != end1)
-                {
-                    out = dispatch(traits1::get_id(sit1), algo, policy,
-                        std::true_type(), beg1, end1, beg2, ldest, f, proj1,
-                        proj2);
-                }
+                end_dest = traits3::end(sdest);
             }
 
-            // handle the beginning of the last partition
-            beg1 = traits1::begin(sit1);
-            end1 = traits1::local(last1);
-            beg2 = traits2::begin(sit2);
-            ldest = traits3::begin(sdest);
-            if (beg1 != end1)
+            difference_type const count1 =
+                static_cast<difference_type>(std::distance(beg1, end1));
+            difference_type const count2 =
+                static_cast<difference_type>(std::distance(beg2, end2));
+            difference_type const count3 =
+                static_cast<difference_type>(std::distance(ldest, end_dest));
+            difference_type const count =
+                (std::min)((std::min)(count1, count2), count3);
+            HPX_ASSERT(count > 0);
+            if (count == 0)
             {
-                out = dispatch(traits1::get_id(sit1), algo, policy,
-                    std::true_type(), beg1, end1, beg2, ldest, f, proj1, proj2);
+                break;
             }
-            last1 = traits1::compose(send1, out.in1);
-            last2 = traits2::compose(send2, out.in2);
-            dest = traits3::compose(sdest, out.out);
+
+            local_iterator_type1 chunk_end1 = beg1;
+            std::advance(chunk_end1, count);
+            util::in_in_out_result<local_iterator_type1,
+                local_iterator_type2, local_iterator_type3>
+                out = dispatch(traits1::get_id(sit1), algo, policy,
+                    std::true_type(), beg1, chunk_end1, beg2, ldest, f, proj1,
+                    proj2);
+
+            beg1 = out.in1;
+            beg2 = out.in2;
+            ldest = out.out;
+            std::advance(first1, count);
+            std::advance(first2, count);
+            std::advance(dest, count);
+            remaining -= count;
         }
         return result::get(util::in_in_out_result<InIter1, InIter2, OutIter>{
-            HPX_MOVE(last1), HPX_MOVE(last2), HPX_MOVE(dest)});
+            HPX_MOVE(first1), HPX_MOVE(first2), HPX_MOVE(dest)});
     }
 
     // parallel remote implementation
@@ -336,8 +336,11 @@ namespace hpx::parallel::detail {
             !std::forward_iterator<InIter1> || !std::forward_iterator<InIter2>>
             forced_seq;
 
+        using difference_type =
+            typename std::iterator_traits<InIter1>::difference_type;
+        difference_type remaining = std::distance(first1, last1);
         auto last2 = first2;
-        detail::advance(last2, std::distance(first1, last1));
+        detail::advance(last2, remaining);
 
         segment_iterator1 sit1 = traits1::segment(first1);
         segment_iterator1 send1 = traits1::segment(last1);
@@ -351,76 +354,78 @@ namespace hpx::parallel::detail {
         segment_type segments;
         segments.reserve(std::distance(sit1, send1));
 
-        if (sit1 == send1)
-        {
-            // all elements are on the same partition
-            local_iterator_type1 beg1 = traits1::local(first1);
-            local_iterator_type1 end1 = traits1::local(last1);
-            local_iterator_type2 beg2 = traits2::local(first2);
-            local_iterator_type3 ldest = traits3::local(dest);
-            if (beg1 != end1)
-            {
-                segments.push_back(dispatch_async(traits1::get_id(sit1), algo,
-                    policy, forced_seq(), beg1, end1, beg2, ldest, f, proj1,
-                    proj2));
-            }
-        }
-        else
-        {
-            // handle the remaining part of the first partition
-            local_iterator_type1 beg1 = traits1::local(first1);
-            local_iterator_type1 end1 = traits1::end(sit1);
-            local_iterator_type2 beg2 = traits2::local(first2);
-            local_iterator_type3 ldest = traits3::local(dest);
-            if (beg1 != end1)
-            {
-                segments.push_back(dispatch_async(traits1::get_id(sit1), algo,
-                    policy, forced_seq(), beg1, end1, beg2, ldest, f, proj1,
-                    proj2));
-            }
+        local_iterator_type1 beg1 = traits1::local(first1);
+        local_iterator_type2 beg2 = traits2::local(first2);
+        local_iterator_type3 ldest = traits3::local(dest);
 
-            // handle all of the full partitions
-            for (++sit1, ++sit2, ++sdest; sit1 != send1;
-                ++sit1, ++sit2, ++sdest)
+        while (remaining != 0)
+        {
+            local_iterator_type1 end1 = sit1 == send1 ?
+                traits1::local(last1) : traits1::end(sit1);
+            local_iterator_type2 end2 = sit2 == send2 ?
+                traits2::local(last2) : traits2::end(sit2);
+            local_iterator_type3 end_dest = traits3::end(sdest);
+
+            while (beg1 == end1 && sit1 != send1)
             {
+                ++sit1;
                 beg1 = traits1::begin(sit1);
-                end1 = traits1::end(sit1);
+                end1 = sit1 == send1 ?
+                    traits1::local(last1) : traits1::end(sit1);
+            }
+            while (beg2 == end2 && sit2 != send2)
+            {
+                ++sit2;
                 beg2 = traits2::begin(sit2);
+                end2 = sit2 == send2 ?
+                    traits2::local(last2) : traits2::end(sit2);
+            }
+            while (ldest == end_dest)
+            {
+                ++sdest;
                 ldest = traits3::begin(sdest);
-                if (beg1 != end1)
-                {
-                    segments.push_back(dispatch_async(traits1::get_id(sit1),
-                        algo, policy, forced_seq(), beg1, end1, beg2, ldest, f,
-                        proj1, proj2));
-                }
+                end_dest = traits3::end(sdest);
             }
 
-            // handle the beginning of the last partition
-            beg1 = traits1::begin(sit1);
-            end1 = traits1::local(last1);
-            beg2 = traits2::begin(sit2);
-            ldest = traits3::begin(sdest);
-            if (beg1 != end1)
+            difference_type const count1 =
+                static_cast<difference_type>(std::distance(beg1, end1));
+            difference_type const count2 =
+                static_cast<difference_type>(std::distance(beg2, end2));
+            difference_type const count3 =
+                static_cast<difference_type>(std::distance(ldest, end_dest));
+            difference_type const count =
+                (std::min)((std::min)(count1, count2), count3);
+            HPX_ASSERT(count > 0);
+            if (count == 0)
             {
-                segments.push_back(dispatch_async(traits1::get_id(sit1), algo,
-                    policy, forced_seq(), beg1, end1, beg2, ldest, f, proj1,
-                    proj2));
+                break;
             }
+
+            local_iterator_type1 chunk_end1 = beg1;
+            std::advance(chunk_end1, count);
+            segments.push_back(dispatch_async(traits1::get_id(sit1), algo,
+                policy, forced_seq(), beg1, chunk_end1, beg2, ldest, f, proj1,
+                proj2));
+
+            std::advance(first1, count);
+            std::advance(first2, count);
+            std::advance(dest, count);
+            std::advance(beg1, count);
+            std::advance(beg2, count);
+            std::advance(ldest, count);
+            remaining -= count;
         }
 
         return result::get(dataflow(
             [=](segment_type&& r)
                 -> util::in_in_out_result<InIter1, InIter2, OutIter> {
+                (void) hpx::wait_all_nothrow(r);
                 // handle any remote exceptions, will throw on error
                 std::list<std::exception_ptr> errors;
                 parallel::util::detail::handle_remote_exceptions<
                     ExPolicy>::call(r, errors);
-                auto rl = r.back().get();
-                auto olast1 = traits1::compose(send1, rl.in1);
-                auto olast2 = traits2::compose(send2, rl.in2);
-                auto odest = traits3::compose(sdest, rl.out);
                 return util::in_in_out_result<InIter1, InIter2, OutIter>{
-                    olast1, olast2, odest};
+                    HPX_MOVE(first1), HPX_MOVE(first2), HPX_MOVE(dest)};
             },
             HPX_MOVE(segments)));
     }
@@ -451,85 +456,83 @@ namespace hpx::parallel::detail {
             util::in_in_out_result<InIter1, InIter2, OutIter>>
             result;
 
+        using difference_type =
+            typename std::iterator_traits<InIter1>::difference_type;
+        difference_type remaining = (std::min)(
+            std::distance(first1, last1), std::distance(first2, last2));
+
         segment_iterator1 sit1 = traits1::segment(first1);
         segment_iterator1 send1 = traits1::segment(last1);
         segment_iterator2 sit2 = traits2::segment(first2);
         segment_iterator2 send2 = traits2::segment(last2);
         segment_iterator3 sdest = traits3::segment(dest);
+        local_iterator_type1 beg1 = traits1::local(first1);
+        local_iterator_type2 beg2 = traits2::local(first2);
+        local_iterator_type3 ldest = traits3::local(dest);
 
-        if (sit1 == send1 && sit2 == send2)
+        while (remaining != 0)
         {
-            // all elements are on the same partition
-            local_iterator_type1 beg1 = traits1::local(first1);
-            local_iterator_type1 end1 = traits1::local(last1);
-            local_iterator_type2 beg2 = traits2::local(first2);
-            local_iterator_type2 end2 = traits2::local(last2);
-            local_iterator_type3 ldest = traits3::local(dest);
-            if (beg1 != end1 && beg2 != end2)
-            {
-                util::in_in_out_result<local_iterator_type1,
-                    local_iterator_type2, local_iterator_type3>
-                    out = dispatch(traits1::get_id(sit1), algo, policy,
-                        std::true_type(), beg1, end1, beg2, end2, ldest, f,
-                        proj1, proj2);
-                last1 = traits1::compose(send1, out.in1);
-                last2 = traits2::compose(send2, out.in2);
-                dest = traits3::compose(sdest, out.out);
-            }
-        }
-        else
-        {
-            // handle the remaining part of the first partition
-            local_iterator_type1 beg1 = traits1::local(first1);
-            local_iterator_type1 end1 = traits1::end(sit1);
-            local_iterator_type2 beg2 = traits2::local(first2);
-            local_iterator_type2 end2 = traits2::end(sit2);
-            local_iterator_type3 ldest = traits3::local(dest);
-            util::in_in_out_result<local_iterator_type1, local_iterator_type2,
-                local_iterator_type3>
-                out;
-            if (beg1 != end1 && beg2 != end2)
-            {
-                out = dispatch(traits1::get_id(sit1), algo, policy,
-                    std::true_type(), beg1, end1, beg2, end2, ldest, f, proj1,
-                    proj2);
-            }
+            local_iterator_type1 end1 = sit1 == send1 ?
+                traits1::local(last1) : traits1::end(sit1);
+            local_iterator_type2 end2 = sit2 == send2 ?
+                traits2::local(last2) : traits2::end(sit2);
+            local_iterator_type3 end_dest = traits3::end(sdest);
 
-            // handle all of the full partitions
-            for (++sit1, ++sit2, ++sdest; sit1 != send1 && sit2 != send2;
-                ++sit1, ++sit2, ++sdest)
+            while (beg1 == end1 && sit1 != send1)
             {
+                ++sit1;
                 beg1 = traits1::begin(sit1);
-                end1 = traits1::end(sit1);
+                end1 = sit1 == send1 ?
+                    traits1::local(last1) : traits1::end(sit1);
+            }
+            while (beg2 == end2 && sit2 != send2)
+            {
+                ++sit2;
                 beg2 = traits2::begin(sit2);
-                end2 = traits2::end(sit2);
+                end2 = sit2 == send2 ?
+                    traits2::local(last2) : traits2::end(sit2);
+            }
+            while (ldest == end_dest)
+            {
+                ++sdest;
                 ldest = traits3::begin(sdest);
-                if (beg1 != end1 && beg2 != end2)
-                {
-                    out = dispatch(traits1::get_id(sit1), algo, policy,
-                        std::true_type(), beg1, end1, beg2, end2, ldest, f,
-                        proj1, proj2);
-                }
+                end_dest = traits3::end(sdest);
             }
 
-            // handle the beginning of the last partition
-            beg1 = traits1::begin(sit1);
-            end1 = traits1::end(sit1);
-            beg2 = traits2::begin(sit2);
-            end2 = traits2::end(sit2);
-            ldest = traits3::begin(sdest);
-            if (beg1 != end1 && beg2 != end2)
+            difference_type const count1 =
+                static_cast<difference_type>(std::distance(beg1, end1));
+            difference_type const count2 =
+                static_cast<difference_type>(std::distance(beg2, end2));
+            difference_type const count3 =
+                static_cast<difference_type>(std::distance(ldest, end_dest));
+            difference_type const count =
+                (std::min)((std::min)(count1, count2), count3);
+            HPX_ASSERT(count > 0);
+            if (count == 0)
             {
-                out = dispatch(traits1::get_id(sit1), algo, policy,
-                    std::true_type(), beg1, end1, beg2, end2, ldest, f, proj1,
-                    proj2);
+                break;
             }
-            last1 = traits1::compose(send1, out.in1);
-            last2 = traits2::compose(send2, out.in2);
-            dest = traits3::compose(sdest, out.out);
+
+            local_iterator_type1 chunk_end1 = beg1;
+            local_iterator_type2 chunk_end2 = beg2;
+            std::advance(chunk_end1, count);
+            std::advance(chunk_end2, count);
+            util::in_in_out_result<local_iterator_type1,
+                local_iterator_type2, local_iterator_type3>
+                out = dispatch(traits1::get_id(sit1), algo, policy,
+                    std::true_type(), beg1, chunk_end1, beg2, chunk_end2,
+                    ldest, f, proj1, proj2);
+
+            beg1 = out.in1;
+            beg2 = out.in2;
+            ldest = out.out;
+            std::advance(first1, count);
+            std::advance(first2, count);
+            std::advance(dest, count);
+            remaining -= count;
         }
         return result::get(util::in_in_out_result<InIter1, InIter2, OutIter>{
-            HPX_MOVE(last1), HPX_MOVE(last2), HPX_MOVE(dest)});
+            HPX_MOVE(first1), HPX_MOVE(first2), HPX_MOVE(dest)});
     }
 
     // parallel remote implementation
@@ -560,6 +563,11 @@ namespace hpx::parallel::detail {
             !std::forward_iterator<InIter1> || !std::forward_iterator<InIter2>>
             forced_seq;
 
+        using difference_type =
+            typename std::iterator_traits<InIter1>::difference_type;
+        difference_type remaining = (std::min)(
+            std::distance(first1, last1), std::distance(first2, last2));
+
         segment_iterator1 sit1 = traits1::segment(first1);
         segment_iterator1 send1 = traits1::segment(last1);
         segment_iterator2 sit2 = traits2::segment(first2);
@@ -571,81 +579,80 @@ namespace hpx::parallel::detail {
             segment_type;
         segment_type segments;
         segments.reserve(std::distance(sit1, send1));
+        local_iterator_type1 beg1 = traits1::local(first1);
+        local_iterator_type2 beg2 = traits2::local(first2);
+        local_iterator_type3 ldest = traits3::local(dest);
 
-        if (sit1 == send1 && sit2 == send2)
+        while (remaining != 0)
         {
-            // all elements are on the same partition
-            local_iterator_type1 beg1 = traits1::local(first1);
-            local_iterator_type1 end1 = traits1::local(last1);
-            local_iterator_type2 beg2 = traits2::local(first2);
-            local_iterator_type2 end2 = traits2::local(last2);
-            local_iterator_type3 ldest = traits3::local(dest);
-            if (beg1 != end1 && beg2 != end2)
-            {
-                segments.push_back(dispatch_async(traits1::get_id(sit1), algo,
-                    policy, forced_seq(), beg1, end1, beg2, end2, ldest, f,
-                    proj1, proj2));
-            }
-        }
-        else
-        {
-            // handle the remaining part of the first partition
-            local_iterator_type1 beg1 = traits1::local(first1);
-            local_iterator_type1 end1 = traits1::end(sit1);
-            local_iterator_type2 beg2 = traits2::local(first2);
-            local_iterator_type2 end2 = traits2::end(sit2);
-            local_iterator_type3 ldest = traits3::local(dest);
-            if (beg1 != end1 && beg2 != end2)
-            {
-                segments.push_back(dispatch_async(traits1::get_id(sit1), algo,
-                    policy, forced_seq(), beg1, end1, beg2, end2, ldest, f,
-                    proj1, proj2));
-            }
+            local_iterator_type1 end1 = sit1 == send1 ?
+                traits1::local(last1) : traits1::end(sit1);
+            local_iterator_type2 end2 = sit2 == send2 ?
+                traits2::local(last2) : traits2::end(sit2);
+            local_iterator_type3 end_dest = traits3::end(sdest);
 
-            // handle all of the full partitions
-            for (++sit1, ++sit2, ++sdest; sit1 != send1 && sit2 != send2;
-                ++sit1, ++sit2, ++sdest)
+            while (beg1 == end1 && sit1 != send1)
             {
+                ++sit1;
                 beg1 = traits1::begin(sit1);
+                end1 = sit1 == send1 ?
+                    traits1::local(last1) : traits1::end(sit1);
+            }
+            while (beg2 == end2 && sit2 != send2)
+            {
+                ++sit2;
                 beg2 = traits2::begin(sit2);
-                end1 = traits1::end(sit1);
-                end2 = traits2::end(sit2);
+                end2 = sit2 == send2 ?
+                    traits2::local(last2) : traits2::end(sit2);
+            }
+            while (ldest == end_dest)
+            {
+                ++sdest;
                 ldest = traits3::begin(sdest);
-                if (beg1 != end1 && beg2 != end2)
-                {
-                    segments.push_back(dispatch_async(traits1::get_id(sit1),
-                        algo, policy, forced_seq(), beg1, end1, beg2, end2,
-                        ldest, f, proj1, proj2));
-                }
+                end_dest = traits3::end(sdest);
             }
 
-            // handle the beginning of the last partition
-            beg1 = traits1::begin(sit1);
-            beg2 = traits2::begin(sit2);
-            end1 = traits1::end(sit1);
-            end2 = traits2::end(sit2);
-            ldest = traits3::begin(sdest);
-            if (beg1 != end1 && beg2 != end2)
+            difference_type const count1 =
+                static_cast<difference_type>(std::distance(beg1, end1));
+            difference_type const count2 =
+                static_cast<difference_type>(std::distance(beg2, end2));
+            difference_type const count3 =
+                static_cast<difference_type>(std::distance(ldest, end_dest));
+            difference_type const count =
+                (std::min)((std::min)(count1, count2), count3);
+            HPX_ASSERT(count > 0);
+            if (count == 0)
             {
-                segments.push_back(dispatch_async(traits1::get_id(sit1), algo,
-                    policy, forced_seq(), beg1, end1, beg2, end2, ldest, f,
-                    proj1, proj2));
+                break;
             }
+
+            local_iterator_type1 chunk_end1 = beg1;
+            local_iterator_type2 chunk_end2 = beg2;
+            std::advance(chunk_end1, count);
+            std::advance(chunk_end2, count);
+            segments.push_back(dispatch_async(traits1::get_id(sit1), algo,
+                policy, forced_seq(), beg1, chunk_end1, beg2, chunk_end2,
+                ldest, f, proj1, proj2));
+
+            std::advance(first1, count);
+            std::advance(first2, count);
+            std::advance(dest, count);
+            std::advance(beg1, count);
+            std::advance(beg2, count);
+            std::advance(ldest, count);
+            remaining -= count;
         }
 
         return result::get(dataflow(
             [=](segment_type&& r)
                 -> util::in_in_out_result<InIter1, InIter2, OutIter> {
+                (void) hpx::wait_all_nothrow(r);
                 // handle any remote exceptions, will throw on error
                 std::list<std::exception_ptr> errors;
                 parallel::util::detail::handle_remote_exceptions<
                     ExPolicy>::call(r, errors);
-                auto rl = r.back().get();
-                auto olast1 = traits1::compose(send1, rl.in1);
-                auto olast2 = traits2::compose(send2, rl.in2);
-                auto odest = traits3::compose(sdest, rl.out);
                 return util::in_in_out_result<InIter1, InIter2, OutIter>{
-                    olast1, olast2, odest};
+                    HPX_MOVE(first1), HPX_MOVE(first2), HPX_MOVE(dest)};
             },
             HPX_MOVE(segments)));
     }
