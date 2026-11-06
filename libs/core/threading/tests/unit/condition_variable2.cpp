@@ -568,9 +568,9 @@ void test_many_cvs(bool call_notify, bool call_interrupt)
 // [thread.condition.condvarany] returns pred() after stop is requested.
 // Requesting stop from the first predicate call must not skip that final
 // evaluation, and must not report false when the predicate is then true.
-template <typename Wait>
-void check_cv_any_stop_from_pred(
-    hpx::condition_variable_any& cv, Wait&& wait, bool become_ready)
+template <typename Wait, typename Lock>
+void check_cv_any_stop_from_pred(hpx::condition_variable_any& cv,
+    std::unique_lock<Lock>& lock, Wait&& wait, bool become_ready)
 {
     hpx::stop_source source;
     int calls = 0;
@@ -602,26 +602,26 @@ void test_cv_any_stop_from_pred()
     std::unique_lock<hpx::mutex> lock(mtx);
 
     check_cv_any_stop_from_pred(
-        cv,
+        cv, lock,
         [&](hpx::stop_token st, auto pred) {
             return cv.wait(lock, std::move(st), std::move(pred));
         },
         true);
     check_cv_any_stop_from_pred(
-        cv,
+        cv, lock,
         [&](hpx::stop_token st, auto pred) {
             return cv.wait(lock, std::move(st), std::move(pred));
         },
         false);
     check_cv_any_stop_from_pred(
-        cv,
+        cv, lock,
         [&](hpx::stop_token st, auto pred) {
             return cv.wait_for(
                 lock, std::move(st), std::chrono::seconds(60), std::move(pred));
         },
         true);
     check_cv_any_stop_from_pred(
-        cv,
+        cv, lock,
         [&](hpx::stop_token st, auto pred) {
             return cv.wait_until(lock, std::move(st),
                 std::chrono::steady_clock::now() + std::chrono::seconds(60),
