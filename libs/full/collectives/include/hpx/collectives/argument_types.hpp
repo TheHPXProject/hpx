@@ -121,7 +121,8 @@ namespace hpx::collectives {
     /// collapses to a single flat communicator spanning all sites. At small
     /// site counts, flat collectives outperform hierarchical composition
     /// because tree-walking overhead exceeds the synchronization-depth benefit.
-    /// Pass 0 to disable the fallback and always build a tree.
+    /// Pass 0 to disable the fallback. The communicator is still a single flat
+    /// communicator if the arity is not smaller than the number of sites.
     HPX_CXX_EXPORT using flat_fallback_threshold_arg =
         detail::argument_type<detail::flat_fallback_threshold_tag, 16>;
 
