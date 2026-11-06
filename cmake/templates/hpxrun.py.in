@@ -231,10 +231,15 @@ def run_gasnet(cmd, localities, verbose):
 
 
 def run_gasnet_smp(cmd, localities, verbose):
-    # The SMP conduit is still a collective job: one process per PE as a
-    # single mpiexec invocation (single node).  There is no PSHM/job-control
-    # magic to set under GASNet-EX.
-    run_gasnet(cmd, localities, verbose)
+    # The SMP conduit forks the PEs itself (shared memory, single node) from
+    # one process; the number of PEs is taken from GASNET_PSHM_NODES.  It must
+    # not be started through mpiexec, which would create independent
+    # single-PE jobs that never talk to each other.
+    os.environ['GASNET_PSHM_NODES'] = str(localities)
+    os.environ['GASNET_QUIET'] = 'yes'
+    if verbose:
+        print('Executing command: ' + ' '.join(cmd))
+    subproc(cmd)
 
 
 # Run with srun
@@ -287,11 +292,17 @@ def build_cmd(options, args):
 
     if options.localities > 1:
         # Selecting the parcelport for hpx via hpx ini configuration
+        # gasnet: parcels injected from the io thread do not wake an idle HPX
+        # worker thread, which adds ~80 ms per message hop and makes round-trip
+        # heavy tests (collectives, migration) very slow; max_idle_loop_count=0
+        # keeps idle workers polling. The other parcelports are switched off:
+        # in a build that also has MPI, LCI or LCW they would initialise MPI in
+        # every GASNet process, which is not a job started by an MPI launcher.
         select_parcelport = (lambda pp:
             ['--hpx:ini=hpx.parcel.mpi.priority=1000', '--hpx:ini=hpx.parcel.mpi.enable=1', '--hpx:ini=hpx.parcel.bootstrap=mpi'] if pp == 'mpi'
             else ['--hpx:ini=hpx.parcel.lci.priority=1000', '--hpx:ini=hpx.parcel.lci.enable=1', '--hpx:ini=hpx.parcel.bootstrap=lci'] if pp == 'lci'
             else ['--hpx:ini=hpx.parcel.lcw.priority=1000', '--hpx:ini=hpx.parcel.lcw.enable=1', '--hpx:ini=hpx.parcel.bootstrap=lcw'] if pp == 'lcw'
-            else ['--hpx:ini=hpx.parcel.gasnet.priority=1000', '--hpx:ini=hpx.parcel.gasnet.enable=1', '--hpx:ini=hpx.parcel.bootstrap=gasnet'] if pp == 'gasnet'
+            else ['--hpx:ini=hpx.parcel.gasnet.priority=1000', '--hpx:ini=hpx.parcel.gasnet.enable=1', '--hpx:ini=hpx.parcel.bootstrap=gasnet', '--hpx:ini=hpx.max_idle_loop_count=0', '--hpx:ini=hpx.parcel.mpi.enable=0', '--hpx:ini=hpx.parcel.lci.enable=0', '--hpx:ini=hpx.parcel.lcw.enable=0', '--hpx:ini=hpx.parcel.tcp.enable=0'] if pp == 'gasnet'
             else ['--hpx:ini=hpx.parcel.tcp.priority=1000', '--hpx:ini=hpx.parcel.tcp.enable=1'] if pp == 'tcp'
             else [])
         cmd += select_parcelport(options.parcelport)
