@@ -24,6 +24,7 @@
 namespace hpx::lcos::local {
 
     ///////////////////////////////////////////////////////////////////////////
+    /// Provides a mutex-protected base implementation of a local trigger.
     HPX_CXX_CORE_EXPORT template <typename Mutex = hpx::spinlock>
     struct base_trigger
     {

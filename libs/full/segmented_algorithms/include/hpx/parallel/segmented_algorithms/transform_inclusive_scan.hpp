@@ -27,6 +27,8 @@
 // The segmented iterators we support all live in namespace hpx::segmented
 namespace hpx::segmented {
 
+    /// \cond NOINTERNAL
+
     HPX_CXX_EXPORT template <typename InIter, typename OutIter, typename Op,
         typename Conv>
         requires(hpx::traits::is_iterator_v<InIter> &&
@@ -133,4 +135,5 @@ namespace hpx::segmented {
             HPX_FORWARD(ExPolicy, policy), first, last, dest, HPX_MOVE(init),
             HPX_FORWARD(Op, op), is_seq(), HPX_FORWARD(Conv, conv));
     }
+    /// \endcond
 }    // namespace hpx::segmented
