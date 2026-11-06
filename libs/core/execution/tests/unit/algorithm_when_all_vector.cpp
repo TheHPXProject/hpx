@@ -75,8 +75,9 @@ lifecycle_receiver(F, std::atomic<bool>&, hpx::stop_source const&)
 
 void test_when_all_vector_lifecycle()
 {
-    // 1. Basic lifecycle test: stop token registered, stop requested inside set_value,
-    // and stop requested after completion and destruction of operation state.
+    // 1. Basic lifecycle test: stop token registered, stop requested inside
+    // set_value, and stop requested after completion and destruction of
+    // operation state.
     {
         hpx::stop_source stop_source;
         std::atomic<bool> set_value_called{false};
@@ -101,7 +102,8 @@ void test_when_all_vector_lifecycle()
         stop_source.request_stop();
     }
 
-    // 2. Heap-allocated operation state deallocated directly upon completion inside set_value.
+    // 2. Heap-allocated operation state deallocated directly upon completion
+    // inside set_value.
     {
         hpx::stop_source stop_source;
         std::atomic<bool> set_value_called{false};
@@ -126,9 +128,7 @@ void test_when_all_vector_lifecycle()
         auto* op_ptr = new auto(ex::connect(std::move(s), std::move(r)));
         std::unique_ptr<std::decay_t<decltype(*op_ptr)>> op_holder(op_ptr);
 
-        destroy_op = [&op_holder]() {
-            op_holder.reset();
-        };
+        destroy_op = [&op_holder]() { op_holder.reset(); };
 
         ex::start(*op_ptr);
 
@@ -138,7 +138,8 @@ void test_when_all_vector_lifecycle()
         stop_source.request_stop();
     }
 
-    // 3. Multiple immediate senders verifying synchronous completion does not race
+    // 3. Multiple immediate senders verifying synchronous completion does not
+    // race
     {
         hpx::stop_source stop_source;
         std::atomic<bool> set_value_called{false};
@@ -182,9 +183,7 @@ void test_when_all_vector_lifecycle()
         }
 
         auto s = ex::when_all_vector(std::move(senders));
-        auto f = [&stop_source]() {
-            stop_source.request_stop();
-        };
+        auto f = [&stop_source]() { stop_source.request_stop(); };
 
         {
             auto r = lifecycle_receiver{f, set_value_called, stop_source};
