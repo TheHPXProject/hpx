@@ -185,14 +185,22 @@ namespace hpx::parcelset {
               , ini_(ini)
               , stopped_(false)
               , num_pes_(static_cast<std::size_t>(
-                    util::gasnet_environment::size()))
+                    util::gasnet_environment::enabled() ?
+                        util::gasnet_environment::size() :
+                        1))
               , my_pe_(static_cast<std::size_t>(
-                    util::gasnet_environment::rank()))
+                    util::gasnet_environment::enabled() ?
+                        util::gasnet_environment::rank() :
+                        0))
               , mtu_(mtu(ini, num_pes_, slots(ini)))
               , slots_(slots(ini))
               , stop_timeout_(stop_timeout(ini))
-              , mailboxes_(num_pes_, my_pe_, mtu_, slots_, checksum(ini),
-                    scan_window(ini))
+              // a parcelport that is compiled in but not selected for this
+              // run (another one is) has no GASNet segment to carve from
+              , mailboxes_(util::gasnet_environment::enabled() ?
+                        mailbox_array(num_pes_, my_pe_, mtu_, slots_,
+                            checksum(ini), scan_window(ini)) :
+                        mailbox_array())
               , sender_(&mailboxes_)
               , receiver_(*this)
             {
@@ -626,6 +634,11 @@ struct hpx::traits::plugin_config_data<
     static void init(int* argc, char*** argv, util::command_line_handling& cfg)
     {
         util::gasnet_environment::init(argc, argv, cfg.rtcfg_);
+
+        // another parcelport (or this one being disabled) leaves the
+        // gasnet runtime uninitialised; do not query it then
+        if (!util::gasnet_environment::enabled())
+            return;
 
         // Zero-copy chunks travel in the same page stream as the serialized
         // data (see sender_connection::prepare()).
