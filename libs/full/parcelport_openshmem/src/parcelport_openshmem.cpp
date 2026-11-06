@@ -235,7 +235,7 @@ namespace hpx::parcelset {
                     hpx::util::get_entry_as<int>(
                         ini, "hpx.parcel.openshmem.stats", 0) != 0);
                 worker_progress_ = hpx::util::get_entry_as<int>(
-                                       ini, "hpx.parcel.openshmem.worker_progress", 1) !=
+                                       ini, "hpx.parcel.openshmem.worker_progress", 0) !=
                     0;
 
                 if (uniform_check(ini))
@@ -772,8 +772,10 @@ struct hpx::traits::plugin_config_data<
                // Max source PEs probed per receive-scan pass (0 = all).
                // Bounds the per-pass remote round-trip cost at large n.
                "scan_window = 8\n"
-               // 1 lets every HPX worker thread progress the transport too
-               "worker_progress = 1\n"
+               // 1 lets every HPX worker thread progress the transport too.
+               // Off by default: with a thread-multiple runtime it hangs the
+               // partitioned_vector min/max element tests.
+               "worker_progress = 0\n"
                // 1 restores the legacy per-peer remote delivery fetches
                "remote_delivery = 0\n"
                // local progress every Nth scan (1 = every scan, 0 = never)

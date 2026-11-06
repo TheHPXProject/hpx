@@ -713,10 +713,8 @@ namespace hpx::parcelset::policies::openshmem {
             {
                 std::size_t const src = lo + ((start - lo + k) % width);
 
-                if (src == my_pe_)
-                {
-                    continue;
-                }
+                // src == my_pe_ is scanned too: a parcel a locality sends to
+                // itself goes through its own rx pool like any other.
                 std::size_t const w = src * num_pes_ + my_pe_;
 
                 // Legacy mode only: pull delivery of src's inbound stores

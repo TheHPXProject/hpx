@@ -31,7 +31,7 @@ add_hpx_module(
   HEADERS ${parcelport_openshmem_headers}
   DEPENDENCIES hpx_core hpx_dependencies_boost OpenSHMEM::openshmem
   MODULE_DEPENDENCIES hpx_actions hpx_command_line_handling hpx_parcelset
-                      hpx_parcelset_base hpx_openshmem_base
+                      hpx_parcelset_base
 )
 
 set(HPX_STATIC_PARCELPORT_PLUGINS
