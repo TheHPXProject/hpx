@@ -59,7 +59,30 @@ void test_sender_to_future()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// Test 3: future holding std::runtime_error propagates via set_error channel.
+// Test 3: non-exception_ptr sender errors are type-erased by as_future.
+void test_sender_to_future_non_exception_error()
+{
+    auto snd = ex::just_error(42);
+    hpx::future<int> f = ex::as_future<int>(std::move(snd));
+
+    bool caught_error = false;
+    try
+    {
+        (void) f.get();
+    }
+    catch (int const& error)
+    {
+        caught_error = error == 42;
+    }
+    catch (...)
+    {
+    }
+
+    HPX_TEST(caught_error);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Test 4: future holding std::runtime_error propagates via set_error channel.
 //
 // We verify error propagation through the public as_sender CPO.
 void test_error_propagation()
@@ -96,7 +119,7 @@ void test_error_propagation()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// Test 4: as_sender(future<T>) must be move-only (not copyable)
+// Test 5: as_sender(future<T>) must be move-only (not copyable)
 void test_move_only_semantics()
 {
     using sender_type = decltype(hpx::execution::experimental::as_sender(
@@ -123,7 +146,7 @@ void test_move_only_semantics()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// Test 5: as_sender(shared_future<T>) remains copyable
+// Test 6: as_sender(shared_future<T>) remains copyable
 void test_shared_future_copyable_semantics()
 {
     using sender_type = decltype(hpx::execution::experimental::as_sender(
@@ -144,7 +167,7 @@ void test_shared_future_copyable_semantics()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// Test 6: as_sender(future<T>, scheduler) preserves scheduler/domain
+// Test 7: as_sender(future<T>, scheduler) preserves scheduler/domain
 // information in the sender environment.
 void test_as_sender_with_scheduler_ready_future()
 {
@@ -166,7 +189,7 @@ void test_as_sender_with_scheduler_ready_future()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// Test 7: void future values are forwarded correctly through the
+// Test 8: void future values are forwarded correctly through the
 // scheduler-aware path.
 void test_as_sender_with_scheduler_void_future()
 {
@@ -183,7 +206,7 @@ void test_as_sender_with_scheduler_void_future()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// Test 8: shared_future remains copyable and works through the
+// Test 9: shared_future remains copyable and works through the
 // scheduler-aware path.
 void test_as_sender_with_scheduler_shared_future()
 {
@@ -202,7 +225,7 @@ void test_as_sender_with_scheduler_shared_future()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// Test 9: exceptional futures still use the receiver error channel.
+// Test 10: exceptional futures still use the receiver error channel.
 void test_as_sender_with_scheduler_error()
 {
     ex::thread_pool_scheduler sched{};
@@ -225,7 +248,7 @@ void test_as_sender_with_scheduler_error()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// Test 10: as_sender(future) | continues_on(thread_pool_scheduler) is lowered
+// Test 11: as_sender(future) | continues_on(thread_pool_scheduler) is lowered
 // to HPX's optimized thread-pool continues_on sender.
 void test_as_sender_pipe_continues_on_uses_fused_bridge()
 {
@@ -255,6 +278,7 @@ int hpx_main()
 {
     test_future_to_sender();
     test_sender_to_future();
+    test_sender_to_future_non_exception_error();
     test_error_propagation();
     test_move_only_semantics();
     test_shared_future_copyable_semantics();
