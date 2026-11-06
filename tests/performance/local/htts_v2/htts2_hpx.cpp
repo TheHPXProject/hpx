@@ -185,7 +185,7 @@ private:
         // overhead, as compared to the more complicated continuation-style
         // detection method that checks the threadmanager internal counters
         // (I've measured). Using this technique is preferable as it is more
-        // comparable to the other implementations (especially qthreads).
+        // comparable to the other implementations.
         //        do {
         //            hpx::this_thread::suspend();
         //        } while (count_ < (this->tasks_ * this->osthreads_));
