@@ -45,6 +45,8 @@ namespace hpx::parallel::detail {
     {
         using policy_type = std::decay_t<ExPolicy>;
 
+        ready.wait();
+
         if (ready.has_exception())
         {
             std::exception_ptr const exception = ready.get_exception_ptr();
