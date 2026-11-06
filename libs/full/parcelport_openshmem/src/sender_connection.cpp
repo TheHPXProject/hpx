@@ -87,7 +87,7 @@ namespace hpx::parcelset::policies::openshmem {
         std::size_t const offset =
             static_cast<std::size_t>(chunk_idx) * available_payload_;
         std::size_t const chunk_size = detail::chunk_size_for(
-            chunk_idx_, num_chunks_, total_data_size_, available_payload_);
+            chunk_idx, num_chunks_, total_data_size_, available_payload_);
 
         unsigned char* out = buffer + sizeof(detail::message_header);
         std::size_t done = 0;
