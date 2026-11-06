@@ -62,8 +62,10 @@ struct lifecycle_receiver
     template <typename... Ts>
     void set_value(Ts&&... ts) && noexcept
     {
-        std::invoke(f, std::forward<Ts>(ts)...);
-        set_value_called = true;
+        auto callback = std::move(f);
+        auto& called = set_value_called;
+        std::invoke(callback, std::forward<Ts>(ts)...);
+        called = true;
     }
 };
 
