@@ -464,12 +464,12 @@ namespace hpx::parallel::detail {
     HPX_CXX_EXPORT template <typename Algo, typename ExPolicy, typename IsSeq,
         typename Iterator1, typename Iterator2, typename Pred>
     hpx::future<typename Algo::result_type> dispatch_comparison_async(
-        hpx::id_type const& id1, hpx::id_type const& id2, Algo algo,
-        ExPolicy policy, IsSeq is_seq, Iterator1 first1, Iterator1 last1,
-        Iterator2 first2, Pred pred)
+        hpx::id_type const& id1, hpx::id_type const& id2, bool same_locality,
+        Algo algo, ExPolicy policy, IsSeq is_seq, Iterator1 first1,
+        Iterator1 last1, Iterator2 first2, Pred pred)
     {
         // same locality
-        if (get_partition_locality(id1) == get_partition_locality(id2))
+        if (same_locality)
         {
             return dispatch_async(id1, HPX_MOVE(algo), HPX_MOVE(policy), is_seq,
                 first1, last1, first2, HPX_MOVE(pred));
@@ -493,6 +493,19 @@ namespace hpx::parallel::detail {
                     HPX_MOVE(policy), is_seq, HPX_MOVE(algo), first1, last1,
                     HPX_MOVE(captured.values), HPX_MOVE(pred));
             });
+    }
+
+    HPX_CXX_EXPORT template <typename Algo, typename ExPolicy, typename IsSeq,
+        typename Iterator1, typename Iterator2, typename Pred>
+    hpx::future<typename Algo::result_type> dispatch_comparison_async(
+        hpx::id_type const& id1, hpx::id_type const& id2, Algo algo,
+        ExPolicy policy, IsSeq is_seq, Iterator1 first1, Iterator1 last1,
+        Iterator2 first2, Pred pred)
+    {
+        return dispatch_comparison_async(id1, id2,
+            get_partition_locality(id1) == get_partition_locality(id2),
+            HPX_MOVE(algo), HPX_MOVE(policy), is_seq, first1, last1, first2,
+            HPX_MOVE(pred));
     }
 
     HPX_CXX_EXPORT template <typename Key, typename LocalIterator,
