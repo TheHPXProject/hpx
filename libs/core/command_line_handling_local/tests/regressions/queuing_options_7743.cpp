@@ -31,14 +31,14 @@ namespace {
             std::string_view const arg(argv[i]);
             if (arg == "--hpx:queuing")
             {
-                if (i + 1 != argc)
+                if (i + 1 != argc &&
+                    !std::string_view(argv[i + 1]).starts_with('-'))
                 {
                     ++i;
+                    continue;
                 }
-                continue;
             }
-
-            if (arg.starts_with("--hpx:queuing="))
+            else if (arg.starts_with("--hpx:queuing="))
             {
                 continue;
             }
@@ -48,6 +48,33 @@ namespace {
 
         result.push_back(nullptr);
         return result;
+    }
+
+    void test_remove_queuing_option()
+    {
+        char program[] = "queuing_options_7743";
+        char queuing[] = "--hpx:queuing";
+        char scheduler[] = "local";
+        char threads[] = "--hpx:threads=2";
+
+        {
+            char* argv[] = {program, queuing, scheduler, threads};
+            std::vector<char*> const result = remove_queuing_option(4, argv);
+            HPX_TEST_EQ(result.size(), std::size_t(3));
+            HPX_TEST_EQ(result[0], program);
+            HPX_TEST_EQ(result[1], threads);
+            HPX_TEST(result[2] == nullptr);
+        }
+
+        {
+            char* argv[] = {program, queuing, threads};
+            std::vector<char*> const result = remove_queuing_option(3, argv);
+            HPX_TEST_EQ(result.size(), std::size_t(4));
+            HPX_TEST_EQ(result[0], program);
+            HPX_TEST_EQ(result[1], queuing);
+            HPX_TEST_EQ(result[2], threads);
+            HPX_TEST(result[3] == nullptr);
+        }
     }
 
     void test_queuing(int argc, char* argv[], std::string const& scheduler,
@@ -67,6 +94,8 @@ namespace {
 
 int main(int argc, char* argv[])
 {
+    test_remove_queuing_option();
+
     // Test configurations may inject a scheduler through
     // HPX_WITH_TESTS_COMMAND_LINE. Each case below supplies its own scheduler,
     // so retain all external arguments except that scheduler option.
