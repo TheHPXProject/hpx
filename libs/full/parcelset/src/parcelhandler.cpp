@@ -1068,21 +1068,7 @@ namespace hpx::parcelset {
         nonresolved_parcels.reserve(num_parcels);
         nonresolved_handlers.reserve(num_parcels);
 
-        naming::gid_type dest_locality;
-        if (num_parcels != 0)
-        {
-            dest_locality = parcels[0].destination_locality();
-            for (std::size_t i = 1; i != num_parcels; ++i)
-            {
-                if (dest_locality != parcels[i].destination_locality())
-                {
-                    HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
-                        "parcelhandler::put_parcels",
-                        "mismatched destinations, all parcels are expected to "
-                        "target the same locality");
-                }
-            }
-        }
+        std::vector<char> resolved(num_parcels, 1);
         for (std::size_t i = 0; i != num_parcels; ++i)
         {
             parcel& p = parcels[i];
@@ -1090,13 +1076,30 @@ namespace hpx::parcelset {
             // properly initialize parcel
             init_parcel(p);
 
-            bool resolved_locally = true;
             naming::address& addr = p.addr();
-
             if (!addr)
             {
-                resolved_locally = agas::resolve_local(p.destination(), addr);
+                resolved[i] = agas::resolve_local(p.destination(), addr);
             }
+        }
+
+        for (std::size_t i = 1; i < num_parcels; ++i)
+        {
+            if (parcels[0].destination_locality() !=
+                parcels[i].destination_locality())
+            {
+                HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
+                    "parcelhandler::put_parcels",
+                    "mismatched destinations, all parcels are expected to "
+                    "target the same locality");
+            }
+        }
+
+        for (std::size_t i = 0; i != num_parcels; ++i)
+        {
+            parcel& p = parcels[i];
+            bool const resolved_locally = resolved[i] != 0;
+            naming::address& addr = p.addr();
 
             write_handler_type f = hpx::bind_front(
                 &detail::parcel_sent_handler, HPX_MOVE(handlers[i]));
