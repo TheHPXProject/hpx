@@ -414,7 +414,6 @@ namespace hpx {
                         hpx::execution::sequenced_policy{}, first, last, dest));
         }
 
-        // clang-format off
         template <typename ExPolicy, typename BidirIter, typename FwdIter>
         // clang-format off
             requires (

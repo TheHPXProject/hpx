@@ -225,10 +225,12 @@ namespace hpx {
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/iterator_support.hpp>
+#include <hpx/modules/threading_base.hpp>
 #include <hpx/parallel/algorithms/detail/adjacent_difference.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
+#include <hpx/parallel/algorithms/detail/task_size_argument.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/clear_container.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
@@ -313,6 +315,11 @@ namespace hpx::parallel {
                     }
                 }
 
+                // an iteration has the size of the operation called with two
+                // adjacent elements
+                auto const size =
+                    task_size_of_call<task_size_argument_t<FwdIter1>,
+                        task_size_argument_t<FwdIter1>>(op);
                 auto f1 = [op = HPX_FORWARD(Op, op)](zip_iterator part_begin,
                               std::size_t part_size) mutable {
                     // VS2015RC bails out when op is captured by ref
@@ -338,7 +345,8 @@ namespace hpx::parallel {
                 return util::partitioner<ExPolicy, FwdIter2, void>::call(
                     HPX_FORWARD(ExPolicy, policy),
                     hpx::util::zip_iterator(first, prev, dest), count,
-                    HPX_MOVE(f1), HPX_MOVE(f2));
+                    hpx::threads::detail::with_task_size(HPX_MOVE(f1), size),
+                    HPX_MOVE(f2));
             }
         };
         /// \endcond

@@ -10,9 +10,11 @@
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/iterator_support.hpp>
+#include <hpx/modules/threading_base.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
+#include <hpx/parallel/algorithms/detail/task_size_argument.hpp>
 #include <hpx/parallel/algorithms/for_each.hpp>
 #include <hpx/parallel/util/loop.hpp>
 #include <hpx/parallel/util/zip_iterator.hpp>
@@ -47,16 +49,22 @@ namespace hpx::parallel::detail {
             {
                 using type = typename std::iterator_traits<InIter>::value_type;
 
-                return for_each_n<InIter>().call(
-                    HPX_FORWARD(ExPolicy, policy), first,
-                    hpx::parallel::detail::distance(first, last),
-                    [old_value, new_value, proj = HPX_FORWARD(Proj, proj)](
-                        type& t) -> void {
-                        if (HPX_INVOKE(proj, t) == old_value)
-                        {
-                            t = new_value;
-                        }
-                    },
+                // an element has the size of its comparison with the old value
+                auto const size =
+                    task_size_of_call<task_size_argument_t<InIter, Proj>,
+                        T1 const&>(hpx::parallel::detail::equal_to{});
+
+                return for_each_n<InIter>().call(HPX_FORWARD(ExPolicy, policy),
+                    first, hpx::parallel::detail::distance(first, last),
+                    hpx::threads::detail::with_task_size(
+                        [old_value, new_value, proj = HPX_FORWARD(Proj, proj)](
+                            type& t) -> void {
+                            if (HPX_INVOKE(proj, t) == old_value)
+                            {
+                                t = new_value;
+                            }
+                        },
+                        size),
                     hpx::identity_v);
             }
         }
@@ -99,17 +107,22 @@ namespace hpx::parallel::detail {
             {
                 using type = typename std::iterator_traits<InIter>::value_type;
 
-                return for_each_n<InIter>().call(
-                    HPX_FORWARD(ExPolicy, policy), first,
-                    hpx::parallel::detail::distance(first, last),
-                    [new_value, f = HPX_FORWARD(F, f),
-                        proj = HPX_FORWARD(Proj, proj)](
-                        type& t) mutable -> void {
-                        if (HPX_INVOKE(f, HPX_INVOKE(proj, t)))
-                        {
-                            t = new_value;
-                        }
-                    },
+                // an element has the size of the predicate called with it
+                auto const size =
+                    task_size_of_call<task_size_argument_t<InIter, Proj>>(f);
+
+                return for_each_n<InIter>().call(HPX_FORWARD(ExPolicy, policy),
+                    first, hpx::parallel::detail::distance(first, last),
+                    hpx::threads::detail::with_task_size(
+                        [new_value, f = HPX_FORWARD(F, f),
+                            proj = HPX_FORWARD(Proj, proj)](
+                            type& t) mutable -> void {
+                            if (HPX_INVOKE(f, HPX_INVOKE(proj, t)))
+                            {
+                                t = new_value;
+                            }
+                        },
+                        size),
                     hpx::identity_v);
             }
         }
@@ -155,19 +168,27 @@ namespace hpx::parallel::detail {
                 using zip_iterator = hpx::util::zip_iterator<InIter, OutIter>;
                 using reference = typename zip_iterator::reference;
 
+                // an element has the size of its comparison with the old value
+                auto const size =
+                    task_size_of_call<task_size_argument_t<InIter, Proj>,
+                        T const&>(hpx::parallel::detail::equal_to{});
+
                 return util::detail::get_in_out_result(
                     for_each_n<zip_iterator>().call(
                         HPX_FORWARD(ExPolicy, policy),
                         zip_iterator(first, dest),
                         hpx::parallel::detail::distance(first, sent),
-                        [old_value, new_value, proj = HPX_FORWARD(Proj, proj)](
-                            reference t) -> void {
-                            using hpx::get;
-                            if (HPX_INVOKE(proj, get<0>(t)) == old_value)
-                                get<1>(t) = new_value;
-                            else
-                                get<1>(t) = get<0>(t);    //-V573
-                        },
+                        hpx::threads::detail::with_task_size(
+                            [old_value, new_value,
+                                proj = HPX_FORWARD(Proj, proj)](
+                                reference t) -> void {
+                                using hpx::get;
+                                if (HPX_INVOKE(proj, get<0>(t)) == old_value)
+                                    get<1>(t) = new_value;
+                                else
+                                    get<1>(t) = get<0>(t);    //-V573
+                            },
+                            size),
                         hpx::identity_v));
             }
         }
@@ -217,24 +238,30 @@ namespace hpx::parallel::detail {
                 using zip_iterator = hpx::util::zip_iterator<InIter, OutIter>;
                 using reference = typename zip_iterator::reference;
 
+                // an element has the size of the predicate called with it
+                auto const size =
+                    task_size_of_call<task_size_argument_t<InIter, Proj>>(f);
+
                 return util::detail::get_in_out_result(
                     for_each_n<zip_iterator>().call(
                         HPX_FORWARD(ExPolicy, policy),
                         zip_iterator(first, dest),
                         hpx::parallel::detail::distance(first, sent),
-                        [new_value, f = HPX_FORWARD(F, f),
-                            proj = HPX_FORWARD(Proj, proj)](
-                            reference t) mutable -> void {
-                            using hpx::get;
-                            if (HPX_INVOKE(f, HPX_INVOKE(proj, get<0>(t))))
-                            {
-                                get<1>(t) = new_value;
-                            }
-                            else
-                            {
-                                get<1>(t) = get<0>(t);    //-V573
-                            }
-                        },
+                        hpx::threads::detail::with_task_size(
+                            [new_value, f = HPX_FORWARD(F, f),
+                                proj = HPX_FORWARD(Proj, proj)](
+                                reference t) mutable -> void {
+                                using hpx::get;
+                                if (HPX_INVOKE(f, HPX_INVOKE(proj, get<0>(t))))
+                                {
+                                    get<1>(t) = new_value;
+                                }
+                                else
+                                {
+                                    get<1>(t) = get<0>(t);    //-V573
+                                }
+                            },
+                            size),
                         hpx::identity_v));
             }
         }

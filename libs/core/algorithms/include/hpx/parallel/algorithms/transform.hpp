@@ -1008,6 +1008,7 @@ namespace hpx {
 
         template <typename FwdIter1, typename FwdIter2, typename FwdIter3,
             typename F>
+        // clang-format off
             requires(hpx::traits::is_iterator_v<FwdIter1> &&
                 hpx::traits::is_iterator_v<FwdIter2> &&
                 hpx::traits::is_iterator_v<FwdIter3>)
