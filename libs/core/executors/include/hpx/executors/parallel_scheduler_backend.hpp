@@ -141,7 +141,7 @@ namespace hpx::execution::experimental {
         get_forward_progress_guarantee() const noexcept
         {
             return hpx::execution::experimental::forward_progress_guarantee::
-                concurrent;
+                parallel;
         }
 
         // Access the underlying thread pool scheduler (HPX-specific).

@@ -33,9 +33,10 @@ namespace hpx::execution::experimental {
 
     namespace detail {
 
-        // P3927R2: Bulk sender returned by task_scheduler_domain::transform_sender.
-        // Adapts bulk_chunked_t and bulk_unchunked_t algorithms to route through
-        // the backend's virtual dispatch methods.
+        // P3927R2: Bulk sender returned by
+        // task_scheduler_domain::transform_sender. Adapts bulk_chunked_t
+        // and bulk_unchunked_t algorithms to route through the backend's
+        // virtual dispatch methods.
         HPX_CXX_CORE_EXPORT template <typename ChildSender, typename F,
             bool IsChunked, bool IsParallel>
         struct task_bulk_sender
@@ -144,11 +145,12 @@ namespace hpx::execution::experimental {
                 }
             };
 
+            template <typename Proxy>
             struct custom_receiver
             {
                 using receiver_concept =
                     hpx::execution::experimental::receiver_t;
-                parallel_scheduler_receiver_proxy* proxy_;
+                Proxy* proxy_;
                 void (*destroy_)(void*) = nullptr;
                 void* storage_ = nullptr;
                 Sch const* sched_ = nullptr;
@@ -198,59 +200,63 @@ namespace hpx::execution::experimental {
                 }
             };
 
-            struct custom_bulk_receiver
+            template <typename Sender, typename Proxy>
+            void dispatch_sender(
+                Sender&& snd, Proxy& proxy, std::span<std::byte> storage)
             {
-                using receiver_concept =
-                    hpx::execution::experimental::receiver_t;
-                parallel_scheduler_bulk_item_receiver_proxy* proxy_;
-                void (*destroy_)(void*) = nullptr;
-                void* storage_ = nullptr;
-                Sch const* sched_ = nullptr;
+                using op_state_t =
+                    decltype(hpx::execution::experimental::connect(
+                        HPX_FORWARD(Sender, snd),
+                        custom_receiver<Proxy>{
+                            &proxy, nullptr, nullptr, &scheduler_}));
 
-                void set_value() noexcept
+                if constexpr (sizeof(op_state_t) <=
+                        parallel_scheduler_storage_size &&
+                    alignof(op_state_t) <=
+                        parallel_scheduler_storage_alignment)
                 {
-                    auto* proxy = proxy_;
-                    auto destroy = destroy_;
-                    auto* storage = storage_;
-                    if (destroy && storage)
-                        destroy(storage);
-                    proxy->set_value();
+                    HPX_ASSERT(storage.size() >= sizeof(op_state_t));
+
+                    auto destroy_fn = [](void* ptr) {
+                        static_cast<op_state_t*>(ptr)->~op_state_t();
+                    };
+
+                    auto* op = ::new (static_cast<void*>(storage.data()))
+                        op_state_t(hpx::execution::experimental::connect(
+                            HPX_FORWARD(Sender, snd),
+                            custom_receiver<Proxy>{&proxy, destroy_fn,
+                                storage.data(), &scheduler_}));
+                    hpx::execution::experimental::start(*op);
                 }
-
-                template <typename Error = std::exception_ptr>
-                void set_error(Error ep) noexcept
+                else
                 {
-                    auto* proxy = proxy_;
-                    auto destroy = destroy_;
-                    auto* storage = storage_;
-                    if (destroy && storage)
-                        destroy(storage);
-                    if constexpr (std::is_same_v<std::decay_t<Error>,
-                                      std::exception_ptr>)
+                    void* heap_storage = ::operator new(sizeof(op_state_t),
+                        std::align_val_t{alignof(op_state_t)});
+
+                    auto destroy_fn = [](void* ptr) {
+                        static_cast<op_state_t*>(ptr)->~op_state_t();
+                        ::operator delete(
+                            ptr, std::align_val_t{alignof(op_state_t)});
+                    };
+
+                    op_state_t* op = nullptr;
+                    try
                     {
-                        proxy->set_error(HPX_MOVE(ep));
+                        op = ::new (heap_storage) op_state_t(
+                            hpx::execution::experimental::connect(
+                                HPX_FORWARD(Sender, snd),
+                                custom_receiver<Proxy>{&proxy, destroy_fn,
+                                    heap_storage, &scheduler_}));
                     }
-                    else
+                    catch (...)
                     {
-                        proxy->set_error(std::make_exception_ptr(HPX_MOVE(ep)));
+                        ::operator delete(heap_storage,
+                            std::align_val_t{alignof(op_state_t)});
+                        throw;
                     }
+                    hpx::execution::experimental::start(*op);
                 }
-
-                void set_stopped() noexcept
-                {
-                    auto* proxy = proxy_;
-                    auto destroy = destroy_;
-                    auto* storage = storage_;
-                    if (destroy && storage)
-                        destroy(storage);
-                    proxy->set_stopped();
-                }
-
-                constexpr custom_receiver_env get_env() const noexcept
-                {
-                    return {sched_};
-                }
-            };
+            }
 
         public:
             explicit task_scheduler_backend_wrapper(Sch sch)
@@ -266,63 +272,9 @@ namespace hpx::execution::experimental {
             {
                 hpx::detail::try_catch_exception_ptr(
                     [&]() {
-                        auto snd =
-                            hpx::execution::experimental::schedule(scheduler_);
-                        using op_state_t =
-                            decltype(hpx::execution::experimental::connect(
-                                HPX_MOVE(snd),
-                                custom_receiver{
-                                    &proxy, nullptr, nullptr, &scheduler_}));
-
-                        if constexpr (sizeof(op_state_t) <=
-                                parallel_scheduler_storage_size &&
-                            alignof(op_state_t) <=
-                                parallel_scheduler_storage_alignment)
-                        {
-                            HPX_ASSERT(storage.size() >= sizeof(op_state_t));
-
-                            auto destroy_fn = [](void* ptr) {
-                                static_cast<op_state_t*>(ptr)->~op_state_t();
-                            };
-
-                            auto* op =
-                                ::new (static_cast<void*>(storage.data()))
-                                    op_state_t(
-                                        hpx::execution::experimental::connect(
-                                            HPX_MOVE(snd),
-                                            custom_receiver{&proxy, destroy_fn,
-                                                storage.data(), &scheduler_}));
-                            hpx::execution::experimental::start(*op);
-                        }
-                        else
-                        {
-                            void* heap_storage =
-                                ::operator new(sizeof(op_state_t),
-                                    std::align_val_t{alignof(op_state_t)});
-
-                            auto destroy_fn = [](void* ptr) {
-                                static_cast<op_state_t*>(ptr)->~op_state_t();
-                                ::operator delete(
-                                    ptr, std::align_val_t{alignof(op_state_t)});
-                            };
-
-                            op_state_t* op = nullptr;
-                            try
-                            {
-                                op = ::new (heap_storage) op_state_t(
-                                    hpx::execution::experimental::connect(
-                                        HPX_MOVE(snd),
-                                        custom_receiver{&proxy, destroy_fn,
-                                            heap_storage, &scheduler_}));
-                            }
-                            catch (...)
-                            {
-                                ::operator delete(heap_storage,
-                                    std::align_val_t{alignof(op_state_t)});
-                                throw;
-                            }
-                            hpx::execution::experimental::start(*op);
-                        }
+                        dispatch_sender(
+                            hpx::execution::experimental::schedule(scheduler_),
+                            proxy, storage);
                     },
                     [&](std::exception_ptr ep) {
                         proxy.set_error(HPX_MOVE(ep));
@@ -342,68 +294,15 @@ namespace hpx::execution::experimental {
 
                 hpx::detail::try_catch_exception_ptr(
                     [&]() {
-                        auto snd =
+                        dispatch_sender(
                             hpx::execution::experimental::schedule(scheduler_) |
-                            hpx::execution::experimental::bulk_chunked(
-                                hpx::execution::experimental::par, count,
-                                [&proxy](std::size_t begin, std::size_t end) {
-                                    proxy.execute(begin, end);
-                                });
-                        using op_state_t =
-                            decltype(hpx::execution::experimental::connect(
-                                HPX_MOVE(snd),
-                                custom_bulk_receiver{
-                                    &proxy, nullptr, nullptr, &scheduler_}));
-
-                        if constexpr (sizeof(op_state_t) <=
-                                parallel_scheduler_storage_size &&
-                            alignof(op_state_t) <=
-                                parallel_scheduler_storage_alignment)
-                        {
-                            HPX_ASSERT(storage.size() >= sizeof(op_state_t));
-
-                            auto destroy_fn = [](void* ptr) {
-                                static_cast<op_state_t*>(ptr)->~op_state_t();
-                            };
-
-                            auto* op = ::new (
-                                static_cast<void*>(storage.data()))
-                                op_state_t(
-                                    hpx::execution::experimental::connect(
-                                        HPX_MOVE(snd),
-                                        custom_bulk_receiver{&proxy, destroy_fn,
-                                            storage.data(), &scheduler_}));
-                            hpx::execution::experimental::start(*op);
-                        }
-                        else
-                        {
-                            void* heap_storage =
-                                ::operator new(sizeof(op_state_t),
-                                    std::align_val_t{alignof(op_state_t)});
-
-                            auto destroy_fn = [](void* ptr) {
-                                static_cast<op_state_t*>(ptr)->~op_state_t();
-                                ::operator delete(
-                                    ptr, std::align_val_t{alignof(op_state_t)});
-                            };
-
-                            op_state_t* op = nullptr;
-                            try
-                            {
-                                op = ::new (heap_storage) op_state_t(
-                                    hpx::execution::experimental::connect(
-                                        HPX_MOVE(snd),
-                                        custom_bulk_receiver{&proxy, destroy_fn,
-                                            heap_storage, &scheduler_}));
-                            }
-                            catch (...)
-                            {
-                                ::operator delete(heap_storage,
-                                    std::align_val_t{alignof(op_state_t)});
-                                throw;
-                            }
-                            hpx::execution::experimental::start(*op);
-                        }
+                                hpx::execution::experimental::bulk_chunked(
+                                    hpx::execution::experimental::par, count,
+                                    [&proxy](
+                                        std::size_t begin, std::size_t end) {
+                                        proxy.execute(begin, end);
+                                    }),
+                            proxy, storage);
                     },
                     [&](std::exception_ptr ep) {
                         proxy.set_error(HPX_MOVE(ep));
@@ -423,68 +322,14 @@ namespace hpx::execution::experimental {
 
                 hpx::detail::try_catch_exception_ptr(
                     [&]() {
-                        auto snd =
+                        dispatch_sender(
                             hpx::execution::experimental::schedule(scheduler_) |
-                            hpx::execution::experimental::bulk_unchunked(
-                                hpx::execution::experimental::par, count,
-                                [&proxy](std::size_t i) {
-                                    proxy.execute(i, i + 1);
-                                });
-                        using op_state_t =
-                            decltype(hpx::execution::experimental::connect(
-                                HPX_MOVE(snd),
-                                custom_bulk_receiver{
-                                    &proxy, nullptr, nullptr, &scheduler_}));
-
-                        if constexpr (sizeof(op_state_t) <=
-                                parallel_scheduler_storage_size &&
-                            alignof(op_state_t) <=
-                                parallel_scheduler_storage_alignment)
-                        {
-                            HPX_ASSERT(storage.size() >= sizeof(op_state_t));
-
-                            auto destroy_fn = [](void* ptr) {
-                                static_cast<op_state_t*>(ptr)->~op_state_t();
-                            };
-
-                            auto* op = ::new (
-                                static_cast<void*>(storage.data()))
-                                op_state_t(
-                                    hpx::execution::experimental::connect(
-                                        HPX_MOVE(snd),
-                                        custom_bulk_receiver{&proxy, destroy_fn,
-                                            storage.data(), &scheduler_}));
-                            hpx::execution::experimental::start(*op);
-                        }
-                        else
-                        {
-                            void* heap_storage =
-                                ::operator new(sizeof(op_state_t),
-                                    std::align_val_t{alignof(op_state_t)});
-
-                            auto destroy_fn = [](void* ptr) {
-                                static_cast<op_state_t*>(ptr)->~op_state_t();
-                                ::operator delete(
-                                    ptr, std::align_val_t{alignof(op_state_t)});
-                            };
-
-                            op_state_t* op = nullptr;
-                            try
-                            {
-                                op = ::new (heap_storage) op_state_t(
-                                    hpx::execution::experimental::connect(
-                                        HPX_MOVE(snd),
-                                        custom_bulk_receiver{&proxy, destroy_fn,
-                                            heap_storage, &scheduler_}));
-                            }
-                            catch (...)
-                            {
-                                ::operator delete(heap_storage,
-                                    std::align_val_t{alignof(op_state_t)});
-                                throw;
-                            }
-                            hpx::execution::experimental::start(*op);
-                        }
+                                hpx::execution::experimental::bulk_unchunked(
+                                    hpx::execution::experimental::par, count,
+                                    [&proxy](std::size_t i) {
+                                        proxy.execute(i, i + 1);
+                                    }),
+                            proxy, storage);
                     },
                     [&](std::exception_ptr ep) {
                         proxy.set_error(HPX_MOVE(ep));
@@ -511,7 +356,8 @@ namespace hpx::execution::experimental {
                 }
             }
 
-            // P3927R2: Query the forward progress guarantee of the wrapped scheduler.
+            // P3927R2: Query the forward progress guarantee of the wrapped
+            // scheduler.
             hpx::execution::experimental::forward_progress_guarantee
             get_forward_progress_guarantee() const noexcept override
             {
@@ -593,7 +439,7 @@ namespace hpx::execution::experimental {
     // concept into a shared_ptr<parallel_scheduler_backend>. This allows
     // coroutines (task<T>) and other type-erased contexts to yield senders
     // that execute on the wrapped scheduler's context, including parallel
-    // bulk operations (via task_scheduler_domain, added in Step 2).
+    // bulk operations (via task_scheduler_domain).
     //
     // Construction:
     //   - From any scheduler Sch: wraps it via task_scheduler_backend_wrapper
@@ -616,14 +462,13 @@ namespace hpx::execution::experimental {
         // Uses task_scheduler_backend_wrapper to adapt it to the backend
         // interface.
         //
-        // SFINAE: disabled when Sch is task_scheduler, parallel_scheduler, or
-        // convertible to std::shared_ptr<parallel_scheduler_backend>.
-        template <typename Sch,
-            typename = std::enable_if_t<
-                !std::is_same_v<std::decay_t<Sch>, task_scheduler> &&
+        // Constrained: disabled when Sch is task_scheduler, parallel_scheduler,
+        // or convertible to std::shared_ptr<parallel_scheduler_backend>.
+        template <typename Sch>
+            requires(!std::is_same_v<std::decay_t<Sch>, task_scheduler> &&
                 !std::is_same_v<std::decay_t<Sch>, parallel_scheduler> &&
                 !std::is_convertible_v<std::decay_t<Sch>,
-                    std::shared_ptr<parallel_scheduler_backend>>>>
+                    std::shared_ptr<parallel_scheduler_backend>>)
         explicit task_scheduler(Sch&& sch)
           : backend_(std::make_shared<
                 detail::task_scheduler_backend_wrapper<std::decay_t<Sch>>>(

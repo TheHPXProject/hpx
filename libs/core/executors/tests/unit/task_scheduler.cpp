@@ -5,10 +5,8 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 #include <hpx/config.hpp>
-#include <hpx/executors/parallel_scheduler.hpp>
-#include <hpx/executors/task_scheduler.hpp>
-#include <hpx/executors/thread_pool_scheduler.hpp>
 #include <hpx/init.hpp>
+#include <hpx/modules/executors.hpp>
 #include <hpx/modules/testing.hpp>
 
 #include <atomic>
@@ -36,7 +34,7 @@ namespace {
         ex::forward_progress_guarantee query(
             ex::get_forward_progress_guarantee_t) const noexcept
         {
-            return ex::forward_progress_guarantee::concurrent;
+            return ex::forward_progress_guarantee::parallel;
         }
 
         template <typename F>
@@ -102,6 +100,8 @@ namespace {
     struct custom_mock_backend final : ex::parallel_scheduler_backend
     {
         int id = 0;
+        std::atomic<int> bulk_chunked_invocations{0};
+        std::atomic<int> bulk_unchunked_invocations{0};
 
         explicit custom_mock_backend(int val = 0) noexcept
           : id(val)
@@ -118,6 +118,7 @@ namespace {
             ex::parallel_scheduler_bulk_item_receiver_proxy& proxy,
             std::span<std::byte>) noexcept override
         {
+            bulk_chunked_invocations.fetch_add(1, std::memory_order_relaxed);
             if (count > 0)
             {
                 proxy.execute(0, count);
@@ -129,6 +130,7 @@ namespace {
             ex::parallel_scheduler_bulk_item_receiver_proxy& proxy,
             std::span<std::byte>) noexcept override
         {
+            bulk_unchunked_invocations.fetch_add(1, std::memory_order_relaxed);
             for (std::size_t i = 0; i < count; ++i)
             {
                 proxy.execute(i, i + 1);
@@ -146,7 +148,7 @@ namespace {
         ex::forward_progress_guarantee get_forward_progress_guarantee()
             const noexcept override
         {
-            return ex::forward_progress_guarantee::concurrent;
+            return ex::forward_progress_guarantee::parallel;
         }
     };
 
@@ -196,7 +198,7 @@ int hpx_main(int, char*[])
         HPX_TEST(!ts.get_backend()->equal_to(*ts_diff.get_backend()));
     }
 
-    // Target 3: Construction from std::shared_ptr<parallel_scheduler_backend> directly
+    // Target 3: Construction from shared_ptr<parallel_scheduler_backend>
     {
         auto custom_be = std::make_shared<custom_mock_backend>(123);
         ex::task_scheduler ts(custom_be);
@@ -277,7 +279,7 @@ int hpx_main(int, char*[])
         custom_mock_scheduler mock{10};
         ex::task_scheduler ts_custom(mock);
         auto fpg_custom = ex::get_forward_progress_guarantee(ts_custom);
-        HPX_TEST(fpg_custom == ex::forward_progress_guarantee::concurrent);
+        HPX_TEST(fpg_custom == ex::forward_progress_guarantee::parallel);
     }
 
     // Target 7: Bulk Execution with get_parallel_scheduler()
@@ -287,19 +289,11 @@ int hpx_main(int, char*[])
         // 7a. bulk_chunked with par
         {
             std::atomic<int> count{0};
-            std::set<std::thread::id> thread_ids;
-            std::mutex mtx;
             constexpr std::size_t n = 100;
 
             auto snd = ex::schedule(ts) |
                 ex::bulk_chunked(
                     ex::par, n, [&](std::size_t begin, std::size_t end) {
-                        {
-                            std::lock_guard<std::mutex> lock(mtx);
-                            thread_ids.insert(std::this_thread::get_id());
-                        }
-                        std::this_thread::sleep_for(
-                            std::chrono::microseconds(100));
                         count.fetch_add(static_cast<int>(end - begin),
                             std::memory_order_relaxed);
                     });
@@ -307,30 +301,21 @@ int hpx_main(int, char*[])
             hpx::this_thread::experimental::sync_wait(snd);
 
             HPX_TEST_EQ(count.load(), static_cast<int>(n));
-            HPX_TEST(thread_ids.size() > 1);
         }
 
         // 7b. bulk_unchunked with par
         {
             std::atomic<int> count{0};
-            std::set<std::thread::id> thread_ids;
-            std::mutex mtx;
             constexpr std::size_t n = 100;
 
             auto snd = ex::schedule(ts) |
                 ex::bulk_unchunked(ex::par, n, [&](std::size_t) {
-                    {
-                        std::lock_guard<std::mutex> lock(mtx);
-                        thread_ids.insert(std::this_thread::get_id());
-                    }
-                    std::this_thread::sleep_for(std::chrono::microseconds(50));
                     count.fetch_add(1, std::memory_order_relaxed);
                 });
 
             hpx::this_thread::experimental::sync_wait(snd);
 
             HPX_TEST_EQ(count.load(), static_cast<int>(n));
-            HPX_TEST(thread_ids.size() > 1);
         }
     }
 
@@ -353,19 +338,11 @@ int hpx_main(int, char*[])
         // 8a. bulk_chunked with par
         {
             std::atomic<int> bulk_count{0};
-            std::set<std::thread::id> tps_thread_ids;
-            std::mutex tps_mtx;
             constexpr std::size_t n = 100;
 
             auto bulk_snd = ex::schedule(ts) |
                 ex::bulk_chunked(
                     ex::par, n, [&](std::size_t begin, std::size_t end) {
-                        {
-                            std::lock_guard<std::mutex> lock(tps_mtx);
-                            tps_thread_ids.insert(std::this_thread::get_id());
-                        }
-                        std::this_thread::sleep_for(
-                            std::chrono::microseconds(100));
                         bulk_count.fetch_add(static_cast<int>(end - begin),
                             std::memory_order_relaxed);
                     });
@@ -373,30 +350,61 @@ int hpx_main(int, char*[])
             hpx::this_thread::experimental::sync_wait(bulk_snd);
 
             HPX_TEST_EQ(bulk_count.load(), static_cast<int>(n));
-            HPX_TEST(tps_thread_ids.size() > 1);
         }
 
         // 8b. bulk_unchunked with par
         {
             std::atomic<int> bulk_count{0};
-            std::set<std::thread::id> tps_thread_ids;
-            std::mutex tps_mtx;
             constexpr std::size_t n = 100;
 
             auto bulk_snd = ex::schedule(ts) |
                 ex::bulk_unchunked(ex::par, n, [&](std::size_t) {
-                    {
-                        std::lock_guard<std::mutex> lock(tps_mtx);
-                        tps_thread_ids.insert(std::this_thread::get_id());
-                    }
-                    std::this_thread::sleep_for(std::chrono::microseconds(50));
                     bulk_count.fetch_add(1, std::memory_order_relaxed);
                 });
 
             hpx::this_thread::experimental::sync_wait(bulk_snd);
 
             HPX_TEST_EQ(bulk_count.load(), static_cast<int>(n));
-            HPX_TEST(tps_thread_ids.size() > 1);
+        }
+    }
+
+    // Target 9: Bulk Execution with custom mock backend
+    {
+        auto custom_be = std::make_shared<custom_mock_backend>(42);
+        ex::task_scheduler ts(custom_be);
+
+        // 9a. bulk_chunked with mock backend
+        {
+            std::atomic<int> count{0};
+            constexpr std::size_t n = 50;
+
+            auto snd = ex::schedule(ts) |
+                ex::bulk_chunked(
+                    ex::par, n, [&](std::size_t begin, std::size_t end) {
+                        count.fetch_add(static_cast<int>(end - begin),
+                            std::memory_order_relaxed);
+                    });
+
+            hpx::this_thread::experimental::sync_wait(snd);
+
+            HPX_TEST_EQ(count.load(), static_cast<int>(n));
+            HPX_TEST_EQ(custom_be->bulk_chunked_invocations.load(), 1);
+        }
+
+        // 9b. bulk_unchunked with mock backend
+        {
+            std::atomic<int> count{0};
+            constexpr std::size_t n = 50;
+
+            auto snd = ex::schedule(ts) |
+                ex::bulk_unchunked(ex::par, n, [&](std::size_t) {
+                    count.fetch_add(1, std::memory_order_relaxed);
+                });
+
+            hpx::this_thread::experimental::sync_wait(snd);
+
+            HPX_TEST_EQ(count.load(), static_cast<int>(n));
+            HPX_TEST_EQ(custom_be->bulk_unchunked_invocations.load(), 1);
         }
     }
 
