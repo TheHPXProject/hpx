@@ -9,6 +9,7 @@
 
 #include <hpx/config.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -54,7 +55,11 @@ namespace hpx::threads::policies {
                 static_cast<std::int64_t>(
                     HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_PENDING_EARLY),
             std::int64_t min_work_to_wake = static_cast<std::int64_t>(
-                HPX_THREAD_QUEUE_MIN_WORK_TO_WAKE)) noexcept
+                HPX_THREAD_QUEUE_MIN_WORK_TO_WAKE),
+            double min_idle_backoff_time = static_cast<double>(
+                HPX_IDLE_BACKOFF_TIME_MIN),
+            double idle_backoff_steal_check_interval = static_cast<double>(
+                HPX_IDLE_BACKOFF_STEAL_CHECK_INTERVAL)) noexcept
           : max_thread_count_(max_thread_count)
           , min_tasks_to_steal_pending_(min_tasks_to_steal_pending)
           , min_tasks_to_steal_staged_(min_tasks_to_steal_staged)
@@ -79,6 +84,9 @@ namespace hpx::threads::policies {
           , idle_loop_count_steal_staged_(idle_loop_count_steal_staged)
           , min_tasks_to_steal_pending_early_(min_tasks_to_steal_pending_early)
           , min_work_to_wake_(min_work_to_wake)
+          , min_idle_backoff_time_(min_idle_backoff_time)
+          , idle_backoff_steal_check_interval_(
+                (std::max) (idle_backoff_steal_check_interval, 0.0))
         {
         }
 
@@ -121,5 +129,13 @@ namespace hpx::threads::policies {
         // before it wakes up a sleeping worker for another one (see
         // HPX_THREAD_QUEUE_MIN_WORK_TO_WAKE)
         std::int64_t min_work_to_wake_;
+
+        // idle backoff periods (us) shorter than this are spent spinning
+        // instead of sleeping (see HPX_IDLE_BACKOFF_TIME_MIN)
+        double min_idle_backoff_time_;
+
+        // a spinning idle worker looks at the queues it steals from every
+        // this many microseconds (see HPX_IDLE_BACKOFF_STEAL_CHECK_INTERVAL)
+        double idle_backoff_steal_check_interval_;
     };
 }    // namespace hpx::threads::policies

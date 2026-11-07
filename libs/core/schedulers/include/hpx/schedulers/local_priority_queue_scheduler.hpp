@@ -920,14 +920,14 @@ namespace hpx::threads::policies {
         // a sleeping worker has woken up, so wake up only the worker it was
         // queued for, if that sleeps. The calling worker runs the threads it
         // queued for itself once it is done with its current one, unless
-        // their staged work is worth stealing (min_work_to_wake_): then it
-        // wakes up one sleeping worker. The staged work is estimated as the
-        // number of staged threads times the run time of the new one, which
-        // is exact for a burst of threads of one size and needs no count of
-        // its own. This holds only if the caller chose the calling worker. A
-        // thread that round-robin placement put there may belong to a caller
-        // that waits for it without yielding, so one sleeping worker is woken
-        // up for it.
+        // their staged work is worth stealing (min_work_to_wake_) or no idle
+        // worker spins that would find them: then it wakes up one sleeping
+        // worker. The staged work is estimated as the number of staged
+        // threads times the run time of the new one, which is exact for a
+        // burst of threads of one size and needs no count of its own. This
+        // holds only if the caller chose the calling worker. A thread that
+        // round-robin placement put there may belong to a caller that waits
+        // for it without yielding, so one sleeping worker is woken up for it.
         void wake_up_for_small(std::size_t const num_thread,
             thread_priority const priority, threads::task_size const size,
             bool const placed_by_caller)
@@ -949,8 +949,14 @@ namespace hpx::threads::policies {
                 queues_[num_thread].queue_->get_staged_queue_length(
                     std::memory_order_relaxed) *
                         threads::task_size_duration(size).count() >=
-                    thread_queue_init_.min_work_to_wake_)
+                    thread_queue_init_.min_work_to_wake_ ||
+                !this->has_spinning_worker())
             {
+                // The caller may keep running for a long time without
+                // getting to its new threads (a task that posts work and
+                // goes on with its own). An idle worker that spins finds
+                // them, but if all of them sleep, one is woken up, which
+                // then spins for a while (waking up resets its backoff).
                 this->wake_one((num_thread + 1) % num_queues_);
             }
         }
@@ -1514,6 +1520,41 @@ namespace hpx::threads::policies {
             }
 
             return count;
+        }
+
+        // Is there work the given worker could take (see get_next_thread): in
+        // its own queues, in the low priority queue all workers share, and,
+        // if it may steal, in the normal queues of its victims and in their
+        // high priority queues if the worker has one (see
+        // attempt_stealing_pending and attempt_stealing_staged). Bound
+        // threads are never stolen.
+        bool has_work_for(
+            std::size_t const num_thread, bool const may_steal) const override
+        {
+            HPX_ASSERT(num_thread < num_queues_);
+
+            if (get_queue_length(num_thread) != 0)
+                return true;
+
+            if (may_steal)
+            {
+                bool const high = num_thread < num_high_priority_queues_;
+                for (std::size_t const idx :
+                    victims_[num_thread].data_.victim_threads_)
+                {
+                    auto const& victim = queues_[idx];
+                    if (victim.queue_->get_queue_length() != 0 ||
+                        (high && idx < num_high_priority_queues_ &&
+                            victim.high_priority_queue_->get_queue_length() !=
+                                0))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            // the last resort of get_next_thread
+            return low_priority_queue_.get_queue_length() != 0;
         }
 
         ///////////////////////////////////////////////////////////////////////
