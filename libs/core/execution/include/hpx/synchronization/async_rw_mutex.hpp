@@ -54,6 +54,59 @@ namespace hpx::experimental {
             async_rw_mutex_shared_state& operator=(
                 async_rw_mutex_shared_state const&) = delete;
 
+            void release() noexcept
+            {
+                if (HPX_LIKELY(next_state))
+                {
+                    if (this->exception)
+                    {
+                        if (next_state)
+                        {
+                            next_state->exception = this->exception;
+                            next_state->set_error(this->exception);
+                        }
+                    }
+                    else
+                    {
+                        try
+                        {
+                            if (next_state)
+                            {
+                                next_state->set_value(HPX_MOVE(value.value()));
+                            }
+                        }
+                        catch (...)
+                        {
+                            this->exception = std::current_exception();
+                            if (next_state)
+                            {
+                                next_state->exception = this->exception;
+                                next_state->set_error(this->exception);
+                            }
+                        }
+                    }
+
+                    for (auto& continuation : continuations)
+                    {
+                        try
+                        {
+                            continuation(next_state);
+                        }
+                        catch (...)
+                        {
+                            // Intentionally ignore: exceptions from one
+                            // downstream continuation must not abort the
+                            // runtime or prevent later continuations from
+                            // running.
+                            [[maybe_unused]] std::exception_ptr ignored =
+                                std::current_exception();
+                        }
+                    }
+                    continuations.clear();
+                    next_state.reset();
+                }
+            }
+
             ~async_rw_mutex_shared_state()
             {
                 // The last state does not have a next state. If this state has
@@ -61,23 +114,19 @@ namespace hpx::experimental {
                 HPX_ASSERT((continuations.empty() && !next_state) ||
                     (!continuations.empty() && next_state));
 
-                // This state must always have the value set by the time it is
-                // destructed. If there is no next state the value is destructed
-                // with this state.
-                HPX_ASSERT(value);
+                // This state must always have either a value or an exception
+                // set by the time it is destructed. If there is no next state
+                // the value is destructed with this state.
+                HPX_ASSERT(value || exception);
 
-                if (HPX_LIKELY(next_state))
-                {
-                    // The current state has now finished all accesses to the
-                    // wrapped value, so we move the value to the next state.
-                    // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
-                    next_state->set_value(HPX_MOVE(value.value()));
+                release();
+            }
 
-                    for (auto& continuation : continuations)
-                    {
-                        continuation(next_state);
-                    }
-                }
+            std::exception_ptr exception;
+
+            void set_error(std::exception_ptr ep) noexcept
+            {
+                exception = HPX_MOVE(ep);
             }
 
             template <typename U>
@@ -126,6 +175,35 @@ namespace hpx::experimental {
             async_rw_mutex_shared_state& operator=(
                 async_rw_mutex_shared_state const&) = delete;
 
+            std::exception_ptr exception;
+
+            void set_error(std::exception_ptr ep) noexcept
+            {
+                exception = HPX_MOVE(ep);
+            }
+
+            void release() noexcept
+            {
+                for (auto& continuation : continuations)
+                {
+                    try
+                    {
+                        continuation(next_state);
+                    }
+                    catch (...)
+                    {
+                        // Intentionally ignore: exceptions from one
+                        // downstream continuation must not abort the
+                        // runtime or prevent later continuations from
+                        // running.
+                        [[maybe_unused]] std::exception_ptr ignored =
+                            std::current_exception();
+                    }
+                }
+                continuations.clear();
+                next_state.reset();
+            }
+
             ~async_rw_mutex_shared_state()
             {
                 // The last state does not have a next state. If this state has
@@ -133,10 +211,7 @@ namespace hpx::experimental {
                 HPX_ASSERT((continuations.empty() && !next_state) ||
                     (!continuations.empty() && next_state));
 
-                for (auto& continuation : continuations)
-                {
-                    continuation(next_state);
-                }
+                release();
             }
 
             void set_next_state(
@@ -502,6 +577,16 @@ namespace hpx::experimental {
 
                     auto continuation =
                         [r = HPX_MOVE(r)](shared_state_ptr_type state) mutable {
+                            // If the previous release() failed to move the
+                            // value, it stored an exception on the state.
+                            // Forward it to the receiver instead of trying
+                            // to construct a (valueless) access wrapper.
+                            if (state && state->exception)
+                            {
+                                hpx::execution::experimental::set_error(
+                                    HPX_MOVE(r), state->exception);
+                                return;
+                            }
                             try
                             {
                                 hpx::execution::experimental::set_value(
@@ -719,6 +804,16 @@ namespace hpx::experimental {
 
                     auto continuation =
                         [r = HPX_MOVE(r)](shared_state_ptr_type state) mutable {
+                            // If the previous release() failed to move the
+                            // value, it stored an exception on the state.
+                            // Forward it to the receiver instead of trying
+                            // to construct a (valueless) access wrapper.
+                            if (state && state->exception)
+                            {
+                                hpx::execution::experimental::set_error(
+                                    HPX_MOVE(r), state->exception);
+                                return;
+                            }
                             try
                             {
                                 hpx::execution::experimental::set_value(
