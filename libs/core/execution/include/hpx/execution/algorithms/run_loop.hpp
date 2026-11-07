@@ -361,6 +361,37 @@ namespace hpx::execution::experimental {
             HPX_ASSERT(stop);    // Postcondition: state is finishing.
         }
 
+        template <typename Pred>
+        void run_until(Pred&& condition)
+        {
+            auto const local_mtx = mtx;    // keep alive
+            std::unique_lock l(local_mtx->mtx_);
+
+            while (!condition())
+            {
+                while (head.next == &head && !condition() && !stop)
+                {
+                    cond_var.wait(l);
+                }
+
+                if (condition() || (head.next == &head && stop))
+                {
+                    break;
+                }
+
+                run_loop_opstate_base* const t = head.next;
+                if (head.tail == head.next)
+                {
+                    head.tail = &head;
+                }
+                head.next = head.next->next;
+
+                l.unlock();
+                t->execute();
+                l.lock();
+            }
+        }
+
         void finish()
         {
             auto const local_mtx = mtx;    // keep alive
