@@ -41,14 +41,14 @@ namespace hpx::util {
                 {
                     result.append(1, *it);    // append this character
                 }
-            }
 
-            // copy while in character set
-            while (++it != end)
-            {
-                result.append(1, *it);
-                if (*it == ']')
-                    break;
+                // copy while in character set
+                while (++it != end)
+                {
+                    result.append(1, *it);
+                    if (*it == ']')
+                        break;
+                }
             }
 
             if (it == end || *it != ']')
