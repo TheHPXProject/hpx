@@ -12,6 +12,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <cstddef>
 #include <exception>
 #include <memory>
 #include <ratio>
@@ -104,11 +105,13 @@ namespace {
         bool operator==(throwing_stop_token const&) const noexcept = default;
     };
 
-    struct throwing_stop_timer_receiver
+    template <typename StopToken>
+    struct custom_stop_timer_receiver
     {
         using receiver_concept = ex::receiver_t;
 
         completion_state& state;
+        StopToken token;
 
         void set_value() && noexcept
         {
@@ -127,8 +130,35 @@ namespace {
 
         auto get_env() const noexcept
         {
-            return ex::prop{ex::get_stop_token_t{}, throwing_stop_token{}};
+            return ex::prop{ex::get_stop_token_t{}, token};
         }
+    };
+
+    struct synchronous_stop_token
+    {
+        template <typename Callback>
+        struct callback_type
+        {
+            callback_type(synchronous_stop_token token, Callback callback)
+            {
+                token.stop_requested_->store(true);
+                callback();
+            }
+        };
+
+        bool stop_requested() const noexcept
+        {
+            return stop_requested_->load();
+        }
+
+        bool stop_possible() const noexcept
+        {
+            return true;
+        }
+
+        bool operator==(synchronous_stop_token const&) const noexcept = default;
+
+        std::shared_ptr<std::atomic<bool>> stop_requested_;
     };
 
     enum class completion_kind
@@ -185,13 +215,13 @@ namespace {
         }
     };
 
-    void test_schedule_after()
+    void test_schedule_timer_after()
     {
         ::asio::io_context context;
         completion_state state;
         ex::inplace_stop_source stop_source;
 
-        auto sender = hpx::io::experimental::schedule_after(
+        auto sender = hpx::io::experimental::schedule_timer_after(
             context, std::chrono::milliseconds(1));
 
         static_assert(ex::sender_in<decltype(sender)>);
@@ -207,7 +237,7 @@ namespace {
         HPX_TEST(!state.stopped);
     }
 
-    void test_schedule_after_max_duration()
+    void test_schedule_timer_after_max_duration()
     {
         auto test_duration = [](auto duration) {
             ::asio::io_context context;
@@ -215,7 +245,7 @@ namespace {
             ex::inplace_stop_source stop_source;
 
             auto operation = ex::connect(
-                hpx::io::experimental::schedule_after(context, duration),
+                hpx::io::experimental::schedule_timer_after(context, duration),
                 timer_receiver{state, stop_source.get_token()});
             ex::start(operation);
 
@@ -243,9 +273,11 @@ namespace {
         ::asio::io_context context;
         completion_state state;
 
-        auto operation = ex::connect(hpx::io::experimental::schedule_after(
-                                         context, std::chrono::hours(1)),
-            throwing_stop_timer_receiver{state});
+        auto operation =
+            ex::connect(hpx::io::experimental::schedule_timer_after(
+                            context, std::chrono::hours(1)),
+                custom_stop_timer_receiver<throwing_stop_token>{
+                    state, throwing_stop_token{}});
         ex::start(operation);
 
         HPX_TEST(!state.value);
@@ -255,15 +287,16 @@ namespace {
         HPX_TEST(context.stopped());
     }
 
-    void test_schedule_at()
+    void test_schedule_timer_at()
     {
         ::asio::io_context context;
         completion_state state;
         ex::inplace_stop_source stop_source;
 
-        auto operation = ex::connect(hpx::io::experimental::schedule_at(context,
-                                         std::chrono::steady_clock::now()),
-            timer_receiver{state, stop_source.get_token()});
+        auto operation =
+            ex::connect(hpx::io::experimental::schedule_timer_at(
+                            context, std::chrono::steady_clock::now()),
+                timer_receiver{state, stop_source.get_token()});
         ex::start(operation);
 
         HPX_TEST(context.run() != 0);
@@ -277,9 +310,10 @@ namespace {
         ::asio::io_context context;
         completion_state state;
 
-        auto operation = ex::connect(hpx::io::experimental::schedule_after(
-                                         context, std::chrono::milliseconds(1)),
-            plain_timer_receiver{state});
+        auto operation =
+            ex::connect(hpx::io::experimental::schedule_timer_after(
+                            context, std::chrono::milliseconds(1)),
+                plain_timer_receiver{state});
         ex::start(operation);
 
         HPX_TEST(context.run() != 0);
@@ -294,7 +328,7 @@ namespace {
         completion_state state;
         bool continuation_called = false;
 
-        auto sender = hpx::io::experimental::schedule_after(
+        auto sender = hpx::io::experimental::schedule_timer_after(
                           context, std::chrono::milliseconds(1)) |
             ex::then([&continuation_called]() noexcept {
                 continuation_called = true;
@@ -317,9 +351,30 @@ namespace {
         ex::inplace_stop_source stop_source;
         stop_source.request_stop();
 
-        auto operation = ex::connect(hpx::io::experimental::schedule_after(
-                                         context, std::chrono::hours(1)),
-            timer_receiver{state, stop_source.get_token()});
+        auto operation =
+            ex::connect(hpx::io::experimental::schedule_timer_after(
+                            context, std::chrono::hours(1)),
+                timer_receiver{state, stop_source.get_token()});
+        ex::start(operation);
+
+        HPX_TEST(!state.value);
+        HPX_TEST(!state.error);
+        HPX_TEST(state.stopped);
+        HPX_TEST_EQ(context.poll(), std::size_t(0));
+    }
+
+    void test_stop_during_start()
+    {
+        ::asio::io_context context;
+        completion_state state;
+        synchronous_stop_token token{
+            std::make_shared<std::atomic<bool>>(false)};
+
+        auto operation =
+            ex::connect(hpx::io::experimental::schedule_timer_after(
+                            context, std::chrono::hours(1)),
+                custom_stop_timer_receiver<synchronous_stop_token>{
+                    state, HPX_MOVE(token)});
         ex::start(operation);
 
         HPX_TEST(context.run() != 0);
@@ -334,9 +389,10 @@ namespace {
         completion_state state;
         ex::inplace_stop_source stop_source;
 
-        auto operation = ex::connect(hpx::io::experimental::schedule_after(
-                                         context, std::chrono::hours(1)),
-            timer_receiver{state, stop_source.get_token()});
+        auto operation =
+            ex::connect(hpx::io::experimental::schedule_timer_after(
+                            context, std::chrono::hours(1)),
+                timer_receiver{state, stop_source.get_token()});
         ex::start(operation);
         stop_source.request_stop();
 
@@ -360,7 +416,7 @@ namespace {
             ex::inplace_stop_source stop_source;
 
             auto operation =
-                ex::connect(hpx::io::experimental::schedule_after(
+                ex::connect(hpx::io::experimental::schedule_timer_after(
                                 pool.get_io_service(), std::chrono::hours(1)),
                     concurrent_timer_receiver{*state, stop_source.get_token()});
             ex::start(operation);
@@ -383,13 +439,14 @@ namespace {
 
 int main()
 {
-    test_schedule_after();
-    test_schedule_after_max_duration();
+    test_schedule_timer_after();
+    test_schedule_timer_after_max_duration();
     test_stop_callback_failure();
-    test_schedule_at();
+    test_schedule_timer_at();
     test_default_environment();
     test_composition();
     test_stop_before_start();
+    test_stop_during_start();
     test_stop_after_start();
     test_concurrent_stop();
 

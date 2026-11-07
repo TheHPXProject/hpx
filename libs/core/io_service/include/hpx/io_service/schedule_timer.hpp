@@ -89,14 +89,26 @@ namespace hpx::io::experimental {
 
                 try
                 {
+                    stop_token_type stop_token =
+                        ex::get_stop_token(ex::get_env(receiver_));
+                    if (stop_token.stop_requested())
+                    {
+                        completed_ = true;
+                        lock.unlock();
+                        ex::set_stopped(HPX_MOVE(receiver_));
+                        return;
+                    }
+
                     timer_.async_wait(
                         expiry_, [state](std::error_code const& error) {
                             state->complete(error);
                         });
 
-                    stop_callback_.emplace(
-                        ex::get_stop_token(ex::get_env(receiver_)),
-                        on_stop{this});
+                    if constexpr (!ex::unstoppable_token<stop_token_type>)
+                    {
+                        stop_callback_.emplace(
+                            HPX_MOVE(stop_token), on_stop{this});
+                    }
                 }
                 catch (...)
                 {
@@ -178,6 +190,12 @@ namespace hpx::io::experimental {
             timer_operation timer_;
             Expiry expiry_;
             Receiver receiver_;
+
+            // Registering a callback for an already stopped token may invoke
+            // on_stop synchronously while start() holds this lock. The Asio
+            // completion handler runs on an ordinary I/O thread, where
+            // hpx::recursive_mutex cannot be used because no HPX execution
+            // agent is installed.
             std::recursive_mutex mutex_;
             std::optional<stop_callback_type> stop_callback_;
             std::exception_ptr cancellation_error_;
@@ -278,7 +296,7 @@ namespace hpx::io::experimental {
     ///
     /// \returns A sender representing the timer operation.
     HPX_CXX_CORE_EXPORT template <typename Rep, typename Period>
-    [[nodiscard]] auto schedule_after(::asio::io_context& context,
+    [[nodiscard]] auto schedule_timer_after(::asio::io_context& context,
         std::chrono::duration<Rep, Period> const duration) noexcept
     {
         return detail::timer_sender<std::chrono::steady_clock::duration>(
@@ -296,7 +314,7 @@ namespace hpx::io::experimental {
     /// \param time_point The absolute time at which the sender should complete.
     ///
     /// \returns A sender representing the timer operation.
-    HPX_CXX_CORE_EXPORT [[nodiscard]] inline auto schedule_at(
+    HPX_CXX_CORE_EXPORT [[nodiscard]] inline auto schedule_timer_at(
         ::asio::io_context& context,
         std::chrono::steady_clock::time_point const time_point) noexcept
     {
