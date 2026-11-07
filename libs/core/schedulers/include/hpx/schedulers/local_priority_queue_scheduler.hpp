@@ -770,7 +770,9 @@ namespace hpx::threads::policies {
                     static_cast<std::size_t>(data.schedulehint.hint) %
                     num_nodes;
 
-                std::size_t const start = curr_queue_.data_++ % num_queues_;
+                std::size_t const start =
+                    curr_queue_.data_.fetch_add(1, std::memory_order_relaxed) %
+                    num_queues_;
                 for (std::size_t i = 0; i < num_queues_; ++i)
                 {
                     std::size_t const idx = (start + i) % num_queues_;
@@ -789,7 +791,9 @@ namespace hpx::threads::policies {
 
             if (static_cast<std::size_t>(-1) == num_thread)
             {
-                num_thread = curr_queue_.data_++ % num_queues_;
+                num_thread =
+                    curr_queue_.data_.fetch_add(1, std::memory_order_relaxed) %
+                    num_queues_;
             }
             else if (num_thread >= num_queues_)
             {
@@ -1284,7 +1288,9 @@ namespace hpx::threads::policies {
 
             if (static_cast<std::size_t>(-1) == num_thread)
             {
-                num_thread = curr_queue_.data_++ % num_queues_;
+                num_thread =
+                    curr_queue_.data_.fetch_add(1, std::memory_order_relaxed) %
+                    num_queues_;
             }
             else if (num_thread >= num_queues_)
             {
@@ -1406,7 +1412,9 @@ namespace hpx::threads::policies {
 
             if (static_cast<std::size_t>(-1) == num_thread)
             {
-                num_thread = curr_queue_.data_++ % num_queues_;
+                num_thread =
+                    curr_queue_.data_.fetch_add(1, std::memory_order_relaxed) %
+                    num_queues_;
             }
             else if (num_thread >= num_queues_)
             {
