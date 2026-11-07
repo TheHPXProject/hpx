@@ -396,6 +396,18 @@
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
+// Run time (in ns) of the staged nano and small tasks a worker of the local
+// priority queue scheduler must have queued for itself before it wakes up a
+// sleeping worker for another one: below that, it runs them itself once it is
+// done with its current thread. A sleeping worker that wakes up takes several
+// microseconds. The run time is estimated as the number of staged tasks times
+// the run time of the new one. 0 wakes up a worker for each new task. Can be
+// changed at runtime with hpx.thread_queue.min_work_to_wake.
+#if !defined(HPX_THREAD_QUEUE_MIN_WORK_TO_WAKE)
+#  define HPX_THREAD_QUEUE_MIN_WORK_TO_WAKE 2000
+#endif
+
+///////////////////////////////////////////////////////////////////////////////
 // Minimum number of pending tasks a worker must have for other workers of the
 // local priority queue scheduler to steal pending tasks from it (not used in
 // fast idle mode). Otherwise, all idle workers pop the few tasks a worker has

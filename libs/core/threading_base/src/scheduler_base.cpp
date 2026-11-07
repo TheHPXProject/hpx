@@ -20,6 +20,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <bit>
 #include <chrono>
 #include <cmath>
 #include <condition_variable>
@@ -67,7 +68,120 @@ namespace hpx::threads::policies {
             states_[i].data_.store(
                 hpx::state::initialized, std::memory_order::relaxed);
         }
+
+#if defined(HPX_HAVE_THREAD_MANAGER_IDLE_BACKOFF)
+        sleep_mask_ =
+            std::vector<util::aligned_line_data<std::atomic<std::uint64_t>>>(
+                (num_threads + 63) / 64);
+#endif
     }
+
+#if defined(HPX_HAVE_THREAD_MANAGER_IDLE_BACKOFF)
+    // is there work this worker could run (its own queues, or any queue if it
+    // may steal)? Called only right before going to sleep.
+    bool scheduler_base::has_visible_work(std::size_t num_thread) const
+    {
+        if (get_queue_length(num_thread) != 0)
+            return true;
+        return (modes_[num_thread].data_.load(std::memory_order_relaxed) &
+                   policies::scheduler_mode::enable_stealing) &&
+            get_queue_length(static_cast<std::size_t>(-1)) != 0;
+    }
+
+    // wake a worker that announced itself as sleeping. Taking the mutex makes
+    // sure the sleeper is already waiting (it holds the mutex from its
+    // announcement until wait_for releases it).
+    void scheduler_base::notify_worker(std::size_t i)
+    {
+        auto& data = wait_count_data_[i].data_;
+        {
+            std::lock_guard<pu_mutex_type> l(data.wait_mtx);
+            data.wait_count.store(0, std::memory_order_relaxed);
+        }
+        data.wait_cond.notify_one();
+    }
+
+    // claim and wake one sleeping worker, the hinted one if it sleeps,
+    // otherwise the next one after it
+    bool scheduler_base::wake_one(std::size_t hint)
+    {
+        std::size_t const size = wait_count_data_.size();
+        if (hint >= size)
+        {
+            hint = wake_start_.fetch_add(1, std::memory_order_relaxed) % size;
+        }
+
+        // No fence between queuing the new thread and reading the sleep mask
+        // below. A seq_cst fence here (paired with one in idle_callback)
+        // would make sure that either this sees the announcement of a worker
+        // going to sleep or that worker sees the new thread in its last
+        // check. It would run for every new nano and small thread, also when
+        // no worker sleeps, and costs those up to several percent of their
+        // throughput. Without it, the store that queued the thread may become
+        // visible only after this load (the memory model allows a store to be
+        // reordered with a later load, and x86 and AArch64 both do it), so a
+        // worker that announces itself at the same time may be missed here
+        // while it misses the thread. The thread is not lost: the worker that
+        // queued it, or any worker that looks at that queue, still runs it,
+        // and the sleeper wakes up after its backoff period (at most
+        // max_idle_backoff_time) and finds it. This is the race do_some_work
+        // accepts.
+
+        // start at the hint's word, prefer the hint's bit, then the lowest
+        // set bit
+        std::size_t const words = sleep_mask_.size();
+        for (std::size_t k = 0; k != words; ++k)
+        {
+            std::size_t const w = (hint / 64 + k) % words;
+            auto& word = sleep_mask_[w].data_;
+            std::uint64_t bits = word.load(std::memory_order_relaxed);
+            while (bits != 0)
+            {
+                std::uint64_t bit = bits & (~bits + 1);
+                if (k == 0)
+                {
+                    std::uint64_t const hint_bit = std::uint64_t(1)
+                        << (hint % 64);
+                    if (bits & hint_bit)
+                        bit = hint_bit;
+                }
+                // the claim only needs to be atomic: two wakers must not
+                // claim the same sleeper, no other memory is ordered by it
+                std::uint64_t const old =
+                    word.fetch_and(~bit, std::memory_order_relaxed);
+                if (old & bit)
+                {
+                    notify_worker(w * 64 +
+                        static_cast<std::size_t>(std::countr_zero(bit)));
+                    return true;
+                }
+                bits = old & ~bit;
+            }
+        }
+        return false;
+    }
+
+    // claim and wake the given worker if it sleeps
+    bool scheduler_base::wake_if_sleeping(std::size_t num_thread)
+    {
+        // No fence between queuing the new thread and reading the sleep mask
+        // (see wake_one): if the target announces itself at the same time,
+        // this may miss it while the target misses the new thread. The
+        // target then sleeps for its backoff period (at most
+        // max_idle_backoff_time) before it runs the thread, unless another
+        // worker steals it first. The claim is relaxed for the same reason
+        // as in wake_one.
+        std::uint64_t const bit = std::uint64_t(1) << (num_thread % 64);
+        auto& word = sleep_mask_[num_thread / 64].data_;
+        if ((word.load(std::memory_order_relaxed) & bit) != 0 &&
+            (word.fetch_and(~bit, std::memory_order_relaxed) & bit) != 0)
+        {
+            notify_worker(num_thread);
+            return true;
+        }
+        return false;
+    }
+#endif
 
     bool scheduler_base::idle_callback([[maybe_unused]] std::size_t num_thread)
     {
@@ -101,13 +215,35 @@ namespace hpx::threads::policies {
             std::chrono::microseconds const period(std::lround(
                 (std::min) (max_idle_backoff_time_, std::pow(2.0, exponent))));
 
-            if (data.wait_cond.wait_for(l, period) ==    //-V1089
-                std::cv_status::no_timeout)
+            // Announce, then check for work once more. There is no fence
+            // between the two: it would only help together with a fence in
+            // wake_one and wake_if_sleeping, on the path of every new nano and
+            // small thread (see wake_one for why that one is gone). Without
+            // them, the announcement may become visible only after the check
+            // has read the queues, so a thread queued at the same time can be
+            // missed by both sides: the worker that queued it does not see
+            // this worker in the sleep mask, and this worker does not see the
+            // thread. This worker then sleeps for the period it has computed
+            // (at most max_idle_backoff_time) and finds the thread when it
+            // wakes up, unless another worker has run it by then. The check
+            // still finds work that was queued before this worker got here,
+            // so the window is only as long as the announcement takes to
+            // become visible. do_some_work accepts the same race.
+            std::uint64_t const bit = std::uint64_t(1) << (num_thread % 64);
+            auto& word = sleep_mask_[num_thread / 64].data_;
+            word.fetch_or(bit, std::memory_order_relaxed);
+
+            if (!has_visible_work(num_thread) &&
+                data.wait_cond.wait_for(l, period) ==    //-V1089
+                    std::cv_status::no_timeout)
             {
                 // reset counter if thread was woken up
                 data.wait_count.store(0, std::memory_order_relaxed);
                 data.free_pass = true;
             }
+
+            // withdraw the announcement if nobody claimed it
+            word.fetch_and(~bit, std::memory_order_relaxed);
             return true;
         }
 #endif

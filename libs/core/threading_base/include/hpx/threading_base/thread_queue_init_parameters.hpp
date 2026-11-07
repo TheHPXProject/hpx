@@ -52,7 +52,9 @@ namespace hpx::threads::policies {
                 static_cast<std::int64_t>(HPX_IDLE_LOOP_COUNT_STEAL_STAGED),
             std::int64_t min_tasks_to_steal_pending_early =
                 static_cast<std::int64_t>(
-                    HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_PENDING_EARLY)) noexcept
+                    HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_PENDING_EARLY),
+            std::int64_t min_work_to_wake = static_cast<std::int64_t>(
+                HPX_THREAD_QUEUE_MIN_WORK_TO_WAKE)) noexcept
           : max_thread_count_(max_thread_count)
           , min_tasks_to_steal_pending_(min_tasks_to_steal_pending)
           , min_tasks_to_steal_staged_(min_tasks_to_steal_staged)
@@ -76,6 +78,7 @@ namespace hpx::threads::policies {
           , min_tasks_to_steal_staged_early_(min_tasks_to_steal_staged_early)
           , idle_loop_count_steal_staged_(idle_loop_count_steal_staged)
           , min_tasks_to_steal_pending_early_(min_tasks_to_steal_pending_early)
+          , min_work_to_wake_(min_work_to_wake)
         {
         }
 
@@ -112,5 +115,11 @@ namespace hpx::threads::policies {
         // victim's queue short but not empty often enough in a row (see
         // HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_PENDING_EARLY)
         std::int64_t min_tasks_to_steal_pending_early_;
+
+        // used by the local priority queue scheduler: run time (ns) of the
+        // staged nano and small tasks a worker must have queued for itself
+        // before it wakes up a sleeping worker for another one (see
+        // HPX_THREAD_QUEUE_MIN_WORK_TO_WAKE)
+        std::int64_t min_work_to_wake_;
     };
 }    // namespace hpx::threads::policies

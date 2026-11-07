@@ -148,6 +148,21 @@ namespace hpx::threads::policies {
         /// possibly idling OS threads
         void do_some_work(std::size_t);
 
+        /// Whether this scheduler wakes up workers for new threads of the
+        /// given size itself (in create_thread). Then create_thread and
+        /// create_work don't call do_some_work for them.
+        [[nodiscard]] bool wakes_up_for(
+            [[maybe_unused]] threads::task_size size) const noexcept
+        {
+#if defined(HPX_HAVE_THREAD_MANAGER_IDLE_BACKOFF)
+            return wakes_up_for_small_ &&
+                (size == threads::task_size::nano ||
+                    size == threads::task_size::small_);
+#else
+            return false;
+#endif
+        }
+
         virtual void suspend(std::size_t num_thread);
         virtual void resume(std::size_t num_thread);
 
@@ -379,6 +394,26 @@ namespace hpx::threads::policies {
         };
         std::vector<util::aligned_line_data<idle_backoff_data>>
             wait_count_data_;
+
+        // set by schedulers that wake up workers for nano and small threads
+        // themselves, see wakes_up_for
+        bool wakes_up_for_small_ = false;
+
+        // one bit per worker that announced it is going to sleep
+        std::vector<util::aligned_line_data<std::atomic<std::uint64_t>>>
+            sleep_mask_;
+        std::atomic<std::size_t> wake_start_{0};
+
+        void notify_worker(std::size_t i);
+        bool has_visible_work(std::size_t num_thread) const;
+
+        // Wake up one sleeping worker (one that announced itself in
+        // sleep_mask_), the given one if it sleeps, otherwise the next one
+        // after it. Returns whether a worker was woken up.
+        bool wake_one(std::size_t hint);
+
+        // Wake up the given worker if it sleeps. Returns whether it did.
+        bool wake_if_sleeping(std::size_t num_thread);
 
         // may this worker ignore the early stealing minima once?
         bool has_free_pass(std::size_t num_thread) const noexcept

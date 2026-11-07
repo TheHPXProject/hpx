@@ -300,6 +300,11 @@ namespace hpx::threads::policies {
             set_steal_staged_threshold(
                 thread_queue_init_.idle_loop_count_steal_staged_);
 
+#if defined(HPX_HAVE_THREAD_MANAGER_IDLE_BACKOFF)
+            // see wake_up_for_small
+            this->wakes_up_for_small_ = true;
+#endif
+
             if (!deferred_initialization)
             {
                 HPX_ASSERT(num_queues_ != 0);
@@ -731,6 +736,12 @@ namespace hpx::threads::policies {
         {
             std::size_t num_thread = static_cast<std::size_t>(-1);
             thread_priority priority = data.priority;
+            [[maybe_unused]] threads::task_size const size =
+                data.schedulehint.task_size();
+            // the caller chose the worker (as opposed to round-robin or NUMA
+            // placement), see wake_up_for_small
+            [[maybe_unused]] bool const placed_by_caller =
+                data.schedulehint.mode() == thread_schedule_hint_mode::thread;
 
             // If the initial priority is initially_bound, promote it to
             // bound for the first scheduling step, regardless of hint mode.
@@ -878,7 +889,68 @@ namespace hpx::threads::policies {
                     "unknown thread priority value (thread_priority::unknown)");
             }
             }
+
+#if defined(HPX_HAVE_THREAD_MANAGER_IDLE_BACKOFF)
+            if (this->wakes_up_for(size))
+            {
+                wake_up_for_small(num_thread, priority, size, placed_by_caller);
+            }
+#endif
         }
+
+#if defined(HPX_HAVE_THREAD_MANAGER_IDLE_BACKOFF)
+        // the number of the calling worker if it belongs to this scheduler's
+        // pool, -1 otherwise
+        std::size_t calling_worker() const noexcept
+        {
+            auto const nums = threads::detail::get_thread_nums_tss();
+            return nums.thread_pool_num ==
+                    this->get_parent_pool()->get_pool_index() ?
+                nums.local_thread_num :
+                static_cast<std::size_t>(-1);
+        }
+
+        // Wake up a worker for a new nano or small thread queued for worker
+        // num_thread (create_thread and create_work leave this to the
+        // scheduler, see wakes_up_for). Such a thread is usually done before
+        // a sleeping worker has woken up, so wake up only the worker it was
+        // queued for, if that sleeps. The calling worker runs the threads it
+        // queued for itself once it is done with its current one, unless
+        // their staged work is worth stealing (min_work_to_wake_): then it
+        // wakes up one sleeping worker. The staged work is estimated as the
+        // number of staged threads times the run time of the new one, which
+        // is exact for a burst of threads of one size and needs no count of
+        // its own. This holds only if the caller chose the calling worker. A
+        // thread that round-robin placement put there may belong to a caller
+        // that waits for it without yielding, so one sleeping worker is woken
+        // up for it.
+        void wake_up_for_small(std::size_t const num_thread,
+            thread_priority const priority, threads::task_size const size,
+            bool const placed_by_caller)
+        {
+            if (priority != thread_priority::normal &&
+                priority != thread_priority::default_)
+            {
+                // as for threads of other sizes
+                this->do_some_work(num_thread);
+                return;
+            }
+
+            if (num_thread != calling_worker())
+            {
+                this->wake_if_sleeping(num_thread);
+            }
+            else if (!placed_by_caller ||
+                thread_queue_init_.min_work_to_wake_ <= 0 ||
+                queues_[num_thread].queue_->get_staged_queue_length(
+                    std::memory_order_relaxed) *
+                        threads::task_size_duration(size).count() >=
+                    thread_queue_init_.min_work_to_wake_)
+            {
+                this->wake_one((num_thread + 1) % num_queues_);
+            }
+        }
+#endif
 
         template <typename Body>
         static bool for_each_circular(

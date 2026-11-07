@@ -264,6 +264,9 @@ namespace hpx::util {
             "min_tasks_to_steal_staged_early = "
             "${HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_STAGED_EARLY:" HPX_PP_STRINGIZE(
                 HPX_PP_EXPAND(HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_STAGED_EARLY)) "}",
+            "min_work_to_wake = "
+            "${HPX_THREAD_QUEUE_MIN_WORK_TO_WAKE:" HPX_PP_STRINGIZE(
+                HPX_PP_EXPAND(HPX_THREAD_QUEUE_MIN_WORK_TO_WAKE)) "}",
             "idle_loop_count_steal_staged = "
             "${HPX_IDLE_LOOP_COUNT_STEAL_STAGED:" HPX_PP_STRINGIZE(
                 HPX_PP_EXPAND(HPX_IDLE_LOOP_COUNT_STEAL_STAGED)) "}",
