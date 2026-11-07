@@ -45,6 +45,7 @@ struct priority_scheduler_access : priority_scheduler
     }
 };
 
+bool has_local_pool = false;
 bool has_priority_pool = false;
 
 // Every worker of the local scheduler marks its PU during startup, and the
@@ -108,7 +109,10 @@ void test_priority_scheduler()
 
 int hpx_main()
 {
-    test_local_scheduler();
+    if (has_local_pool)
+    {
+        test_local_scheduler();
+    }
     if (has_priority_pool)
     {
         test_priority_scheduler();
@@ -133,7 +137,12 @@ void init_resource_partitioner(
         }
     }
 
-    HPX_TEST(pus.size() >= 2);
+    // the test needs a second pool, which needs a second PU
+    if (pus.size() < 2)
+    {
+        return;
+    }
+    has_local_pool = true;
 
     // the first PU stays in the default pool, the others are split evenly
     std::size_t const num_local_pus =
