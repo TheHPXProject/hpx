@@ -49,12 +49,11 @@ namespace hpx {
         /// Synchronization: None
         /// Postconditions: counter_ == count.
         ///
-        /// \note Enforced by HPX_PRE if native C++26 contracts are available.
-        ///
         explicit latch(std::ptrdiff_t const count) HPX_PRE(count >= 0)
           : counter_(count)
           , notified_(count == 0)
         {
+            HPX_CONTRACT_ASSERT(count >= 0);
         }
 
         /// Requires: No threads are blocked at the synchronization point.
@@ -90,14 +89,11 @@ namespace hpx {
         /// Synchronization: Synchronizes with all calls that block on this
         /// latch and with all try_wait calls on this latch that return true .
         ///
-        /// \note n >= 0 is enforced by HPX_PRE if native C++26 contracts are
-        ///       available; counter_ >= n by HPX_CONTRACT_ASSERT.
-        ///
         /// \throws Nothing.
         ///
         void count_down(std::ptrdiff_t const update) HPX_PRE(update >= 0)
         {
-            HPX_ASSERT(update >= 0);
+            HPX_CONTRACT_ASSERT(update >= 0);
 
             std::unique_lock<mutex_type> l(mtx_.data_);
 
@@ -156,12 +152,9 @@ namespace hpx {
         ///             wait();
         ///
         /// Requires: counter_ >= update and update >= 0.
-        ///
-        /// \note update >= 0 is enforced by HPX_PRE if native C++26 contracts
-        ///       are available; counter_ >= update by HPX_CONTRACT_ASSERT.
         void arrive_and_wait(std::ptrdiff_t update = 1) HPX_PRE(update >= 0)
         {
-            HPX_ASSERT(update >= 0);
+            HPX_CONTRACT_ASSERT(update >= 0);
 
             std::unique_lock l(mtx_.data_);
 

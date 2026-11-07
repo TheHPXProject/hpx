@@ -66,6 +66,18 @@ int hpx_main()
         HPX_TEST_EQ(last_condition, std::string("old_count >= update"));
     }
 
+    {
+        hpx::lcos::local::latch l(1);
+        l.count_down(-1);
+
+        HPX_TEST_EQ(handler_call_count.load(), 3);
+        HPX_TEST_EQ(last_condition, std::string("update >= 0"));
+
+        // the handler returned, so the counter went from 1 to 2
+        l.count_down(2);
+        HPX_TEST(l.is_ready());
+    }
+
     hpx::contracts::set_violation_handler(nullptr);
 
     return hpx::local::finalize();
