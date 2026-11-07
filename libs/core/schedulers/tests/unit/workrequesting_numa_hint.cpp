@@ -21,42 +21,38 @@
 
 void test_numa_worker_selection()
 {
-    std::vector<std::size_t> const domains{0, 0, 1, 1, 2, 2};
+    std::vector<std::size_t> const domain_workers{2, 3};
 
-    HPX_TEST_EQ(hpx::threads::policies::detail::select_numa_worker(
-                    domains, domains.size(), 1, 0),
-        std::size_t(2));
-    HPX_TEST_EQ(hpx::threads::policies::detail::select_numa_worker(
-                    domains, domains.size(), 1, 3),
-        std::size_t(3));
-    HPX_TEST_EQ(hpx::threads::policies::detail::select_numa_worker(
-                    domains, domains.size(), 0, 4),
-        std::size_t(0));
+    // Repeated hints rotate evenly over the workers in the requested domain.
+    for (std::size_t i = 0; i != 8; ++i)
+    {
+        HPX_TEST_EQ(hpx::threads::policies::detail::select_numa_worker(
+                        domain_workers, i),
+            domain_workers[i % domain_workers.size()]);
+    }
 
-    // If the requested domain has no eligible worker, keep the one
-    // round-robin position that was already selected for the lookup.
+    // An empty domain falls back to the scheduler's global round-robin path.
     HPX_TEST_EQ(hpx::threads::policies::detail::select_numa_worker(
-                    domains, domains.size(), 3, 4),
-        std::size_t(4));
+                    std::vector<std::size_t>{}, 0),
+        static_cast<std::size_t>(-1));
 
-    // Only the first two workers have high-priority queues. Worker 3 is on
-    // the requested domain, but is not eligible for high-priority work.
-    std::vector<std::size_t> const restricted_domains{0, 1, 1, 0};
+    // High-priority lookup uses a prefiltered list containing only workers
+    // with a high-priority queue.
+    std::vector<std::size_t> const high_priority_workers{0, 1};
     HPX_TEST_EQ(hpx::threads::policies::detail::select_numa_worker(
-                    restricted_domains, 2, 0, 1),
-        std::size_t(0));
-
-    std::vector<std::size_t> const ineligible_domain{0, 0, 1, 1};
-    HPX_TEST_EQ(hpx::threads::policies::detail::select_numa_worker(
-                    ineligible_domain, 2, 1, 1),
+                    high_priority_workers, 1),
         std::size_t(1));
 
     // Skip an inactive worker if another eligible worker belongs to the
     // requested domain.
-    HPX_TEST_EQ(hpx::threads::policies::detail::select_numa_worker(domains,
-                    domains.size(), 1, 2,
-                    [](std::size_t worker) noexcept { return worker != 2; }),
+    HPX_TEST_EQ(
+        hpx::threads::policies::detail::select_numa_worker(domain_workers, 0,
+            [](std::size_t worker) noexcept { return worker != 2; }),
         std::size_t(3));
+    HPX_TEST_EQ(
+        hpx::threads::policies::detail::select_numa_worker(
+            domain_workers, 0, [](std::size_t) noexcept { return false; }),
+        static_cast<std::size_t>(-1));
 }
 
 int hpx_main()
@@ -90,21 +86,22 @@ int hpx_main()
     return hpx::local::finalize();
 }
 
-void test_scheduler(char* argv0, char const* scheduler)
+void test_scheduler(int argc, char* argv[], char const* scheduler)
 {
-    std::string const queuing = std::string("--hpx:queuing=") + scheduler;
-    std::vector<char*> av = {argv0, const_cast<char*>(queuing.c_str())};
+    std::string queuing = std::string("--hpx:queuing=") + scheduler;
+    std::vector<char*> av(argv, argv + argc);
+    av.push_back(queuing.data());
 
     HPX_TEST_EQ(
         hpx::local::init(hpx_main, static_cast<int>(av.size()), av.data()), 0);
 }
 
-int main(int, char* argv[])
+int main(int argc, char* argv[])
 {
     test_numa_worker_selection();
 
-    test_scheduler(argv[0], "local-workrequesting-fifo");
-    test_scheduler(argv[0], "local-workrequesting-mc");
+    test_scheduler(argc, argv, "local-workrequesting-fifo");
+    test_scheduler(argc, argv, "local-workrequesting-mc");
 
     return hpx::util::report_errors();
 }
