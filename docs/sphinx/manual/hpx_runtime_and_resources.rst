@@ -105,11 +105,12 @@ threads; the number of high priority queues can be specified on the command line
 using :option:`--hpx:high-priority-threads`. High priority threads are executed
 by the first OS threads before any other work is executed. When a queue is empty
 work will be taken from high priority queues first. There is one low priority
-queue from which threads will be scheduled only when there is no other work. For
-this scheduling policy there is an option to turn on NUMA sensitivity using the
-command line option :option:`--hpx:numa-sensitive`. When NUMA sensitivity
-is turned on work stealing is done from queues associated with the same NUMA
-domain first, only after that work is stolen from other NUMA domains.
+queue from which threads will be scheduled only when there is no other work.
+The command line option :option:`--hpx:numa-sensitive` controls NUMA-sensitive
+work stealing for this policy. The scheduler checks queues in the same NUMA
+domain first. At level ``0`` all workers may then steal across NUMA domains. At
+the default level ``1`` only boundary workers may steal from the nearest NUMA
+domains. At level ``2`` workers may not steal across NUMA domains.
 
 This scheduler can be used with two underlying queuing policies (FIFO:
 first-in-first-out, and LIFO: last-in-first-out). In order to use the LIFO
@@ -179,6 +180,11 @@ core. This core now (whenever it is not busy with other work) either responds to
 the original core by sending back work or passes the request on to the next
 possible core in the system. In general, this scheme avoids contention on the
 work queues as those are always accessed by their own cores only.
+
+Requests first try workers in the same NUMA domain. At level ``0`` all workers
+may request work across NUMA domains. At the default level ``1`` only boundary
+workers may request work from the nearest NUMA domains. At level ``2`` workers
+may not request work across NUMA domains.
 
 
 The |hpx| resource partitioner

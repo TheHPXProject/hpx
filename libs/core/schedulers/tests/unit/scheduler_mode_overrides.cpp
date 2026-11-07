@@ -22,8 +22,10 @@ constexpr auto stealing =
     scheduler_mode::enable_stealing | scheduler_mode::enable_stealing_numa;
 
 bool stealing_forced_on = false;
+bool numa_stealing_configurable = false;
 
-void check_stealing(hpx::threads::policies::scheduler_base const* scheduler)
+void check_stealing(hpx::threads::policies::scheduler_base const* scheduler,
+    bool numa_stealing_enabled)
 {
     for (std::size_t i = 0; i != hpx::get_os_thread_count(); ++i)
     {
@@ -32,7 +34,8 @@ void check_stealing(hpx::threads::policies::scheduler_base const* scheduler)
             stealing_forced_on);
         HPX_TEST_EQ(scheduler->has_scheduler_mode(
                         scheduler_mode::enable_stealing_numa, i),
-            stealing_forced_on);
+            numa_stealing_configurable ? numa_stealing_enabled :
+                                         stealing_forced_on);
     }
 }
 
@@ -41,28 +44,30 @@ int hpx_main()
     auto const* scheduler =
         hpx::threads::get_self_id_data()->get_scheduler_base();
 
-    check_stealing(scheduler);
+    check_stealing(scheduler, true);
 
     hpx::threads::add_scheduler_mode(stealing);
-    check_stealing(scheduler);
+    check_stealing(scheduler, true);
 
     hpx::threads::remove_scheduler_mode(stealing);
-    check_stealing(scheduler);
+    check_stealing(scheduler, false);
 
     hpx::threads::add_remove_scheduler_mode(
         stealing, scheduler_mode::nothing_special);
-    check_stealing(scheduler);
+    check_stealing(scheduler, true);
 
     hpx::threads::add_remove_scheduler_mode(
         scheduler_mode::nothing_special, stealing);
-    check_stealing(scheduler);
+    check_stealing(scheduler, false);
 
     return hpx::local::finalize();
 }
 
-void test_scheduler(char* argv0, std::string const& name, bool forced_on)
+void test_scheduler(char* argv0, std::string const& name, bool forced_on,
+    bool numa_configurable = false)
 {
     stealing_forced_on = forced_on;
+    numa_stealing_configurable = numa_configurable;
 
     std::string const queuing = "--hpx:queuing=" + name;
     std::vector<char*> av = {argv0, const_cast<char*>(queuing.c_str())};
@@ -80,7 +85,7 @@ int main(int, char* argv[])
     test_scheduler(argv[0], "static", false);
     test_scheduler(argv[0], "static-priority", false);
 #if defined(HPX_HAVE_WORK_REQUESTING_SCHEDULERS)
-    test_scheduler(argv[0], "local-workrequesting-fifo", true);
+    test_scheduler(argv[0], "local-workrequesting-fifo", true, true);
 #endif
 
     return hpx::util::report_errors();
