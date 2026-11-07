@@ -212,8 +212,7 @@ namespace hpx::execution::experimental {
 
                 if constexpr (sizeof(op_state_t) <=
                         parallel_scheduler_storage_size &&
-                    alignof(op_state_t) <=
-                        parallel_scheduler_storage_alignment)
+                    alignof(op_state_t) <= parallel_scheduler_storage_alignment)
                 {
                     HPX_ASSERT(storage.size() >= sizeof(op_state_t));
 
@@ -242,8 +241,8 @@ namespace hpx::execution::experimental {
                     op_state_t* op = nullptr;
                     try
                     {
-                        op = ::new (heap_storage) op_state_t(
-                            hpx::execution::experimental::connect(
+                        op = ::new (heap_storage)
+                            op_state_t(hpx::execution::experimental::connect(
                                 HPX_FORWARD(Sender, snd),
                                 custom_receiver<Proxy>{&proxy, destroy_fn,
                                     heap_storage, &scheduler_}));
