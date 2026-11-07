@@ -60,47 +60,24 @@ namespace hpx::experimental {
                 {
                     if (this->exception)
                     {
-                        if (next_state)
-                        {
-                            next_state->exception = this->exception;
-                            next_state->set_error(this->exception);
-                        }
+                        next_state->set_error(this->exception);
                     }
                     else
                     {
                         try
                         {
-                            if (next_state)
-                            {
-                                next_state->set_value(HPX_MOVE(value.value()));
-                            }
+                            next_state->set_value(HPX_MOVE(value.value()));
                         }
                         catch (...)
                         {
                             this->exception = std::current_exception();
-                            if (next_state)
-                            {
-                                next_state->exception = this->exception;
-                                next_state->set_error(this->exception);
-                            }
+                            next_state->set_error(this->exception);
                         }
                     }
 
                     for (auto& continuation : continuations)
                     {
-                        try
-                        {
-                            continuation(next_state);
-                        }
-                        catch (...)
-                        {
-                            // Intentionally ignore: exceptions from one
-                            // downstream continuation must not abort the
-                            // runtime or prevent later continuations from
-                            // running.
-                            [[maybe_unused]] std::exception_ptr ignored =
-                                std::current_exception();
-                        }
+                        continuation(next_state);
                     }
                     continuations.clear();
                     next_state.reset();
@@ -175,30 +152,11 @@ namespace hpx::experimental {
             async_rw_mutex_shared_state& operator=(
                 async_rw_mutex_shared_state const&) = delete;
 
-            std::exception_ptr exception;
-
-            void set_error(std::exception_ptr ep) noexcept
-            {
-                exception = HPX_MOVE(ep);
-            }
-
             void release() noexcept
             {
                 for (auto& continuation : continuations)
                 {
-                    try
-                    {
-                        continuation(next_state);
-                    }
-                    catch (...)
-                    {
-                        // Intentionally ignore: exceptions from one
-                        // downstream continuation must not abort the
-                        // runtime or prevent later continuations from
-                        // running.
-                        [[maybe_unused]] std::exception_ptr ignored =
-                            std::current_exception();
-                    }
+                    continuation(next_state);
                 }
                 continuations.clear();
                 next_state.reset();
@@ -577,16 +535,6 @@ namespace hpx::experimental {
 
                     auto continuation =
                         [r = HPX_MOVE(r)](shared_state_ptr_type state) mutable {
-                            // If the previous release() failed to move the
-                            // value, it stored an exception on the state.
-                            // Forward it to the receiver instead of trying
-                            // to construct a (valueless) access wrapper.
-                            if (state && state->exception)
-                            {
-                                hpx::execution::experimental::set_error(
-                                    HPX_MOVE(r), state->exception);
-                                return;
-                            }
                             try
                             {
                                 hpx::execution::experimental::set_value(
