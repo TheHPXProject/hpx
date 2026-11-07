@@ -5,8 +5,8 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 // Work-requesting schedulers must carry the staged-stealing delay and early
-// task-count limit in work requests, and victims must be able to convert staged
-// work directly into a requesting worker's queue.
+// task-count limit in work requests. Victims convert eligible staged work into
+// their own pending queue before sending it through the existing steal path.
 
 #include <hpx/execution.hpp>
 #include <hpx/future.hpp>
@@ -128,7 +128,7 @@ void test_scheduler(char* argv0, hpx::resource::scheduling_policy scheduler)
     hpx::local::init_params init_args;
     init_args.cfg = {"hpx.os_threads=" + std::to_string(num_workers),
         "hpx.max_idle_loop_count=1000000000000000",
-        "hpx.thread_queue.min_tasks_to_steal_pending=1000",
+        "hpx.thread_queue.min_tasks_to_steal_pending=1",
         "hpx.thread_queue.min_tasks_to_steal_staged=1",
         "hpx.thread_queue.min_tasks_to_steal_staged_early=1",
         "hpx.thread_queue.idle_loop_count_steal_staged=0"};
@@ -148,6 +148,8 @@ int main(int, char* argv[])
         get_workrequesting_pending_steal_count;
     using hpx::threads::policies::detail::
         get_workrequesting_staged_steal_minimum;
+    using hpx::threads::policies::detail::
+        has_enough_workrequesting_staged_tasks;
 
     HPX_TEST_EQ(
         get_workrequesting_pending_steal_count(0, 0, false), std::size_t(0));
@@ -169,15 +171,27 @@ int main(int, char* argv[])
     HPX_TEST_EQ(get_workrequesting_staged_steal_minimum(501, 1000, 100, 10),
         std::int64_t(0));
 
+    // A nonzero idle threshold selects the larger early minimum. The same
+    // predicate used by the request handler keeps a smaller staged batch on
+    // its owner, but permits it once the minimum is met.
+    std::int64_t const early_minimum =
+        get_workrequesting_staged_steal_minimum(101, 1000, 100, 31);
+    HPX_TEST_EQ(early_minimum, std::int64_t(31));
+    HPX_TEST(!has_enough_workrequesting_staged_tasks(30, early_minimum, 1));
+    HPX_TEST(has_enough_workrequesting_staged_tasks(31, early_minimum, 1));
+
     if (hpx::threads::hardware_concurrency() < num_workers)
     {
         return hpx::util::report_errors();
     }
 
-    test_scheduler(
-        argv[0], hpx::resource::scheduling_policy::local_workrequesting_fifo);
-    test_scheduler(
-        argv[0], hpx::resource::scheduling_policy::local_workrequesting_mc);
+    auto const fifo =
+        hpx::resource::scheduling_policy::local_workrequesting_fifo;
+    auto const multiple_queues =
+        hpx::resource::scheduling_policy::local_workrequesting_mc;
+
+    test_scheduler(argv[0], fifo);
+    test_scheduler(argv[0], multiple_queues);
 
     return hpx::util::report_errors();
 }

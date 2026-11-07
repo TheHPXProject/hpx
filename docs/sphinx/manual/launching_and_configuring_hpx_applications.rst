@@ -494,15 +494,19 @@ The ``hpx.thread_queue`` configuration section
        them. The default is to allow stealing always. A worker thread always
        converts its own staged tasks.
    * * ``hpx.thread_queue.idle_loop_count_steal_staged``
-     * The value of this property defines the number of consecutive empty
-       scheduling loop iterations after which a worker thread starts stealing
-       staged |hpx| tasks from other worker threads (local priority queue
-       and work-requesting schedulers only; values above
-       ``hpx.max_idle_loop_count / 2`` are limited to it). The local and shared
-       priority schedulers steal staged tasks right away. Fast idle mode makes
-       the local priority queue scheduler steal staged tasks right away, but
-       does not bypass this threshold for work-requesting schedulers.
-       See :ref:`thread_scheduler_staged_steal`.
+     * The value of this property defines the idle-loop counter value after
+       which a worker thread starts stealing staged |hpx| tasks from other
+       worker threads (local priority queue and work-requesting schedulers
+       only; values above ``hpx.max_idle_loop_count / 2`` are limited to it).
+       The counter normally advances once per empty scheduling loop iteration.
+       In fast idle mode it advances by ``hpx.max_idle_loop_count / 1024`` per
+       empty iteration, so a small threshold may be passed in one iteration.
+       The local and shared priority schedulers steal staged tasks right away.
+       The local priority queue scheduler bypasses this threshold in fast idle
+       mode because it steals directly while scanning victim queues. A
+       work-requesting scheduler instead carries the threshold result in its
+       request, so fast idle mode accelerates the counter without bypassing the
+       check. See :ref:`thread_scheduler_staged_steal`.
    * * ``hpx.thread_queue.min_tasks_to_steal_staged_early``
      * The value of this property defines the number of staged |hpx| tasks that
        need to be available before other worker threads are allowed to steal
