@@ -10,12 +10,6 @@ if(HPX_WITH_EXAMPLES_OPENMP)
   set(benchmarks ${benchmarks} htts2_omp)
 endif()
 
-if(HPX_WITH_EXAMPLES_QTHREADS)
-  set(benchmarks ${benchmarks} htts2_qthreads)
-  set(htts2_qthreads_LIBRARIES ${Qthreads_LIBRARY})
-  set(htts2_qthreads_INCLUDE_DIRECTORIES ${Qthreads_INCLUDE_DIR})
-endif()
-
 foreach(benchmark ${benchmarks})
   set(sources htts2.cpp ${benchmark}.cpp)
 

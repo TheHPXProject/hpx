@@ -6,9 +6,13 @@
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 set(tracing_headers
-    hpx/tracing/backends/apex.hpp hpx/tracing/backends/empty.hpp
-    hpx/tracing/backends/ittnotify.hpp hpx/tracing/backends/tracy.hpp
-    hpx/tracing/macros.hpp hpx/tracing/tracing.hpp
+    hpx/tracing/backends/apex.hpp
+    hpx/tracing/backends/empty.hpp
+    hpx/tracing/backends/empty_lock_context.hpp
+    hpx/tracing/backends/ittnotify.hpp
+    hpx/tracing/backends/tracy.hpp
+    hpx/tracing/macros.hpp
+    hpx/tracing/tracing.hpp
 )
 set(tracing_sources backends/ittnotify.cpp backends/tracy.cpp)
 
@@ -30,6 +34,7 @@ add_hpx_module(
   MACRO_HEADERS hpx/tracing/macros.hpp
   EXCLUDE_FROM_GLOBAL_HEADER
     hpx/tracing/backends/apex.hpp hpx/tracing/backends/empty.hpp
+    hpx/tracing/backends/empty_lock_context.hpp
     hpx/tracing/backends/ittnotify.hpp hpx/tracing/backends/tracy.hpp
   MODULE_DEPENDENCIES ${tracing_module_dependencies}
   CMAKE_SUBDIRS tests
