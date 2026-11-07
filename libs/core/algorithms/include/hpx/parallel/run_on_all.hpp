@@ -233,12 +233,11 @@ namespace hpx::experimental {
                     hpx::util::make_index_pack_t<
                         std::tuple_size_v<ReductionsTuple>>{});
 
-                auto sched = ex::with_hint(
-                    ex::with_priority(
-                        sched_, hpx::threads::thread_priority::bound),
-                    hpx::threads::thread_schedule_hint(
-                        hpx::threads::thread_sharing_hint::
-                            do_not_share_function));
+                auto sched =
+                    ex::with_hint(ex::with_priority(sched_,
+                                      hpx::threads::thread_priority::bound),
+                        hpx::threads::thread_schedule_hint(hpx::threads::
+                                thread_sharing_hint::do_not_share_function));
 
                 run_on_all_bulk_task<decltype(sp), F> bulk_task{
                     sp, HPX_MOVE(f_)};
