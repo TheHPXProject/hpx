@@ -8,8 +8,8 @@
 
 #include <hpx/config.hpp>
 #include <hpx/algorithms/traits/projected.hpp>
-#include <hpx/datastructures/tuple.hpp>
-#include <hpx/executors/execution_policy.hpp>
+#include <hpx/modules/datastructures.hpp>
+#include <hpx/modules/executors.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
@@ -65,7 +65,18 @@ namespace hpx::parallel::detail {
 
             FwdIter base = hpx::get<0>(part_begin.get_iterator_tuple());
 
-            util::const_loop_n<std::decay_t<ExPolicy>>(++part_begin, part_size,
+            // Note: replacing the invoke() with HPX_INVOKE()
+            // below makes gcc generate errors
+
+            // MSVC complains if pred or proj is captured by ref below
+#if defined(HPX_HAVE_DATAPAR)
+            using policy_type =
+                decltype(hpx::execution::experimental::to_non_simd(
+                    std::declval<ExPolicy>()));
+#else
+            using policy_type = std::decay_t<ExPolicy>;
+#endif
+            util::const_loop_n<policy_type>(++part_begin, part_size,
                 [base, pred = HPX_FORWARD(Pred, pred),
                     proj = HPX_FORWARD(Proj, proj)](
                     ZipIter it) mutable -> void {
@@ -183,8 +194,21 @@ namespace hpx::parallel::detail {
             InIter base = hpx::get<0>(part_begin.get_iterator_tuple());
             std::size_t curr = 0;
 
-            util::const_loop_n<std::decay_t<ExPolicy>>(++part_begin, part_size,
-                [&pred, proj, &base, &curr](ZipIter it) mutable -> void {
+            // Note: replacing the invoke() with HPX_INVOKE()
+            // below makes gcc generate errors
+
+            // MSVC complains if pred or proj is captured by ref below
+#if defined(HPX_HAVE_DATAPAR)
+            using policy_type =
+                decltype(hpx::execution::experimental::to_non_simd(
+                    std::declval<ExPolicy>()));
+#else
+            using policy_type = std::decay_t<ExPolicy>;
+#endif
+            util::const_loop_n<policy_type>(++part_begin, part_size,
+                [base, &curr, pred = HPX_FORWARD(Pred, pred),
+                    proj = HPX_FORWARD(Proj, proj)](
+                    ZipIter it) mutable -> void {
                     bool r = hpx::invoke(pred, hpx::invoke(proj, *base),
                         hpx::invoke(proj, hpx::get<0>(*it)));
 

@@ -8,11 +8,15 @@
 #include <hpx/init.hpp>
 #include <hpx/modules/testing.hpp>
 
+#include <algorithm>
+#include <atomic>
 #include <cstddef>
 #include <cstdlib>
 #include <ctime>
 #include <deque>
 #include <iostream>
+#include <numeric>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -27,7 +31,7 @@ void test_unique_copy_simd()
 
     int rand_base = std::rand();
 
-    // Test with generic predicate (exercising the SIMD path)
+    // Test with generic predicate on non-contiguous iterator (exercising fallback)
     test_unique_copy(
         simd, IteratorTag(), int(),
         [](auto const a, auto const b) { return a == b; }, rand_base);
@@ -102,6 +106,158 @@ void test_unique_copy_contiguous(ExPolicy policy)
 }
 
 template <typename ExPolicy>
+void test_unique_copy_contiguous_random(ExPolicy policy)
+{
+    using pack_type = hpx::parallel::traits::vector_pack_type_t<int>;
+    constexpr std::size_t pack_size =
+        hpx::parallel::traits::vector_pack_size_v<pack_type>;
+
+    std::vector<std::size_t> sizes = {0, 1, 2, pack_size, pack_size + 1,
+        2 * pack_size, 2 * pack_size + 1, 3 * pack_size, 4 * pack_size,
+        10 * pack_size, 10007};
+    if constexpr (pack_size > 1)
+    {
+        sizes.push_back(pack_size - 1);
+        sizes.push_back(2 * pack_size - 1);
+    }
+
+    std::mt19937 gen(42);
+    std::uniform_int_distribution<int> dis(0, 5);
+
+    for (std::size_t sz : sizes)
+    {
+        std::vector<int> c(sz);
+        std::generate(c.begin(), c.end(), [&]() { return dis(gen); });
+        std::vector<int> res(sz);
+        std::vector<int> expected(sz);
+
+        auto result = hpx::unique_copy(policy, c.begin(), c.end(), res.begin(),
+            [](auto const a, auto const b) { return a == b; });
+        res.erase(result, res.end());
+
+        auto exp_end = std::unique_copy(c.begin(), c.end(), expected.begin(),
+            [](int a, int b) { return a == b; });
+        expected.erase(exp_end, expected.end());
+
+        HPX_TEST(res == expected);
+
+        if (sz > 0)
+        {
+            std::vector<int> cp(sz);
+            std::generate(cp.begin(), cp.end(), [&]() { return dis(gen); });
+            std::vector<int> resp(sz);
+            std::vector<int> expectedp(sz);
+
+            int* ptr_res = hpx::unique_copy(policy, cp.data(),
+                cp.data() + cp.size(), resp.data(),
+                [](auto const a, auto const b) { return a == b; });
+            resp.erase(resp.begin() + (ptr_res - resp.data()), resp.end());
+
+            auto exp_ptr = std::unique_copy(cp.begin(), cp.end(),
+                expectedp.begin(), [](int a, int b) { return a == b; });
+            expectedp.erase(exp_ptr, expectedp.end());
+
+            HPX_TEST(resp == expectedp);
+        }
+    }
+}
+
+template <typename ExPolicy>
+void test_unique_copy_contiguous_boundaries(ExPolicy policy)
+{
+    using pack_type = hpx::parallel::traits::vector_pack_type_t<int>;
+    constexpr std::size_t pack_size =
+        hpx::parallel::traits::vector_pack_size_v<pack_type>;
+
+    if constexpr (pack_size > 1)
+    {
+        for (std::size_t mult = 1; mult <= 4; ++mult)
+        {
+            std::size_t sz = mult * pack_size * 2 + 3;
+            std::vector<int> c(sz);
+            std::iota(c.begin(), c.end(), 0);
+
+            std::size_t start = mult * pack_size > 2 ? mult * pack_size - 2 : 0;
+            std::size_t end = (std::min) (sz, mult * pack_size + 3);
+            for (std::size_t i = start; i < end; ++i)
+            {
+                c[i] = 999;
+            }
+
+            std::vector<int> res(sz);
+            std::vector<int> expected(sz);
+
+            auto result = hpx::unique_copy(policy, c.begin(), c.end(),
+                res.begin(), [](auto const a, auto const b) { return a == b; });
+            res.erase(result, res.end());
+
+            auto exp_end = std::unique_copy(c.begin(), c.end(),
+                expected.begin(), [](int a, int b) { return a == b; });
+            expected.erase(exp_end, expected.end());
+
+            HPX_TEST(res == expected);
+        }
+
+        for (std::size_t sz :
+            {pack_size, pack_size + 1, 2 * pack_size, 3 * pack_size + 2})
+        {
+            std::vector<int> c(sz, 7);
+            std::vector<int> res(sz);
+            std::vector<int> expected(sz);
+
+            auto result = hpx::unique_copy(policy, c.begin(), c.end(),
+                res.begin(), [](auto const a, auto const b) { return a == b; });
+            res.erase(result, res.end());
+
+            auto exp_end = std::unique_copy(c.begin(), c.end(),
+                expected.begin(), [](int a, int b) { return a == b; });
+            expected.erase(exp_end, expected.end());
+
+            HPX_TEST(res == expected);
+        }
+    }
+}
+
+template <typename ExPolicy>
+void test_unique_copy_uses_simd_path(ExPolicy policy)
+{
+    using pack_type = hpx::parallel::traits::vector_pack_type_t<int>;
+    constexpr std::size_t pack_size =
+        hpx::parallel::traits::vector_pack_size_v<pack_type>;
+
+    if constexpr (pack_size > 1)
+    {
+        std::atomic<int> pack_calls(0);
+        auto pred = [&pack_calls](auto const& a, auto const& b) {
+            if constexpr (!std::is_arithmetic_v<std::decay_t<decltype(a)>>)
+            {
+                ++pack_calls;
+            }
+            return a == b;
+        };
+
+        std::vector<int> c(pack_size * 4 + 1, 0);
+        for (std::size_t i = 0; i < c.size(); ++i)
+        {
+            c[i] = static_cast<int>(i / 2);
+        }
+        std::vector<int> res(c.size());
+        std::vector<int> expected(c.size());
+
+        auto result =
+            hpx::unique_copy(policy, c.begin(), c.end(), res.begin(), pred);
+        res.erase(result, res.end());
+
+        auto exp_end = std::unique_copy(c.begin(), c.end(), expected.begin(),
+            [](int a, int b) { return a == b; });
+        expected.erase(exp_end, expected.end());
+
+        HPX_TEST(res == expected);
+        HPX_TEST(pack_calls > 0);
+    }
+}
+
+template <typename ExPolicy>
 void test_unique_copy_deque(ExPolicy policy)
 {
     std::deque<int> c = {1, 1, 2, 2, 3, 3, 3, 4, 5, 5, 6};
@@ -145,6 +301,11 @@ void unique_copy_test()
 
     test_unique_copy_contiguous(hpx::execution::simd);
     test_unique_copy_contiguous(hpx::execution::par_simd);
+    test_unique_copy_contiguous_random(hpx::execution::simd);
+    test_unique_copy_contiguous_random(hpx::execution::par_simd);
+    test_unique_copy_contiguous_boundaries(hpx::execution::simd);
+    test_unique_copy_contiguous_boundaries(hpx::execution::par_simd);
+    test_unique_copy_uses_simd_path(hpx::execution::simd);
     test_unique_copy_deque(hpx::execution::simd);
     test_unique_copy_deque(hpx::execution::par_simd);
     test_unique_copy_arithmetic_pred(hpx::execution::simd);

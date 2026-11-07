@@ -17,7 +17,6 @@
 #include <hpx/parallel/algorithms/detail/unique.hpp>
 #include <hpx/parallel/datapar/iterator_helpers.hpp>
 #include <hpx/parallel/datapar/loop.hpp>
-#include <hpx/parallel/datapar/zip_iterator.hpp>
 #include <hpx/parallel/util/result_types.hpp>
 
 #include <cstddef>
@@ -27,7 +26,7 @@
 
 namespace hpx::parallel::detail {
 
-    template <typename Pred, typename Proj, typename Vector>
+    HPX_CXX_CORE_EXPORT template <typename Pred, typename Proj, typename Vector>
     inline constexpr bool is_unique_datapar_compatible_v =
         requires(Pred&& pred, Proj&& proj, Vector&& v) {
             requires !std::is_arithmetic_v<std::decay_t<decltype(HPX_INVOKE(
@@ -36,7 +35,7 @@ namespace hpx::parallel::detail {
                 HPX_INVOKE(pred, HPX_INVOKE(proj, v), HPX_INVOKE(proj, v)));
         };
 
-    template <typename Mask>
+    HPX_CXX_CORE_EXPORT template <typename Mask>
     HPX_HOST_DEVICE HPX_FORCEINLINE bool mask_lane_is_true(
         Mask const& msk, std::size_t i) noexcept
     {
@@ -50,7 +49,9 @@ namespace hpx::parallel::detail {
         }
         else
         {
-            return static_cast<bool>(msk);
+            static_assert(sizeof(Mask) == 0,
+                "mask_lane_is_true: unexpected mask type with no lane access");
+            return false;
         }
     }
 
@@ -149,17 +150,6 @@ namespace hpx::parallel::detail {
                 return ++dest;
             }
         }
-
-        template <typename ZipIter, typename Pred, typename Proj>
-        static void call(
-            ZipIter part_begin, std::size_t part_size, Pred&& pred, Proj&& proj)
-        {
-            using base_policy_type =
-                decltype(hpx::execution::experimental::to_non_simd(
-                    std::declval<ExPolicy>()));
-            sequential_unique<base_policy_type>(part_begin, part_size,
-                HPX_FORWARD(Pred, pred), HPX_FORWARD(Proj, proj));
-        }
     };
 
     ///////////////////////////////////////////////////////////////////////////
@@ -251,23 +241,13 @@ namespace hpx::parallel::detail {
                     HPX_MOVE(first), HPX_MOVE(dest)};
             }
         }
-
-        template <typename ZipIter, typename Pred, typename Proj>
-        static std::size_t call(
-            ZipIter part_begin, std::size_t part_size, Pred&& pred, Proj&& proj)
-        {
-            using base_policy_type =
-                decltype(hpx::execution::experimental::to_non_simd(
-                    std::declval<ExPolicy>()));
-            return sequential_unique_copy<base_policy_type>(part_begin,
-                part_size, HPX_FORWARD(Pred, pred), HPX_FORWARD(Proj, proj));
-        }
     };
 
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename InIter,
         typename Sent, typename Pred, typename Proj>
-        requires(hpx::is_vectorpack_execution_policy_v<ExPolicy>)
+        requires(hpx::is_vectorpack_execution_policy_v<ExPolicy> &&
+            !std::is_integral_v<std::decay_t<Sent>>)
     constexpr InIter hpx_invoke(sequential_unique_t<ExPolicy>, InIter first,
         Sent last, Pred&& pred, Proj&& proj)
     {
@@ -289,28 +269,6 @@ namespace hpx::parallel::detail {
                     std::declval<ExPolicy>()));
             return sequential_unique<base_policy_type>(
                 first, last, HPX_FORWARD(Pred, pred), HPX_FORWARD(Proj, proj));
-        }
-    }
-
-    HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename ZipIter,
-        typename Pred, typename Proj>
-        requires(hpx::is_vectorpack_execution_policy_v<ExPolicy>)
-    constexpr void hpx_invoke(sequential_unique_t<ExPolicy>, ZipIter part_begin,
-        std::size_t part_size, Pred&& pred, Proj&& proj)
-    {
-        if constexpr (hpx::parallel::util::detail::iterator_datapar_compatible<
-                          ZipIter>::value)
-        {
-            datapar_unique<ExPolicy>::call(part_begin, part_size,
-                HPX_FORWARD(Pred, pred), HPX_FORWARD(Proj, proj));
-        }
-        else
-        {
-            using base_policy_type =
-                decltype(hpx::execution::experimental::to_non_simd(
-                    std::declval<ExPolicy>()));
-            sequential_unique<base_policy_type>(part_begin, part_size,
-                HPX_FORWARD(Pred, pred), HPX_FORWARD(Proj, proj));
         }
     }
 
@@ -341,28 +299,6 @@ namespace hpx::parallel::detail {
                     std::declval<ExPolicy>()));
             return sequential_unique_copy<base_policy_type>(first, last, dest,
                 HPX_FORWARD(Pred, pred), HPX_FORWARD(Proj, proj), is_fwd);
-        }
-    }
-
-    HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename ZipIter,
-        typename Pred, typename Proj>
-        requires(hpx::is_vectorpack_execution_policy_v<ExPolicy>)
-    constexpr std::size_t hpx_invoke(sequential_unique_copy_t<ExPolicy>,
-        ZipIter part_begin, std::size_t part_size, Pred&& pred, Proj&& proj)
-    {
-        if constexpr (hpx::parallel::util::detail::iterator_datapar_compatible<
-                          ZipIter>::value)
-        {
-            return datapar_unique_copy<ExPolicy>::call(part_begin, part_size,
-                HPX_FORWARD(Pred, pred), HPX_FORWARD(Proj, proj));
-        }
-        else
-        {
-            using base_policy_type =
-                decltype(hpx::execution::experimental::to_non_simd(
-                    std::declval<ExPolicy>()));
-            return sequential_unique_copy<base_policy_type>(part_begin,
-                part_size, HPX_FORWARD(Pred, pred), HPX_FORWARD(Proj, proj));
         }
     }
 

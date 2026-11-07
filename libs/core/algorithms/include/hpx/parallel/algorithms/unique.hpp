@@ -304,9 +304,6 @@ namespace hpx {
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/type_support.hpp>
-#if defined(HPX_HAVE_DATAPAR)
-#include <hpx/executors/datapar/execution_policy_mappings.hpp>
-#endif
 #include <hpx/parallel/algorithms/detail/advance_and_get_distance.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
@@ -382,7 +379,13 @@ namespace hpx::parallel {
 
                 using hpx::get;
 
+#if defined(HPX_HAVE_DATAPAR)
+                using policy_type =
+                    decltype(hpx::execution::experimental::to_non_simd(
+                        std::declval<ExPolicy>()));
+#else
                 using policy_type = std::decay_t<ExPolicy>;
+#endif
 
                 auto f1 = [pred = HPX_FORWARD(Pred, pred),
                               proj = HPX_FORWARD(Proj, proj)](
@@ -517,7 +520,13 @@ namespace hpx::parallel {
                 using scan_partitioner_type = util::scan_partitioner<ExPolicy,
                     unique_copy_result<FwdIter1, FwdIter2>, std::size_t>;
 
+#if defined(HPX_HAVE_DATAPAR)
+                using policy_type =
+                    decltype(hpx::execution::experimental::to_non_simd(
+                        std::declval<ExPolicy>()));
+#else
                 using policy_type = std::decay_t<ExPolicy>;
+#endif
 
                 auto f1 = [pred = HPX_FORWARD(Pred, pred),
                               proj = HPX_FORWARD(Proj, proj)](

@@ -8,11 +8,15 @@
 #include <hpx/init.hpp>
 #include <hpx/modules/testing.hpp>
 
+#include <algorithm>
+#include <atomic>
 #include <cstddef>
 #include <cstdlib>
 #include <ctime>
 #include <deque>
 #include <iostream>
+#include <numeric>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -27,7 +31,7 @@ void test_unique_simd()
 
     int rand_base = std::rand();
 
-    // Test with generic predicate (exercising the SIMD path)
+    // Test with generic predicate on non-contiguous iterator (exercising fallback)
     test_unique(
         simd, IteratorTag(), int(),
         [](auto const a, auto const b) { return a == b; }, rand_base);
@@ -101,6 +105,151 @@ void test_unique_contiguous(ExPolicy policy)
 }
 
 template <typename ExPolicy>
+void test_unique_contiguous_random(ExPolicy policy)
+{
+    using pack_type = hpx::parallel::traits::vector_pack_type_t<int>;
+    constexpr std::size_t pack_size =
+        hpx::parallel::traits::vector_pack_size_v<pack_type>;
+
+    std::vector<std::size_t> sizes = {0, 1, 2, pack_size, pack_size + 1,
+        2 * pack_size, 2 * pack_size + 1, 3 * pack_size, 4 * pack_size,
+        10 * pack_size, 10007};
+    if constexpr (pack_size > 1)
+    {
+        sizes.push_back(pack_size - 1);
+        sizes.push_back(2 * pack_size - 1);
+    }
+
+    std::mt19937 gen(42);
+    std::uniform_int_distribution<int> dis(0, 5);
+
+    for (std::size_t sz : sizes)
+    {
+        std::vector<int> c(sz);
+        std::generate(c.begin(), c.end(), [&]() { return dis(gen); });
+        std::vector<int> d = c;
+
+        auto result = hpx::unique(policy, c.begin(), c.end(),
+            [](auto const a, auto const b) { return a == b; });
+        c.erase(result, c.end());
+
+        auto expected = std::unique(
+            d.begin(), d.end(), [](int a, int b) { return a == b; });
+        d.erase(expected, d.end());
+
+        HPX_TEST(c == d);
+
+        if (sz > 0)
+        {
+            std::vector<int> cp(sz);
+            std::generate(cp.begin(), cp.end(), [&]() { return dis(gen); });
+            std::vector<int> dp = cp;
+
+            int* ptr_res = hpx::unique(policy, cp.data(), cp.data() + cp.size(),
+                [](auto const a, auto const b) { return a == b; });
+            cp.erase(cp.begin() + (ptr_res - cp.data()), cp.end());
+
+            auto exp_ptr = std::unique(
+                dp.begin(), dp.end(), [](int a, int b) { return a == b; });
+            dp.erase(exp_ptr, dp.end());
+
+            HPX_TEST(cp == dp);
+        }
+    }
+}
+
+template <typename ExPolicy>
+void test_unique_contiguous_boundaries(ExPolicy policy)
+{
+    using pack_type = hpx::parallel::traits::vector_pack_type_t<int>;
+    constexpr std::size_t pack_size =
+        hpx::parallel::traits::vector_pack_size_v<pack_type>;
+
+    if constexpr (pack_size > 1)
+    {
+        for (std::size_t mult = 1; mult <= 4; ++mult)
+        {
+            std::size_t sz = mult * pack_size * 2 + 3;
+            std::vector<int> c(sz);
+            std::iota(c.begin(), c.end(), 0);
+
+            std::size_t start = mult * pack_size > 2 ? mult * pack_size - 2 : 0;
+            std::size_t end = (std::min) (sz, mult * pack_size + 3);
+            for (std::size_t i = start; i < end; ++i)
+            {
+                c[i] = 999;
+            }
+
+            std::vector<int> d = c;
+
+            auto result = hpx::unique(policy, c.begin(), c.end(),
+                [](auto const a, auto const b) { return a == b; });
+            c.erase(result, c.end());
+
+            auto expected = std::unique(
+                d.begin(), d.end(), [](int a, int b) { return a == b; });
+            d.erase(expected, d.end());
+
+            HPX_TEST(c == d);
+        }
+
+        for (std::size_t sz :
+            {pack_size, pack_size + 1, 2 * pack_size, 3 * pack_size + 2})
+        {
+            std::vector<int> c(sz, 7);
+            std::vector<int> d = c;
+
+            auto result = hpx::unique(policy, c.begin(), c.end(),
+                [](auto const a, auto const b) { return a == b; });
+            c.erase(result, c.end());
+
+            auto expected = std::unique(
+                d.begin(), d.end(), [](int a, int b) { return a == b; });
+            d.erase(expected, d.end());
+
+            HPX_TEST(c == d);
+        }
+    }
+}
+
+template <typename ExPolicy>
+void test_unique_uses_simd_path(ExPolicy policy)
+{
+    using pack_type = hpx::parallel::traits::vector_pack_type_t<int>;
+    constexpr std::size_t pack_size =
+        hpx::parallel::traits::vector_pack_size_v<pack_type>;
+
+    if constexpr (pack_size > 1)
+    {
+        std::atomic<int> pack_calls(0);
+        auto pred = [&pack_calls](auto const& a, auto const& b) {
+            if constexpr (!std::is_arithmetic_v<std::decay_t<decltype(a)>>)
+            {
+                ++pack_calls;
+            }
+            return a == b;
+        };
+
+        std::vector<int> c(pack_size * 4 + 1, 0);
+        for (std::size_t i = 0; i < c.size(); ++i)
+        {
+            c[i] = static_cast<int>(i / 2);
+        }
+        std::vector<int> d = c;
+
+        auto result = hpx::unique(policy, c.begin(), c.end(), pred);
+        c.erase(result, c.end());
+
+        auto expected = std::unique(
+            d.begin(), d.end(), [](int a, int b) { return a == b; });
+        d.erase(expected, d.end());
+
+        HPX_TEST(c == d);
+        HPX_TEST(pack_calls > 0);
+    }
+}
+
+template <typename ExPolicy>
 void test_unique_deque(ExPolicy policy)
 {
     std::deque<int> c = {1, 1, 2, 2, 3, 3, 3, 4, 5, 5, 6};
@@ -142,6 +291,11 @@ void unique_test()
 
     test_unique_contiguous(hpx::execution::simd);
     test_unique_contiguous(hpx::execution::par_simd);
+    test_unique_contiguous_random(hpx::execution::simd);
+    test_unique_contiguous_random(hpx::execution::par_simd);
+    test_unique_contiguous_boundaries(hpx::execution::simd);
+    test_unique_contiguous_boundaries(hpx::execution::par_simd);
+    test_unique_uses_simd_path(hpx::execution::simd);
     test_unique_deque(hpx::execution::simd);
     test_unique_deque(hpx::execution::par_simd);
     test_unique_arithmetic_pred(hpx::execution::simd);
