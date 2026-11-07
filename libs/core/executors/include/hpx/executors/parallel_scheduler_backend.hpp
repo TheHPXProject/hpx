@@ -136,6 +136,14 @@ namespace hpx::execution::experimental {
         virtual bool equal_to(
             parallel_scheduler_backend const& other) const noexcept = 0;
 
+        // P3927R2: Query the forward progress guarantee of the backend.
+        virtual hpx::execution::experimental::forward_progress_guarantee
+        get_forward_progress_guarantee() const noexcept
+        {
+            return hpx::execution::experimental::forward_progress_guarantee::
+                concurrent;
+        }
+
         // Access the underlying thread pool scheduler (HPX-specific).
         // Returns nullptr if this backend doesn't wrap a thread_pool_policy_scheduler.
         // Used by parallel_scheduler_domain::transform_sender to create
