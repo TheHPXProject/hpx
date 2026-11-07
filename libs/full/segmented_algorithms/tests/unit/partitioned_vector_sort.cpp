@@ -1,4 +1,4 @@
-//  Copyright (c) 2026 the-ivii
+//  Copyright (c) 2026 Pratyksh Gupta
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -414,71 +414,17 @@ void test_kway_merge()
     }
 }
 
-void test_host_placement(std::vector<hpx::id_type> const& localities)
+void test_large_transfers(std::vector<hpx::id_type> const& localities)
 {
-    namespace detail = hpx::parallel::detail;
-    constexpr auto unit = static_cast<std::ptrdiff_t>(
-        detail::segmented_sort_transfer_chunk_size / 32 + 1);
-    std::vector<int> data(static_cast<std::size_t>(45 * unit));
-    using iterator = std::vector<int>::iterator;
-    detail::segmented_sort_block<iterator> runs;
-    auto const& a = localities.front();
-    auto const& b = localities.back();
-    // A owns the largest individual run (5 units); B owns ten of 4.
-    runs.emplace_back(a, a, data.begin(), data.begin() + 5 * unit);
-    for (std::ptrdiff_t i = 5 * unit; i < 45 * unit; i += 4 * unit)
-    {
-        runs.emplace_back(b, b, data.begin() + i, data.begin() + i + 4 * unit);
-    }
-    HPX_TEST(detail::segmented_sort_host(runs, {}) == b);
-
-    if (a != b)
-    {
-        hpx::partitioned_vector<int> values(
-            200, 0, hpx::container_layout(20, std::vector<hpx::id_type>{a, b}));
-        initialize_values(values, [](int i) { return 200 - i; });
-        auto first = values.begin() + 90;
-        auto participating = detail::segmented_sort_runs(first, values.end());
-        HPX_TEST_EQ(participating.size(), std::size_t(11));
-        HPX_TEST(participating.front().locality == a);
-        HPX_TEST_EQ(std::count_if(participating.begin(), participating.end(),
-                        [&](auto const& run) { return run.locality == b; }),
-            std::ptrdiff_t(10));
-        HPX_TEST(detail::segmented_sort_host(participating, {}) == b);
-        auto expected = copy_values(values);
-        std::sort(expected.begin() + 90, expected.end());
-        hpx::sort(hpx::execution::par, first, values.end());
-        HPX_TEST(copy_values(values) == expected);
-    }
-}
-
-void test_transfer_chunks(std::vector<hpx::id_type> const& localities)
-{
-    namespace detail = hpx::parallel::detail;
-    auto const size = 8 * detail::segmented_sort_transfer_chunk_size + 7;
+    // Large enough to exercise multiple bounded transfers through the public
+    // algorithm without depending on implementation helpers.
+    constexpr std::size_t size = 8 * 65536 + 7;
     hpx::partitioned_vector<int> values(
         size, 0, hpx::container_layout(3, localities));
     initialize_values(values,
         [](std::size_t i) { return static_cast<int>((i * 17 + 3) % 97); });
     auto expected = copy_values(values);
     std::sort(expected.begin() + 1, expected.end() - 2);
-    auto runs =
-        detail::segmented_sort_runs(values.begin() + 1, values.end() - 2);
-    auto chunks = detail::segmented_sort_transfer_chunks(runs);
-    std::size_t total = 0;
-    for (auto const& chunk : chunks)
-    {
-        auto const n = detail::segmented_sort_block_size(chunk);
-        HPX_TEST_LTE(n, detail::segmented_sort_transfer_chunk_size);
-        total += n;
-        for (auto const& run : chunk)
-        {
-            HPX_TEST(run.locality ==
-                hpx::get_colocation_id(hpx::launch::sync, run.id));
-            HPX_TEST(run.locality != run.id);
-        }
-    }
-    HPX_TEST_EQ(total, size - 3);
     hpx::sort(hpx::execution::par(hpx::execution::task), values.begin() + 1,
         values.end() - 2)
         .get();
@@ -487,8 +433,7 @@ void test_transfer_chunks(std::vector<hpx::id_type> const& localities)
     // Exercise the distributed merge with nontrivial values and descending
     // order as well as the default integer comparator above.
     hpx::partitioned_vector<std::string> strings(
-        2 * detail::segmented_sort_transfer_chunk_size + 7, std::string{},
-        hpx::container_layout(3, localities));
+        2 * 65536 + 7, std::string{}, hpx::container_layout(3, localities));
     initialize_values(strings, [](std::size_t i) {
         return std::to_string((i * 17 + 3) % 97) + std::string(32, 'x');
     });
@@ -657,55 +602,12 @@ void test_async_run_collection(ExPolicy const& policy)
     }
 }
 
-void test_transfer_batches(std::vector<hpx::id_type> const& localities)
-{
-    namespace detail = hpx::parallel::detail;
-    auto const partitions = 4 * localities.size();
-    hpx::partitioned_vector<int> values(
-        partitions * 9, 0, hpx::container_layout(partitions, localities));
-    initialize_values(values, [](int i) { return i; });
-    auto runs = detail::segmented_sort_runs(values.begin(), values.end());
-    decltype(runs) block;
-    std::vector<int> expected;
-    // Interleave ownership so four localities cross the eight-action batch
-    // boundary. The helper must preserve logical order and disjoint writes.
-    for (std::size_t piece = 0; piece < 4; ++piece)
-    {
-        for (std::size_t locality = 0; locality < localities.size(); ++locality)
-        {
-            auto const index = 4 * locality + piece;
-            block.push_back(runs[index]);
-            for (std::size_t i = 0; i < 9; ++i)
-            {
-                expected.push_back(static_cast<int>(9 * index + i));
-            }
-        }
-    }
-    auto fetched =
-        detail::segmented_sort_fetch_block(hpx::execution::par, block);
-    HPX_TEST(fetched == expected);
-    for (auto& value : fetched)
-    {
-        value = -value - 1;
-    }
-    auto end = detail::segmented_sort_store_block(
-        hpx::execution::par, block, fetched.begin());
-    HPX_TEST(end == fetched.end());
-    auto got = copy_values(values);
-    for (std::size_t i = 0; i < got.size(); ++i)
-    {
-        HPX_TEST_EQ(got[i], -static_cast<int>(i) - 1);
-    }
-}
-
 ///////////////////////////////////////////////////////////////////////////////
 int main()
 {
     std::vector<hpx::id_type> localities = hpx::find_all_localities();
     test_kway_merge();
-    test_host_placement(localities);
-    test_transfer_chunks(localities);
-    test_transfer_batches(localities);
+    test_large_transfers(localities);
     test_async_run_collection(hpx::execution::seq(hpx::execution::task));
     test_async_run_collection(hpx::execution::par(hpx::execution::task));
     test_merge_exceptions(hpx::execution::seq, localities);

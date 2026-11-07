@@ -1,4 +1,4 @@
-//  Copyright (c) 2026 the-ivii
+//  Copyright (c) 2026 Pratyksh Gupta
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -68,6 +68,8 @@ namespace hpx::parallel::detail {
         static InIter parallel(ExPolicy&& policy, InIter first, Sent last,
             Comp&& comp, Proj&& proj)
         {
+            // The shared control path still passes the parallel policy to the
+            // local hpx::sort invocation above.
             return sequential(HPX_FORWARD(ExPolicy, policy), first, last,
                 HPX_FORWARD(Comp, comp), HPX_FORWARD(Proj, proj));
         }
@@ -315,6 +317,8 @@ namespace hpx::parallel::detail {
         static std::vector<value_type> parallel(
             ExPolicy const& policy, segmented_sort_block<LocalIter> const& runs)
         {
+            // A single block is copied serially. Concurrency between remote
+            // blocks is provided by segmented_sort_fetch_block.
             return sequential(policy, runs);
         }
     };
@@ -352,6 +356,8 @@ namespace hpx::parallel::detail {
             segmented_sort_block<LocalIter> const& runs,
             std::vector<value_type> values)
         {
+            // The shared control path still passes the parallel policy to
+            // hpx::move for every destination run.
             return sequential(policy, runs, HPX_MOVE(values));
         }
     };
@@ -583,6 +589,8 @@ namespace hpx::parallel::detail {
         static bool parallel(ExPolicy const& policy,
             segmented_sort_block<LocalIter> const& runs, Comp comp, Proj proj)
         {
+            // The run loop is orchestration; each local sort receives the
+            // parallel policy, and localities are overlapped by the caller.
             return sequential(policy, runs, HPX_MOVE(comp), HPX_MOVE(proj));
         }
     };
@@ -721,14 +729,17 @@ namespace hpx::parallel::detail {
         static bool parallel(ExPolicy const& policy,
             segmented_sort_block<LocalIter> const& runs, Comp comp, Proj proj)
         {
+            // The current first implementation intentionally shares the
+            // serial k-way merge. The policy still controls fetch/store work.
             return execute(policy, runs, HPX_MOVE(comp), HPX_MOVE(proj));
         }
     };
 
-    // Fetch each sorted run once onto the locality already holding the most
-    // participating data, perform one serial k-way merge there, and write each
-    // final run once. Network traffic and coordinator storage are linear in the
-    // input size.
+    // This first implementation fetches each sorted run onto the locality
+    // already holding the most participating data, performs one serial k-way
+    // merge there, and writes each final run once. Network traffic and peak
+    // coordinator storage are O(N); the merge is O(N log P), where P is the
+    // number of participating runs.
     template <typename ExPolicy, typename LocalIter, typename Comp,
         typename Proj, typename IsSeq>
     void segmented_sort_merge_runs(ExPolicy const& policy,
@@ -830,10 +841,11 @@ namespace hpx::segmented {
     /// spanning localities, the comparator must be copyable and serializable
     /// by HPX.
     ///
-    /// The final merge runs serially on one participating locality and uses
-    /// storage proportional to the input size. Destination runs are committed
-    /// incrementally; an exception during this phase can leave a partially
-    /// reordered range.
+    /// This first implementation gathers all participating runs on one
+    /// locality. Its final merge is serial, requires O(N) coordinator storage,
+    /// and takes O(N log P) comparisons for P participating runs. Destination
+    /// runs are committed incrementally; an exception during this phase can
+    /// leave a partially reordered range.
     HPX_CXX_EXPORT template <typename SegIter,
         typename Comp = hpx::parallel::detail::less>
         requires(hpx::traits::is_iterator_v<SegIter> &&
@@ -859,10 +871,11 @@ namespace hpx::segmented {
     /// serializable by HPX.
     ///
     /// The policy controls local partition sorting and whether independent
-    /// locality operations overlap. The final merge runs serially on one
-    /// participating locality and uses storage proportional to the input size.
-    /// Destination runs are committed incrementally; an exception during this
-    /// phase can leave a partially reordered range.
+    /// locality operations overlap. This first implementation gathers all
+    /// participating runs on one locality. Its final merge is serial, requires
+    /// O(N) coordinator storage, and takes O(N log P) comparisons for P
+    /// participating runs. Destination runs are committed incrementally; an
+    /// exception during this phase can leave a partially reordered range.
     HPX_CXX_EXPORT template <typename ExPolicy, typename SegIter,
         typename Comp = hpx::parallel::detail::less>
         requires(hpx::is_execution_policy_v<ExPolicy> &&

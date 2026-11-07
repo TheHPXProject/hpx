@@ -112,8 +112,14 @@ namespace examples::server {
 
             do
             {
+                if (tuples_.empty())
+                {
+                    continue;
+                }
+
                 {
                     std::lock_guard<mutex_type> l(mtx_);
+
                     result = tuples_.match(tp);
                 }
 
@@ -135,8 +141,14 @@ namespace examples::server {
 
             do
             {
+                if (tuples_.empty())
+                {
+                    continue;
+                }
+
                 {
                     std::lock_guard<mutex_type> l(mtx_);
+
                     result = tuples_.match_and_erase(tp);
                 }
 

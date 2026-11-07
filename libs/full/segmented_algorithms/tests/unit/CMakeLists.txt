@@ -129,13 +129,8 @@ foreach(test ${tests})
 endforeach()
 
 if(HPX_WITH_CXX_MODULES)
-  # These tests inspect implementation helpers that are not exported by
-  # HPX.Full.
-  foreach(test partitioned_vector_merge_extended
-               partitioned_vector_merge_regressions partitioned_vector_sort
+  # This test inspects implementation helpers that are not exported by HPX.Full.
+  target_compile_definitions(
+    partitioned_vector_sort_test PRIVATE HPX_HAVE_FORCE_NO_CXX_MODULES
   )
-    target_compile_definitions(
-      ${test}_test PRIVATE HPX_HAVE_FORCE_NO_CXX_MODULES
-    )
-  endforeach()
 endif()
