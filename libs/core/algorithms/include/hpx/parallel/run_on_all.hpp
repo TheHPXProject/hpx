@@ -12,8 +12,8 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/assert.hpp>
 #include <hpx/modules/concepts.hpp>
+#include <hpx/modules/errors.hpp>
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/execution_base.hpp>
 #include <hpx/modules/executors.hpp>
@@ -118,6 +118,141 @@ namespace hpx::experimental {
                 HPX_FORWARD(ExPolicy, policy), HPX_MOVE(f), std::get<Is>(t)...);
         }
 
+        template <typename Tuple, std::size_t... Is>
+        constexpr void init_iterations(Tuple& t, hpx::util::index_pack<Is...>)
+        {
+            if constexpr (sizeof...(Is) > 0)
+            {
+                (std::get<Is>(t).init_iteration(0, 0), ...);
+            }
+        }
+
+        template <typename Tuple, std::size_t... Is>
+        constexpr void exit_iterations(Tuple& t, hpx::util::index_pack<Is...>)
+        {
+            if constexpr (sizeof...(Is) > 0)
+            {
+                (std::get<Is>(t).exit_iteration(0), ...);
+            }
+        }
+
+        template <typename F, typename Tuple, std::size_t... Is>
+        constexpr void invoke_iteration_values(
+            F& f, Tuple& t, std::size_t i, hpx::util::index_pack<Is...>)
+        {
+            if constexpr (sizeof...(Is) == 0)
+            {
+                if constexpr (std::is_invocable_v<F&, std::size_t>)
+                {
+                    f(i);
+                }
+                else
+                {
+                    f();
+                }
+            }
+            else
+            {
+                f(std::get<Is>(t).iteration_value(i)...);
+            }
+        }
+
+        template <typename Sp>
+        struct run_on_all_cleanup
+        {
+            Sp sp_;
+
+            void operator()() const
+            {
+                exit_iterations(*sp_,
+                    hpx::util::make_index_pack_t<
+                        std::tuple_size_v<std::decay_t<decltype(*sp_)>>>{});
+            }
+        };
+
+        template <typename Cleanup>
+        struct run_on_all_error
+        {
+            Cleanup cleanup_;
+
+            auto operator()(std::exception_ptr ep) const
+            {
+                try
+                {
+                    cleanup_();
+                }
+                // NOLINTNEXTLINE(bugprone-empty-catch)
+                catch (...)
+                {
+                    // silently swallow secondary exceptions during cleanup
+                }
+                return hpx::execution::experimental::just_error(HPX_MOVE(ep));
+            }
+        };
+
+        template <typename Sp, typename F>
+        struct run_on_all_bulk_task
+        {
+            Sp sp_;
+            std::decay_t<F> f_;
+
+            template <typename... Ts>
+            void operator()(std::size_t i, Ts&&...)
+            {
+                invoke_iteration_values(f_, *sp_, i,
+                    hpx::util::make_index_pack_t<
+                        std::tuple_size_v<std::decay_t<decltype(*sp_)>>>{});
+            }
+        };
+
+        template <typename Scheduler, typename F, typename ReductionsTuple>
+        struct run_on_all_start
+        {
+            std::decay_t<Scheduler> sched_;
+            std::decay_t<F> f_;
+            ReductionsTuple reductions_;
+
+            auto operator()()
+            {
+                namespace ex = hpx::execution::experimental;
+
+                auto cores = ex::processing_units_count(sched_);
+                auto const limit =
+                    hpx::parallel::execution::detail::get_os_thread_count();
+                if (cores > limit)
+                {
+                    HPX_THROW_EXCEPTION(hpx::error::bad_parameter, "run_on_all",
+                        "The number of cores exceeds the allocated reduction "
+                        "storage size.");
+                }
+
+                auto sp =
+                    std::make_shared<ReductionsTuple>(HPX_MOVE(reductions_));
+
+                init_iterations(*sp,
+                    hpx::util::make_index_pack_t<
+                        std::tuple_size_v<ReductionsTuple>>{});
+
+                auto sched = ex::with_hint(
+                    ex::with_priority(
+                        sched_, hpx::threads::thread_priority::bound),
+                    hpx::threads::thread_schedule_hint(
+                        hpx::threads::thread_sharing_hint::
+                            do_not_share_function));
+
+                run_on_all_bulk_task<decltype(sp), F> bulk_task{
+                    sp, HPX_MOVE(f_)};
+                run_on_all_cleanup<decltype(sp)> cleanup_action{sp};
+                run_on_all_error<decltype(cleanup_action)> error_action{
+                    cleanup_action};
+
+                return ex::schedule(HPX_MOVE(sched)) |
+                    ex::bulk(cores, HPX_MOVE(bulk_task)) |
+                    ex::let_error(HPX_MOVE(error_action)) |
+                    ex::then(HPX_MOVE(cleanup_action));
+            }
+        };
+
         HPX_CXX_CORE_EXPORT template <typename Scheduler, typename F,
             typename... Reductions>
         // clang-format off
@@ -128,51 +263,16 @@ namespace hpx::experimental {
         decltype(auto) run_on_all_sched(
             Scheduler&& sched, F&& f, Reductions&&... reductions)
         {
-            auto cores =
-                hpx::execution::experimental::processing_units_count(sched);
-            HPX_ASSERT(cores <=
-                hpx::parallel::execution::detail::get_os_thread_count());
-
             namespace ex = hpx::execution::experimental;
 
             auto all_reductions =
                 std::make_tuple(HPX_FORWARD(Reductions, reductions)...);
-            auto sp = std::make_shared<decltype(all_reductions)>(
-                HPX_MOVE(all_reductions));
+            using reductions_type = decltype(all_reductions);
 
-            std::apply([&](auto&... r) { (r.init_iteration(0, 0), ...); }, *sp);
-
-            // Extract lambdas before pipeline composition. This prevents a
-            // Clang 22 template-instantiation crash (exit code 139).
-            auto bulk_task = [sp, f = HPX_FORWARD(F, f)](std::size_t i) {
-                std::apply(
-                    [&](auto&... r) { f(r.iteration_value(i)...); }, *sp);
-            };
-
-            auto cleanup_task = [sp]() mutable {
-                std::apply([](auto&... r) { (r.exit_iteration(0), ...); }, *sp);
-            };
-
-            auto cleanup_error = [sp]() mutable {
-                std::apply([](auto&... r) { (r.exit_iteration(0), ...); }, *sp);
-            };
-
-            return ex::schedule(HPX_FORWARD(Scheduler, sched)) |
-                ex::bulk(cores, HPX_MOVE(bulk_task)) |
-                ex::let_error([cleanup_error = HPX_MOVE(cleanup_error)](
-                                  std::exception_ptr ep) mutable {
-                    try
-                    {
-                        HPX_INVOKE(cleanup_error);
-                    }
-                    // NOLINTNEXTLINE(bugprone-empty-catch)
-                    catch (...)
-                    {
-                        // silently swallow secondary exceptions during cleanup
-                    }
-                    return ex::just_error(HPX_MOVE(ep));
-                }) |
-                ex::then(HPX_MOVE(cleanup_task));
+            return ex::let_value(ex::just(),
+                run_on_all_start<Scheduler, F, reductions_type>{
+                    HPX_FORWARD(Scheduler, sched), HPX_FORWARD(F, f),
+                    HPX_MOVE(all_reductions)});
         }
 
         HPX_CXX_CORE_EXPORT template <typename Scheduler, std::size_t... Is,
