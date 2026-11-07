@@ -1216,8 +1216,23 @@ namespace hpx::threads::policies {
 
             if (thread_schedule_state::unknown == state)
             {
-                return thread_map_count_ + new_tasks_count_.data_ -
-                    terminated_items_count_;
+                // Read the counters in the order in which a thread leaves
+                // them, so that a thread that changes state while they are
+                // read may be counted once too often, but is never missed if
+                // it stays in this queue (scheduled_thread_pool::
+                // suspend_internal waits for the sum over all queues to
+                // drop): add_new increments thread_map_count_ before it
+                // decrements new_tasks_count_, and the cleanup decrements
+                // terminated_items_count_ before thread_map_count_. An
+                // acquire load that sees the later write of such a pair makes
+                // the earlier one visible to the loads after it.
+                std::int64_t const staged =
+                    new_tasks_count_.data_.load(std::memory_order_acquire);
+                std::int64_t const in_map =
+                    thread_map_count_.load(std::memory_order_acquire);
+                std::int64_t const terminated =
+                    terminated_items_count_.load(std::memory_order_acquire);
+                return in_map + staged - terminated;
             }
 
             // acquire lock only if absolutely necessary
