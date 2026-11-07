@@ -1115,9 +1115,8 @@ namespace hpx {
                 std::unique_lock<mutex_type> l(data->mtx_);
                 if (stoken.stop_requested())
                 {
-                    // pred() has already evaluated to false since we last
-                    // an acquired lock
-                    return false;
+                    l.unlock();
+                    return pred();
                 }
 
                 unlock_guard<Lock> unlock(lock);
@@ -1210,9 +1209,8 @@ namespace hpx {
                     std::unique_lock<mutex_type> l(data->mtx_);
                     if (stoken.stop_requested())
                     {
-                        // pred() has already evaluated to false since we last
-                        // acquired lock.
-                        return false;
+                        l.unlock();
+                        return pred();
                     }
 
                     unlock_guard<Lock> unlock(lock);
