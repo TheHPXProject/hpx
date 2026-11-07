@@ -227,16 +227,17 @@ namespace hpx::parallel::util::detail {
         using type = decltype(hpx::execution::experimental::just());
 
         template <typename T_>
-        static constexpr auto get(T_&& t)
+        static constexpr auto get([[maybe_unused]] T_&& t)
         {
             namespace ex = hpx::execution::experimental;
             if constexpr (ex::is_sender_v<T_>)
             {
-                return HPX_FORWARD(T_, t);
+                // Public void algorithms must not expose internal results.
+                return ex::then(HPX_FORWARD(T_, t), [](auto&&...) noexcept {});
             }
             else
             {
-                return ex::just(HPX_FORWARD(T_, t));
+                return ex::just();
             }
         }
     };
