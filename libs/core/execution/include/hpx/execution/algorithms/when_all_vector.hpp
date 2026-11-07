@@ -35,11 +35,10 @@ namespace hpx::when_all_vector_detail {
     // callback object to request cancellation
     HPX_CXX_CORE_EXPORT struct on_stop_requested
     {
-        hpx::stop_source stop_source_;
+        hpx::experimental::in_place_stop_source& stop_source_;
         void operator()() noexcept
         {
-            hpx::stop_source stop_source = stop_source_;
-            stop_source.request_stop();
+            stop_source_.request_stop();
         }
     };
 
@@ -226,7 +225,8 @@ namespace hpx::when_all_vector_detail {
                 decltype(hpx::execution::experimental::get_env(
                     std::declval<std::decay_t<Receiver> const&>()));
             using stop_token_type =
-                decltype(std::declval<hpx::stop_source>().get_token());
+                decltype(std::declval<hpx::experimental::in_place_stop_source>()
+                        .get_token());
             using prop_type = decltype(hpx::execution::experimental::prop(
                 hpx::execution::experimental::get_stop_token,
                 std::declval<stop_token_type>()));
@@ -246,7 +246,7 @@ namespace hpx::when_all_vector_detail {
             std::size_t const num_predecessors;
             HPX_NO_UNIQUE_ADDRESS std::decay_t<Receiver> receiver;
 
-            hpx::stop_source stop_source_{};
+            hpx::experimental::in_place_stop_source stop_source_{};
 
             using stop_token_t = hpx::execution::experimental::stop_token_of_t<
                 hpx::execution::experimental::env_of_t<receiver_type>&>;
@@ -466,7 +466,6 @@ namespace hpx::when_all_vector_detail {
                 // the child operations.
                 if (stop_source_.stop_requested())
                 {
-                    on_stop_.reset();
                     hpx::execution::experimental::set_stopped(
                         HPX_FORWARD(Receiver, receiver));
                     return;
@@ -476,7 +475,6 @@ namespace hpx::when_all_vector_detail {
                 // continuation as soon as start is called.
                 if (num_predecessors == 0)
                 {
-                    on_stop_.reset();
                     // If the predecessor sender type sends nothing, we also
                     // send nothing to the continuation.
                     if constexpr (is_void_value_type)
@@ -539,8 +537,7 @@ namespace hpx::when_all_vector_detail {
         if (!op_state.set_stopped_error_called.exchange(
                 true, std::memory_order_acq_rel))
         {
-            hpx::stop_source stop_source = op_state.stop_source_;
-            stop_source.request_stop();
+            op_state.stop_source_.request_stop();
             try
             {
                 op_state.error = HPX_FORWARD(Error, error);
@@ -565,8 +562,7 @@ namespace hpx::when_all_vector_detail {
         if (!op_state.set_stopped_error_called.exchange(
                 true, std::memory_order_acq_rel))
         {
-            hpx::stop_source stop_source = op_state.stop_source_;
-            stop_source.request_stop();
+            op_state.stop_source_.request_stop();
         }
         op_state.finish();
     }
