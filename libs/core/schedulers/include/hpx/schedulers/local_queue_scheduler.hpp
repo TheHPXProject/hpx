@@ -879,7 +879,10 @@ namespace hpx::threads::policies {
             if (any(core_mask) && any(node_mask))
             {
 #if !defined(HPX_NATIVE_MIC)    // we know that the MIC has one NUMA domain only
-                set(steals_in_numa_domain_, num_pu);
+                {
+                    std::lock_guard<Mutex> l(steals_mtx_);
+                    set(steals_in_numa_domain_, num_pu);
+                }
 #endif
                 numa_domain_masks_[num_thread] = node_mask;
             }
@@ -912,7 +915,10 @@ namespace hpx::threads::policies {
                     return;
 
 #if !defined(HPX_NATIVE_MIC)    // we know that the MIC has one NUMA domain only
-                set(steals_outside_numa_domain_, num_pu);
+                {
+                    std::lock_guard<Mutex> l(steals_mtx_);
+                    set(steals_outside_numa_domain_, num_pu);
+                }
 #endif
                 mask_type outside_numa_domain_mask = mask_type();
                 resize(outside_numa_domain_mask, mask_size(machine_mask));
@@ -955,6 +961,8 @@ namespace hpx::threads::policies {
         numa_sensitive_mode const numa_sensitive_;
 
 #if !defined(HPX_NATIVE_MIC)    // we know that the MIC has one NUMA domain only
+        // The workers of a pool start concurrently and share these masks.
+        Mutex steals_mtx_;
         mask_type steals_in_numa_domain_ = mask_type();
         mask_type steals_outside_numa_domain_ = mask_type();
 #endif
