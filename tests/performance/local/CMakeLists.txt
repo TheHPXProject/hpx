@@ -53,34 +53,9 @@ if(HPX_WITH_DATAPAR)
 endif()
 
 if(HPX_WITH_EXAMPLES_OPENMP)
-  list(APPEND benchmarks openmp_homogeneous_timed_task_spawn
-       openmp_parallel_region
-  )
+  list(APPEND benchmarks openmp_parallel_region)
 
-  set(openmp_homogeneous_timed_task_spawn_FLAGS
-      NOLIBS DEPENDENCIES ${boost_library_dependencies} hpx_core
-  )
   set(openmp_parallel_region_FLAGS NOLIBS DEPENDENCIES hpx_core)
-endif()
-
-if(HPX_WITH_EXAMPLES_QTHREADS)
-  list(APPEND benchmarks qthreads_homogeneous_timed_task_spawn
-       qthreads_heterogeneous_timed_task_spawn
-  )
-
-  set(qthreads_homogeneous_timed_task_spawn_FLAGS
-      NOLIBS DEPENDENCIES ${boost_library_dependencies} ${Qthreads_LIBRARIES}
-      hpx_core
-  )
-
-  set(qthreads_heterogeneous_timed_task_spawn_FLAGS
-      NOLIBS DEPENDENCIES ${boost_library_dependencies} ${Qthreads_LIBRARIES}
-      hpx_core
-  )
-
-  set(qthreads_heterogeneous_timed_task_spawn_INCLUDE_DIRECTORIES
-      ${Qthreads_INCLUDE_DIR}
-  )
 endif()
 
 if(HPX_WITH_DISTRIBUTED_RUNTIME)
@@ -208,14 +183,6 @@ if(HPX_WITH_LIBCDS)
 endif()
 
 if(HPX_WITH_EXAMPLES_OPENMP)
-  set_target_properties(
-    openmp_homogeneous_timed_task_spawn_test PROPERTIES COMPILE_FLAGS
-                                                        ${OpenMP_CXX_FLAGS}
-  )
-  set_target_properties(
-    openmp_homogeneous_timed_task_spawn_test PROPERTIES LINK_FLAGS
-                                                        ${OpenMP_CXX_FLAGS}
-  )
   set_target_properties(
     openmp_parallel_region_test PROPERTIES COMPILE_FLAGS ${OpenMP_CXX_FLAGS}
   )

@@ -508,6 +508,12 @@ namespace hpx::collectives {
                     hpx::error::bad_parameter, "hpx::collectives::gather_here",
                     "the generation number shouldn't be zero"));
             }
+            if (!fid.valid())
+            {
+                return hpx::make_exceptional_future<Result>(HPX_GET_EXCEPTION(
+                    hpx::error::invalid_status, "hpx::collectives::gather_here",
+                    "the communicator is not valid"));
+            }
 
             // Handle operation right away if there is only one value.
             if (auto [num_sites, comm_site] = fid.get_info(); num_sites == 1)
@@ -720,6 +726,13 @@ namespace hpx::collectives {
                 return hpx::make_exceptional_future<void>(HPX_GET_EXCEPTION(
                     hpx::error::bad_parameter, "hpx::collectives::gather_there",
                     "the generation number shouldn't be zero"));
+            }
+            if (!fid.valid())
+            {
+                return hpx::make_exceptional_future<void>(
+                    HPX_GET_EXCEPTION(hpx::error::invalid_status,
+                        "hpx::collectives::gather_there",
+                        "the communicator is not valid"));
             }
 
             auto gather_there_data =

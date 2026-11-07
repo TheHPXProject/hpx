@@ -251,8 +251,8 @@ average: {{average(elapsed)}}
 
 #if defined(HPX_HAVE_NANOBENCH)
     void perftests_report(std::string const& name, std::string const& exec,
-        std::size_t const steps, hpx::function<void()>&& test,
-        hpx::function<void()> pretest)
+        std::size_t const steps, std::size_t const warmup,
+        hpx::function<void()>&& test, hpx::function<void()> pretest)
     {
         if (steps == 0)
             return;
@@ -263,6 +263,7 @@ average: {{average(elapsed)}}
                 .name(name)
                 .context("executor", exec)
                 .epochs(steps)
+                .warmup(warmup)
                 .run(test);
         }
         else
@@ -271,12 +272,21 @@ average: {{average(elapsed)}}
                 .name(name)
                 .context("executor", exec)
                 .epochs(steps)
+                .warmup(warmup)
                 .run([&]() {
                     // nanobench doesn't allow separating pretest from test
                     pretest();
                     test();
                 });
         }
+    }
+
+    void perftests_report(std::string const& name, std::string const& exec,
+        std::size_t const steps, hpx::function<void()>&& test,
+        hpx::function<void()> pretest)
+    {
+        perftests_report(name, exec, steps, detail::nanobench_warmup,
+            HPX_MOVE(test), HPX_MOVE(pretest));
     }
 
     // Print all collected results to the provided stream,
@@ -318,19 +328,23 @@ average: {{average(elapsed)}}
     }
 #else
     void perftests_report(std::string const& name, std::string const& exec,
-        std::size_t const steps, hpx::function<void()>&& test,
-        hpx::function<void()> pretest)
+        std::size_t const steps, std::size_t const warmup,
+        hpx::function<void()>&& test, hpx::function<void()> pretest)
     {
         if (steps == 0)
             return;
 
-        // First iteration to cache the data
-        if (!pretest.empty())
+        // Untimed iterations to cache the data
+        for (std::size_t i = 0; i != warmup; ++i)
         {
-            pretest();
+            if (!pretest.empty())
+            {
+                pretest();
+            }
+
+            test();
         }
 
-        test();
         using timer = std::chrono::high_resolution_clock;
         for (std::size_t i = 0; i != steps; ++i)
         {
@@ -349,6 +363,14 @@ average: {{average(elapsed)}}
                     timer::now() - start);
             detail::add_time(name, exec, time.count());
         }
+    }
+
+    void perftests_report(std::string const& name, std::string const& exec,
+        std::size_t const steps, hpx::function<void()>&& test,
+        hpx::function<void()> pretest)
+    {
+        perftests_report(
+            name, exec, steps, 1, HPX_MOVE(test), HPX_MOVE(pretest));
     }
 
     void perftests_print_times()

@@ -236,6 +236,12 @@ namespace hpx::cuda::experimental::detail {
     // -------------------------------------------------------------
     void register_polling(hpx::threads::thread_pool_base& pool)
     {
+        // create the event pool (and with it initialize the CUDA runtime used
+        // by this module) here instead of on the first call to poll() from a
+        // worker thread: on Windows that first call failed intermittently
+        // with cudaErrorNotSupported
+        [[maybe_unused]] auto& event_pool = cuda_event_pool::get_event_pool();
+
 #if defined(HPX_DEBUG)
         ++get_register_polling_count();
 #endif

@@ -39,16 +39,23 @@ namespace hpx::cuda::experimental {
                 "Number of CUDA event pools does not match the number of "
                 "devices!");
 
+            // this may run during static destruction after the CUDA runtime
+            // has been unloaded (e.g. on Windows); a destructor must not
+            // throw, and the events go away with the context anyway
             for (int device = 0; device < max_number_devices_; device++)
             {
-                check_cuda_error(cudaSetDevice(device));
+                // don't let an error left from an earlier asynchronous
+                // operation stop the cleanup
+                [[maybe_unused]] cudaError_t const previous_error =
+                    cudaGetLastError();
+                if (cudaSetDevice(device) != cudaSuccess)
+                    continue;
+
                 cudaEvent_t event;
-                bool ok = true;
-                while (ok)
+                while (free_lists_[device].pop(event))
                 {
-                    ok = free_lists_[device].pop(event);
-                    if (ok)
-                        check_cuda_error(cudaEventDestroy(event));
+                    [[maybe_unused]] cudaError_t const err =
+                        cudaEventDestroy(event);    // ignore error
                 }
             }
         }
