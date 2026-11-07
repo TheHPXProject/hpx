@@ -17,6 +17,7 @@ set(tests
     steal_staged_early
     thread_queue_get_next_threads
     thread_queue_parameters
+    wake_by_task_size
 )
 
 if(HPX_WITH_WORK_REQUESTING_SCHEDULERS)
@@ -40,6 +41,7 @@ set(shared_priority_queue_external_cleanup_PARAMETERS THREADS_PER_LOCALITY 1)
 
 set(steal_staged_early_PARAMETERS THREADS_PER_LOCALITY 4)
 set(steal_pending_early_PARAMETERS THREADS_PER_LOCALITY 4)
+set(wake_by_task_size_PARAMETERS THREADS_PER_LOCALITY 4)
 
 # ##############################################################################
 foreach(test ${tests})
@@ -94,4 +96,28 @@ add_hpx_unit_test(
   PSEUDO_DEPS_NAME steal_pending_early
   THREADS_PER_LOCALITY 4
   ARGS --mode=fast-idle
+)
+
+# wake up a sleeping worker for each nano and small task, only when no idle
+# worker spins, and without spinning idle workers
+add_hpx_unit_test(
+  "modules.schedulers" wake_by_task_size_wake_always
+  EXECUTABLE wake_by_task_size
+  PSEUDO_DEPS_NAME wake_by_task_size
+  THREADS_PER_LOCALITY 4
+  ARGS --hpx:ini=hpx.thread_queue.min_work_to_wake=0
+)
+add_hpx_unit_test(
+  "modules.schedulers" wake_by_task_size_large_min_work
+  EXECUTABLE wake_by_task_size
+  PSEUDO_DEPS_NAME wake_by_task_size
+  THREADS_PER_LOCALITY 4
+  ARGS --hpx:ini=hpx.thread_queue.min_work_to_wake=1000000000
+)
+add_hpx_unit_test(
+  "modules.schedulers" wake_by_task_size_no_spin
+  EXECUTABLE wake_by_task_size
+  PSEUDO_DEPS_NAME wake_by_task_size
+  THREADS_PER_LOCALITY 4
+  ARGS --hpx:ini=hpx.min_idle_backoff_time=0
 )
