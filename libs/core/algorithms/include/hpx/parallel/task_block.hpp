@@ -366,19 +366,10 @@ namespace hpx::experimental {
                     std::decay_t<Scheduler>>)
             void operator()(Scheduler&& sched, F&& f) const
             {
-                // Use a default parallel_policy task_block; users pass
-                // the scheduler to tr.run(sched, callable) inside f.
-                using policy_type = hpx::execution::parallel_policy;
-                task_block<policy_type> trh;
-
-                // invoke the user supplied function
-                hpx::detail::try_catch_exception_ptr([&]() { f(trh, sched); },
-                    [&](std::exception_ptr e) {
-                        trh.add_exception(HPX_MOVE(e));
-                    });
-
-                // wait for all tasks to join
-                trh.wait_for_completion();
+                auto policy = hpx::execution::par.on(
+                    hpx::execution::experimental::scheduler_executor(
+                        HPX_FORWARD(Scheduler, sched)));
+                (*this)(HPX_MOVE(policy), HPX_FORWARD(F, f));
             }
         };
 
@@ -431,7 +422,7 @@ namespace hpx::experimental {
     }
 
     /// Constructs a \a task_block, tr, and invokes the expression
-    /// \a f(tr, sched) on the user-provided object, \a f, using the given
+    /// \a f(tr) on the user-provided object, \a f, using the given
     /// P2300 scheduler \a sched. This version uses the P2300 scheduler
     /// for task scheduling within the block.
     ///
@@ -443,9 +434,8 @@ namespace hpx::experimental {
     /// \param sched The P2300 scheduler to use for the scheduling of
     ///              the iterations.
     /// \param f     The user defined function to invoke inside the task block.
-    ///              Given an lvalue \a tr of type \a task_block and the
-    ///              scheduler \a sched, the expression, (void)f(tr, sched),
-    ///              shall be well-formed.
+    ///              Given an lvalue \a tr of type \a task_block, the
+    ///              expression, (void)f(tr), shall be well-formed.
     ///
     /// Postcondition: All tasks spawned from \a f have finished execution.
     ///
@@ -526,7 +516,7 @@ namespace hpx::experimental {
     }
 
     /// Constructs a \a task_block, tr, and invokes the expression
-    /// \a f(tr, sched) on the user-provided object, \a f, using the given
+    /// \a f(tr) on the user-provided object, \a f, using the given
     /// P2300 scheduler. This version always returns on the same thread.
     ///
     /// \tparam Scheduler The type of the P2300 scheduler to use (deduced).
@@ -537,7 +527,9 @@ namespace hpx::experimental {
     /// \param sched The P2300 scheduler to use for the scheduling of
     ///              the iterations.
     /// \param f     The user defined function to invoke inside the
-    ///              define_task_block.
+    ///              define_task_block. Given an lvalue \a tr of type
+    ///              \a task_block, the expression, (void)f(tr), shall be
+    ///              well-formed.
     ///
     /// \throws exception_list, as specified in Exception Handling.
     ///

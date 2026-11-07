@@ -1,4 +1,5 @@
 //  Copyright (c) 2026 Hartmut Kaiser
+//  Copyright (c) 2026 Shivansh Singh
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -14,7 +15,6 @@
 
 #include <atomic>
 #include <cstddef>
-#include <iostream>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -25,8 +25,6 @@ namespace ex = hpx::execution::experimental;
 // Test 1: Basic fork-join task spawning with P2300 scheduler
 void test_define_task_block_scheduler_basic()
 {
-    std::cout << "test_define_task_block_scheduler_basic" << std::endl;
-
     bool parent_flag = false;
     std::atomic<bool> task1_flag{false};
     std::atomic<bool> task2_flag{false};
@@ -34,14 +32,14 @@ void test_define_task_block_scheduler_basic()
 
     ex::thread_pool_scheduler sched{};
 
-    hpx::experimental::define_task_block(sched, [&](auto& tr, auto& s) {
+    hpx::experimental::define_task_block(sched, [&](auto& tr) {
         parent_flag = true;
 
-        tr.run(s, [&]() { task1_flag.store(true); });
+        tr.run([&]() { task1_flag.store(true); });
 
-        tr.run(s, [&]() { task2_flag.store(true); });
+        tr.run(sched, [&]() { task2_flag.store(true); });
 
-        tr.run(s, [&]() { task3_flag.store(true); });
+        tr.run([&]() { task3_flag.store(true); });
     });
 
     HPX_TEST(parent_flag);
@@ -54,8 +52,6 @@ void test_define_task_block_scheduler_basic()
 // Test 2: Nested define_task_block with P2300 scheduler
 void test_define_task_block_scheduler_nested()
 {
-    std::cout << "test_define_task_block_scheduler_nested" << std::endl;
-
     std::string s("test");
 
     bool parent_flag = false;
@@ -65,60 +61,52 @@ void test_define_task_block_scheduler_nested()
 
     ex::thread_pool_scheduler sched{};
 
-    hpx::experimental::define_task_block(sched, [&](auto& tr, auto& s_outer) {
+    hpx::experimental::define_task_block(sched, [&](auto& tr) {
         parent_flag = true;
 
-        tr.run(s_outer, [&]() {
+        tr.run([&]() {
             task1_flag.store(true);
-            std::cout << "task1: " << s << std::endl;
+            s += " passed";
         });
 
-        tr.run(s_outer, [&]() {
+        tr.run([&]() {
             task2_flag.store(true);
-            std::cout << "task2" << std::endl;
 
             // Nested task block with scheduler
-            hpx::experimental::define_task_block(
-                s_outer, [&](auto& tr2, auto& s_inner) {
-                    tr2.run(s_inner, [&]() {
-                        task21_flag.store(true);
-                        std::cout << "task2.1" << std::endl;
-                    });
-                });
+            hpx::experimental::define_task_block(sched, [&](auto& tr2) {
+                tr2.run([&]() { task21_flag.store(true); });
+            });
         });
-
-        std::cout << "parent" << std::endl;
     });
 
     HPX_TEST(parent_flag);
     HPX_TEST(task1_flag.load());
     HPX_TEST(task2_flag.load());
     HPX_TEST(task21_flag.load());
+    HPX_TEST_EQ(s, std::string("test passed"));
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 // Test 3: Explicit tr.wait() synchronization with P2300 scheduler
 void test_define_task_block_scheduler_wait()
 {
-    std::cout << "test_define_task_block_scheduler_wait" << std::endl;
-
     std::atomic<int> counter{0};
 
     ex::thread_pool_scheduler sched{};
 
-    hpx::experimental::define_task_block(sched, [&](auto& tr, auto& s) {
-        tr.run(s, [&]() { counter.fetch_add(1); });
+    hpx::experimental::define_task_block(sched, [&](auto& tr) {
+        tr.run([&]() { counter.fetch_add(1); });
 
-        tr.run(s, [&]() { counter.fetch_add(1); });
+        tr.run([&]() { counter.fetch_add(1); });
 
         // Wait for the above tasks to complete
         tr.wait();
 
-        // At this point, counter should be at least 2
+        // At this point, counter should be exactly 2
         HPX_TEST_EQ(counter.load(), 2);
 
         // Spawn more tasks after wait
-        tr.run(s, [&]() { counter.fetch_add(1); });
+        tr.run([&]() { counter.fetch_add(1); });
     });
 
     HPX_TEST_EQ(counter.load(), 3);
@@ -128,24 +116,15 @@ void test_define_task_block_scheduler_wait()
 // Test 4: Exception handling with P2300 scheduler
 void test_define_task_block_scheduler_exceptions()
 {
-    std::cout << "test_define_task_block_scheduler_exceptions" << std::endl;
-
     ex::thread_pool_scheduler sched{};
 
     try
     {
-        hpx::experimental::define_task_block(sched, [](auto& tr, auto& s) {
-            tr.run(s, []() {
-                std::cout << "task1" << std::endl;
-                throw std::runtime_error("scheduler_error_1");
-            });
+        hpx::experimental::define_task_block(sched, [](auto& tr) {
+            tr.run([]() { throw std::runtime_error("scheduler_error_1"); });
 
-            tr.run(s, []() {
-                std::cout << "task2" << std::endl;
-                throw std::runtime_error("scheduler_error_2");
-            });
+            tr.run([]() { throw std::runtime_error("scheduler_error_2"); });
 
-            std::cout << "parent" << std::endl;
             throw std::runtime_error("scheduler_error_parent");
         });
 
@@ -165,16 +144,14 @@ void test_define_task_block_scheduler_exceptions()
 // Test 5: define_task_block_restore_thread with P2300 scheduler
 void test_define_task_block_restore_thread_scheduler()
 {
-    std::cout << "test_define_task_block_restore_thread_scheduler" << std::endl;
-
     auto const original_thread = hpx::threads::get_self_id();
 
     std::atomic<bool> task_ran{false};
 
     ex::thread_pool_scheduler sched{};
 
-    hpx::experimental::define_task_block_restore_thread(sched,
-        [&](auto& tr, auto& s) { tr.run(s, [&]() { task_ran.store(true); }); });
+    hpx::experimental::define_task_block_restore_thread(
+        sched, [&](auto& tr) { tr.run([&]() { task_ran.store(true); }); });
 
     HPX_TEST(task_ran.load());
 
@@ -186,8 +163,6 @@ void test_define_task_block_restore_thread_scheduler()
 // Test 6: task_group directly with P2300 scheduler
 void test_task_group_scheduler_basic()
 {
-    std::cout << "test_task_group_scheduler_basic" << std::endl;
-
     std::atomic<int> sum{0};
 
     ex::thread_pool_scheduler sched{};
@@ -205,8 +180,6 @@ void test_task_group_scheduler_basic()
 // Test 7: task_group scheduler with arguments
 void test_task_group_scheduler_args()
 {
-    std::cout << "test_task_group_scheduler_args" << std::endl;
-
     std::atomic<int> result{0};
 
     ex::thread_pool_scheduler sched{};
@@ -222,8 +195,6 @@ void test_task_group_scheduler_args()
 // Test 8: task_group scheduler exception propagation
 void test_task_group_scheduler_exception()
 {
-    std::cout << "test_task_group_scheduler_exception" << std::endl;
-
     bool caught_exception = false;
     try
     {
@@ -252,8 +223,6 @@ void test_task_group_scheduler_exception()
 // Test 9: Mixed executor + scheduler tasks on task_group
 void test_task_group_mixed_executor_scheduler()
 {
-    std::cout << "test_task_group_mixed_executor_scheduler" << std::endl;
-
     std::atomic<int> sum{0};
 
     ex::thread_pool_scheduler sched{};
