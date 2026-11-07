@@ -10,6 +10,7 @@
 #include <hpx/assert.hpp>
 #include <hpx/modules/allocator_support.hpp>
 #include <hpx/modules/datastructures.hpp>
+#include <hpx/modules/errors.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/memory.hpp>
@@ -662,30 +663,34 @@ namespace hpx::util::detail {
     {
         frame_->enter_traversal();
 
-        bool finished = false;
-        {
-            // Leave also when the traversal throws, so that the frame is still
-            // completed by the last traversal to leave
-            auto on_fail = hpx::experimental::scope_fail(
-                [&]() { frame_->leave_traversal(false); });
-
-            // The state holds iterators into the arguments of the frame. Move
-            // it out of this callable, so that all of them are destroyed at
-            // the end of this scope, before leave_traversal() may complete
-            // the frame, which hands the arguments to the visitor, after
-            // which another thread may move or destroy them.
-            auto hierarchy =
-                hpx::tuple_cat(hpx::make_tuple(frame_), HPX_MOVE(state_));
+        bool const finished = hpx::detail::try_catch_exception_ptr(
+            [&]() {
+                // The state holds iterators into the arguments of the frame.
+                // Move it out of this callable, so that all of them are
+                // destroyed when this lambda returns, before
+                // leave_traversal() may complete the frame, which hands the
+                // arguments to the visitor, after which another thread may
+                // move or destroy them.
+                auto hierarchy =
+                    hpx::tuple_cat(hpx::make_tuple(frame_), HPX_MOVE(state_));
 #if defined(HPX_GCC_VERSION) && HPX_GCC_VERSION >= 110000
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wstringop-overflow"
 #endif
-            finished =
-                hpx::invoke_fused(resume_state_callable{}, HPX_MOVE(hierarchy));
+                return hpx::invoke_fused(
+                    resume_state_callable{}, HPX_MOVE(hierarchy));
 #if defined(HPX_GCC_VERSION) && HPX_GCC_VERSION >= 110000
 #pragma GCC diagnostic pop
 #endif
-        }
+            },
+            [&](std::exception_ptr ep) -> bool {
+                // Leave also when the traversal throws, so that the frame is
+                // still completed by the last traversal to leave. This must
+                // not run in a catch block or during unwinding: completing
+                // the frame may suspend or throw.
+                frame_->leave_traversal(false);
+                std::rethrow_exception(HPX_MOVE(ep));
+            });
 
         frame_->leave_traversal(finished);
     }
