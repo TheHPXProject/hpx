@@ -201,7 +201,7 @@ namespace hpx::execution::experimental {
 
             void execute_deferred(error_code& = throws) override
             {
-                loop.run();
+                loop.run_until([this]() { return this->is_ready(); });
             }
         };
 
