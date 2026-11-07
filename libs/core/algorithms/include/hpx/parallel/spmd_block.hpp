@@ -142,7 +142,7 @@ namespace hpx::lcos::local {
 
     namespace detail {
 
-        struct spmd_shared_state
+        HPX_CXX_CORE_EXPORT struct spmd_shared_state
         {
             hpx::barrier<> barrier_;
             std::map<std::set<std::size_t>, std::shared_ptr<hpx::barrier<>>>
@@ -212,7 +212,8 @@ namespace hpx::lcos::local {
     ///
     /// Creates \a num_images concurrent images of \a f, each
     /// receiving a unique \a spmd_block handle plus the forwarded
-    /// \a args. Every image is scheduled as an independent sender on
+    /// \a args. All images receive the same arguments by lvalue
+    /// reference. Every image is scheduled as an independent sender on
     /// \a sched and the results are joined with
     /// \a ex::when_all_vector.
     ///
@@ -226,24 +227,38 @@ namespace hpx::lcos::local {
     /// \param num_images  Number of SPMD images to launch.
     /// \param f       Callable whose first parameter is an
     ///                \a spmd_block.
-    /// \param args    Extra arguments forwarded to every image.
+    /// \param args    Extra arguments forwarded to every image. All
+    ///                images receive the same arguments by lvalue
+    ///                reference.
     ///
     /// \returns A lazy sender representing the SPMD block
     ///          execution. The caller controls synchronization
     ///          (e.g. via \a sync_wait).
     HPX_CXX_CORE_EXPORT template <typename Scheduler, typename F,
-        typename... Args,
-        typename = std::enable_if_t<hpx::execution::experimental::
-                is_scheduler_v<std::decay_t<Scheduler>>>>
+        typename... Args>
+    // clang-format off
+        requires(
+            hpx::execution::experimental::is_scheduler_v<
+                std::decay_t<Scheduler>>
+        )
+    // clang-format on
     decltype(auto) define_spmd_block(
         Scheduler&& sched, std::size_t num_images, F&& f, Args&&... args)
     {
+        using ftype = std::decay_t<F>;
+        using first_type = hpx::util::first_argument_t<ftype>;
+
+        static_assert(std::is_same_v<spmd_block, first_type>,
+            "define_spmd_block() needs a function or lambda that "
+            "has at least a local spmd_block as 1st argument");
+
         auto state = std::make_shared<detail::spmd_shared_state>(num_images);
 
         namespace ex = hpx::execution::experimental;
 
         // Package the callable and arguments into a shared tuple
         // so that move-only types survive across multiple images.
+        // All images receive the same arguments by lvalue reference.
         auto shared_data = std::make_shared<
             std::tuple<std::decay_t<F>, std::decay_t<Args>...>>(
             std::make_tuple(HPX_FORWARD(F, f), HPX_FORWARD(Args, args)...));
@@ -253,21 +268,22 @@ namespace hpx::lcos::local {
 
         for (std::size_t image_id = 0; image_id < num_images; ++image_id)
         {
-            senders.push_back(ex::just(shared_data) | ex::continues_on(sched) |
-                ex::then([state, num_images, image_id](auto data) {
+            senders.push_back(ex::schedule(sched) |
+                ex::then([state, num_images, image_id, shared_data]() {
                     spmd_block block(num_images, image_id, state->barrier_,
                         state->barriers_, state->mtx_);
 
-                    // Inline the lambda directly into std::apply to reduce template AST depth
+                    // Inline the lambda directly into std::apply to
+                    // reduce template AST depth.
                     std::apply(
                         [&block](auto& func, auto&... unpacked_args) {
                             HPX_INVOKE(func, HPX_MOVE(block), unpacked_args...);
                         },
-                        *data);
+                        *shared_data);
                 }));
         }
 
-        return ex::when_all_vector(HPX_MOVE(senders)) | ex::continues_on(sched);
+        return ex::when_all_vector(HPX_MOVE(senders));
     }
 
     // Synchronous version
@@ -345,12 +361,23 @@ namespace hpx::parallel {
 
     // P2300 Scheduler version
     HPX_CXX_CORE_EXPORT template <typename Scheduler, typename F,
-        typename... Args,
-        typename = std::enable_if_t<hpx::execution::experimental::
-                is_scheduler_v<std::decay_t<Scheduler>>>>
+        typename... Args>
+    // clang-format off
+        requires(
+            hpx::execution::experimental::is_scheduler_v<
+                std::decay_t<Scheduler>>
+        )
+    // clang-format on
     decltype(auto) define_spmd_block(
         Scheduler&& sched, std::size_t num_images, F&& f, Args&&... args)
     {
+        using ftype = std::decay_t<F>;
+        using first_type = hpx::util::first_argument_t<ftype>;
+
+        static_assert(std::is_same_v<spmd_block, first_type>,
+            "define_spmd_block() needs a function or lambda that "
+            "has at least a local spmd_block as 1st argument");
+
         return hpx::lcos::local::define_spmd_block(
             HPX_FORWARD(Scheduler, sched), num_images, HPX_FORWARD(F, f),
             HPX_FORWARD(Args, args)...);
