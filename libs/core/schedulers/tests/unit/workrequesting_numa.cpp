@@ -20,6 +20,8 @@ int main()
 
     auto nearest = policies::detail::make_workrequesting_victim_masks(
         0, worker_domains, {1});
+    HPX_TEST(nearest.has_local_victims_);
+    HPX_TEST(nearest.has_remote_victims_);
 
     // Same-domain workers are the only candidates in the first phase.
     for (std::size_t worker = 0; worker != num_workers; ++worker)
@@ -38,10 +40,17 @@ int main()
     auto strict = policies::detail::make_workrequesting_victim_masks(
         0, worker_domains, {});
     HPX_TEST_EQ(hpx::threads::count(strict.remote_), num_workers);
+    HPX_TEST(strict.has_local_victims_);
+    HPX_TEST(!strict.has_remote_victims_);
 
     auto unrestricted = policies::detail::make_workrequesting_victim_masks(
         0, worker_domains, {1, 2});
     HPX_TEST_EQ(hpx::threads::count(unrestricted.remote_), std::size_t(2));
+
+    auto isolated = policies::detail::make_workrequesting_victim_masks(
+        0, std::vector<std::size_t>{0, 1}, {});
+    HPX_TEST(!isolated.has_local_victims_);
+    HPX_TEST(!isolated.has_remote_victims_);
 
     // Victim selection is constrained by each phase's precomputed mask.
     policies::detail::affinity_data affinity;
@@ -56,7 +65,7 @@ int main()
     }
 
     policies::detail::workrequesting_steal_request remote_request(
-        0, nullptr, nearest.remote_, true, true, true);
+        0, nullptr, nearest.remote_, true, true, false, true);
     for (int i = 0; i != 100; ++i)
     {
         std::size_t const victim = scheduler.random_victim(0, remote_request);

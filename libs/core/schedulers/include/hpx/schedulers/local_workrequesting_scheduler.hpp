@@ -114,6 +114,8 @@ namespace hpx::threads::policies {
         {
             mask_type local_;
             mask_type remote_;
+            bool has_local_victims_ = false;
+            bool has_remote_victims_ = false;
         };
 
         HPX_CXX_CORE_EXPORT inline workrequesting_victim_masks
@@ -140,9 +142,17 @@ namespace hpx::threads::policies {
                 {
                     set(masks.local_, worker);
                 }
+                else
+                {
+                    masks.has_local_victims_ = true;
+                }
                 if (worker == num_thread || !remote)
                 {
                     set(masks.remote_, worker);
+                }
+                else
+                {
+                    masks.has_remote_victims_ = true;
                 }
             }
             return masks;
@@ -334,6 +344,8 @@ namespace hpx::threads::policies {
             // initial affinity mask for this core
             mask_type victims_ = mask_type();
             mask_type remote_victims_ = mask_type();
+            bool has_local_victims_ = false;
+            bool has_remote_victims_ = false;
 
             // queues for threads scheduled on this core
             thread_queue_type* queue_ = nullptr;
@@ -400,6 +412,7 @@ namespace hpx::threads::policies {
           , low_priority_queue_(thread_queue_init_)
           , curr_queue_(0)
           , affinity_data_(init.affinity_data_)
+          , worker_domains_(init.num_queues_)
           , numa_sensitive_(init.numa_sensitive_)
           , num_queues_(init.num_queues_)
           , num_high_priority_queues_(init.num_high_priority_queues_)
@@ -852,7 +865,7 @@ namespace hpx::threads::policies {
                 if (req.state_ == steal_request::state::idle && !req.remote_ &&
                     d.queue_->get_pending_queue_length(
                         std::memory_order_relaxed) == 0 &&
-                    count(d.remote_victims_) != num_queues_)
+                    d.has_remote_victims_)
                 {
                     req.remote_ = true;
                     req.victims_ = d.remote_victims_;
@@ -894,7 +907,7 @@ namespace hpx::threads::policies {
                 {
                     // Continue circulating the steal request if it makes sense
                     req.state_ = steal_request::state::idle;
-                    req.remote_ = count(d.victims_) == num_queues_;
+                    req.remote_ = !d.has_local_victims_;
                     req.victims_ = req.remote_ ? d.remote_victims_ : d.victims_;
                     req.attempt_ =
                         static_cast<std::uint16_t>(count(req.victims_) - 1);
@@ -1805,7 +1818,8 @@ namespace hpx::threads::policies {
         // nothing to work on.
         void send_steal_request(scheduler_data& d, bool idle = true) noexcept
         {
-            if (d.requested_ == 0)
+            if (d.requested_ == 0 &&
+                (d.has_local_victims_ || d.has_remote_victims_))
             {
                 // Estimate work-stealing efficiency during the last interval;
                 // switch strategies if the value is below a threshold
@@ -1836,7 +1850,7 @@ namespace hpx::threads::policies {
                     }
                 }
 
-                bool const remote = count(d.victims_) == num_queues_;
+                bool const remote = !d.has_local_victims_;
                 mask_cref_type victims =
                     remote ? d.remote_victims_ : d.victims_;
                 steal_request req(d.num_thread_, d.tasks_, victims, idle,
@@ -2068,7 +2082,8 @@ namespace hpx::threads::policies {
             if (allow_stealing)
             {
                 send_steal_request(d);
-                HPX_ASSERT(d.requested_ != 0);
+                HPX_ASSERT(d.requested_ != 0 ||
+                    (!d.has_local_victims_ && !d.has_remote_victims_));
             }
 
             if (!d.tasks_->is_empty() &&
@@ -2146,12 +2161,15 @@ namespace hpx::threads::policies {
             }
 
             auto const& topo = create_topology();
-            std::vector<std::size_t> worker_domains(num_queues_);
-            for (std::size_t worker = 0; worker != num_queues_; ++worker)
-            {
-                worker_domains[worker] = topo.get_numa_node_number(
-                    affinity_data_.get_pu_num(worker));
-            }
+            std::call_once(worker_domains_once_, [this, &topo] {
+                for (std::size_t worker = 0; worker != num_queues_; ++worker)
+                {
+                    std::size_t const global_worker =
+                        local_to_global_thread_index(worker);
+                    worker_domains_[worker] = topo.get_numa_node_number(
+                        affinity_data_.get_pu_num(global_worker));
+                }
+            });
 
             std::vector<std::size_t> remote_domains;
             if (has_scheduler_mode(
@@ -2161,8 +2179,10 @@ namespace hpx::threads::policies {
                 if (num_domains == 0)
                     num_domains = 1;
 
+                std::size_t const global_thread =
+                    local_to_global_thread_index(num_thread);
                 std::size_t const num_pu =
-                    affinity_data_.get_pu_num(num_thread);
+                    affinity_data_.get_pu_num(global_thread);
                 mask_cref_type numa_mask =
                     topo.get_numa_node_affinity_mask(num_pu);
                 mask_cref_type pu_mask = topo.get_thread_affinity_mask(num_pu);
@@ -2172,7 +2192,7 @@ namespace hpx::threads::policies {
                     test(pu_mask, first);
 
                 remote_domains = detail::get_numa_stealing_domains(
-                    numa_sensitive_, worker_domains[num_thread], num_domains,
+                    numa_sensitive_, worker_domains_[num_thread], num_domains,
                     is_boundary_worker,
                     [&topo](std::size_t from, std::size_t to) {
                         return topo.get_numa_distance(from, to);
@@ -2183,9 +2203,11 @@ namespace hpx::threads::policies {
             // the local mask first and switch to the remote mask only after
             // all same-domain workers have been tried.
             auto masks = detail::make_workrequesting_victim_masks(
-                num_thread, worker_domains, remote_domains);
+                num_thread, worker_domains_, remote_domains);
             d.victims_ = HPX_MOVE(masks.local_);
             d.remote_victims_ = HPX_MOVE(masks.remote_);
+            d.has_local_victims_ = masks.has_local_victims_;
+            d.has_remote_victims_ = masks.has_remote_victims_;
         }
 
         void on_stop_thread(std::size_t num_thread) override
@@ -2255,6 +2277,8 @@ namespace hpx::threads::policies {
         util::cache_aligned_data_derived<std::atomic<std::size_t>> curr_queue_;
 
         detail::affinity_data const& affinity_data_;
+        std::once_flag worker_domains_once_;
+        std::vector<std::size_t> worker_domains_;
         numa_sensitive_mode const numa_sensitive_;
         std::size_t const num_queues_;
         std::size_t const num_high_priority_queues_;
