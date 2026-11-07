@@ -609,7 +609,7 @@ namespace hpx::threads {
         [[maybe_unused]] thread_pool_init_parameters const& thread_pool_init,
         [[maybe_unused]] policies::thread_queue_init_parameters const&
             thread_queue_init,
-        [[maybe_unused]] std::size_t const numa_sensitive)
+        std::size_t const numa_sensitive)
     {
 #if defined(HPX_HAVE_WORK_REQUESTING_SCHEDULERS)
         // set parameters for scheduler and pool instantiation and perform
@@ -628,7 +628,8 @@ namespace hpx::threads {
         local_sched_type::init_parameter_type const init(
             thread_pool_init.num_threads_, thread_pool_init.affinity_data_,
             num_high_priority_queues, thread_queue_init,
-            "core-local_workrequesting_scheduler-fifo");
+            "core-local_workrequesting_scheduler-fifo",
+            static_cast<policies::numa_sensitive_mode>(numa_sensitive));
 
         auto sched = std::make_unique<local_sched_type>(init);
         auto const full_mask =
@@ -660,7 +661,7 @@ namespace hpx::threads {
         [[maybe_unused]] thread_pool_init_parameters const& thread_pool_init,
         [[maybe_unused]] policies::thread_queue_init_parameters const&
             thread_queue_init,
-        [[maybe_unused]] std::size_t const numa_sensitive)
+        std::size_t const numa_sensitive)
     {
 #if defined(HPX_HAVE_WORK_REQUESTING_SCHEDULERS)
         // set parameters for scheduler and pool instantiation and perform
@@ -680,7 +681,8 @@ namespace hpx::threads {
         local_sched_type::init_parameter_type const init(
             thread_pool_init.num_threads_, thread_pool_init.affinity_data_,
             num_high_priority_queues, thread_queue_init,
-            "core-local_workrequesting_scheduler-mc");
+            "core-local_workrequesting_scheduler-mc",
+            static_cast<policies::numa_sensitive_mode>(numa_sensitive));
 
         auto sched = std::make_unique<local_sched_type>(init);
         auto const full_mask =
@@ -733,7 +735,8 @@ namespace hpx::threads {
         local_sched_type::init_parameter_type const init(
             thread_pool_init.num_threads_, thread_pool_init.affinity_data_,
             num_high_priority_queues, thread_queue_init,
-            "core-local_workrequesting_scheduler-lifo");
+            "core-local_workrequesting_scheduler-lifo",
+            static_cast<policies::numa_sensitive_mode>(numa_sensitive));
 
         auto sched = std::make_unique<local_sched_type>(init);
         auto const full_mask =

@@ -1925,7 +1925,8 @@ namespace hpx::threads::policies {
             std::vector<std::ptrdiff_t> numa_domains(num_threads);
             for (std::size_t i = 0; i != num_threads; ++i)
             {
-                std::size_t const num_pu = affinity_data_.get_pu_num(i);
+                std::size_t const num_pu =
+                    affinity_data_.get_pu_num(local_to_global_thread_index(i));
                 numa_masks[i] = topo.get_numa_node_affinity_mask(num_pu);
                 numa_domains[i] = static_cast<std::ptrdiff_t>(
                     topo.get_numa_node_number(num_pu));
@@ -1945,7 +1946,8 @@ namespace hpx::threads::policies {
             thread_numa_domain_[num_thread] =
                 static_cast<std::size_t>(numa_domains[num_thread]);
 
-            std::size_t const num_pu = affinity_data_.get_pu_num(num_thread);
+            std::size_t const num_pu = affinity_data_.get_pu_num(
+                local_to_global_thread_index(num_thread));
             mask_cref_type pu_mask = topo.get_thread_affinity_mask(num_pu);
             mask_cref_type numa_mask = numa_masks[num_thread];
             mask_cref_type core_mask = core_masks[num_thread];

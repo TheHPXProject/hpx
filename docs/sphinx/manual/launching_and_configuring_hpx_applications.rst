@@ -1791,7 +1791,8 @@ The predefined command line options for any application using
 
    Controls NUMA-sensitive work stealing. The default and the value used when
    the option is given without an argument are both ``1``. For the local,
-   local-priority, and ABP-priority schedulers the allowed values are:
+   local-priority, ABP-priority, and local-workrequesting schedulers the allowed
+   values are:
 
    * ``0``: all workers may steal across NUMA domains;
    * ``1``: only boundary workers may steal from the nearest NUMA domains;
@@ -1799,8 +1800,7 @@ The predefined command line options for any application using
 
    The static, static-priority, and shared-priority schedulers do not distinguish
    boundary workers. They allow cross-domain stealing for levels ``0`` and ``1``
-   and disable it for level ``2``. Work-requesting schedulers currently ignore
-   this option.
+   and disable it for level ``2``.
 
 
 |hpx| configuration options
