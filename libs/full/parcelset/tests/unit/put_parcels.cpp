@@ -11,6 +11,7 @@
 #include <hpx/hpx_init.hpp>
 #include <hpx/modules/testing.hpp>
 
+#include <atomic>
 #include <chrono>
 #include <cstddef>
 #include <iostream>
@@ -249,7 +250,7 @@ struct handler_state
 {
     hpx::promise<void> done;
     std::error_code got;
-    int calls = 0;
+    std::atomic<int> calls = 0;
 };
 
 hpx::naming::gid_type missing_locality_gid()
@@ -267,16 +268,21 @@ int expected_tolerated_error()
 #endif
 }
 
-hpx::parcelset::parcel generate_missing_locality_parcel()
+hpx::parcelset::parcel generate_test1_parcel(hpx::naming::gid_type dest)
 {
     std::vector<double> data(1, 1.0);
     hpx::naming::address addr;
     hpx::parcelset::parcel p(hpx::parcelset::detail::create_parcel::call(
-        missing_locality_gid(), std::move(addr), test1_action(), data));
+        std::move(dest), std::move(addr), test1_action(), data));
 
     p.set_source_id(hpx::find_here());
     p.size() = 4096;
     return p;
+}
+
+hpx::parcelset::parcel generate_missing_locality_parcel()
+{
+    return generate_test1_parcel(missing_locality_gid());
 }
 
 void test_put_parcel_unknown_locality_synchronous()
@@ -357,36 +363,29 @@ void test_put_parcel_unknown_locality_rescheduled()
     }
 }
 
-void test_put_parcels_unknown_locality_rescheduled()
+void test_put_parcels_failing_batch_rescheduled(
+    std::vector<hpx::parcelset::parcel> parcels)
 {
-    auto state = std::make_shared<handler_state>();
-    auto other_state = std::make_shared<handler_state>();
-
-    std::vector<hpx::parcelset::parcel> parcels;
-    parcels.push_back(generate_missing_locality_parcel());
-    parcels.push_back(generate_missing_locality_parcel());
+    std::size_t const num_parcels = parcels.size();
 
     using handler_type = hpx::parcelset::parcelhandler::write_handler_type;
+    std::vector<std::shared_ptr<handler_state>> states;
+    std::vector<hpx::future<void>> futures;
     std::vector<handler_type> handlers;
-    handlers.emplace_back(
-        [state](std::error_code const& ec, hpx::parcelset::parcel const&) {
-            state->got = ec;
-            if (++state->calls == 1)
-            {
-                state->done.set_value();
-            }
-        });
-    handlers.emplace_back([other_state](std::error_code const& ec,
-                              hpx::parcelset::parcel const&) {
-        other_state->got = ec;
-        if (++other_state->calls == 1)
-        {
-            other_state->done.set_value();
-        }
-    });
-
-    hpx::future<void> f = state->done.get_future();
-    hpx::future<void> other_f = other_state->done.get_future();
+    for (std::size_t i = 0; i != num_parcels; ++i)
+    {
+        auto state = std::make_shared<handler_state>();
+        futures.push_back(state->done.get_future());
+        handlers.emplace_back(
+            [state](std::error_code const& ec, hpx::parcelset::parcel const&) {
+                state->got = ec;
+                if (++state->calls == 1)
+                {
+                    state->done.set_value();
+                }
+            });
+        states.push_back(std::move(state));
+    }
 
     std::thread os_thread([parcels = std::move(parcels),
                               handlers = std::move(handlers)]() mutable {
@@ -395,30 +394,45 @@ void test_put_parcels_unknown_locality_rescheduled()
     });
     os_thread.join();
 
-    HPX_TEST(f.wait_for(std::chrono::seconds(10)) == hpx::future_status::ready);
-    HPX_TEST(other_f.wait_for(std::chrono::seconds(10)) ==
-        hpx::future_status::ready);
-    if (f.is_ready())
+    for (std::size_t i = 0; i != num_parcels; ++i)
     {
-        f.get();
+        HPX_TEST(futures[i].wait_for(std::chrono::seconds(10)) ==
+            hpx::future_status::ready);
+        if (futures[i].is_ready())
+        {
+            futures[i].get();
+        }
     }
-    if (other_f.is_ready())
+
+    for (std::size_t i = 0; i != num_parcels; ++i)
     {
-        other_f.get();
-    }
-    for (auto const& handler : {state, other_state})
-    {
-        HPX_TEST_EQ(handler->calls, 1);
+        HPX_TEST_EQ(states[i]->calls.load(), 1);
         if (hpx::tolerate_node_faults())
         {
-            HPX_TEST_EQ(handler->got.value(), expected_tolerated_error());
+            HPX_TEST_EQ(states[i]->got.value(), expected_tolerated_error());
         }
         else
         {
-            HPX_TEST_EQ(handler->got.value(),
+            HPX_TEST_EQ(states[i]->got.value(),
                 static_cast<int>(hpx::error::bad_parameter));
         }
     }
+}
+
+void test_put_parcels_unknown_locality_rescheduled()
+{
+    std::vector<hpx::parcelset::parcel> parcels;
+    parcels.push_back(generate_missing_locality_parcel());
+    parcels.push_back(generate_missing_locality_parcel());
+    test_put_parcels_failing_batch_rescheduled(std::move(parcels));
+}
+
+void test_put_parcels_mismatched_destinations_rescheduled()
+{
+    std::vector<hpx::parcelset::parcel> parcels;
+    parcels.push_back(generate_test1_parcel(hpx::find_here().get_gid()));
+    parcels.push_back(generate_missing_locality_parcel());
+    test_put_parcels_failing_batch_rescheduled(std::move(parcels));
 }
 
 void test_put_parcel_rescheduled_reaches_destination()
@@ -536,6 +550,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
     test_put_parcel_unknown_locality_synchronous();
     test_put_parcel_unknown_locality_rescheduled();
     test_put_parcels_unknown_locality_rescheduled();
+    test_put_parcels_mismatched_destinations_rescheduled();
     test_put_parcel_rescheduled_reaches_destination();
     test_put_parcels_rescheduled_reaches_destination();
 
