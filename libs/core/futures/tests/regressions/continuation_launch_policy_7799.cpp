@@ -6,6 +6,7 @@
 
 #include <hpx/future.hpp>
 #include <hpx/init.hpp>
+#include <hpx/modules/resource_partitioner.hpp>
 #include <hpx/modules/testing.hpp>
 #include <hpx/modules/threading_base.hpp>
 #include <hpx/thread.hpp>
@@ -14,6 +15,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <string>
 
 namespace {
 
@@ -62,78 +64,91 @@ namespace {
             return;
         }
 
-        std::atomic<bool> blocker_started(false);
-        std::atomic<bool> release_blocker(false);
-
-        hpx::future<void> blocker = hpx::async(
-            make_policy(1, hpx::threads::thread_execution_hint::none), [&] {
-                blocker_started.store(true, std::memory_order_release);
-                while (!release_blocker.load(std::memory_order_acquire))
-                {
-                }
-            });
-
-        while (!blocker_started.load(std::memory_order_acquire))
-        {
-            hpx::this_thread::yield();
-        }
-
         hpx::future<bool> result = hpx::async(
             make_policy(0, hpx::threads::thread_execution_hint::none), [] {
-                std::size_t const parent_worker = hpx::get_worker_thread_num();
-                std::size_t continuation_worker = static_cast<std::size_t>(-1);
+                std::atomic<bool> blocker_started(false);
+                std::atomic<bool> release_blocker(false);
+                hpx::future<void> blocker = hpx::async(
+                    make_policy(1, hpx::threads::thread_execution_hint::none),
+                    [&] {
+                        blocker_started.store(true, std::memory_order_release);
+                        while (!release_blocker.load(std::memory_order_acquire))
+                        {
+                            hpx::this_thread::yield();
+                        }
+                    });
 
+                while (!blocker_started.load(std::memory_order_acquire))
+                {
+                    hpx::this_thread::yield();
+                }
+
+                std::size_t const parent_worker = hpx::get_worker_thread_num();
+                std::atomic<std::size_t> continuation_worker(
+                    static_cast<std::size_t>(-1));
+
+                hpx::launch continuation_policy = make_policy(
+                    1, hpx::threads::thread_execution_hint::run_as_child);
+                continuation_policy.set_priority(
+                    hpx::threads::thread_priority::normal);
                 hpx::future<void> continuation = hpx::make_ready_future().then(
-                    make_policy(
-                        1, hpx::threads::thread_execution_hint::run_as_child),
-                    [&](hpx::future<void>&& predecessor) {
+                    continuation_policy,
+                    [&continuation_worker](hpx::future<void>&& predecessor) {
                         predecessor.get();
-                        continuation_worker = hpx::get_worker_thread_num();
+                        continuation_worker.store(hpx::get_worker_thread_num(),
+                            std::memory_order_release);
                     });
 
                 hpx::future_status const status =
                     continuation.wait_for(std::chrono::milliseconds(250));
                 if (status != hpx::future_status::ready)
                 {
+                    release_blocker.store(true, std::memory_order_release);
+                    blocker.get();
+                    continuation.get();
                     return false;
                 }
 
                 continuation.get();
-                return continuation_worker == parent_worker;
+                bool const ran_inline =
+                    continuation_worker.load(std::memory_order_acquire) ==
+                    parent_worker;
+                release_blocker.store(true, std::memory_order_release);
+                blocker.get();
+                return ran_inline;
             });
 
-        bool const ran_inline = result.get();
-        release_blocker.store(true, std::memory_order_release);
-        blocker.get();
-
-        HPX_TEST(ran_inline);
+        HPX_TEST(result.get());
     }
 
     void test_expired_wait_does_not_run_child()
     {
-        std::atomic<bool> blocker_started(false);
-        std::atomic<bool> release_blocker(false);
-        std::atomic<bool> continuation_started(false);
-
-        hpx::future<void> blocker = hpx::async(
-            make_policy(1, hpx::threads::thread_execution_hint::none), [&] {
-                blocker_started.store(true, std::memory_order_release);
-                while (!release_blocker.load(std::memory_order_acquire))
-                {
-                }
-            });
-
-        while (!blocker_started.load(std::memory_order_acquire))
-        {
-            hpx::this_thread::yield();
-        }
-
         hpx::future<bool> result = hpx::async(
-            make_policy(0, hpx::threads::thread_execution_hint::none), [&] {
+            make_policy(0, hpx::threads::thread_execution_hint::none), [] {
+                std::atomic<bool> blocker_started(false);
+                std::atomic<bool> release_blocker(false);
+                std::atomic<bool> continuation_started(false);
+                hpx::future<void> blocker = hpx::async(
+                    make_policy(1, hpx::threads::thread_execution_hint::none),
+                    [&] {
+                        blocker_started.store(true, std::memory_order_release);
+                        while (!release_blocker.load(std::memory_order_acquire))
+                        {
+                            hpx::this_thread::yield();
+                        }
+                    });
+
+                while (!blocker_started.load(std::memory_order_acquire))
+                {
+                    hpx::this_thread::yield();
+                }
+
+                hpx::launch continuation_policy = make_policy(
+                    1, hpx::threads::thread_execution_hint::run_as_child);
+                continuation_policy.set_priority(
+                    hpx::threads::thread_priority::normal);
                 hpx::future<void> continuation = hpx::make_ready_future().then(
-                    make_policy(
-                        1, hpx::threads::thread_execution_hint::run_as_child),
-                    [&](hpx::future<void>&& predecessor) {
+                    continuation_policy, [&](hpx::future<void>&& predecessor) {
                         predecessor.get();
                         continuation_started.store(
                             true, std::memory_order_release);
@@ -147,13 +162,11 @@ namespace {
 
                 release_blocker.store(true, std::memory_order_release);
                 continuation.get();
+                blocker.get();
                 return timed_out_without_running;
             });
 
-        bool const timed_out_without_running = result.get();
-        blocker.get();
-
-        HPX_TEST(timed_out_without_running);
+        HPX_TEST(result.get());
     }
 }    // namespace
 
@@ -170,7 +183,24 @@ int hpx_main()
 
 int main(int argc, char* argv[])
 {
-    HPX_TEST_EQ_MSG(hpx::local::init(hpx_main, argc, argv), 0,
+    hpx::program_options::options_description desc(
+        "Usage: " HPX_APPLICATION_STRING " [options]");
+    desc.add_options()("scheduler",
+        hpx::program_options::value<std::string>()->default_value("default"),
+        "default (as selected by --hpx:queuing) | shared-priority");
+
+    hpx::local::init_params init_args;
+    init_args.desc_cmdline = desc;
+    init_args.rp_callback = [](hpx::resource::partitioner& rp,
+                                hpx::program_options::variables_map const& vm) {
+        if (vm["scheduler"].as<std::string>() == "shared-priority")
+        {
+            rp.create_thread_pool(
+                "default", hpx::resource::scheduling_policy::shared_priority);
+        }
+    };
+
+    HPX_TEST_EQ_MSG(hpx::local::init(hpx_main, argc, argv, init_args), 0,
         "HPX main exited with non-zero status");
 
     return hpx::util::report_errors();

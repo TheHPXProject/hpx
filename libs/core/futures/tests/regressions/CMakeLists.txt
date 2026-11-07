@@ -54,7 +54,7 @@ add_hpx_regression_test(
   EXECUTABLE continuation_launch_policy_7799
   PSEUDO_DEPS_NAME continuation_launch_policy_7799
   THREADS_PER_LOCALITY 2
-  ARGS --hpx:queuing=shared-priority
+  ARGS --scheduler=shared-priority
 )
 
 # with more workers a leftover queue entry can also be dequeued while the parent

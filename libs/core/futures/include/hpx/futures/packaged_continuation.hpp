@@ -245,13 +245,14 @@ namespace hpx::lcos::detail {
             threads::task_size const size =
                 traits::get_task_size<std::decay_t<F>>::call(f_);
             threads::thread_id_ref_type id;
-            bool const runs_as_child = spawner(
+            threads::thread_schedule_hint const hint = spawner(
                 [this_ = HPX_MOVE(this_), f = HPX_MOVE(f)]() mutable -> void {
                     this_->template run_impl<Unwrap>(HPX_MOVE(f));
                 },
                 desc, id, policy, size);
 
-            if (runs_as_child)
+            if (hint.runs_as_child_mode() ==
+                threads::thread_execution_hint::run_as_child)
             {
                 // Publish the child before making it pending. Once pending,
                 // another worker may run it to completion and reset the id.
@@ -259,7 +260,7 @@ namespace hpx::lcos::detail {
                     std::lock_guard<mutex_type> l(mtx_);
                     this->runs_child_ = id;
                 }
-                spawner.start(id, policy, size);
+                spawner.start(id, policy, hint);
             }
         }
 

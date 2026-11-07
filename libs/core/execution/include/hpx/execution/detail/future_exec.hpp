@@ -151,22 +151,18 @@ namespace hpx::lcos::detail {
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT struct post_policy_spawner
     {
-        // The hint of the executor the continuation was given to, if any.
-        // The task size comes from the continuation only.
-        threads::thread_schedule_hint hint;
-
         template <typename Policy>
         threads::thread_schedule_hint effective_hint(
             Policy const& policy, threads::task_size size) const
         {
-            auto task_hint =
-                hint == threads::thread_schedule_hint{} ? policy.hint() : hint;
+            auto task_hint = policy.hint();
             task_hint.task_size(size);
             return task_hint;
         }
 
         template <typename F, typename Policy>
-        bool operator()(F&& f, hpx::threads::thread_description desc,
+        threads::thread_schedule_hint operator()(F&& f,
+            hpx::threads::thread_description desc,
             threads::thread_id_ref_type& id, Policy const& policy,
             threads::task_size size) const
         {
@@ -191,17 +187,17 @@ namespace hpx::lcos::detail {
                 runs_as_child);
 
             threads::register_thread(data, pool, id);
-            return runs_as_child;
+            return data.schedulehint;
         }
 
         template <typename Policy>
         void start(threads::thread_id_ref_type const& id, Policy const& policy,
-            threads::task_size size) const
+            threads::thread_schedule_hint const& hint) const
         {
             threads::detail::set_thread_state(id.noref(),
                 threads::thread_schedule_state::pending,
                 threads::thread_restart_state::signaled, policy.priority(),
-                effective_hint(policy, size), true);
+                hint, true);
         }
     };
 
@@ -211,18 +207,18 @@ namespace hpx::lcos::detail {
         Executor exec;
 
         template <typename F, typename Policy>
-        bool operator()(F&& f, hpx::threads::thread_description,
-            threads::thread_id_ref_type& id, Policy const&,
-            threads::task_size) const
+        threads::thread_schedule_hint operator()(F&& f,
+            hpx::threads::thread_description, threads::thread_id_ref_type& id,
+            Policy const&, threads::task_size) const
         {
             id = threads::invalid_thread_id;
             hpx::parallel::execution::post(exec, HPX_FORWARD(F, f));
-            return false;
+            return {};
         }
 
         template <typename Policy>
         void start(threads::thread_id_ref_type const&, Policy const&,
-            threads::task_size) const
+            threads::thread_schedule_hint const&) const
         {
         }
     };
@@ -325,11 +321,8 @@ namespace hpx::lcos::detail {
         hpx::traits::detail::shared_state_ptr_t<result_type> r(
             p.release(), false);
 
-        // parallel_executor::then_execute passes its own policy here, so its
-        // hint goes with the continuation's thread
         static_cast<shared_state*>(r.get())->template attach<false>(
-            HPX_FORWARD(Future, future),
-            spawner_type{hpx::execution::experimental::get_hint(policy)},
+            HPX_FORWARD(Future, future), spawner_type{},
             HPX_FORWARD(Policy, policy));
 
         return r;
