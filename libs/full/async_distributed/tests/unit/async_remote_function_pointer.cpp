@@ -91,6 +91,33 @@ HPX_REGISTER_COMPONENT(counter_server_type, counter_server)
 using counter_client = hpx::components::client<counter_server>;
 
 ///////////////////////////////////////////////////////////////////////////////
+struct not_a_component
+{
+    int get() const
+    {
+        return 0;
+    }
+};
+
+template <auto F, typename... Ts>
+concept can_async_function_pointer =
+    requires(Ts&&... ts) { hpx::async<F>(HPX_FORWARD(Ts, ts)...); };
+
+static_assert(can_async_function_pointer<&where, hpx::id_type const&, int>);
+static_assert(can_async_function_pointer<&counter_server::get, hpx::id_type>);
+static_assert(can_async_function_pointer<&counter_server::get, counter_client>);
+
+// plain actions can't be invoked on a client
+static_assert(!can_async_function_pointer<&where, counter_client, int>);
+static_assert(
+    !can_async_function_pointer<&where, hpx::launch, counter_client, int>);
+
+// only member functions of components can be turned into actions
+static_assert(!can_async_function_pointer<&not_a_component::get, hpx::id_type>);
+static_assert(!can_async_function_pointer<&not_a_component::get, hpx::launch,
+    hpx::id_type>);
+
+///////////////////////////////////////////////////////////////////////////////
 void test_async_function_pointer(hpx::id_type const& target)
 {
     {

@@ -45,6 +45,7 @@ namespace hpx {
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/async_local.hpp>
 #include <hpx/modules/components.hpp>
+#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/futures.hpp>
@@ -272,13 +273,29 @@ namespace hpx {
             true;
 #endif
 
-        // free functions become plain actions, member functions become
-        // component actions
+        template <typename F>
+        inline constexpr bool is_component_member_function_v = false;
+
+        template <typename F, typename Component>
+        inline constexpr bool is_component_member_function_v<F Component::*> =
+            std::is_function_v<F> && hpx::traits::is_component_v<Component>;
+
+        // free functions become plain actions, member functions of components
+        // become component actions
         template <auto F>
         inline constexpr bool is_action_function_v =
             (std::is_pointer_v<decltype(F)> &&
                 std::is_function_v<std::remove_pointer_t<decltype(F)>>) ||
-            std::is_member_function_pointer_v<decltype(F)>;
+            is_component_member_function_v<decltype(F)>;
+
+        // clients refer to components, thus they can't be the target of plain
+        // actions
+        template <auto F, typename Target>
+        inline constexpr bool is_action_function_target_v =
+            std::is_same_v<Target, hpx::id_type> ||
+            hpx::traits::is_distribution_policy_v<Target> ||
+            (hpx::traits::is_client_v<Target> &&
+                is_component_member_function_v<decltype(F)>);
     }    // namespace detail
     /// \endcond
 
@@ -294,14 +311,13 @@ namespace hpx {
     ///
     /// \tparam F      A pointer to a free function or to a member function of
     ///                a component.
-    /// \tparam Target id_type, client, or distribution policy.
+    /// \tparam Target id_type or distribution policy. Clients are supported
+    ///                for member functions only.
     /// \tparam Ts     Additional arguments to pass to the function.
     // clang-format off
     HPX_CXX_EXPORT template <auto F, typename Target, typename... Ts>
         requires(detail::is_action_function_v<F> &&
-            (std::is_same_v<std::decay_t<Target>, hpx::id_type> ||
-                hpx::traits::is_client_v<std::decay_t<Target>> ||
-                hpx::traits::is_distribution_policy_v<std::decay_t<Target>>))
+            detail::is_action_function_target_v<F, std::decay_t<Target>>)
     HPX_FORCEINLINE auto async(Target&& target, Ts&&... ts)
     // clang-format on
     {
@@ -321,16 +337,15 @@ namespace hpx {
     /// \tparam F      A pointer to a free function or to a member function of
     ///                a component.
     /// \tparam Policy The launch policy to use.
-    /// \tparam Target id_type, client, or distribution policy.
+    /// \tparam Target id_type or distribution policy. Clients are supported
+    ///                for member functions only.
     /// \tparam Ts     Additional arguments to pass to the function.
     // clang-format off
     HPX_CXX_EXPORT template <auto F, typename Policy, typename Target,
         typename... Ts>
         requires(detail::is_action_function_v<F> &&
             traits::is_launch_policy_v<Policy> &&
-            (std::is_same_v<std::decay_t<Target>, hpx::id_type> ||
-                hpx::traits::is_client_v<std::decay_t<Target>> ||
-                hpx::traits::is_distribution_policy_v<std::decay_t<Target>>))
+            detail::is_action_function_target_v<F, std::decay_t<Target>>)
     HPX_FORCEINLINE auto async(Policy&& policy, Target&& target, Ts&&... ts)
     // clang-format on
     {

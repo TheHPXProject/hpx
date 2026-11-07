@@ -175,7 +175,8 @@ by passing a pointer to the function as the template argument of ``hpx::async``:
 This creates the action for ``app::square`` internally. It relies on the action
 being registered automatically, which is the default. If |hpx| was configured
 with ``HPX_WITH_AUTOMATIC_SERIALIZATION_REGISTRATION=OFF``, use
-:c:macro:`HPX_PLAIN_ACTION` instead.
+:c:macro:`HPX_PLAIN_ACTION` instead. The target can be an ``hpx::id_type`` or a
+distribution policy, but not a client.
 
 For member functions of objects which have been registered with AGAS
 (e.g., 'components'), a different registration macro
@@ -234,7 +235,9 @@ type for them, the same way as global functions::
             component_id, std::string("42"));
 
 The component itself still has to be registered using
-:c:macro:`HPX_REGISTER_COMPONENT`, only the action macros are not needed.
+:c:macro:`HPX_REGISTER_COMPONENT`, only the action macros are not needed. In
+addition to an ``hpx::id_type`` or a distribution policy, the target can also be
+a client of the component.
 
 .. _reflection_based_component_actions:
 
