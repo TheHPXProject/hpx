@@ -369,12 +369,12 @@ namespace hpx::execution::experimental {
 
             while (!condition())
             {
-                while (head.next == &head && !condition() && !stop)
+                while (head.next == &head && !condition())
                 {
                     cond_var.wait(l);
                 }
 
-                if (condition() || (head.next == &head && stop))
+                if (condition())
                 {
                     break;
                 }
