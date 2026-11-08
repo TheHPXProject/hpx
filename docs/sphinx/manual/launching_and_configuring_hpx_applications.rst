@@ -186,7 +186,9 @@ The |hpx| configuration section
    max_idle_backoff_time = ${HPX_MAX_IDLE_BACKOFF_TIME:<hpx_idle_backoff_time_max>}
    min_idle_backoff_time = ${HPX_MIN_IDLE_BACKOFF_TIME:<hpx_idle_backoff_time_min>}
    idle_backoff_steal_check_interval = ${HPX_IDLE_BACKOFF_STEAL_CHECK_INTERVAL:<hpx_idle_backoff_steal_check_interval>}
+   idle_backoff_spin_round_pauses = ${HPX_IDLE_BACKOFF_SPIN_ROUND_PAUSES:16}
    default_scheduler_mode = ${HPX_DEFAULT_SCHEDULER_MODE}
+   scheduler_tuner = ${HPX_SCHEDULER_TUNER:static}
    exception_verbosity = ${HPX_EXCEPTION_VERBOSITY:2}
    trace_depth = ${HPX_TRACE_DEPTH:20}
    handle_signals = ${HPX_HANDLE_SIGNALS:1}
@@ -320,6 +322,16 @@ The |hpx| configuration section
        ``HPX_WITH_THREAD_MANAGER_IDLE_BACKOFF`` is set during configuration in
        |cmake|_. By default this is defined by the preprocessor constant
        ``HPX_IDLE_BACKOFF_STEAL_CHECK_INTERVAL`` (``8``).
+   * * ``hpx.idle_backoff_spin_round_pauses``
+     * This setting defines the number of pause instructions of a round of the
+       idle spin of the ``local-priority-tuned-fifo`` scheduler (the other
+       schedulers use ``16``). The default is ``16``.
+   * * ``hpx.scheduler_tuner``
+     * This setting selects by name the tuner of the ``local-priority-tuned-fifo``
+       scheduler, which decides the values of the settings in
+       :ref:`ini_hpx_scheduler_policy` while the scheduler runs. The default,
+       ``static``, keeps the configured values. Other tuners can be registered
+       with ``hpx::threads::policies::register_scheduler_tuner``.
    * * ``hpx.default_scheduler_mode``
      * This setting defines the scheduler mode of the default thread pool as a
        number (the bitwise or of the values of
@@ -456,6 +468,52 @@ The ``hpx.threadpools`` configuration section
    * * ``hpx.threadpools.timer_pool_size``
      * The value of this property defines the number of OS threads created for
        the internal timer thread pool.
+
+The ``hpx.scheduler_policy`` configuration section
+..................................................
+
+These settings are used by the ``local-priority-tuned-fifo`` scheduler only (see
+:ref:`schedulers`). Together with ``hpx.max_idle_backoff_time``,
+``hpx.min_idle_backoff_time``, ``hpx.idle_backoff_steal_check_interval`` and
+``hpx.idle_backoff_spin_round_pauses`` they are the tunable settings of its
+rules, which its tuner (``hpx.scheduler_tuner``) may change while it runs. At
+their defaults the scheduler decides like the local priority scheduler (see
+:ref:`thread_scheduler_wake_up`).
+
+.. code-block:: ini
+
+   [hpx.scheduler_policy]
+   wake_one_max_size = ${HPX_SCHEDULER_POLICY_WAKE_ONE_MAX_SIZE:small}
+   wake_target_only = ${HPX_SCHEDULER_POLICY_WAKE_TARGET_ONLY:1}
+   wake_if_nobody_spins = ${HPX_SCHEDULER_POLICY_WAKE_IF_NOBODY_SPINS:1}
+   wake_one_unless_placed_by_caller = ${HPX_SCHEDULER_POLICY_WAKE_ONE_UNLESS_PLACED_BY_CALLER:1}
+   free_pass_after_wake = ${HPX_SCHEDULER_POLICY_FREE_PASS_AFTER_WAKE:1}
+
+.. _ini_hpx_scheduler_policy:
+
+.. list-table::
+
+   * * Property
+     * Description
+   * * ``hpx.scheduler_policy.wake_one_max_size``
+     * New threads up to this size (``nano``, ``small``, ``medium`` or
+       ``large``, see :ref:`task_sizes`) wake up at most one sleeping worker
+       thread; larger and unsized threads wake up the sleeping worker threads
+       as before. ``unknown`` turns this off. Read once when the scheduler is
+       created. A tuner sees the sizes as numbers in their order, from ``0``
+       (``unknown``) to ``4`` (``large``).
+   * * ``hpx.scheduler_policy.wake_target_only``
+     * If ``1``, such a thread placed on another worker thread wakes up only
+       that worker thread, and only if it sleeps.
+   * * ``hpx.scheduler_policy.wake_if_nobody_spins``
+     * If ``1``, a worker thread that places such a thread on itself wakes up
+       a sleeping worker thread when no idle worker thread spins.
+   * * ``hpx.scheduler_policy.wake_one_unless_placed_by_caller``
+     * If ``1``, such a thread that round-robin or NUMA placement put on the
+       creating worker thread wakes up a sleeping worker thread.
+   * * ``hpx.scheduler_policy.free_pass_after_wake``
+     * If ``1``, a worker thread woken up by new work may steal once without
+       the early minima (see :ref:`thread_scheduler_pending_steal`).
 
 The ``hpx.thread_queue`` configuration section
 ..............................................
@@ -1789,7 +1847,8 @@ The predefined command line options for any application using
 
    The queue scheduling policy to use. Options are ``local``,
    ``local-priority-fifo``, ``local-priority-fifo-double``,
-   ``local-priority-lifo``, ``static``, ``static-priority``,
+   ``local-priority-lifo``, ``local-priority-tuned-fifo``, ``static``,
+   ``static-priority``,
    ``abp-priority-fifo``,
    ``local-workrequesting-fifo``, ``local-workrequesting-lifo``,
    ``local-workrequesting-mc``, and ``abp-priority-lifo``
@@ -1807,7 +1866,8 @@ The predefined command line options for any application using
    (default: number of OS threads), valid for :option:`--hpx:queuing`\
    ``=local-priority-fifo``, :option:`--hpx:queuing`\
    ``=local-priority-fifo-double``, :option:`--hpx:queuing`\
-   ``=local-priority-lifo``, :option:`--hpx:queuing`\ ``=static-priority``,
+   ``=local-priority-lifo``, :option:`--hpx:queuing`\
+   ``=local-priority-tuned-fifo``, :option:`--hpx:queuing`\ ``=static-priority``,
    :option:`--hpx:queuing`\ ``=local-workrequesting-fifo``,
    :option:`--hpx:queuing`\ ``=local-workrequesting-lifo``,
    :option:`--hpx:queuing`\ ``=local-workrequesting-mc``,
