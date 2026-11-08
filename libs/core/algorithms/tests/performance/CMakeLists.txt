@@ -32,7 +32,9 @@ set(benchmarks
 )
 
 if(HPX_WITH_DATAPAR)
-  list(APPEND benchmarks benchmark_search benchmark_search_n)
+  list(APPEND benchmarks benchmark_search benchmark_search_n
+       benchmark_lexicographical_compare
+  )
 endif()
 
 set(perftest_reports
