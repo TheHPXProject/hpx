@@ -1553,8 +1553,11 @@ namespace hpx::threads::policies {
                 }
             }
 
-            // the last resort of get_next_thread
-            return low_priority_queue_.get_queue_length() != 0;
+            // The last resort of get_next_thread. Only the last worker
+            // converts the staged threads of the low priority queue (it
+            // counts them in get_queue_length above), the others can take
+            // only its pending threads.
+            return low_priority_queue_.get_pending_queue_length() != 0;
         }
 
         ///////////////////////////////////////////////////////////////////////

@@ -100,12 +100,15 @@ void run_while_busy(std::size_t const num_tasks, Create&& create)
 // Tasks the calling worker places on itself.
 void test_placed_on_self_while_busy(std::size_t const num_tasks)
 {
-    std::size_t const self = hpx::get_worker_thread_num();
-    run_while_busy(num_tasks, [self](auto&& f) {
-        post_to(self, hpx::threads::small_task(std::forward<decltype(f)>(f)));
+    // the calling thread may resume on another worker after the sleep in
+    // run_while_busy, so the worker is looked up when the tasks are created
+    run_while_busy(num_tasks, [](auto&& f) {
+        post_to(hpx::get_worker_thread_num(),
+            hpx::threads::small_task(std::forward<decltype(f)>(f)));
     });
-    run_while_busy(num_tasks, [self](auto&& f) {
-        post_to(self, hpx::threads::nano_task(std::forward<decltype(f)>(f)));
+    run_while_busy(num_tasks, [](auto&& f) {
+        post_to(hpx::get_worker_thread_num(),
+            hpx::threads::nano_task(std::forward<decltype(f)>(f)));
     });
 }
 

@@ -98,26 +98,28 @@ add_hpx_unit_test(
   ARGS --mode=fast-idle
 )
 
-# wake up a sleeping worker for each nano and small task, only when no idle
-# worker spins, and without spinning idle workers
-add_hpx_unit_test(
-  "modules.schedulers" wake_by_task_size_wake_always
-  EXECUTABLE wake_by_task_size
-  PSEUDO_DEPS_NAME wake_by_task_size
-  THREADS_PER_LOCALITY 4
-  ARGS --hpx:ini=hpx.thread_queue.min_work_to_wake=0
-)
-add_hpx_unit_test(
-  "modules.schedulers" wake_by_task_size_large_min_work
-  EXECUTABLE wake_by_task_size
-  PSEUDO_DEPS_NAME wake_by_task_size
-  THREADS_PER_LOCALITY 4
-  ARGS --hpx:ini=hpx.thread_queue.min_work_to_wake=1000000000
-)
-add_hpx_unit_test(
-  "modules.schedulers" wake_by_task_size_no_spin
-  EXECUTABLE wake_by_task_size
-  PSEUDO_DEPS_NAME wake_by_task_size
-  THREADS_PER_LOCALITY 4
-  ARGS --hpx:ini=hpx.min_idle_backoff_time=0
-)
+if(HPX_WITH_THREAD_MANAGER_IDLE_BACKOFF)
+  # wake up a sleeping worker for each nano and small task, only when no idle
+  # worker spins, and without spinning idle workers
+  add_hpx_unit_test(
+    "modules.schedulers" wake_by_task_size_wake_always
+    EXECUTABLE wake_by_task_size
+    PSEUDO_DEPS_NAME wake_by_task_size
+    THREADS_PER_LOCALITY 4
+    ARGS --hpx:ini=hpx.thread_queue.min_work_to_wake=0
+  )
+  add_hpx_unit_test(
+    "modules.schedulers" wake_by_task_size_large_min_work
+    EXECUTABLE wake_by_task_size
+    PSEUDO_DEPS_NAME wake_by_task_size
+    THREADS_PER_LOCALITY 4
+    ARGS --hpx:ini=hpx.thread_queue.min_work_to_wake=1000000000
+  )
+  add_hpx_unit_test(
+    "modules.schedulers" wake_by_task_size_no_spin
+    EXECUTABLE wake_by_task_size
+    PSEUDO_DEPS_NAME wake_by_task_size
+    THREADS_PER_LOCALITY 4
+    ARGS --hpx:ini=hpx.min_idle_backoff_time=0
+  )
+endif()
