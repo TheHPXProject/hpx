@@ -19,6 +19,7 @@
 #include <hpx/modules/type_support.hpp>
 
 #include <hpx/schedulers/lockfree_queue_backends.hpp>
+#include <hpx/schedulers/queue_helpers.hpp>
 #include <hpx/schedulers/thread_queue.hpp>
 
 #include <algorithm>
@@ -109,6 +110,92 @@ namespace hpx::threads::policies {
             return rd();
         }
 
+        HPX_CXX_CORE_EXPORT struct workrequesting_victim_masks
+        {
+            mask_type local_;
+            mask_type remote_;
+            bool has_local_victims_ = false;
+            bool has_remote_victims_ = false;
+        };
+
+        HPX_CXX_CORE_EXPORT inline workrequesting_victim_masks
+        make_workrequesting_victim_masks(std::size_t num_thread,
+            std::vector<std::size_t> const& worker_domains,
+            std::vector<std::size_t> const& remote_domains)
+        {
+            workrequesting_victim_masks masks;
+            resize(masks.local_, worker_domains.size());
+            resize(masks.remote_, worker_domains.size());
+            reset(masks.local_);
+            reset(masks.remote_);
+
+            std::size_t const local_domain = worker_domains[num_thread];
+            for (std::size_t worker = 0; worker != worker_domains.size();
+                ++worker)
+            {
+                bool const local = worker_domains[worker] == local_domain;
+                bool const remote =
+                    std::find(remote_domains.begin(), remote_domains.end(),
+                        worker_domains[worker]) != remote_domains.end();
+
+                if (worker == num_thread || !local)
+                {
+                    set(masks.local_, worker);
+                }
+                else
+                {
+                    masks.has_local_victims_ = true;
+                }
+                if (worker == num_thread || !remote)
+                {
+                    set(masks.remote_, worker);
+                }
+                else
+                {
+                    masks.has_remote_victims_ = true;
+                }
+            }
+            return masks;
+        }
+
+        HPX_CXX_CORE_EXPORT inline std::int64_t
+        get_workrequesting_staged_steal_minimum(std::int64_t idle_loop_count,
+            std::int64_t max_idle_loop_count,
+            std::int64_t steal_staged_threshold,
+            std::int64_t min_tasks_to_steal_staged_early) noexcept
+        {
+            if (idle_loop_count <= steal_staged_threshold)
+            {
+                return -1;
+            }
+            if (idle_loop_count <= max_idle_loop_count / 2)
+            {
+                return min_tasks_to_steal_staged_early;
+            }
+            return 0;
+        }
+
+        HPX_CXX_CORE_EXPORT inline bool has_enough_workrequesting_staged_tasks(
+            std::int64_t staged_count, std::int64_t request_minimum,
+            std::int64_t configured_minimum) noexcept
+        {
+            return request_minimum >= 0 && staged_count != 0 &&
+                staged_count >=
+                (std::max) (request_minimum, configured_minimum);
+        }
+
+        HPX_CXX_CORE_EXPORT inline std::size_t
+        get_workrequesting_pending_steal_count(std::int64_t pending_count,
+            std::int64_t min_tasks_to_steal_pending, bool steal_half) noexcept
+        {
+            if (pending_count == 0 ||
+                pending_count < min_tasks_to_steal_pending)
+            {
+                return 0;
+            }
+            return steal_half ? static_cast<std::size_t>(pending_count / 2) : 1;
+        }
+
         ////////////////////////////////////////////////////////////////////////
         struct workrequesting_init_parameter
         {
@@ -118,7 +205,9 @@ namespace hpx::threads::policies {
                     -1),
                 thread_queue_init_parameters const& thread_queue_init =
                     thread_queue_init_parameters{},
-                char const* description = "local_workrequesting_scheduler")
+                char const* description = "local_workrequesting_scheduler",
+                numa_sensitive_mode numa_sensitive =
+                    numa_sensitive_mode::boundary)
               : num_queues_(num_queues)
               , num_high_priority_queues_(
                     num_high_priority_queues == static_cast<std::size_t>(-1) ?
@@ -127,6 +216,7 @@ namespace hpx::threads::policies {
               , thread_queue_init_(thread_queue_init)
               , affinity_data_(affinity_data)
               , description_(description)
+              , numa_sensitive_(numa_sensitive)
             {
             }
 
@@ -145,6 +235,7 @@ namespace hpx::threads::policies {
             thread_queue_init_parameters thread_queue_init_;
             detail::affinity_data const& affinity_data_;
             char const* description_;
+            numa_sensitive_mode numa_sensitive_ = numa_sensitive_mode::boundary;
         };
 
         struct workrequesting_task_data
@@ -183,14 +274,18 @@ namespace hpx::threads::policies {
             workrequesting_steal_request(std::size_t const num_thread,
                 workrequesting_task_channel* channel, mask_cref_type victims,
                 bool idle, bool const stealhalf,
-                bool const steal_high_priority = false)
+                bool const steal_high_priority = false,
+                bool const remote = false,
+                std::int64_t min_tasks_to_steal_staged = -1)
               : channel_(channel)
               , victims_(victims)
               , num_thread_(static_cast<std::uint16_t>(num_thread))
               , attempt_(static_cast<std::uint16_t>(count(victims) - 1))
+              , min_tasks_to_steal_staged_(min_tasks_to_steal_staged)
               , state_(idle ? state::idle : state::working)
               , stealhalf_(stealhalf)
               , steal_high_priority_(steal_high_priority)
+              , remote_(remote)
             {
             }
 
@@ -198,10 +293,15 @@ namespace hpx::threads::policies {
             mask_type victims_ = mask_type();
             std::uint16_t num_thread_ = static_cast<std::uint16_t>(-1);
             std::uint16_t attempt_ = 0;
+            // A negative value disables staged stealing for this request. The
+            // value is fixed when the thief creates the request and remains
+            // unchanged while the request visits possible victims.
+            std::int64_t min_tasks_to_steal_staged_ = -1;
             state state_ = state::failed;
             // true ? attempt steal-half : attempt steal-one
             bool stealhalf_ = true;
             bool steal_high_priority_ = false;
+            bool remote_ = false;
         };
 
         using workrequesting_steal_request_channel =
@@ -287,6 +387,9 @@ namespace hpx::threads::policies {
 
             // initial affinity mask for this core
             mask_type victims_ = mask_type();
+            mask_type remote_victims_ = mask_type();
+            bool has_local_victims_ = false;
+            bool has_remote_victims_ = false;
 
             // queues for threads scheduled on this core
             thread_queue_type* queue_ = nullptr;
@@ -353,12 +456,17 @@ namespace hpx::threads::policies {
           , low_priority_queue_(thread_queue_init_)
           , curr_queue_(0)
           , affinity_data_(init.affinity_data_)
+          , worker_domains_(init.num_queues_)
+          , numa_sensitive_(init.numa_sensitive_)
           , num_queues_(init.num_queues_)
           , num_high_priority_queues_(init.num_high_priority_queues_)
         {
             HPX_ASSERT(init.num_queues_ != 0);
             HPX_ASSERT(num_high_priority_queues_ != 0);
             HPX_ASSERT(num_high_priority_queues_ <= num_queues_);
+
+            set_steal_staged_threshold(
+                thread_queue_init_.idle_loop_count_steal_staged_);
 
             if (!deferred_initialization)
             {
@@ -798,6 +906,27 @@ namespace hpx::threads::policies {
                 // Steal request was either returned by another worker or
                 // picked up by us.
 
+                // Same-domain victims are tried first. Once that phase is
+                // exhausted, restart the request with the allowed remote
+                // victims, if any.
+                if (req.state_ == steal_request::state::idle && !req.remote_ &&
+                    d.queue_->get_pending_queue_length(
+                        std::memory_order_relaxed) == 0 &&
+                    d.has_remote_victims_)
+                {
+                    req.remote_ = true;
+                    req.victims_ = d.remote_victims_;
+                    req.attempt_ = static_cast<std::uint16_t>(
+                        count(d.remote_victims_) - 1);
+
+                    std::size_t victim = next_victim(d, req);
+                    data_[victim].data_.requests_->set(HPX_MOVE(req));
+#if defined(HPX_HAVE_WORKREQUESTING_STEAL_STATISTICS)
+                    ++d.steal_requests_sent_;
+#endif
+                    return true;
+                }
+
                 // 26813: Use 'bitwise and' to check if a flag is set.
 #if defined(HPX_MSVC)
 #pragma warning(push)
@@ -825,9 +954,10 @@ namespace hpx::threads::policies {
                 {
                     // Continue circulating the steal request if it makes sense
                     req.state_ = steal_request::state::idle;
-                    req.victims_ = d.victims_;
+                    req.remote_ = !d.has_local_victims_;
+                    req.victims_ = req.remote_ ? d.remote_victims_ : d.victims_;
                     req.attempt_ =
-                        static_cast<std::uint16_t>(count(d.victims_) - 1);
+                        static_cast<std::uint16_t>(count(req.victims_) - 1);
 
                     std::size_t victim = next_victim(d, req);
                     data_[victim].data_.requests_->set(HPX_MOVE(req));
@@ -893,19 +1023,10 @@ namespace hpx::threads::policies {
                                               thread_queue_type* queue) {
                 std::int64_t const pending_count =
                     queue->get_pending_queue_length(std::memory_order_relaxed);
-                if (pending_count <
-                    thread_queue_init_.min_tasks_to_steal_pending_)
-                {
-                    return std::size_t(0);
-                }
-
-                if (!req.stealhalf_)
-                {
-                    return std::size_t(1);
-                }
-
-                // the pending queue length is never negative
-                return static_cast<std::size_t>(pending_count / 2);
+                return detail::get_workrequesting_pending_steal_count(
+                    pending_count,
+                    thread_queue_init_.min_tasks_to_steal_pending_,
+                    req.stealhalf_);
             };
 
             thread_queue_type* high_priority_queue = req.steal_high_priority_ &&
@@ -916,7 +1037,29 @@ namespace hpx::threads::policies {
                 high_priority_queue != nullptr ?
                 max_num_to_steal(high_priority_queue) :
                 0;
-            std::size_t const max_normal = max_num_to_steal(d.queue_);
+            std::size_t max_normal = max_num_to_steal(d.queue_);
+
+            // Convert eligible staged tasks into this worker's own pending
+            // queue. Sending them through the normal pending-task path keeps
+            // queue maintenance on the queue's owner.
+            if (max_high_priority == 0 && max_normal == 0 &&
+                req.min_tasks_to_steal_staged_ >= 0)
+            {
+                std::int64_t const staged_count =
+                    d.queue_->get_staged_queue_length(
+                        std::memory_order_relaxed);
+                if (detail::has_enough_workrequesting_staged_tasks(staged_count,
+                        req.min_tasks_to_steal_staged_,
+                        thread_queue_init_.min_tasks_to_steal_staged_))
+                {
+                    std::size_t converted = 0;
+                    d.queue_->wait_or_add_new(true, converted);
+                    if (converted != 0)
+                    {
+                        max_normal = max_num_to_steal(d.queue_);
+                    }
+                }
+            }
 
             // The requesting core may be stopping or suspended, in which case
             // it would not pick up any tasks we send. Claim its task channel
@@ -997,7 +1140,10 @@ namespace hpx::threads::policies {
 
                     return true;
                 }
+            }
 
+            if (channel_claimed)
+            {
                 thief_state.store(
                     channel_state::accepting, std::memory_order_release);
             }
@@ -1703,7 +1849,8 @@ namespace hpx::threads::policies {
                     req.num_thread_ == d.num_thread_ || req.attempt_ != 0);
 
 #if defined(HPX_HAVE_WORKREQUESTING_LAST_VICTIM)
-                if (d.last_victim_ != std::uint16_t(-1))
+                if (d.last_victim_ != std::uint16_t(-1) &&
+                    !test(req.victims_, d.last_victim_))
                 {
                     victim = d.last_victim_;
                 }
@@ -1732,9 +1879,11 @@ namespace hpx::threads::policies {
         // is still busy working on some tasks. A steal request with idle ==
         // true indicates that the requesting worker is in fact idle and has
         // nothing to work on.
-        void send_steal_request(scheduler_data& d, bool idle = true) noexcept
+        void send_steal_request(scheduler_data& d,
+            std::int64_t min_tasks_to_steal_staged, bool idle = true) noexcept
         {
-            if (d.requested_ == 0)
+            if (d.requested_ == 0 &&
+                (d.has_local_victims_ || d.has_remote_victims_))
             {
                 // Estimate work-stealing efficiency during the last interval;
                 // switch strategies if the value is below a threshold
@@ -1765,8 +1914,12 @@ namespace hpx::threads::policies {
                     }
                 }
 
-                steal_request req(d.num_thread_, d.tasks_, d.victims_, idle,
-                    d.stealhalf_, d.num_thread_ < num_high_priority_queues_);
+                bool const remote = !d.has_local_victims_;
+                mask_cref_type victims =
+                    remote ? d.remote_victims_ : d.victims_;
+                steal_request req(d.num_thread_, d.tasks_, victims, idle,
+                    d.stealhalf_, d.num_thread_ < num_high_priority_queues_,
+                    remote, min_tasks_to_steal_staged);
                 std::size_t victim = next_victim(d, req);
 
                 ++d.requested_;
@@ -1891,12 +2044,6 @@ namespace hpx::threads::policies {
                         ++added;
                     }
 
-#if defined(HPX_HAVE_WORKREQUESTING_LAST_VICTIM)
-                    // store the originating core for the next stealing
-                    // operation
-                    d.last_victim_ = thrds.num_thread_;
-                    HPX_ASSERT(d.last_victim_ != d.num_thread_);
-#endif
                     // the last of the received tasks will be either directly
                     // executed or normally scheduled
                     if (next_thrd != nullptr)
@@ -1916,7 +2063,16 @@ namespace hpx::threads::policies {
 #endif
                         ++added;
                     }
+                }
 
+                if (!thrds.tasks_.empty())
+                {
+#if defined(HPX_HAVE_WORKREQUESTING_LAST_VICTIM)
+                    // store the originating core for the next stealing
+                    // operation
+                    d.last_victim_ = thrds.num_thread_;
+                    HPX_ASSERT(d.last_victim_ != d.num_thread_);
+#endif
                     ++d.num_recent_steals_;
                     return true;
                 }
@@ -1940,6 +2096,26 @@ namespace hpx::threads::policies {
 
             // We don't need to call wait_or_add_new for high priority or bound
             // threads as these threads are never created 'staged'.
+
+            bool handled_request = false;
+            if (running && allow_stealing && !d.requests_->is_empty())
+            {
+                steal_request req;
+                while (try_receiving_steal_request(d, req))
+                {
+                    if (!handle_steal_request(d, req))
+                        break;
+                    handled_request = true;
+                }
+            }
+
+            if (handled_request)
+            {
+                // Servicing a request is scheduler activity. Prevent fast idle
+                // mode from advancing the idle counter as if no work happened.
+                added = static_cast<std::size_t>(-1);
+                return false;
+            }
 
             bool result =
                 d.queue_->wait_or_add_new(running, added, allow_stealing);
@@ -1992,8 +2168,15 @@ namespace hpx::threads::policies {
             // attempt to steal more work
             if (allow_stealing)
             {
-                send_steal_request(d);
-                HPX_ASSERT(d.requested_ != 0);
+                std::int64_t const min_tasks_to_steal_staged =
+                    detail::get_workrequesting_staged_steal_minimum(
+                        idle_loop_count, get_max_idle_loop_count(),
+                        get_steal_staged_threshold(),
+                        thread_queue_init_.min_tasks_to_steal_staged_early_);
+
+                send_steal_request(d, min_tasks_to_steal_staged);
+                HPX_ASSERT(d.requested_ != 0 ||
+                    (!d.has_local_victims_ && !d.has_remote_victims_));
             }
 
             if (!d.tasks_->is_empty() &&
@@ -2070,12 +2253,54 @@ namespace hpx::threads::policies {
                 low_priority_queue_.on_start_thread(num_thread);
             }
 
-            // Initially set all bits, code below resets the bits corresponding
-            // to cores that can serve as a victim for the current core. A set
-            // bit in this mask means 'do not steal from this core'.
-            resize(d.victims_, num_queues_);
-            reset(d.victims_);
-            set(d.victims_, num_thread);
+            auto const& topo = create_topology();
+            std::call_once(worker_domains_once_, [this, &topo] {
+                for (std::size_t worker = 0; worker != num_queues_; ++worker)
+                {
+                    std::size_t const global_worker =
+                        local_to_global_thread_index(worker);
+                    worker_domains_[worker] = topo.get_numa_node_number(
+                        affinity_data_.get_pu_num(global_worker));
+                }
+            });
+
+            std::vector<std::size_t> remote_domains;
+            if (has_scheduler_mode(
+                    policies::scheduler_mode::enable_stealing_numa, num_thread))
+            {
+                std::size_t num_domains = topo.get_number_of_numa_nodes();
+                if (num_domains == 0)
+                    num_domains = 1;
+
+                std::size_t const global_thread =
+                    local_to_global_thread_index(num_thread);
+                std::size_t const num_pu =
+                    affinity_data_.get_pu_num(global_thread);
+                mask_cref_type numa_mask =
+                    topo.get_numa_node_affinity_mask(num_pu);
+                mask_cref_type pu_mask = topo.get_thread_affinity_mask(num_pu);
+                std::size_t const first = find_first(numa_mask);
+                bool const is_boundary_worker =
+                    first == static_cast<std::size_t>(-1) ||
+                    test(pu_mask, first);
+
+                remote_domains = detail::get_numa_stealing_domains(
+                    numa_sensitive_, worker_domains_[num_thread], num_domains,
+                    is_boundary_worker,
+                    [&topo](std::size_t from, std::size_t to) {
+                        return topo.get_numa_distance(from, to);
+                    });
+            }
+
+            // A set bit means "do not steal from this worker". Requests use
+            // the local mask first and switch to the remote mask only after
+            // all same-domain workers have been tried.
+            auto masks = detail::make_workrequesting_victim_masks(
+                num_thread, worker_domains_, remote_domains);
+            d.victims_ = HPX_MOVE(masks.local_);
+            d.remote_victims_ = HPX_MOVE(masks.remote_);
+            d.has_local_victims_ = masks.has_local_victims_;
+            d.has_remote_victims_ = masks.has_remote_victims_;
         }
 
         void on_stop_thread(std::size_t num_thread) override
@@ -2132,8 +2357,7 @@ namespace hpx::threads::policies {
             // lead to deadlocks. Fast idle mode lets idle workers send steal
             // requests immediately.
             return mode | policies::scheduler_mode::fast_idle_mode |
-                policies::scheduler_mode::enable_stealing |
-                policies::scheduler_mode::enable_stealing_numa;
+                policies::scheduler_mode::enable_stealing;
         }
 
     protected:
@@ -2146,6 +2370,9 @@ namespace hpx::threads::policies {
         util::cache_aligned_data_derived<std::atomic<std::size_t>> curr_queue_;
 
         detail::affinity_data const& affinity_data_;
+        std::once_flag worker_domains_once_;
+        std::vector<std::size_t> worker_domains_;
+        numa_sensitive_mode const numa_sensitive_;
         std::size_t const num_queues_;
         std::size_t const num_high_priority_queues_;
     };
