@@ -113,7 +113,10 @@ recorded() {
 # Adds the run of the reports in $1 to upload/data, the log in $2
 add_reports() {
     local reports=$1 upload_log=$2
-    sed -i "s/^Jenkins build unknown, ran on /${added_by} with the steps of the lane (without the CDash submits) on /" \
+    # added_by literally in the replacement (& and \ are special there)
+    local by
+    by=$(printf '%s' "${added_by}" | sed 's/[\&]/\\&/g')
+    sed -i "s/^Jenkins build unknown, ran on /${by} with the steps of the lane (without the CDash submits) on /" \
         "${reports}/history/intro.md"
     grep -qF "${added_by} " "${reports}/history/intro.md" ||
         log "[${n}/${total}] ${short}: build line of intro.md not reworded"
