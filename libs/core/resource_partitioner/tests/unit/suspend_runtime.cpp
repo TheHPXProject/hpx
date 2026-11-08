@@ -63,6 +63,7 @@ int main(int argc, char* argv[])
         hpx::resource::scheduling_policy::local,
         hpx::resource::scheduling_policy::local_priority_fifo,
         hpx::resource::scheduling_policy::local_priority_fifo_double,
+        hpx::resource::scheduling_policy::local_priority_tuned_fifo,
 #if defined(HPX_HAVE_CXX11_STD_ATOMIC_128BIT)
         hpx::resource::scheduling_policy::local_priority_lifo,
 #endif

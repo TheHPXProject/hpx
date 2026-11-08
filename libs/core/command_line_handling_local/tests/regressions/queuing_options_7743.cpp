@@ -81,6 +81,7 @@ int main(int argc, char* argv[])
 
     test_queuing(argc, argv, "local-priority-fifo", true, 0);
     test_queuing(argc, argv, "local-priority-fifo-double", true, 0);
+    test_queuing(argc, argv, "local-priority-tuned-fifo", true, 0);
     test_queuing(argc, argv, "static-priority", true, 0);
 
 #if defined(HPX_HAVE_CXX11_STD_ATOMIC_128BIT)

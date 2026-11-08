@@ -120,6 +120,11 @@ int main(int argc, char* argv[])
     test_queuing_string(argc, argv, "local-priority-fifo-double",
         hpx::resource::scheduling_policy::local_priority_fifo_double);
 
+    // Must resolve to local_priority_tuned_fifo, and must not be
+    // short-circuited by the shorter local-priority-fifo branch.
+    test_queuing_string(argc, argv, "local-priority-tuned-fifo",
+        hpx::resource::scheduling_policy::local_priority_tuned_fifo);
+
     // A value that is not a prefix of any known scheduler name.
     test_invalid_queuing_string(argc, argv, "not-a-real-scheduler");
 
