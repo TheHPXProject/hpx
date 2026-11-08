@@ -105,6 +105,7 @@ namespace hpx::resource {
         local_workrequesting_fifo = 8,
         local_workrequesting_lifo = 9,
         local_workrequesting_mc = 10,
+        local_priority_tuned_fifo = 12,
     };
 
 #define HPX_SCHEDULING_POLICY_UNSCOPED_ENUM_DEPRECATION_MSG                    \

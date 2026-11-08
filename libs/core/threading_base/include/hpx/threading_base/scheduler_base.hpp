@@ -14,6 +14,7 @@
 #include <hpx/modules/functional.hpp>
 #include <hpx/threading_base/scheduler_mode.hpp>
 #include <hpx/threading_base/scheduler_state.hpp>
+#include <hpx/threading_base/scheduling_policy.hpp>
 #include <hpx/threading_base/thread_data.hpp>
 #include <hpx/threading_base/thread_init_data.hpp>
 #include <hpx/threading_base/thread_pool_base.hpp>
@@ -127,6 +128,25 @@ namespace hpx::threads::policies {
 
         bool idle_callback(std::size_t num_thread);
 
+#if defined(HPX_HAVE_THREAD_MANAGER_IDLE_BACKOFF)
+        /// What the given worker does for its next idle backoff period after
+        /// count periods without work (rules 6 and 7 of scheduling_policy,
+        /// called by idle_callback): the period doubles with every one, up to
+        /// hpx.max_idle_backoff_time, and periods shorter than
+        /// hpx.min_idle_backoff_time are spent spinning. This uses the
+        /// configured values; a scheduler with tunable rules overrides it.
+        [[nodiscard]] virtual idle_step idle_step_for(
+            std::size_t num_thread, std::uint32_t count) const;
+
+        /// Whether a worker woken up by a notification may steal once
+        /// without the early minima of the scheduler (rule 8 of
+        /// scheduling_policy, called by idle_callback).
+        [[nodiscard]] virtual bool free_pass_after_wake() const
+        {
+            return true;
+        }
+#endif
+
         /// Called by a worker thread that found work: clear its idle backoff
         /// count (if set), so that do_some_work does not keep notifying it
         /// while it is busy. Only the worker itself writes here unless the
@@ -155,9 +175,8 @@ namespace hpx::threads::policies {
             [[maybe_unused]] threads::task_size size) const noexcept
         {
 #if defined(HPX_HAVE_THREAD_MANAGER_IDLE_BACKOFF)
-            return wakes_up_for_small_ &&
-                (size == threads::task_size::nano ||
-                    size == threads::task_size::small_);
+            return size != threads::task_size::unknown &&
+                size <= wake_one_max_size_;
 #else
             return false;
 #endif
@@ -415,9 +434,10 @@ namespace hpx::threads::policies {
         std::vector<util::aligned_line_data<idle_backoff_data>>
             wait_count_data_;
 
-        // set by schedulers that wake up workers for nano and small threads
-        // themselves, see wakes_up_for
-        bool wakes_up_for_small_ = false;
+        // set by schedulers that wake up workers for new threads up to this
+        // size themselves (rule 1 of scheduling_policy), see wakes_up_for;
+        // unknown for the others
+        threads::task_size wake_one_max_size_ = threads::task_size::unknown;
 
         // one bit per worker that announced it is going to sleep
         std::vector<util::aligned_line_data<std::atomic<std::uint64_t>>>

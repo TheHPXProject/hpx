@@ -218,12 +218,15 @@ namespace hpx::threads::policies {
     /// are executed by the first N OS threads before any other work is
     /// executed. Low priority threads are created by the last OS thread and
     /// executed by any OS thread that has no other work. See the overview at
-    /// the top of this file.
+    /// the top of this file. Rules decides whom to wake up for new nano and
+    /// small threads (fixed_scheduling_rules with the configured values, or
+    /// tuned_scheduling_rules for the local-priority-tuned-fifo scheduler).
     HPX_CXX_CORE_EXPORT template <typename Mutex = std::mutex,
         typename PendingQueuing = lockfree_fifo,
         typename StagedQueuing = concurrentqueue_fifo,
         typename TerminatedQueuing =
-            default_local_priority_queue_scheduler_terminated_queue>
+            default_local_priority_queue_scheduler_terminated_queue,
+        typename Rules = fixed_scheduling_rules>
     class local_priority_queue_scheduler : public scheduler_base
     {
     public:
@@ -292,6 +295,7 @@ namespace hpx::threads::policies {
           , victims_(num_queues_)
           , low_priority_queue_(thread_queue_init_)
           , curr_queue_(0)
+          , rules_(init.num_queues_)
         {
             // Start stealing staged tasks soon after a worker ran out of work
             // (see wait_or_add_new). This takes load off the pending queue of
@@ -301,8 +305,9 @@ namespace hpx::threads::policies {
                 thread_queue_init_.idle_loop_count_steal_staged_);
 
 #if defined(HPX_HAVE_THREAD_MANAGER_IDLE_BACKOFF)
-            // see wake_up_for_small
-            this->wakes_up_for_small_ = true;
+            // nano and small threads wake up at most one worker, see
+            // wake_up_for_small (rule 1 of scheduling_policy)
+            this->wake_one_max_size_ = threads::task_size::small_;
 #endif
 
             if (!deferred_initialization)
@@ -916,8 +921,10 @@ namespace hpx::threads::policies {
 
         // Wake up a worker for a new nano or small thread queued for worker
         // num_thread (create_thread and create_work leave this to the
-        // scheduler, see wakes_up_for). Such a thread is usually done before
-        // a sleeping worker has woken up, so wake up only the worker it was
+        // scheduler, see wakes_up_for). The rules decide whom to wake up (see
+        // fixed_scheduling_rules and scheduling_policy::wake_for_small), this
+        // carries out the decision. Such a thread is usually done before a
+        // sleeping worker has woken up, so it wakes up only the worker it was
         // queued for, if that sleeps. The calling worker runs the threads it
         // queued for itself once it is done with its current one, or an idle
         // worker that spins finds them; only if no idle worker spins, it
@@ -928,26 +935,30 @@ namespace hpx::threads::policies {
         void wake_up_for_small(std::size_t const num_thread,
             thread_priority const priority, bool const placed_by_caller)
         {
-            if (priority != thread_priority::normal &&
-                priority != thread_priority::default_)
+            switch (rules_.wake_for_small(thread_queue_init_, num_thread,
+                calling_worker(), priority, placed_by_caller,
+                [&] { return this->has_spinning_worker(); }))
             {
-                // as for threads of other sizes
-                this->do_some_work(num_thread);
-                return;
-            }
+            case wake_action::none:
+                break;
 
-            if (num_thread != calling_worker())
-            {
+            case wake_action::target_if_sleeping:
                 this->wake_if_sleeping(num_thread);
-            }
-            else if (!placed_by_caller || !this->has_spinning_worker())
-            {
+                break;
+
+            case wake_action::one:
                 // The caller may keep running for a long time without
                 // getting to its new threads (a task that posts work and
                 // goes on with its own). An idle worker that spins finds
                 // them, but if all of them sleep, one is woken up, which
                 // then spins for a while (waking up resets its backoff).
                 this->wake_one((num_thread + 1) % num_queues_);
+                break;
+
+            case wake_action::all:
+                // as for threads of other sizes
+                this->do_some_work(num_thread);
+                break;
             }
         }
 #endif
@@ -2414,6 +2425,10 @@ namespace hpx::threads::policies {
         // which works within a page).
         char curr_queue_page_offset_[4096];
         util::aligned_line_data<std::atomic<std::size_t>> curr_queue_;
+
+        // The rules for new nano and small threads (see wake_up_for_small).
+        // fixed_scheduling_rules is empty and takes no space.
+        HPX_NO_UNIQUE_ADDRESS Rules rules_;
     };    // namespace hpx::threads::policies
 }    // namespace hpx::threads::policies
 

@@ -148,6 +148,7 @@ namespace hpx::local::detail {
         if (matches("local-priority-fifo") ||
             matches("local-priority-fifo-double") ||
             matches("local-priority-lifo") ||
+            matches("local-priority-tuned-fifo") ||
             matches("local-workrequesting-fifo") ||
             matches("local-workrequesting-lifo") ||
             matches("local-workrequesting-mc"))
@@ -520,6 +521,7 @@ namespace hpx::local::detail {
                     "valid for --hpx:queuing=local-priority-fifo, "
                     "--hpx:queuing=local-priority-fifo-double, "
                     "--hpx:queuing=local-priority-lifo, "
+                    "--hpx:queuing=local-priority-tuned-fifo, "
                     "--hpx:queuing=static-priority, "
                     "--hpx:queuing=local-workrequesting-fifo, "
                     "--hpx:queuing=local-workrequesting-lifo, "
