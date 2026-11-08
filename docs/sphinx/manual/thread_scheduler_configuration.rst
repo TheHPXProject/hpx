@@ -273,7 +273,7 @@ at the cost of more busy processing units.
 Waking up worker threads
 ========================
 
-Settings: ``hpx.thread_queue.min_work_to_wake``.
+Settings: ``hpx.min_idle_backoff_time``.
 
 When new work is created, the local priority queue scheduler decides by the
 size of the task (see :ref:`task_sizes`) which sleeping worker threads to wake
@@ -284,12 +284,10 @@ task is usually done before a sleeping worker thread has woken up, so:
 * a task placed on another worker thread wakes up that worker thread only, and
   only if it sleeps;
 * a task a worker thread places on itself wakes up no other worker thread as
-  long as the nano and small tasks it has staged for itself add up to less than
-  ``hpx.thread_queue.min_work_to_wake`` (2000 nanoseconds) and an idle worker
-  thread spins that will find them. Otherwise it wakes up one sleeping worker
-  thread. The staged work is estimated as the number of staged tasks times the
-  run time the size of the new task stands for. ``0`` wakes up a sleeping
-  worker thread for each such task;
+  long as an idle worker thread spins (see ``hpx.min_idle_backoff_time``) that
+  will find it; the creating worker thread runs it itself once it is done with
+  its current |hpx| thread. If no idle worker thread spins, it wakes up one
+  sleeping worker thread;
 * a task that round-robin placement put on the creating worker thread wakes up
   one sleeping worker thread, since its creator may wait for it without
   yielding.
@@ -491,12 +489,6 @@ Which scheduler uses which setting
      * yes
      * yes
      * yes (different batch sizes)
-   * * ``min_work_to_wake``
-     * yes
-     * no
-     * no
-     * no
-     * no
    * * ``hpx.max_idle_loop_count``, ``hpx.max_busy_loop_count``,
        ``hpx.max_idle_backoff_time``, ``hpx.min_idle_backoff_time``,
        ``hpx.idle_backoff_steal_check_interval``,
@@ -534,9 +526,6 @@ Dependencies between settings
 * Idle backoff periods shorter than ``hpx.min_idle_backoff_time`` are spent
   spinning; if it is larger than ``hpx.max_idle_backoff_time``, idle worker
   threads never sleep.
-* ``hpx.thread_queue.min_work_to_wake`` only matters while some idle worker
-  thread spins (``hpx.min_idle_backoff_time``); if none does, a worker thread
-  that places a nano or small task on itself wakes up a sleeping one.
 * The conversion batch size is limited by ``hpx.thread_queue.max_thread_count``
   as well as by ``min_add_new_count`` and ``max_add_new_count``;
   ``min_add_new_count`` is limited to ``max_add_new_count``.
@@ -577,10 +566,6 @@ was built with ``HPX_WITH_THREAD_STEALING_COUNTS=ON``,
    * * Idle worker threads react slowly to new work.
      * ``hpx.max_idle_backoff_time`` (lower it), ``hpx.max_idle_loop_count``
        (raise it), ``hpx.min_idle_backoff_time`` (raise it).
-   * * Many nano or small tasks created by one worker thread run on that worker
-       only, while others sleep.
-     * ``hpx.thread_queue.min_work_to_wake`` (lower it, ``0`` wakes a sleeping
-       worker thread for each task).
    * * Applications creating very many short |hpx| threads spend a lot of time
        allocating thread objects.
      * ``cached_threads_count``, ``init_threads_count``,

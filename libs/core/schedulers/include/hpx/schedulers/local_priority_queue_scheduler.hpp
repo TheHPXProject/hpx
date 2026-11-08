@@ -897,7 +897,7 @@ namespace hpx::threads::policies {
 #if defined(HPX_HAVE_THREAD_MANAGER_IDLE_BACKOFF)
             if (this->wakes_up_for(size))
             {
-                wake_up_for_small(num_thread, priority, size, placed_by_caller);
+                wake_up_for_small(num_thread, priority, placed_by_caller);
             }
 #endif
         }
@@ -919,18 +919,14 @@ namespace hpx::threads::policies {
         // scheduler, see wakes_up_for). Such a thread is usually done before
         // a sleeping worker has woken up, so wake up only the worker it was
         // queued for, if that sleeps. The calling worker runs the threads it
-        // queued for itself once it is done with its current one, unless
-        // their staged work is worth stealing (min_work_to_wake_) or no idle
-        // worker spins that would find them: then it wakes up one sleeping
-        // worker. The staged work is estimated as the number of staged
-        // threads times the run time of the new one, which is exact for a
-        // burst of threads of one size and needs no count of its own. This
-        // holds only if the caller chose the calling worker. A thread that
-        // round-robin placement put there may belong to a caller that waits
-        // for it without yielding, so one sleeping worker is woken up for it.
+        // queued for itself once it is done with its current one, or an idle
+        // worker that spins finds them; only if no idle worker spins, it
+        // wakes up one sleeping worker. This holds only if the caller chose
+        // the calling worker. A thread that round-robin placement put there
+        // may belong to a caller that waits for it without yielding, so one
+        // sleeping worker is woken up for it.
         void wake_up_for_small(std::size_t const num_thread,
-            thread_priority const priority, threads::task_size const size,
-            bool const placed_by_caller)
+            thread_priority const priority, bool const placed_by_caller)
         {
             if (priority != thread_priority::normal &&
                 priority != thread_priority::default_)
@@ -944,13 +940,7 @@ namespace hpx::threads::policies {
             {
                 this->wake_if_sleeping(num_thread);
             }
-            else if (!placed_by_caller ||
-                thread_queue_init_.min_work_to_wake_ <= 0 ||
-                queues_[num_thread].queue_->get_staged_queue_length(
-                    std::memory_order_relaxed) *
-                        threads::task_size_duration(size).count() >=
-                    thread_queue_init_.min_work_to_wake_ ||
-                !this->has_spinning_worker())
+            else if (!placed_by_caller || !this->has_spinning_worker())
             {
                 // The caller may keep running for a long time without
                 // getting to its new threads (a task that posts work and

@@ -476,7 +476,6 @@ The ``hpx.thread_queue`` configuration section
    min_tasks_to_steal_pending_early = ${HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_PENDING_EARLY:4}
    min_tasks_to_steal_staged_early = ${HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_STAGED_EARLY:10}
    idle_loop_count_steal_staged = ${HPX_IDLE_LOOP_COUNT_STEAL_STAGED:30}
-   min_work_to_wake = ${HPX_THREAD_QUEUE_MIN_WORK_TO_WAKE:2000}
    min_add_new_count = ${HPX_THREAD_QUEUE_MIN_ADD_NEW_COUNT:10}
    max_add_new_count = ${HPX_THREAD_QUEUE_MAX_ADD_NEW_COUNT:10}
    min_delete_count = ${HPX_THREAD_QUEUE_MIN_DELETE_COUNT:10}
@@ -532,16 +531,6 @@ The ``hpx.thread_queue`` configuration section
        keeps them close to the data in that core's caches. The minimum is
        ignored for a worker that doesn't get to its few staged tasks. See
        :ref:`thread_scheduler_staged_steal`.
-   * * ``hpx.thread_queue.min_work_to_wake``
-     * The value of this property defines the run time (in nanoseconds) of the
-       nano and small |hpx| tasks a worker thread must have staged for itself
-       before it wakes up a sleeping worker thread for them (local priority
-       queue scheduler only). Below that, it runs them itself once it is done
-       with its current |hpx| thread, unless no idle worker thread spins. The
-       run time is estimated as the number of staged tasks times the run time
-       the size of the new task stands for (see :ref:`task_sizes`). ``0``
-       wakes up a sleeping worker thread for each new task. See
-       :ref:`thread_scheduler_wake_up`.
    * * ``hpx.thread_queue.min_add_new_count``
      * The value of this property defines the minimal number of staged tasks
        converted into |hpx| threads at a time, see

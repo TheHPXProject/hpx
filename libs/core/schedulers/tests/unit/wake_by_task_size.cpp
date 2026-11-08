@@ -6,17 +6,15 @@
 
 // The local priority queue scheduler wakes up at most one sleeping worker for
 // a new nano or small task: the worker it was placed on, if that sleeps, or,
-// for a task a worker placed on itself, another one once the staged work adds
-// up to hpx.thread_queue.min_work_to_wake or no idle worker spins. A task that
-// round-robin placement put on the creating worker wakes up one sleeping
-// worker.
+// for a task a worker placed on itself, another one if no idle worker spins. A
+// task that round-robin placement put on the creating worker wakes up one
+// sleeping worker.
 //
 // The test lets the workers go to sleep, then creates nano and small tasks in
 // each of these ways and checks that all of them run, also while the worker
 // that created them stays busy without yielding, so that only other workers
-// can run them. The ctest variants change hpx.thread_queue.min_work_to_wake
-// (0: wake up for each task, very large: never by the amount of work) and
-// hpx.min_idle_backoff_time (0: idle workers never spin).
+// can run them. The ctest variant sets hpx.min_idle_backoff_time to 0: idle
+// workers never spin.
 
 #include <hpx/execution.hpp>
 #include <hpx/future.hpp>
@@ -35,8 +33,7 @@
 
 constexpr std::chrono::seconds timeout(10);
 
-// fewer small tasks than make up the default hpx.thread_queue.min_work_to_wake
-// (2000 ns, a small task stands for 100 ns), and more
+// a few tasks, and a burst
 constexpr std::size_t few_tasks = 3;
 constexpr std::size_t many_tasks = 100;
 
