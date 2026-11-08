@@ -20,6 +20,7 @@
 #pragma once
 
 #include <hpx/config.hpp>
+#include <hpx/errors/try_catch_exception_ptr.hpp>
 #include <hpx/futures/future.hpp>
 #include <hpx/futures/promise.hpp>
 #include <hpx/modules/errors.hpp>
@@ -98,8 +99,13 @@ namespace hpx::execution::experimental {
                 }
                 else
                 {
-                    promise_.set_exception(
-                        std::make_exception_ptr(HPX_FORWARD(E, err)));
+                    auto ep = hpx::detail::try_catch_exception_ptr(
+                        [&]() {
+                            return std::make_exception_ptr(
+                                HPX_FORWARD(E, err));
+                        },
+                        [](std::exception_ptr e) { return e; });
+                    promise_.set_exception(HPX_MOVE(ep));
                 }
             }
 
@@ -125,7 +131,7 @@ namespace hpx::execution::experimental {
         // sender signals completion.  Constructs the op_state in-place via
         // guaranteed copy elision (C++17) since P2300 operation states are
         // immovable.
-        template <typename Sender, typename Receiver>
+        HPX_CXX_CORE_EXPORT template <typename Sender, typename Receiver>
         struct op_state_holder
         {
             template <typename Sender_>
