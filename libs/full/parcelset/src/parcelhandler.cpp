@@ -1079,7 +1079,8 @@ namespace hpx::parcelset {
             naming::address& addr = p.addr();
             if (!addr)
             {
-                resolved[i] = agas::resolve_local(p.destination(), addr);
+                resolved[i] =
+                    agas::resolve_local(p.destination(), addr) ? 1 : 0;
             }
         }
 
