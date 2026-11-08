@@ -11,6 +11,7 @@
 #pragma once
 
 #include <hpx/assert.hpp>
+#include <hpx/contracts.hpp>
 #include <hpx/modules/concurrency.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/synchronization/detail/condition_variable.hpp>
@@ -48,10 +49,11 @@ namespace hpx {
         /// Synchronization: None
         /// Postconditions: counter_ == count.
         ///
-        explicit latch(std::ptrdiff_t const count)
+        explicit latch(std::ptrdiff_t const count) HPX_PRE(count >= 0)
           : counter_(count)
           , notified_(count == 0)
         {
+            HPX_CONTRACT_ASSERT(count >= 0);
         }
 
         /// Requires: No threads are blocked at the synchronization point.
@@ -89,21 +91,25 @@ namespace hpx {
         ///
         /// \throws Nothing.
         ///
-        void count_down(std::ptrdiff_t const update)
+        void count_down(std::ptrdiff_t const update) HPX_PRE(update >= 0)
         {
-            HPX_ASSERT(update >= 0);
+            HPX_CONTRACT_ASSERT(update >= 0);
 
             std::unique_lock<mutex_type> l(mtx_.data_);
 
             std::ptrdiff_t const old_count =
                 counter_.fetch_sub(update, std::memory_order_acq_rel);
 
-            HPX_ASSERT(old_count >= update);
-
             if (old_count == update)
             {
                 notified_ = true;
                 notify_waiters(HPX_MOVE(l));
+            }
+            else
+            {
+                // The handler may re-enter the latch.
+                l.unlock();
+                HPX_CONTRACT_ASSERT(old_count >= update);
             }
         }
 
@@ -144,15 +150,16 @@ namespace hpx {
         /// Effects: Equivalent to:
         ///             count_down(update);
         ///             wait();
-        void arrive_and_wait(std::ptrdiff_t update = 1)
+        ///
+        /// Requires: counter_ >= update and update >= 0.
+        void arrive_and_wait(std::ptrdiff_t update = 1) HPX_PRE(update >= 0)
         {
-            HPX_ASSERT(update >= 0);
+            HPX_CONTRACT_ASSERT(update >= 0);
 
             std::unique_lock l(mtx_.data_);
 
             std::ptrdiff_t const old_count =
                 counter_.fetch_sub(update, std::memory_order_acq_rel);
-            HPX_ASSERT_LOCKED(l, old_count >= update);
 
             // 26110: Caller failing to hold lock 'this->mtx_.data_'
             // 26111: Caller failing to release lock 'this->mtx_.data_'
@@ -175,6 +182,11 @@ namespace hpx {
                 notified_ = true;
                 notify_waiters(HPX_MOVE(l));
             }
+
+            // Violations (old_count < update) take the else branch and release
+            // the lock before calling the handler. Only locals are safe here:
+            // notifying waiters may destroy the latch.
+            HPX_CONTRACT_ASSERT(old_count >= update);
         }
 
     private:
