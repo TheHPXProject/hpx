@@ -398,6 +398,21 @@ else
 fi
 set -x
 
+# A master build also adds the runs of the master commits missing from the
+# performance history (builds that never ran, or whose run failed or wasn't
+# uploaded), once it gets the history node again. This comes after the status
+# is set: it may take hours, and its failures only show in the log.
+if [[ "${perftest_history}" == 1 ]]; then
+    perftest_log "Looking for master commits missing from the performance" \
+        "history"
+    if ! configuration_slurm_partition="${configuration_slurm_partition}" \
+        configuration_slurm_nodelist="${configuration_slurm_nodelist}" \
+        ./.jenkins/lsu-perftests/backfill_history.sh; then
+        echo "Warning: could not add all missing runs to the performance" \
+            "history" >&2
+    fi
+fi
+
 set -e
 if [[ "${slurm_status}" -ne 0 ]]; then
     exit "${slurm_status}"
