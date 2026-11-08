@@ -25,6 +25,8 @@ set(threading_base_headers
     hpx/threading_base/scheduler_base.hpp
     hpx/threading_base/scheduler_mode.hpp
     hpx/threading_base/scheduler_state.hpp
+    hpx/threading_base/scheduler_tuning.hpp
+    hpx/threading_base/scheduling_policy.hpp
     hpx/threading_base/scoped_annotation.hpp
     hpx/threading_base/set_thread_affinity.hpp
     hpx/threading_base/set_thread_state.hpp
@@ -86,6 +88,8 @@ set(threading_base_sources
     print.cpp
     register_thread.cpp
     scheduler_base.cpp
+    scheduler_tuning.cpp
+    scheduling_policy.cpp
     set_thread_affinity.cpp
     set_thread_state.cpp
     set_thread_state_timed.cpp

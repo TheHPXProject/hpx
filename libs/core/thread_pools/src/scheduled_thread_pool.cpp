@@ -29,6 +29,9 @@ template class HPX_CORE_EXPORT hpx::threads::detail::scheduled_thread_pool<
         hpx::threads::policies::lockfree_fifo_double>>;
 
 template class HPX_CORE_EXPORT hpx::threads::detail::scheduled_thread_pool<
+    hpx::threads::policies::local_priority_tuned_scheduler<>>;
+
+template class HPX_CORE_EXPORT hpx::threads::detail::scheduled_thread_pool<
     hpx::threads::policies::static_priority_queue_scheduler<>>;
 #if defined(HPX_HAVE_CXX11_STD_ATOMIC_128BIT)
 template class HPX_CORE_EXPORT hpx::threads::detail::scheduled_thread_pool<

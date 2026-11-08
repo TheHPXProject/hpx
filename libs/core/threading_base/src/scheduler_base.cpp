@@ -45,9 +45,41 @@ namespace hpx::threads::policies {
         // queues
         void spin_round() noexcept
         {
-            for (int i = 0; i != 16; ++i)
+            for (std::uint32_t i = 0;
+                i != scheduling_policy::calibration_pauses_per_round; ++i)
             {
                 HPX_SMT_PAUSE;
+            }
+        }
+
+        // A round of another number of pauses, for a scheduler that tunes it
+        // (hpx.idle_backoff_spin_round_pauses). The rate is measured with
+        // rounds of spin_round, so the number of rounds is scaled by the
+        // number of pauses (see scheduling_policy::idle_step_for). Out of
+        // line, so that the spin with the default rounds stays as it is.
+        HPX_NOINLINE void spin_round(std::uint32_t const pauses) noexcept
+        {
+            for (std::uint32_t i = 0; i != pauses; ++i)
+            {
+                HPX_SMT_PAUSE;
+            }
+        }
+
+        // Spin for the rounds of step, or until there is work: the own
+        // queues are looked at every round, the queues to steal from every
+        // step.steal_check_rounds rounds.
+        template <typename Round, typename HasOwnWork, typename HasVisibleWork>
+        void spin(idle_step const& step, Round&& round,
+            HasOwnWork&& has_own_work, HasVisibleWork&& has_visible_work)
+        {
+            for (std::uint64_t i = 1; i <= step.spin_rounds; ++i)
+            {
+                round();
+                if (has_own_work() ||
+                    (i % step.steal_check_rounds == 0 && has_visible_work()))
+                {
+                    break;
+                }
             }
         }
 
@@ -235,6 +267,45 @@ namespace hpx::threads::policies {
     }
 #endif
 
+#if defined(HPX_HAVE_THREAD_MANAGER_IDLE_BACKOFF)
+    // Short periods are spent spinning: a timed wait lasts at least the time
+    // the OS takes to wake the thread up (a millisecond or more on Windows,
+    // the timer slack of 50 us on Linux), so a short sleep would be a long
+    // one. A spinning worker looks at its own queues every round, but at the
+    // queues it steals from only every hpx.idle_backoff_steal_check_interval
+    // microseconds, since that reads the length of the queue of every victim.
+    // It counts rounds instead of reading the clock: the period and the check
+    // interval are converted to rounds with the rate measured at startup,
+    // because a round lasts from a few nanoseconds (yield on AArch64) to most
+    // of a microsecond (pause on recent Intel cores).
+    idle_step scheduler_base::idle_step_for(
+        std::size_t, std::uint32_t const count) const
+    {
+        // exponential back-off with a maximum sleep time
+        constexpr double max_exponent =
+            std::numeric_limits<double>::max_exponent - 1;
+        double const exponent =
+            (std::min) (static_cast<double>(count), max_exponent);
+
+        idle_step step{};
+        step.period = std::chrono::microseconds(std::lround(
+            (std::min) (max_idle_backoff_time_, std::pow(2.0, exponent))));
+
+        if (static_cast<double>(step.period.count()) >= min_idle_backoff_time_)
+        {
+            return step;    // sleep
+        }
+
+        step.pauses_per_round = scheduling_policy::calibration_pauses_per_round;
+        step.spin_rounds = (std::max) (std::uint64_t(1),
+            static_cast<std::uint64_t>(
+                std::llround(static_cast<double>(step.period.count()) *
+                    spin_rounds_per_us_)));
+        step.steal_check_rounds = idle_backoff_steal_check_rounds_;
+        return step;
+    }
+#endif
+
     bool scheduler_base::idle_callback([[maybe_unused]] std::size_t num_thread)
     {
 #if defined(HPX_HAVE_THREAD_MANAGER_IDLE_BACKOFF)
@@ -256,48 +327,40 @@ namespace hpx::threads::policies {
                 return false;
             }
 
-            // Exponential back-off with a maximum sleep time.
-            constexpr double max_exponent =
-                std::numeric_limits<double>::max_exponent - 1;
+            // the backoff period and whether to spin or sleep through it
+            // (see idle_step_for)
             std::uint32_t const count =
                 data.wait_count.fetch_add(1, std::memory_order_relaxed);
-            double const exponent =
-                (std::min) (static_cast<double>(count), max_exponent);
+            idle_step const step = idle_step_for(num_thread, count);
 
-            std::chrono::microseconds const period(std::lround(
-                (std::min) (max_idle_backoff_time_, std::pow(2.0, exponent))));
-
-            // Short periods are spent spinning: a timed wait lasts at least
-            // the time the OS takes to wake the thread up (a millisecond or
-            // more on Windows, the timer slack of 50 us on Linux), so a short
-            // sleep would be a long one. A spinning worker is awake: it is
-            // not announced in sleep_mask_, and it leaves as soon as it sees
-            // work. do_some_work may still reset its count and notify it,
-            // which is harmless. It looks at its own queues every round, but
-            // at the queues it steals from only every
-            // hpx.idle_backoff_steal_check_interval microseconds, since that
-            // reads the length of the queue of every victim. It counts rounds
-            // instead of reading the clock: the period and the check interval
-            // are converted to rounds with the rate measured at startup,
-            // because a round lasts from a few nanoseconds (yield on AArch64)
-            // to most of a microsecond (pause on recent Intel cores).
-            if (static_cast<double>(period.count()) < min_idle_backoff_time_)
+            // A spinning worker is awake: it is not announced in sleep_mask_,
+            // and it leaves as soon as it sees work. do_some_work may still
+            // reset its count and notify it, which is harmless.
+            if (step.spin_rounds != 0)
             {
                 l.unlock();
                 spinning_workers_.data_.fetch_add(1, std::memory_order_relaxed);
-                auto const rounds = (std::max) (std::uint64_t(1),
-                    static_cast<std::uint64_t>(
-                        std::llround(static_cast<double>(period.count()) *
-                            spin_rounds_per_us_)));
-                for (std::uint64_t round = 1; round <= rounds; ++round)
+                auto const has_own_work = [&] {
+                    return get_queue_length(num_thread) != 0;
+                };
+                auto const has_work_to_steal = [&] {
+                    return has_visible_work(num_thread);
+                };
+                if (step.pauses_per_round ==
+                    scheduling_policy::calibration_pauses_per_round)
                 {
-                    spin_round();
-                    if (get_queue_length(num_thread) != 0 ||
-                        (round % idle_backoff_steal_check_rounds_ == 0 &&
-                            has_visible_work(num_thread)))
-                    {
-                        break;
-                    }
+                    spin(
+                        step, [] { spin_round(); }, has_own_work,
+                        has_work_to_steal);
+                }
+                else
+                {
+                    spin(
+                        step,
+                        [pauses = step.pauses_per_round] {
+                            spin_round(pauses);
+                        },
+                        has_own_work, has_work_to_steal);
                 }
 
                 // No fence after leaving the spin. A seq_cst fence here,
@@ -335,12 +398,12 @@ namespace hpx::threads::policies {
             word.fetch_or(bit, std::memory_order_relaxed);
 
             if (!has_visible_work(num_thread) &&
-                data.wait_cond.wait_for(l, period) ==    //-V1089
+                data.wait_cond.wait_for(l, step.period) ==    //-V1089
                     std::cv_status::no_timeout)
             {
                 // reset counter if thread was woken up
                 data.wait_count.store(0, std::memory_order_relaxed);
-                data.free_pass = true;
+                data.free_pass = free_pass_after_wake();
             }
 
             // withdraw the announcement if nobody claimed it

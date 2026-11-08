@@ -37,6 +37,26 @@ namespace hpx::threads {
         large = 4
     };
 
+    /// The name of the given task \p size, as used in the configuration:
+    /// "unknown", "nano", "small", "medium" or "large".
+    HPX_CXX_CORE_EXPORT [[nodiscard]] constexpr char const* get_task_size_name(
+        task_size const size) noexcept
+    {
+        switch (size)
+        {
+        case task_size::nano:
+            return "nano";
+        case task_size::small_:
+            return "small";
+        case task_size::medium:
+            return "medium";
+        case task_size::large:
+            return "large";
+        default:
+            return "unknown";
+        }
+    }
+
     /// The run time a task of the given \p size stands for. Each size stands
     /// for a hundred times the run time of the one below it: nano about 1 ns,
     /// small about 100 ns, medium about 10 us, large about 1 ms or more.
@@ -97,6 +117,7 @@ namespace hpx::threads {
 namespace hpx {
 
     HPX_CXX_CORE_EXPORT using threads::task_size;
+    HPX_CXX_CORE_EXPORT using threads::get_task_size_name;
     HPX_CXX_CORE_EXPORT using threads::task_size_duration;
     HPX_CXX_CORE_EXPORT using threads::bulk_task_size;
 }    // namespace hpx

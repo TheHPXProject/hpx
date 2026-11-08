@@ -182,8 +182,11 @@ namespace hpx::util {
             "idle_backoff_steal_check_interval = "
             "${HPX_IDLE_BACKOFF_STEAL_CHECK_INTERVAL:" HPX_PP_STRINGIZE(
                 HPX_PP_EXPAND(HPX_IDLE_BACKOFF_STEAL_CHECK_INTERVAL)) "}",
+            "idle_backoff_spin_round_pauses = "
+            "${HPX_IDLE_BACKOFF_SPIN_ROUND_PAUSES:16}",
 #endif
             "default_scheduler_mode = ${HPX_DEFAULT_SCHEDULER_MODE}",
+            "scheduler_tuner = ${HPX_SCHEDULER_TUNER:static}",
 
         /// If HPX_HAVE_ATTACH_DEBUGGER_ON_TEST_FAILURE is set,
         /// then apply the test-failure value as default.
@@ -254,6 +257,19 @@ namespace hpx::util {
             "timer_pool_size = ${HPX_NUM_TIMER_POOL_SIZE:" HPX_PP_STRINGIZE(
                 HPX_PP_EXPAND(HPX_NUM_TIMER_POOL_SIZE)) "}",
 #endif
+
+            // the switches and numbers of the rules of the scheduling
+            // policy (see hpx::threads::policies::scheduling_policy)
+            "[hpx.scheduler_policy]",
+            "wake_one_max_size = "
+            "${HPX_SCHEDULER_POLICY_WAKE_ONE_MAX_SIZE:small}",
+            "wake_target_only = ${HPX_SCHEDULER_POLICY_WAKE_TARGET_ONLY:1}",
+            "wake_if_nobody_spins = "
+            "${HPX_SCHEDULER_POLICY_WAKE_IF_NOBODY_SPINS:1}",
+            "wake_one_unless_placed_by_caller = "
+            "${HPX_SCHEDULER_POLICY_WAKE_ONE_UNLESS_PLACED_BY_CALLER:1}",
+            "free_pass_after_wake = "
+            "${HPX_SCHEDULER_POLICY_FREE_PASS_AFTER_WAKE:1}",
 
             "[hpx.thread_queue]",
             "max_thread_count = ${HPX_THREAD_QUEUE_MAX_THREAD_COUNT:" HPX_PP_STRINGIZE(
