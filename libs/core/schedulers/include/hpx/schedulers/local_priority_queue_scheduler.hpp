@@ -1526,8 +1526,9 @@ namespace hpx::threads::policies {
         // its own queues, in the low priority queue all workers share, and,
         // if it may steal, in the normal queues of its victims and in their
         // high priority queues if the worker has one (see
-        // attempt_stealing_pending and attempt_stealing_staged). Bound
-        // threads are never stolen.
+        // attempt_stealing_pending and attempt_stealing_staged), if they hold
+        // at least the stealing minima that always apply. Bound threads are
+        // never stolen.
         bool has_work_for(
             std::size_t const num_thread, bool const may_steal) const override
         {
@@ -1543,10 +1544,9 @@ namespace hpx::threads::policies {
                     victims_[num_thread].data_.victim_threads_)
                 {
                     auto const& victim = queues_[idx];
-                    if (victim.queue_->get_queue_length() != 0 ||
+                    if (victim.queue_->has_stealable_work() ||
                         (high && idx < num_high_priority_queues_ &&
-                            victim.high_priority_queue_->get_queue_length() !=
-                                0))
+                            victim.high_priority_queue_->has_stealable_work()))
                     {
                         return true;
                     }
@@ -1557,7 +1557,8 @@ namespace hpx::threads::policies {
             // converts the staged threads of the low priority queue (it
             // counts them in get_queue_length above), the others can take
             // only its pending threads.
-            return low_priority_queue_.get_pending_queue_length() != 0;
+            return low_priority_queue_.get_pending_queue_length(
+                       std::memory_order_relaxed) != 0;
         }
 
         ///////////////////////////////////////////////////////////////////////

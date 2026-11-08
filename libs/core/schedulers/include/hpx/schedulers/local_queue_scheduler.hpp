@@ -544,7 +544,7 @@ namespace hpx::threads::policies {
 
         // Is there work the given worker could take: in its own queue and,
         // if it may steal, in the queues of the NUMA domains it steals from
-        // (see get_next_thread).
+        // (see get_next_thread) that hold at least the stealing minima.
         bool has_work_for(
             std::size_t const num_thread, bool const may_steal) const override
         {
@@ -562,7 +562,7 @@ namespace hpx::threads::policies {
                 {
                     std::size_t const idx = (i + num_thread) % queues_size;
                     if (test(domain, affinity_data_.get_pu_num(idx)) &&
-                        queues_[idx]->get_queue_length() != 0)
+                        queues_[idx]->has_stealable_work())
                     {
                         return true;
                     }

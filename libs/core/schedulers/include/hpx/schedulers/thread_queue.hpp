@@ -735,6 +735,27 @@ namespace hpx::threads::policies {
             return new_tasks_count_.data_.load(order);
         }
 
+        // Could another worker steal from this queue: pending threads or
+        // staged tasks at least as many as the stealing minima that always
+        // apply (min_tasks_to_steal_pending and min_tasks_to_steal_staged)?
+        // A hint for idle workers, nothing is read based on it: a stale count
+        // costs at most one backoff period or one more spin.
+        bool has_stealable_work() const noexcept
+        {
+            if (auto const pending =
+                    get_pending_queue_length(std::memory_order_relaxed);
+                pending != 0 &&
+                pending >= parameters_.min_tasks_to_steal_pending_)
+            {
+                return true;
+            }
+
+            auto const staged =
+                get_staged_queue_length(std::memory_order_relaxed);
+            return staged != 0 &&
+                staged >= parameters_.min_tasks_to_steal_staged_;
+        }
+
 #ifdef HPX_HAVE_THREAD_QUEUE_WAITTIME
         std::uint64_t get_average_task_wait_time() const noexcept
         {
