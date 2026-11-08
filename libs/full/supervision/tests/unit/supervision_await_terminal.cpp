@@ -92,7 +92,11 @@ void test_await_terminal_epoch_mismatch_never_resolves(
     // For a remote locality, the invalidation reaches the future only with
     // the response of the await_terminal action, so wait for it instead of
     // expecting it after a fixed delay.
-    HPX_TEST(f.wait_for(std::chrono::seconds(10)) == hpx::future_status::ready);
+    if (!HPX_TEST(
+            f.wait_for(std::chrono::seconds(10)) == hpx::future_status::ready))
+    {
+        return;
+    }
 
     bool caught_stale_state = false;
     try
