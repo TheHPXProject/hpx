@@ -619,8 +619,11 @@ also give its size with an annotation:
 
    hpx::post(solver_step{});    // runs as a large task
 
-A size given with ``hpx::with_task_size`` wins over the annotation. Only class
-types can have one, and a lambda has none, so it stays ``task_size::unknown``.
+A size given with ``hpx::with_task_size`` wins over the annotation. For a task
+posted directly, only an annotation on a class type is read: a function
+pointer stays ``task_size::unknown`` even if the function is annotated, and so
+does a lambda. An annotation on a function is read by the actions listed
+below.
 Annotations are not inherited: a class derived from an annotated class has no
 size unless it is annotated itself. Two different sizes on one type are a
 compile-time error when the size of that type is read, for example when it is
@@ -783,7 +786,10 @@ An action binds a single function, so its size is the size of that function.
 action that binds a function given a size with ``hpx::with_task_size`` has
 that size unless ``HPX_ACTION_HAS_TASK_SIZE`` overrides it. The size is known
 from the type of the action on every locality, so it is not sent along with
-the action.
+the action. In builds with C++26 reflection, ``HPX_ACTION_HAS_TASK_SIZE`` has
+no effect yet on a component action defined with
+``HPX_DEFINE_COMPONENT_ACTION`` or ``HPX_COMPONENT_ACTION``, see
+:hpx-issue:`8019`.
 
 Like ``HPX_ACTION_HAS_PRIORITY``, ``HPX_ACTION_HAS_TASK_SIZE`` has to be
 visible wherever the action is registered or invoked, as each locality reads
@@ -811,6 +817,33 @@ the compiler does not diagnose.
    // in one source file
    HPX_REGISTER_ACTION(simulate_step_action)
    HPX_REGISTER_ACTION(get_value_action)
+
+If the compiler supports C++26 reflection and annotations, an annotation on
+the function gives its action a size as well:
+
+.. code-block:: c++
+
+   [[=hpx::task_size::small_]] void update_counter(int);
+   HPX_PLAIN_ACTION(update_counter, update_counter_action)
+
+   hpx::post<update_counter_action>(locality, 1);    // runs as a small task
+
+This works for the actions of ``HPX_PLAIN_ACTION``,
+``HPX_DEFINE_PLAIN_ACTION``, ``HPX_DEFINE_COMPONENT_ACTION`` and
+``HPX_COMPONENT_ACTION``, for ``hpx::async<^^f>`` and the other functions that
+take a reflected function, and for actions made with
+``hpx::actions::make_action_t`` from a function pointer.
+``HPX_ACTION_HAS_TASK_SIZE`` and ``hpx::with_task_size`` win over the
+annotation, except that ``HPX_ACTION_HAS_TASK_SIZE`` is not seen yet for
+``HPX_DEFINE_COMPONENT_ACTION`` and ``HPX_COMPONENT_ACTION`` (see above), so
+for those the annotation is used. ``task_size::unknown`` counts as no
+annotation. Two different sizes on one function are a compile-time error when
+the size of an action that binds it is read. Actions made from a member
+function pointer, for instance ``make_action_t<decltype(&C::f), &C::f>``, do
+not read annotations. An explicit specialization of a function template does
+not have the annotation of the template, so it needs its own. Each source file
+reads the annotation from the declarations it sees, so put it on the
+declaration in the header.
 
 .. _parallel_scheduler:
 
