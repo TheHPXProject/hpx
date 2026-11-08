@@ -285,6 +285,32 @@ int main()
             static_cast<std::uint32_t>(hpx::get_num_worker_threads()));
     }
 
+    // Test that generic lambda is invoked without index (0 arguments)
+    // both with execution policy and with scheduler
+    {
+        std::atomic<std::uint32_t> n(0);
+        run_on_all(hpx::execution::par, [&](auto&&... args) {
+            static_assert(sizeof...(args) == 0,
+                "Generic lambda must be called with 0 arguments");
+            ++n;
+        });
+        HPX_TEST_EQ(n.load(),
+            static_cast<std::uint32_t>(hpx::get_num_worker_threads()));
+    }
+
+    {
+        std::atomic<std::uint32_t> n(0);
+        auto sched = hpx::execution::experimental::thread_pool_scheduler{};
+        auto s = run_on_all(sched, [&](auto&&... args) {
+            static_assert(sizeof...(args) == 0,
+                "Generic lambda must be called with 0 arguments");
+            ++n;
+        });
+        hpx::this_thread::experimental::sync_wait(std::move(s));
+        HPX_TEST_EQ(n.load(),
+            static_cast<std::uint32_t>(hpx::get_num_worker_threads()));
+    }
+
     // Test with P2300 scheduler
     {
         auto sched = hpx::execution::experimental::thread_pool_scheduler{};

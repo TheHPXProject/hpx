@@ -137,19 +137,12 @@ namespace hpx::experimental {
         }
 
         template <typename F, typename Tuple, std::size_t... Is>
-        constexpr void invoke_iteration_values(
-            F& f, Tuple& t, std::size_t i, hpx::util::index_pack<Is...>)
+        constexpr void invoke_iteration_values(F& f, [[maybe_unused]] Tuple& t,
+            [[maybe_unused]] std::size_t i, hpx::util::index_pack<Is...>)
         {
             if constexpr (sizeof...(Is) == 0)
             {
-                if constexpr (std::is_invocable_v<F&, std::size_t>)
-                {
-                    f(i);
-                }
-                else
-                {
-                    f();
-                }
+                f();
             }
             else
             {
