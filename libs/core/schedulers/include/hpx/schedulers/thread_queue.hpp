@@ -1226,6 +1226,10 @@ namespace hpx::threads::policies {
                 // terminated_items_count_ before thread_map_count_. An
                 // acquire load that sees the later write of such a pair makes
                 // the earlier one visible to the loads after it.
+                // A thread that enters the map after thread_map_count_ is
+                // read and terminates before terminated_items_count_ is read
+                // still lowers the result by one; no read order avoids both
+                // this and the cleanup case (see #8017).
                 std::int64_t const staged =
                     new_tasks_count_.data_.load(std::memory_order_acquire);
                 std::int64_t const in_map =
