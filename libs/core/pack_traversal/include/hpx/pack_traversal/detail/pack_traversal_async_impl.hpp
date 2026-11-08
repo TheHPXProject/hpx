@@ -10,6 +10,7 @@
 #include <hpx/assert.hpp>
 #include <hpx/modules/allocator_support.hpp>
 #include <hpx/modules/datastructures.hpp>
+#include <hpx/modules/errors.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/memory.hpp>
@@ -104,6 +105,11 @@ namespace hpx::util::detail {
         hpx::tuple<Args...> args_;
         std::atomic<bool> finished_;
 
+        // The traversals running right now, and whether one of them reached
+        // the end (see enter_traversal() and leave_traversal())
+        std::atomic<std::size_t> active_traversals_;
+        std::atomic<bool> complete_pending_;
+
         Visitor& visitor() noexcept
         {
             return *static_cast<Visitor*>(this);
@@ -119,6 +125,8 @@ namespace hpx::util::detail {
           : Visitor(HPX_MOVE(visitor))
           , args_(hpx::make_tuple(HPX_MOVE(args)...))
           , finished_(false)
+          , active_traversals_(0)
+          , complete_pending_(false)
         {
         }
 
@@ -134,6 +142,8 @@ namespace hpx::util::detail {
           : Visitor(HPX_FORWARD(MapperArg, mapper_arg))
           , args_(hpx::make_tuple(HPX_MOVE(args)...))
           , finished_(false)
+          , active_traversals_(0)
+          , complete_pending_(false)
         {
         }
 
@@ -170,6 +180,33 @@ namespace hpx::util::detail {
             // to resume the control flow.
             HPX_INVOKE(visitor(), async_traverse_detach_tag{},
                 HPX_FORWARD(T, value), HPX_MOVE(resumable));
+        }
+
+        /// Registers a traversal of the arguments that is about to run.
+        void enter_traversal() noexcept
+        {
+            active_traversals_.fetch_add(1, std::memory_order_relaxed);
+        }
+
+        /// Unregisters a traversal once it destroyed all its iterators into
+        /// the arguments; \a finished tells whether it reached their end.
+        /// The last traversal to leave completes the frame: a traversal that
+        /// detached (its continuation may already have resumed the traversal
+        /// on another thread and finished it) may still hold iterators into
+        /// the arguments until it leaves, and the arguments may be moved or
+        /// destroyed once the frame is completed.
+        void leave_traversal(bool finished)
+        {
+            if (finished)
+            {
+                complete_pending_.store(true, std::memory_order_relaxed);
+            }
+            if (active_traversals_.fetch_sub(1, std::memory_order_acq_rel) ==
+                    1 &&
+                complete_pending_.load(std::memory_order_relaxed))
+            {
+                async_complete();
+            }
         }
 
         /// Calls the visitor with no arguments to signalize that the
@@ -553,18 +590,21 @@ namespace hpx::util::detail {
     struct resume_state_callable
     {
         /// Reenter an asynchronous iterator pack and continue its traversal.
+        /// Returns true when the traversal is finished, false when it was
+        /// detached. The caller completes the frame, after it destroyed the
+        /// traversal state (see resume_traversal_callable::operator()).
         template <typename Frame, typename Current, typename... Hierarchy>
-        void operator()(
+        bool operator()(
             Frame&& frame, Current&& current, Hierarchy&&... hierarchy) const
         {
             bool detached = false;
-            next(detached, HPX_FORWARD(Frame, frame),
+            return next(detached, HPX_FORWARD(Frame, frame),
                 HPX_FORWARD(Current, current),
                 HPX_FORWARD(Hierarchy, hierarchy)...);
         }
 
         template <typename Frame, typename Current>
-        void next(bool& detached, Frame&& frame, Current&& current) const
+        bool next(bool& detached, Frame&& frame, Current&& current) const
         {
             // Only process the next element if the current iterator hasn't
             // reached its end.
@@ -578,17 +618,17 @@ namespace hpx::util::detail {
                 // Don't continue the frame when the execution was detached
                 if (detached)
                 {
-                    return;
+                    return false;
                 }
             }
 
-            frame->async_complete();
+            return true;
         }
 
         /// Reenter an asynchronous iterator pack and continue its traversal.
         template <typename Frame, typename Current, typename Parent,
             typename... Hierarchy>
-        void next(bool& detached, Frame&& frame, Current&& current,
+        bool next(bool& detached, Frame&& frame, Current&& current,
             Parent&& parent, Hierarchy&&... hierarchy) const
         {
             // Only process the element if the current iterator hasn't reached
@@ -605,13 +645,13 @@ namespace hpx::util::detail {
                 // Don't continue the frame when the execution was detached
                 if (detached)
                 {
-                    return;
+                    return false;
                 }
             }
 
             // Pop the top element from the hierarchy, and shift the parent
             // element one to the right
-            next(detached, HPX_FORWARD(Frame, frame),
+            return next(detached, HPX_FORWARD(Frame, frame),
                 // CUDA needs std::forward here
                 std::forward<Parent>(parent).next(),
                 HPX_FORWARD(Hierarchy, hierarchy)...);
@@ -621,15 +661,38 @@ namespace hpx::util::detail {
     template <typename Frame, typename State>
     void resume_traversal_callable<Frame, State>::operator()()
     {
-        auto hierarchy = hpx::tuple_cat(hpx::make_tuple(frame_), state_);
+        frame_->enter_traversal();
+
+        bool const finished = hpx::detail::try_catch_exception_ptr(
+            [&]() {
+                // The state holds iterators into the arguments of the frame.
+                // Move it out of this callable, so that all of them are
+                // destroyed when this lambda returns, before
+                // leave_traversal() may complete the frame, which hands the
+                // arguments to the visitor, after which another thread may
+                // move or destroy them.
+                auto hierarchy =
+                    hpx::tuple_cat(hpx::make_tuple(frame_), HPX_MOVE(state_));
 #if defined(HPX_GCC_VERSION) && HPX_GCC_VERSION >= 110000
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wstringop-overflow"
 #endif
-        hpx::invoke_fused(resume_state_callable{}, HPX_MOVE(hierarchy));
+                return hpx::invoke_fused(
+                    resume_state_callable{}, HPX_MOVE(hierarchy));
 #if defined(HPX_GCC_VERSION) && HPX_GCC_VERSION >= 110000
 #pragma GCC diagnostic pop
 #endif
+            },
+            [&](std::exception_ptr ep) -> bool {
+                // Leave also when the traversal throws, so that the frame is
+                // still completed by the last traversal to leave. This must
+                // not run in a catch block or during unwinding: completing
+                // the frame may suspend or throw.
+                frame_->leave_traversal(false);
+                std::rethrow_exception(HPX_MOVE(ep));
+            });
+
+        frame_->leave_traversal(finished);
     }
 
     /// Gives access to types related to the traversal frame
