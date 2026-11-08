@@ -18,6 +18,7 @@
 #include <numeric>
 #include <random>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "../algorithms/test_utils.hpp"
