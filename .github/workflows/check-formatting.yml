@@ -14,6 +14,9 @@ on:
       - 'release**'
   workflow_dispatch:   
 
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -25,6 +28,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v7
+      with:
+        persist-credentials: false
 
     - name: Clang Format
       shell: bash
@@ -63,6 +68,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v7
+      with:
+        persist-credentials: false
     
     - name: CMake Format
       shell: bash
@@ -96,6 +103,7 @@ jobs:
     - uses: actions/checkout@v7
       with:
         fetch-depth: 0 # Ensure full history for proper diff
+        persist-credentials: false
     
     - name: Running Spell Check
       shell: bash
@@ -142,3 +150,24 @@ jobs:
       with:
         name: spelling-suggestions
         path: /tmp/spelling_suggestions.txt
+
+  reuse-lint:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v7
+
+    # see https://reuse.software/
+    - name: REUSE Compliance Check
+      shell: bash
+      run: |
+        pipx install "reuse[charset-normalizer]==6.3.0"
+        reuse --version
+        reuse lint | tee /tmp/reuse_lint_report.txt
+
+    - name: Upload REUSE Compliance Artifacts
+      if: success() || failure()
+      uses: actions/upload-artifact@v7
+      with:
+        name: reuse-lint-report
+        path: /tmp/reuse_lint_report.txt

@@ -607,6 +607,25 @@ size. ``hpx::traits::get_task_size<F>::call(f)`` reads it from the function
 object ``f``, which also finds the size of a function stored in an
 ``hpx::function`` or an ``hpx::move_only_function``, known at run time only.
 
+If the compiler supports C++26 reflection and annotations, a class type can
+also give its size with an annotation:
+
+.. code-block:: c++
+
+   struct [[=hpx::task_size::large]] solver_step
+   {
+       void operator()() const;
+   };
+
+   hpx::post(solver_step{});    // runs as a large task
+
+A size given with ``hpx::with_task_size`` wins over the annotation. Only class
+types can have one, and a lambda has none, so it stays ``task_size::unknown``.
+Annotations are not inherited: a class derived from an annotated class has no
+size unless it is annotated itself. Two different sizes on one type are a
+compile-time error when the size of that type is read, for example when it is
+posted.
+
 .. note::
 
    As a rule of thumb, a nano task runs for about a nanosecond, a small task
@@ -758,6 +777,40 @@ for the wrapped function, which gives it ``value``, and forwards ``call``:
            return hpx::traits::get_task_size<F, Size>::call(w.f);
        }
    };
+
+An action binds a single function, so its size is the size of that function.
+``HPX_ACTION_HAS_TASK_SIZE(action, size)`` gives an action a size, and an
+action that binds a function given a size with ``hpx::with_task_size`` has
+that size unless ``HPX_ACTION_HAS_TASK_SIZE`` overrides it. The size is known
+from the type of the action on every locality, so it is not sent along with
+the action.
+
+Like ``HPX_ACTION_HAS_PRIORITY``, ``HPX_ACTION_HAS_TASK_SIZE`` has to be
+visible wherever the action is registered or invoked, as each locality reads
+the size when it creates the thread for the action. Put it next to
+``HPX_REGISTER_ACTION_DECLARATION``, in a header. A macro that is visible in
+some source files only leaves the action without a size in the others, which
+the compiler does not diagnose.
+
+.. code-block:: c++
+
+   // in a header
+   int simulate_step(int);
+   HPX_DEFINE_PLAIN_ACTION(simulate_step, simulate_step_action);
+   HPX_REGISTER_ACTION_DECLARATION(simulate_step_action)
+   HPX_ACTION_HAS_TASK_SIZE(simulate_step_action, hpx::task_size::large)
+
+   int get_value();
+   struct get_value_action
+     : hpx::actions::make_action_t<decltype(hpx::small_task(&get_value)),
+           hpx::small_task(&get_value), get_value_action>
+   {
+   };
+   HPX_REGISTER_ACTION_DECLARATION(get_value_action)
+
+   // in one source file
+   HPX_REGISTER_ACTION(simulate_step_action)
+   HPX_REGISTER_ACTION(get_value_action)
 
 .. _parallel_scheduler:
 

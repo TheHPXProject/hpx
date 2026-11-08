@@ -188,14 +188,12 @@ namespace hpx { namespace ranges {
     ///           range [first2, last2), it returns false.
 
     template <typename ExPolicy, typename FwdIter1, typename Sent1,
-        typename FwdIter2, typename Sent2,
-        typename Proj1 = hpx::identity,
-        typename Proj2 = hpx::identity,
-        typename Pred = hpx::parallel::detail::less>
-    hpx::parallel::util::detail::algorithm_result_t<ExPolicy, bool>
+        typename FwdIter2, typename Sent2, typename Proj1 = hpx::identity,
+        typename Proj2 = hpx::identity, typename Pred = std::ranges::less>
+    parallel::util::detail::algorithm_result_t<ExPolicy, bool>
     lexicographical_compare(ExPolicy&& policy, FwdIter1 first1, Sent1 last1,
-        FwdIter2 first2, Sent2 last2, Pred&& pred = Pred(),
-        Proj1&& proj1 = Proj1(), Proj2&& proj2 = Proj2());
+        FwdIter2 first2, Sent2 last2, Pred pred = Pred(),
+        Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2());
 
     /// Checks if the first range rng1 is lexicographically less than
     /// the second range rng2. uses a provided predicate to compare
@@ -348,12 +346,11 @@ namespace hpx { namespace ranges {
     ///           range [first2, last2), it returns false.
 
     template <typename ExPolicy, typename Rng1, typename Rng2,
-        typename Proj1 = hpx::identity,
-        typename Proj2 = hpx::identity,
-        typename Pred = hpx::parallel::detail::less>
-    hpx::parallel::util::detail::algorithm_result_t<ExPolicy, bool>
+        typename Proj1 = hpx::identity, typename Proj2 = hpx::identity,
+        typename Pred = std::ranges::less>
+    parallel::util::detail::algorithm_result_t<ExPolicy, bool>
     lexicographical_compare(ExPolicy&& policy, Rng1&& rng1, Rng2&& rng2,
-        Pred&& pred = Pred(), Proj1&& proj1 = Proj1(), Proj2&& proj2 = Proj2());
+        Pred pred = Pred(), Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2());
     // clang-format on
 }}    // namespace hpx::ranges
 
@@ -372,6 +369,7 @@ namespace hpx { namespace ranges {
 
 #include <algorithm>
 #include <cstddef>
+#include <functional>
 #include <iterator>
 #include <ranges>
 #include <type_traits>
@@ -418,22 +416,17 @@ namespace hpx::ranges {
 
         template <typename ExPolicy, typename FwdIter1, typename Sent1,
             typename FwdIter2, typename Sent2, typename Proj1 = hpx::identity,
-            typename Proj2 = hpx::identity,
-            typename Pred = hpx::parallel::detail::less>
+            typename Proj2 = hpx::identity, typename Pred = std::ranges::less>
         // clang-format off
-            requires(
+            requires (
                 hpx::is_execution_policy_v<ExPolicy> &&
-                std::forward_iterator<FwdIter1> &&
-                std::sentinel_for<Sent1, FwdIter1> &&
-                std::forward_iterator<FwdIter2> &&
-                std::sentinel_for<Sent2, FwdIter2> &&
-                hpx::parallel::traits::is_projected_v<Proj1, FwdIter1> &&
-                hpx::parallel::traits::is_projected_v<Proj2, FwdIter2> &&
-                hpx::parallel::traits::is_indirect_callable_v<
-                    ExPolicy, Pred,
-                    hpx::parallel::traits::projected<Proj1, FwdIter1>,
-                    hpx::parallel::traits::projected<Proj2, FwdIter2>
-                >
+                std::random_access_iterator<FwdIter1> &&
+                std::sized_sentinel_for<Sent1, FwdIter1> &&
+                std::random_access_iterator<FwdIter2> &&
+                std::sized_sentinel_for<Sent2, FwdIter2> &&
+                std::indirect_strict_weak_order<Pred,
+                    std::projected<FwdIter1, Proj1>,
+                    std::projected<FwdIter2, Proj2>>
             )
         // clang-format on
         static parallel::util::detail::algorithm_result_t<ExPolicy, bool>
@@ -441,11 +434,6 @@ namespace hpx::ranges {
             FwdIter2 first2, Sent2 last2, Pred pred = Pred(),
             Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
         {
-            static_assert(std::forward_iterator<FwdIter1>,
-                "Requires at least forward iterator.");
-            static_assert(std::forward_iterator<FwdIter2>,
-                "Requires at least forward iterator.");
-
             return hpx::parallel::detail::lexicographical_compare().call(
                 HPX_FORWARD(ExPolicy, policy), first1, last1, first2, last2,
                 HPX_MOVE(pred), HPX_MOVE(proj1), HPX_MOVE(proj2));
@@ -489,40 +477,29 @@ namespace hpx::ranges {
 
         template <typename ExPolicy, typename Rng1, typename Rng2,
             typename Proj1 = hpx::identity, typename Proj2 = hpx::identity,
-            typename Pred = hpx::parallel::detail::less>
+            typename Pred = std::ranges::less>
         // clang-format off
-            requires(
+            requires (
                 hpx::is_execution_policy_v<ExPolicy> &&
-                std::ranges::range<Rng1> &&
-                std::ranges::range<Rng2> &&
-                hpx::parallel::traits::is_projected_range_v<Proj1, Rng1> &&
-                hpx::parallel::traits::is_projected_range_v<Proj2, Rng2> &&
-                hpx::parallel::traits::is_indirect_callable_v<
-                    ExPolicy, Pred,
-                    hpx::parallel::traits::projected_range<Proj1, Rng1>,
-                    hpx::parallel::traits::projected_range<Proj2, Rng2>
-                >
+                std::ranges::random_access_range<Rng1> &&
+                std::ranges::sized_range<Rng1> &&
+                std::ranges::random_access_range<Rng2> &&
+                std::ranges::sized_range<Rng2> &&
+                std::indirect_strict_weak_order<Pred,
+                    std::projected<std::ranges::iterator_t<Rng1>, Proj1>,
+                    std::projected<std::ranges::iterator_t<Rng2>, Proj2>>
             )
         // clang-format on
         static parallel::util::detail::algorithm_result_t<ExPolicy, bool>
         invoke_default(ExPolicy&& policy, Rng1&& rng1, Rng2&& rng2,
             Pred pred = Pred(), Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
         {
-            using iterator_type1 =
-                typename hpx::traits::range_traits<Rng1>::iterator_type;
-            using iterator_type2 =
-                typename hpx::traits::range_traits<Rng2>::iterator_type;
-
-            static_assert(std::forward_iterator<iterator_type1>,
-                "Requires at least forward iterator.");
-
-            static_assert(std::forward_iterator<iterator_type2>,
-                "Requires at least forward iterator.");
-
             return hpx::parallel::detail::lexicographical_compare().call(
-                HPX_FORWARD(ExPolicy, policy), std::begin(rng1), std::end(rng1),
-                std::begin(rng2), std::end(rng2), HPX_MOVE(pred),
-                HPX_MOVE(proj1), HPX_MOVE(proj2));
+                HPX_FORWARD(ExPolicy, policy), std::ranges::begin(rng1),
+                (std::ranges::begin(rng1) + std::ranges::distance(rng1)),
+                std::ranges::begin(rng2),
+                (std::ranges::begin(rng2) + std::ranges::distance(rng2)),
+                HPX_MOVE(pred), HPX_MOVE(proj1), HPX_MOVE(proj2));
         }
     } lexicographical_compare{};
 }    // namespace hpx::ranges

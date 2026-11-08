@@ -113,7 +113,8 @@ used CMake options.
    installation works). To view the events you need a tool that reads them,
    such as |vtune|. Task lifecycle and work-stealing events are emitted as
    well, see :option:`HPX_WITH_TRACING_LIFECYCLE_EVENTS` and
-   :option:`HPX_WITH_TRACING_WORK_STEALING_EVENTS`. No events are emitted
+   :option:`HPX_WITH_TRACING_WORK_STEALING_EVENTS`. Lock events need
+   :option:`HPX_WITH_TRACING_LOCK_EVENTS`. No events are emitted
    unless ITTNotify is enabled at runtime with
    ``--hpx:ini=hpx.use_itt_notify=1``. See :ref:`profiling_with_itt`.
 
@@ -146,6 +147,16 @@ used CMake options.
    being consumed. The saving applies on Tracy and ITTNotify builds; the other backends already
    treat this hook as a no-op. On ITTNotify builds, turning this ``OFF`` means no work-stealing
    events are emitted.
+
+.. option:: HPX_WITH_TRACING_LOCK_EVENTS
+
+   Emit lock events for ``hpx::mutex``, ``hpx::spinlock`` and ``hpx::util::spinlock``, so that the
+   profiler can show when a lock is taken and released. Defaults to ``OFF``. With this ``ON`` on
+   Tracy builds, every lock is registered with Tracy when it is created, even when no profiler is
+   connected. Every future holds a lock, so this slows down programs with many small tasks, and
+   the memory used grows with the number of locks created. On ITTNotify builds, lock events are
+   only sent when ITTNotify is enabled at runtime. With this ``OFF``, locks have no tracing code at
+   all. Applies to Tracy and ITTNotify builds; the other backends do not record locks.
 
 .. option:: HPX_WITH_TRACING_SAMPLE_RATE
 

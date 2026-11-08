@@ -666,7 +666,7 @@ hpx_option(
 
 hpx_option(
   HPX_WITH_STDEXEC_TAG STRING "STDEXEC repository commit, tag, or branch"
-  "04de75de5807e73a229acf047c6976575e313359" CATEGORY "Executor"
+  "1d58877ad898fa3422658d47b28f67deb9c10e80" CATEGORY "Executor"
 )
 
 # ##############################################################################
@@ -1216,10 +1216,10 @@ if(HPX_WITH_TRACY)
   )
 endif()
 
-# Per-subsystem tracing gates, compiled out when OFF so a user profiling one
-# subsystem does not pay for the others. Lifecycle and work-stealing are honored
-# by both the Tracy and the ITTNotify backends; causal events remain Tracy-only
-# since ITT has no causal hooks. Defaults keep current behavior: all on.
+# Per-subsystem tracing gates (Tracy and ITTNotify; causal is Tracy-only),
+# compiled out when OFF so profiling one subsystem does not pay for the others.
+# Lock events are off by default because with them on, Tracy announces every
+# lock even when no profiler is attached.
 if(HPX_WITH_TRACY OR HPX_WITH_ITTNOTIFY)
   hpx_option(
     HPX_WITH_TRACING_LIFECYCLE_EVENTS
@@ -1241,6 +1241,17 @@ if(HPX_WITH_TRACY OR HPX_WITH_ITTNOTIFY)
   )
   if(HPX_WITH_TRACING_WORK_STEALING_EVENTS)
     hpx_add_config_define(HPX_HAVE_TRACING_WORK_STEALING_EVENTS)
+  endif()
+
+  hpx_option(
+    HPX_WITH_TRACING_LOCK_EVENTS
+    BOOL
+    "Emit lock events (create, acquire, release, destroy) for hpx::mutex, hpx::spinlock and hpx::util::spinlock. Tracy and ITTNotify backends. Default: OFF."
+    OFF
+    CATEGORY "Profiling"
+  )
+  if(HPX_WITH_TRACING_LOCK_EVENTS)
+    hpx_add_config_define(HPX_HAVE_TRACING_LOCK_EVENTS)
   endif()
 endif()
 
@@ -1333,7 +1344,8 @@ if(HPX_WITH_NETWORKING)
   endif()
 
   hpx_option(
-    HPX_WITH_PARCEL_PROFILING BOOL "Enable profiling data for parcels"
+    HPX_WITH_PARCEL_PROFILING BOOL
+    "Enable profiling data for parcels (used by the tracing backends)"
     ${_parcel_profiling_default}
     CATEGORY "Parcelport"
     ADVANCED
@@ -1562,9 +1574,6 @@ if((HPX_WITH_NETWORKING AND HPX_WITH_PARCELPORT_MPI)
     # hpx_add_compile_flag() below does not add the extra options to the top
     # level directory
     hpx_add_config_define(OMPI_IMPORTS)
-    if(HPX_WITH_CUDA)
-      hpx_add_config_cond_define(NOMINMAX)
-    endif()
   endif()
 endif()
 
@@ -1627,18 +1636,6 @@ hpx_option(
 )
 if(HPX_WITH_EXAMPLES_OPENMP)
   find_package(OpenMP REQUIRED)
-endif()
-hpx_option(
-  HPX_WITH_EXAMPLES_QTHREADS BOOL
-  "Enable examples requiring QThreads support (default: OFF)." OFF
-  CATEGORY "Build Targets"
-  ADVANCED
-)
-if(HPX_WITH_EXAMPLES_QTHREADS)
-  find_package(QThreads)
-  if(NOT Qthreads_FOUND)
-    set(HPX_WITH_EXAMPLES_QTHREADS OFF)
-  endif()
 endif()
 
 hpx_option(
@@ -3041,6 +3038,13 @@ install(
 install(
   FILES "${PROJECT_SOURCE_DIR}/LICENSE_1_0.txt"
   DESTINATION ${CMAKE_INSTALL_DATADIR}/hpx
+  COMPONENT license
+)
+
+# license text in the location defined by REUSE (https://reuse.software/)
+install(
+  FILES "${PROJECT_SOURCE_DIR}/LICENSES/BSL-1.0.txt"
+  DESTINATION ${CMAKE_INSTALL_DATADIR}/hpx/LICENSES
   COMPONENT license
 )
 

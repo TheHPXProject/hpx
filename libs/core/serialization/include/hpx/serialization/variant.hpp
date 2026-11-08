@@ -1,4 +1,4 @@
-//  copyright (c) 2005
+//  Copyright (c) 2005
 //  troy d. straszheim <troy@resophonic.com>
 //  http://www.resophonic.com
 //  Copyright (c) 2015 Anton Bikineev

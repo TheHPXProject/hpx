@@ -1,5 +1,5 @@
 //  Copyright (c) 2021 Srinivas Yadav
-//  copyright (c) 2014 Grant Mercer
+//  Copyright (c) 2014 Grant Mercer
 //  Copyright (c) 2024 Aneek Barman
 //
 //  SPDX-License-Identifier: BSL-1.0

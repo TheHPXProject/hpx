@@ -24,6 +24,8 @@ set(tests
     num_cores
     prefetching_iterator
     reduce_3641
+    reduce_with_auto_chunk_size
+    reverse_rotate_copy_result
     scan_different_inits
     scan_non_commutative
     scan_shortlength
@@ -35,6 +37,7 @@ set(tests
     static_chunker_2282
     transform_inclusive_scan_4786
     transform_inclusive_scan_4787
+    transform_set_intersection_result
     ranges_facilities
 )
 

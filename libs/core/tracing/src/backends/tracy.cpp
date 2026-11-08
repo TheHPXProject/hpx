@@ -110,6 +110,7 @@ namespace hpx::tracing {
 
     background_work_region::~background_work_region() = default;
 
+#if defined(HPX_HAVE_TRACING_LOCK_EVENTS)
     ////////////////////////////////////////////////////////////////////////////
     // lock_context -- see rationale in header.
 
@@ -161,6 +162,7 @@ namespace hpx::tracing {
             return;
         hpx::tracy::lock_released(impl);
     }
+#endif    // HPX_HAVE_TRACING_LOCK_EVENTS
 
     ////////////////////////////////////////////////////////////////////////////
     // set_thread_name
@@ -469,13 +471,6 @@ namespace hpx::tracing {
             // Blue-grey: cold/inactive state
             hpx::tracy::message(buffer, std::strlen(buffer), 0x546E7Au);
         }
-
-        // Mirror of naming::invalid_locality_id (~std::uint32_t(0)) from
-        // libs/full/naming_base/include/hpx/naming_base/naming_base.hpp.
-        // Duplicated because core cannot depend on full; if the real
-        // constant ever changes, update this or the invalid-locality
-        // branches will silently start printing L#4294967295 again.
-        static constexpr std::uint64_t invalid_locality = 0xFFFFFFFFULL;
 
         void send_parcel_impl(std::uint64_t tag_msb, std::uint64_t tag_lsb,
             std::uint64_t size, std::uint64_t target_locality_id) noexcept

@@ -16,16 +16,7 @@
 
 #if defined(HPX_HAVE_CUDA) && defined(HPX_COMPUTE_CODE)
 #include <hpx/hardware/timestamp/cuda.hpp>
-
-namespace hpx::util::hardware {
-
-    [[nodiscard]] HPX_HOST_DEVICE inline std::uint64_t timestamp()
-    {
-        return timestamp_cuda();
-    }
-}    // namespace hpx::util::hardware
-
-#else
+#endif
 
 #include <windows.h>
 
@@ -34,11 +25,14 @@ namespace hpx::util::hardware {
     [[nodiscard]] HPX_HOST_DEVICE HPX_FORCEINLINE std::uint64_t
     timestamp() noexcept
     {
+#if defined(HPX_HAVE_CUDA) && defined(HPX_COMPUTE_DEVICE_CODE)
+        return timestamp_cuda();
+#else
         LARGE_INTEGER now;
         QueryPerformanceCounter(&now);
         return static_cast<std::uint64_t>(now.QuadPart);
+#endif
     }
 }    // namespace hpx::util::hardware
 
-#endif
 #endif

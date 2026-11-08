@@ -30,15 +30,29 @@ void process(std::vector<int>& data, size_t index) {
 
 ## Build Configuration
 
+Contracts are disabled by default (`HPX_WITH_CONTRACTS=OFF`):
+
+- With `HPX_WITH_CONTRACTS=OFF`, `HPX_PRE` and `HPX_POST` are no-ops and
+  `HPX_CONTRACT_ASSERT` falls back to `HPX_ASSERT`, even if the compiler
+  supports native C++26 contracts.
+- With `HPX_WITH_CONTRACTS=ON` and native C++26 contracts available, the macros
+  map to the standard contract syntax.
+- With `HPX_WITH_CONTRACTS=ON` and no native contracts, `HPX_PRE` and
+  `HPX_POST` are no-ops and `HPX_CONTRACT_ASSERT` is checked according to
+  `HPX_WITH_CONTRACTS_MODE`.
+
 ```bash
 # Enable contracts
-cmake -DHPX_WITH_CONTRACTS=ON -DCMAKE_CXX_STANDARD=26
+cmake -DHPX_WITH_CONTRACTS=ON -DHPX_WITH_CXX_STANDARD=26
 
 # Enable contract-enhanced assertions (optional)
 cmake -DHPX_WITH_CONTRACTS=ON -DHPX_WITH_ASSERTS_AS_CONTRACT_ASSERTS=ON
 
-# Contracts disabled (hpx_contract_assert will work as hpx_assert)
-cmake -DHPX_WITH_CONTRACTS=OFF #default
+# Select the evaluation mode used without native contracts
+cmake -DHPX_WITH_CONTRACTS=ON -DHPX_WITH_CONTRACTS_MODE=ENFORCE|QUICK_ENFORCE|OBSERVE|IGNORE
+
+# Contracts disabled (HPX_CONTRACT_ASSERT works as HPX_ASSERT)
+cmake -DHPX_WITH_CONTRACTS=OFF # default
 ```
 
 ## Advanced Features

@@ -1,0 +1,60 @@
+# Copyright (c) 2026 The STE||AR Group
+#
+# SPDX-License-Identifier: BSL-1.0
+# Distributed under the Boost Software License, Version 1.0. (See accompanying
+# file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+
+name: Windows CI (Release, VS2022 toolset, CUDA)
+
+on: [pull_request]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-2022
+
+    steps:
+    - uses: actions/checkout@v7
+    - uses: lukka/get-cmake@v4.4.5
+
+    - name: Install dependencies
+      uses: ./.github/actions/setup-vcpkg
+    # the runner has no GPU, so this job only builds the CUDA code (nvcc with
+    # MSVC as its host compiler); install the parts of the toolkit HPX uses,
+    # visual_studio_integration adds the CUDA support to the VS generator
+    - name: Install CUDA
+      uses: Jimver/cuda-toolkit@v0.2.36
+      with:
+        cuda: '13.0.0'
+        method: 'network'
+        sub-packages: '["nvcc", "crt", "nvvm", "cudart", "thrust", "cublas", "cublas_dev", "visual_studio_integration"]'
+    - name: Configure
+      shell: bash
+      run: |
+          cmake . -Bbuild -G'Visual Studio 17 2022' \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_TOOLCHAIN_FILE='C:/projects/vcpkg/scripts/buildsystems/vcpkg.cmake' \
+              -DCMAKE_CUDA_ARCHITECTURES=89 \
+              -DHPX_WITH_CUDA=ON \
+              -DHPX_WITH_FETCH_ASIO=ON \
+              -DHPX_WITH_EXAMPLES=OFF \
+              -DHPX_WITH_TESTS=ON \
+              -DHPX_WITH_TESTS_UNIT=ON \
+              -DHPX_WITH_TESTS_BENCHMARKS=ON \
+              -DHPX_WITH_DEPRECATION_WARNINGS=OFF \
+              -DHPX_WITH_CHECK_MODULE_DEPENDENCIES=On
+    # build the CUDA tests (and everything they depend on); the stdexec based
+    # CUDA tests are skipped for nvcc with an MSVC host compiler, and the
+    # tests.* pseudo targets have no dependencies on Windows, so name the test
+    # executables
+    - name: Build
+      shell: bash
+      run: |
+          cmake --build build --config Release \
+          --target cuda_future_test cuda_multi_device_polling_test \
+            transform_stream_test synchronize_test \
+            cuda_executor_throughput_test \
+          -- -maxcpucount:2 -verbosity:minimal -nologo

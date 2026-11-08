@@ -162,6 +162,12 @@ namespace hpx::collectives {
                 hpx::error::bad_parameter, "hpx::collectives::barrier",
                 "the generation number shouldn't be zero"));
         }
+        if (!fid.valid())
+        {
+            return hpx::make_exceptional_future<void>(HPX_GET_EXCEPTION(
+                hpx::error::invalid_status, "hpx::collectives::barrier",
+                "the communicator is not valid"));
+        }
 
         // Handle operation right away if there is only one site.
         if ([[maybe_unused]] auto const [num_sites, _] = fid.get_info();
@@ -189,6 +195,15 @@ namespace hpx::collectives {
             return result;
         };
 
+        if (!fid.is_ready())
+        {
+            // The continuation of an unresolved client runs in the thread
+            // that resolves it, which can be another site inside AGAS'
+            // symbol namespace bind. The request may suspend that thread
+            // before the site issued its own part of the barrier, so run it
+            // on a new thread instead.
+            return fid.then(hpx::launch::async, HPX_MOVE(barrier_data));
+        }
         return fid.then(hpx::launch::sync, HPX_MOVE(barrier_data));
     }
 

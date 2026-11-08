@@ -24,7 +24,8 @@
 # change of the same measurement, so that a step is listed once. On the graph,
 # the points that moved are ringed (red slower, green faster), and the
 # --labels commits with the largest changes (default 8) are marked with a
-# dashed line and the number of their rows in the table.
+# dashed line and the number of their rows in the table. A solid line marks
+# each release (see releases below) before the first commit that has it.
 #
 # The graphs are SVG, so that the repository, which gets new versions of all of
 # them with every run, stores only their differences. They are reproducible:
@@ -59,6 +60,13 @@ max_commit_labels = 40
 max_date_labels = 8
 # The size of their text
 label_size = 7.5
+
+# The releases marked on the graphs: the name, and the first parent count of
+# the master commit that brought the release into master (the commit of the
+# tag itself is on the release branch)
+releases = (
+    ("v2.0.0", 14211),  # 7dbfb3a506, #7560 (release-2.0.X)
+)
 
 # GitHub shows a README at most about 830 pixels wide (on the start page of the
 # repository, next to its sidebar); a graph of this width (in inches) fills it,
@@ -128,18 +136,41 @@ def changes(series, position, threshold, window):
     return found
 
 
+def shared_prefix(names):
+    # The length of the part up to the last ' - ' that all names start with
+    # (ignoring case, e.g. 'Stream benchmark - '), 0 for a single name. The
+    # characters are compared one by one, since lower() may change the length
+    if len(set(names)) < 2:
+        return 0
+    length = 0
+    for chars in zip(*names):
+        if len({char.lower() for char in chars}) > 1:
+            break
+        length += 1
+    prefix = names[0][:length]
+    return prefix.rfind(' - ') + 3 if ' - ' in prefix else 0
+
+
 def plot(benchmark, series, commits, position, args, path):
     nodes = {node for _, _, node in series}
     medians = [median for points in series.values() for _, median, _ in points]
     unit, factor = time_unit(min(medians))
 
+    # A prefix all lines share is said once, as the title of the legend
+    names = sorted(name for name, _, _ in series)
+    cut = shared_prefix(names)
+    title = names[0][:cut - 3] if cut else None
+
     fig, ax = plt.subplots(figsize=(graph_width, 4))
-    for (name, executor, node), points in sorted(series.items()):
+    lines = []
+    # ignoring case, the names don't all start alike (e.g. 'stream benchmark')
+    for (name, executor, node), points in sorted(series.items(),
+            key=lambda item: (item[0][0].lower(), item[0][1:])):
         points = sorted(points, key=lambda point: position[point[0]])
-        label = f"{name} ({executor})"
+        label = f"{name[cut:]} ({executor})"
         if len(nodes) > 1:
             label += f", {node}"
-        ax.plot([position[commit] for commit, _, _ in points],
+        lines += ax.plot([position[commit] for commit, _, _ in points],
             [median * factor for _, median, _ in points],
             marker='o', markersize=3, linewidth=1, label=label)
 
@@ -163,11 +194,22 @@ def plot(benchmark, series, commits, position, args, path):
             fontsize=7, bbox={'boxstyle': 'circle,pad=0.2', 'fc': 'white',
                 'ec': '0.4', 'lw': 0.8})
 
+    # The releases, between the last commit without and the first with them
+    ordered = sorted(commits, key=lambda commit: position[commit])
+    for name, count in releases:
+        first = next((i for i, commit in enumerate(ordered)
+            if commits[commit][0] >= count), None)
+        if not first:
+            continue
+        ax.axvline(first - 0.5, color='tab:purple', linewidth=1, zorder=1)
+        ax.text(first - 0.5, 0.97, name, transform=top, rotation=90,
+            ha='center', va='top', fontsize=7, color='tab:purple', zorder=4,
+            bbox={'boxstyle': 'square,pad=0.15', 'fc': 'white', 'ec': 'none'})
+
     # Measurements of very different sizes share the graph on a log scale
     if max(medians) > 10 * min(medians):
         ax.set_yscale('log')
     # The commits on the x axis, the dates of some of them above the graph
-    ordered = sorted(commits, key=lambda commit: position[commit])
     step = math.ceil(len(ordered) / max_commit_labels)
     shown = ordered[::step]
     ax.set_xticks([position[commit] for commit in shown])
@@ -187,8 +229,21 @@ def plot(benchmark, series, commits, position, args, path):
     ax.set_xlabel("master commit (pull request, or the commit without one)")
     ax.set_ylabel(f"median time [{unit}]")
     ax.set_title(benchmark, fontsize=10, pad=18)
-    ax.legend(fontsize=7, loc='upper center', bbox_to_anchor=(0.5, -0.28),
-        ncol=1 if len(series) < 6 else 2, frameon=False)
+    # The legend is centered below the image (the graph and the labels on its
+    # left). Two columns for many lines, if they fit into its width: a wider
+    # legend would widen the image, and GitHub would scale it down.
+    renderer = fig.canvas.get_renderer()
+    graph = ax.get_window_extent(renderer)
+    left = ax.get_tightbbox(renderer).x0
+    center = ((left + graph.x1) / 2 - graph.x0) / graph.width
+    for ncol in (1,) if len(series) < 6 else (2, 1):
+        # the lines are passed, since a label that starts with '_' (after the
+        # prefix is cut) would otherwise be left out of the legend
+        legend = ax.legend(lines, [line.get_label() for line in lines],
+            fontsize=7, loc='upper center', bbox_to_anchor=(center, -0.28),
+            ncol=ncol, frameon=False, title=title, title_fontsize=7)
+        if legend.get_window_extent(renderer).width <= graph.x1 - left:
+            break
     fig.savefig(path, format='svg', bbox_inches='tight',
         metadata={'Date': None, 'Creator': None})
     plt.close(fig)

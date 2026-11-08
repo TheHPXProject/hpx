@@ -236,7 +236,8 @@ namespace hpx::when_all_vector_detail {
 
             // Number of predecessor senders that have not yet called any of
             // the set signals.
-            std::atomic<std::size_t> predecessors_remaining{num_predecessors};
+            std::atomic<std::size_t> predecessors_remaining{
+                num_predecessors + 1};
 
             // The values sent by the predecessor senders are stored in a
             // vector of optional or the dummy type void_value_type if the
@@ -486,6 +487,8 @@ namespace hpx::when_all_vector_detail {
 #pragma clang diagnostic pop
 #endif
                     }
+
+                    finish();
                 }
             }
         };

@@ -292,6 +292,13 @@ namespace hpx::collectives {
                         "hpx::collectives::all_gather",
                         "the generation number shouldn't be zero"));
             }
+            if (!fid.valid())
+            {
+                return hpx::make_exceptional_future<std::vector<arg_type>>(
+                    HPX_GET_EXCEPTION(hpx::error::invalid_status,
+                        "hpx::collectives::all_gather",
+                        "the communicator is not valid"));
+            }
 
             // Handle operation right away if there is only one value.
             if (auto [num_sites, comm_site] = fid.get_info(); num_sites == 1)
