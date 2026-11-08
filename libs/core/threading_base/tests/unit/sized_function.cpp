@@ -24,6 +24,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -114,6 +115,21 @@ struct hpx::traits::get_function_annotation<named_function>
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
+void test_names()
+{
+    using hpx::threads::get_task_size_name;
+    static_assert(
+        std::string_view(get_task_size_name(task_size::unknown)) == "unknown");
+    static_assert(
+        std::string_view(get_task_size_name(task_size::nano)) == "nano");
+    static_assert(
+        std::string_view(get_task_size_name(task_size::small_)) == "small");
+    static_assert(
+        std::string_view(get_task_size_name(task_size::medium)) == "medium");
+    static_assert(
+        std::string_view(get_task_size_name(task_size::large)) == "large");
+}
+
 void test_trait()
 {
     auto lambda = [](int i) { return i; };
@@ -558,6 +574,7 @@ void test_builtin_operations()
 ///////////////////////////////////////////////////////////////////////////////
 int hpx_main()
 {
+    test_names();
     test_trait();
     test_builtin_operations();
     test_forwarding();

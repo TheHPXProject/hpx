@@ -201,6 +201,8 @@ int main(int argc, char* argv[])
         {scheduling_policy::local_priority_fifo, "local_priority_fifo"},
         {scheduling_policy::local_priority_fifo_double,
             "local_priority_fifo_double"},
+        {scheduling_policy::local_priority_tuned_fifo,
+            "local_priority_tuned_fifo"},
 #if defined(HPX_HAVE_CXX11_STD_ATOMIC_128BIT)
         {scheduling_policy::local_priority_lifo, "local_priority_lifo"},
         {scheduling_policy::abp_priority_fifo, "abp_priority_fifo"},
