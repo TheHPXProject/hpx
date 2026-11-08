@@ -101,8 +101,7 @@ namespace hpx::execution::experimental {
                 {
                     auto ep = hpx::detail::try_catch_exception_ptr(
                         [&]() {
-                            return std::make_exception_ptr(
-                                HPX_FORWARD(E, err));
+                            return std::make_exception_ptr(HPX_FORWARD(E, err));
                         },
                         [](std::exception_ptr e) { return e; });
                     promise_.set_exception(HPX_MOVE(ep));
