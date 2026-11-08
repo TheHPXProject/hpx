@@ -49,6 +49,23 @@ enabled using the LIFO (last-in-first-out) policy. This is not the default
 policy and must be invoked using the command line option
 :option:`--hpx:queuing`\ ``local-priority-lifo``.
 
+Tuned priority local scheduling policy
+--------------------------------------
+
+* invoke using: :option:`--hpx:queuing`\ ``local-priority-tuned-fifo``
+
+This scheduler places, queues and steals threads like the priority local
+scheduling policy (with FIFO queueing), but takes the rules that decide whom to
+wake up for new threads and what an idle worker thread does next from a
+tunable scheduling policy. The numbers and switches of these rules are
+settings that a *tuner* may change while the scheduler runs. The tuner is
+selected with ``hpx.scheduler_tuner`` (see :ref:`ini_hpx`); the default,
+``static``, keeps the configured values, so that the scheduler decides like
+the priority local scheduling policy. The settings of the rules are listed in
+:ref:`ini_hpx_scheduler_policy`. Applications can register their own tuners
+with ``hpx::threads::policies::register_scheduler_tuner`` before the runtime
+is started.
+
 Static priority scheduling policy
 ---------------------------------
 
