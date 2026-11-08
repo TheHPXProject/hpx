@@ -167,8 +167,10 @@ namespace hpx {
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
+#include <hpx/parallel/algorithms/detail/distance.hpp>
+#include <hpx/parallel/algorithms/detail/lexicographical_compare.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
-#include <hpx/parallel/algorithms/mismatch.hpp>
+#include <hpx/parallel/util/adapt_placement_mode.hpp>
 #include <hpx/parallel/util/cancellation_token.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/clear_container.hpp>
@@ -205,23 +207,9 @@ namespace hpx::parallel {
                 Sent1 last1, InIter2 first2, Sent2 last2, Pred&& pred,
                 Proj1&& proj1, Proj2&& proj2)
             {
-                // clang-format off
-                for (; first1 != last1 && first2 != last2;
-                    ++first1, ++first2)
-                // clang-format on
-                {
-                    if (HPX_INVOKE(pred, HPX_INVOKE(proj1, *first1),
-                            HPX_INVOKE(proj2, *first2)))
-                    {
-                        return true;
-                    }
-                    if (HPX_INVOKE(pred, HPX_INVOKE(proj2, *first2),
-                            HPX_INVOKE(proj1, *first1)))
-                    {
-                        return false;
-                    }
-                }
-                return first1 == last1 && first2 != last2;
+                return sequential_lexicographical_compare<ExPolicy>(first1,
+                    last1, first2, last2, HPX_FORWARD(Pred, pred),
+                    HPX_FORWARD(Proj1, proj1), HPX_FORWARD(Proj2, proj2));
             }
 
             template <typename ExPolicy, typename FwdIter1, typename Sent1,
@@ -233,7 +221,6 @@ namespace hpx::parallel {
             {
                 using zip_iterator =
                     hpx::util::zip_iterator<FwdIter1, FwdIter2>;
-                using reference = typename zip_iterator::reference;
                 constexpr bool has_scheduler_executor =
                     hpx::execution_policy_has_scheduler_executor_v<ExPolicy>;
 
@@ -270,20 +257,8 @@ namespace hpx::parallel {
                 auto f1 = [tok, pred, proj1, proj2](zip_iterator it,
                               std::size_t part_count,
                               std::size_t base_idx) mutable -> void {
-                    util::loop_idx_n<policy_type>(base_idx, it, part_count, tok,
-                        [&pred, &tok, &proj1, &proj2](
-                            reference t, std::size_t i) mutable -> void {
-                            using hpx::get;
-                            using hpx::invoke;
-                            // gcc10/cuda11 complains about using HPX_INVOKE here
-                            if (invoke(pred, invoke(proj1, get<0>(t)),
-                                    invoke(proj2, get<1>(t))) ||
-                                invoke(pred, invoke(proj2, get<1>(t)),
-                                    invoke(proj1, get<0>(t))))
-                            {
-                                tok.cancel(i);
-                            }
-                        });
+                    sequential_lexicographical_compare<policy_type>(
+                        base_idx, it, part_count, tok, pred, proj1, proj2);
                 };
 
                 auto f2 = [tok, first1, first2, last1, last2, pred, proj1,
@@ -301,9 +276,8 @@ namespace hpx::parallel {
 
                     if (first1 != last1 && first2 != last2)
                     {
-                        using hpx::invoke;
-                        return invoke(pred, invoke(proj1, *first1),
-                            invoke(proj2, *first2));
+                        return hpx::invoke(pred, hpx::invoke(proj1, *first1),
+                            hpx::invoke(proj2, *first2));
                     }
 
                     return first2 != last2;
