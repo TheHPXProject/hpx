@@ -56,10 +56,14 @@ struct throwing_on_second_move
     throwing_on_second_move(throwing_on_second_move&& other)
       : value(other.value)
     {
-        if (move_count.load() >= 0 && ++move_count > 0)
+        if (move_count.load() >= 0)
         {
-            throw std::runtime_error(
-                "throwing_on_second_move: intentional move exception");
+            int current_count = ++move_count;
+            if (current_count > 0)
+            {
+                throw std::runtime_error(
+                    "throwing_on_second_move: intentional move exception");
+            }
         }
     }
 
@@ -134,8 +138,7 @@ void test_set_error_called_on_move_throw()
     catch (std::runtime_error const& e)
     {
         HPX_TEST_EQ(std::string(e.what()),
-            std::string(
-                "throwing_on_second_move: intentional move exception"));
+            std::string("throwing_on_second_move: intentional move exception"));
         second_got_expected_error = true;
     }
     catch (...)
@@ -199,8 +202,7 @@ void test_multiple_receivers_all_get_set_error()
     catch (std::runtime_error const& e)
     {
         HPX_TEST_EQ(std::string(e.what()),
-            std::string(
-                "throwing_on_second_move: intentional move exception"));
+            std::string("throwing_on_second_move: intentional move exception"));
         ++error_count;
     }
     catch (...)
@@ -224,8 +226,7 @@ void test_multiple_receivers_all_get_set_error()
     catch (std::runtime_error const& e)
     {
         HPX_TEST_EQ(std::string(e.what()),
-            std::string(
-                "throwing_on_second_move: intentional move exception"));
+            std::string("throwing_on_second_move: intentional move exception"));
         ++error_count;
     }
     catch (...)
