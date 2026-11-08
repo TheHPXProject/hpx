@@ -91,7 +91,8 @@ namespace hpx::execution::experimental {
             template <typename E>
             void set_error(E&& err) && noexcept
             {
-                if constexpr (std::is_same_v<std::decay_t<E>, std::exception_ptr>)
+                if constexpr (std::is_same_v<std::decay_t<E>,
+                                  std::exception_ptr>)
                 {
                     promise_.set_exception(HPX_FORWARD(E, err));
                 }
