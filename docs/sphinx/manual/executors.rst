@@ -840,10 +840,8 @@ for those the annotation is used. ``task_size::unknown`` counts as no
 annotation. Two different sizes on one function are a compile-time error when
 the size of an action that binds it is read. Actions made from a member
 function pointer, for instance ``make_action_t<decltype(&C::f), &C::f>``, do
-not read annotations. An explicit specialization of a function template does
-not have the annotation of the template, so it needs its own. Each source file
-reads the annotation from the declarations it sees, so put it on the
-declaration in the header.
+not read annotations. Each source file reads the annotation from the
+declarations it sees, so put it on the declaration in the header.
 
 .. _parallel_scheduler:
 
