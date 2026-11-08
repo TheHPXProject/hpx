@@ -148,11 +148,13 @@ if [[ -n "${PERFTEST_BACKFILL_DRY_RUN:-}" ]]; then
 fi
 
 # The scripts as of the built commit, also for drawing the reports: the tree
-# they run from must not be the one the commits are checked out in
+# they run from must not be the one the commits are checked out in. The
+# upload copies the license from there into a history that lacks it.
 scripts="${base}/scripts"
 rm -rf "${scripts}"
 mkdir -p "${scripts}/.jenkins" "${scripts}/tools" &&
     cp -r "${workspace}/.jenkins/lsu-perftests" "${scripts}/.jenkins/" &&
+    cp "${workspace}/LICENSE_1_0.txt" "${scripts}/" &&
     cp -r "${workspace}/tools/perftests_ci" "${scripts}/tools/" || {
     echo "Warning: could not copy the scripts, not adding missing runs" >&2
     exit 1
@@ -234,17 +236,31 @@ for attempt in 1 2 3; do
     perftest_log "The push was rejected, adding the runs again on top of" \
         "the history (attempt ${attempt})"
     rm -rf "${data}"
-    git_token -C "${base}/upload" clone --quiet --depth 1 --filter=blob:none \
-        --sparse "${history_repo}" data || break
-    "${backfill}" "${job}" >> "${base}/backfill.log" 2>&1
+    if ! git_token -C "${base}/upload" clone --quiet --depth 1 \
+        --filter=blob:none --sparse "${history_repo}" data; then
+        status=1
+        break
+    fi
+    "${backfill}" "${job}" >> "${base}/backfill.log" 2>&1 || status=$?
 done
 scancel "${job}" 2> /dev/null
 trap - EXIT
 tail -n "+$((log_start + 1))" "${base}/backfill.log"
 perftest_log "Added ${pushed} of the ${count} missing runs to the" \
     "performance history"
-if [[ "${ahead}" != 0 ]]; then
-    echo "Warning: could not push the missing runs, they stay in ${data}" >&2
+if [[ "${ahead}" != 0 || "${status}" != 0 ]]; then
+    echo "Warning: not all missing runs were added; the reports of the runs" \
+        "made are kept in ${base}/runs for the next build" >&2
     exit 1
 fi
-exit "${status}"
+
+# The reports of runs that are in the history now aren't needed anymore (a
+# run's directory is runs/<position>-<commit>, see backfill.sh)
+for dir in "${base}"/runs/*-*/; do
+    short=${dir%/}
+    short=${short##*-}
+    if [[ -n "${short}" ]] && grep -q "	${short}" "${data}/runs.tsv"; then
+        rm -rf "${dir:?}"
+    fi
+done
+exit 0

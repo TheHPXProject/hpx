@@ -53,7 +53,9 @@ its own run and set its status):
   built in sit next to the workspace and are kept between builds. The tree's
   path has as many characters as the workspace's (its name ends in `-bf`
   instead of the last three characters), so this build's own reports stay
-  untouched for archiving.
+  untouched for archiving. The reports of a run are removed from `runs/` once
+  the run is in the history; those of runs that weren't pushed are kept, and
+  the next build adds them from there.
 - The build line of such a run's README says which build added it
   (`PERFTEST_BACKFILL_BY`). A failure is reported in the log, it doesn't change
   the status of the build.
