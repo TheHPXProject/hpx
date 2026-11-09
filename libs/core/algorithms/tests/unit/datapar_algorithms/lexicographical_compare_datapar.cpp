@@ -174,6 +174,41 @@ void lexicographical_compare_test()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+template <typename ExPolicy, typename Iterator1, typename Sentinel1,
+    typename Iterator2, typename Sentinel2, typename... Args>
+bool compare_test(ExPolicy&& policy, Iterator1 first1, Sentinel1 last1,
+    Iterator2 first2, Sentinel2 last2, Args&&... args)
+{
+    if constexpr (hpx::is_async_execution_policy_v<std::decay_t<ExPolicy>>)
+    {
+        return hpx::lexicographical_compare(HPX_FORWARD(ExPolicy, policy),
+            first1, last1, first2, last2, HPX_FORWARD(Args, args)...)
+            .get();
+    }
+    else
+    {
+        return hpx::lexicographical_compare(HPX_FORWARD(ExPolicy, policy),
+            first1, last1, first2, last2, HPX_FORWARD(Args, args)...);
+    }
+}
+
+template <typename ExPolicy, typename... Args>
+bool compare_ranges_test(ExPolicy&& policy, Args&&... args)
+{
+    if constexpr (hpx::is_async_execution_policy_v<std::decay_t<ExPolicy>>)
+    {
+        return hpx::ranges::lexicographical_compare(
+            HPX_FORWARD(ExPolicy, policy), HPX_FORWARD(Args, args)...)
+            .get();
+    }
+    else
+    {
+        return hpx::ranges::lexicographical_compare(
+            HPX_FORWARD(ExPolicy, policy), HPX_FORWARD(Args, args)...);
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
 template <typename ExPolicy>
 void test_lexicographical_compare_contiguous(ExPolicy policy)
 {
@@ -184,7 +219,8 @@ void test_lexicographical_compare_contiguous(ExPolicy policy)
     std::uniform_int_distribution<int> dis(1, 100);
 
     std::vector<std::size_t> test_sizes = {0, 1, 2, pack_size, pack_size + 1,
-        2 * pack_size, 3 * pack_size + 2, 100};
+        2 * pack_size, 3 * pack_size + 2, 100,
+        (std::max) (std::size_t(500), pack_size * 50 + 7)};
     if constexpr (pack_size > 1)
     {
         test_sizes.push_back(pack_size - 1);
@@ -195,23 +231,51 @@ void test_lexicographical_compare_contiguous(ExPolicy policy)
     {
         for (std::size_t sz2 : test_sizes)
         {
+            std::size_t common_sz = (std::min) (sz1, sz2);
+
             std::vector<int> c(sz1);
             std::generate(c.begin(), c.end(), [&]() { return dis(gen); });
+
+            // Case A: common prefix is identical, lengths may differ
             std::vector<int> d(sz2);
-            std::generate(d.begin(), d.end(), [&]() { return dis(gen); });
+            std::copy(c.begin(), c.begin() + common_sz, d.begin());
+            if (sz2 > sz1)
+            {
+                std::generate(
+                    d.begin() + common_sz, d.end(), [&]() { return dis(gen); });
+            }
 
-            bool actual = hpx::lexicographical_compare(
-                policy, c.begin(), c.end(), d.begin(), d.end());
-            bool expected = std::lexicographical_compare(
+            bool actual_common =
+                compare_test(policy, c.begin(), c.end(), d.begin(), d.end());
+            bool expected_common = std::lexicographical_compare(
                 c.begin(), c.end(), d.begin(), d.end());
-            HPX_TEST_EQ(actual, expected);
+            HPX_TEST_EQ(actual_common, expected_common);
 
-            // Test raw pointers
             if (sz1 > 0 && sz2 > 0)
             {
-                bool actual_ptr = hpx::lexicographical_compare(policy, c.data(),
+                bool actual_ptr = compare_test(policy, c.data(),
                     c.data() + c.size(), d.data(), d.data() + d.size());
-                HPX_TEST_EQ(actual_ptr, expected);
+                HPX_TEST_EQ(actual_ptr, expected_common);
+            }
+
+            // Case B: change one element at a random position in the common part
+            if (common_sz > 0)
+            {
+                std::uniform_int_distribution<std::size_t> pos_dis(
+                    0, common_sz - 1);
+                std::size_t diff_pos = pos_dis(gen);
+                int old_val = d[diff_pos];
+                d[diff_pos] = (old_val == 100) ? 1 : old_val + 1;
+
+                bool actual_diff = compare_test(
+                    policy, c.begin(), c.end(), d.begin(), d.end());
+                bool expected_diff = std::lexicographical_compare(
+                    c.begin(), c.end(), d.begin(), d.end());
+                HPX_TEST_EQ(actual_diff, expected_diff);
+
+                bool actual_diff_ptr = compare_test(policy, c.data(),
+                    c.data() + c.size(), d.data(), d.data() + d.size());
+                HPX_TEST_EQ(actual_diff_ptr, expected_diff);
             }
         }
     }
@@ -236,19 +300,19 @@ void test_lexicographical_compare_boundaries(ExPolicy policy)
             // Mismatch right at pack boundary
             std::size_t boundary = mult * pack_size;
             c[boundary] = 9;
-            HPX_TEST(hpx::lexicographical_compare(
-                policy, c.begin(), c.end(), d.begin(), d.end()));
-            HPX_TEST(!hpx::lexicographical_compare(
-                policy, d.begin(), d.end(), c.begin(), c.end()));
+            HPX_TEST(
+                compare_test(policy, c.begin(), c.end(), d.begin(), d.end()));
+            HPX_TEST(
+                !compare_test(policy, d.begin(), d.end(), c.begin(), c.end()));
 
             // Mismatch one before pack boundary
             if (boundary > 0)
             {
                 c[boundary] = 10;
                 c[boundary - 1] = 9;
-                HPX_TEST(hpx::lexicographical_compare(
+                HPX_TEST(compare_test(
                     policy, c.begin(), c.end(), d.begin(), d.end()));
-                HPX_TEST(!hpx::lexicographical_compare(
+                HPX_TEST(!compare_test(
                     policy, d.begin(), d.end(), c.begin(), c.end()));
             }
 
@@ -257,9 +321,9 @@ void test_lexicographical_compare_boundaries(ExPolicy policy)
             {
                 c[boundary - 1] = 10;
                 c[boundary + 1] = 9;
-                HPX_TEST(hpx::lexicographical_compare(
+                HPX_TEST(compare_test(
                     policy, c.begin(), c.end(), d.begin(), d.end()));
-                HPX_TEST(!hpx::lexicographical_compare(
+                HPX_TEST(!compare_test(
                     policy, d.begin(), d.end(), c.begin(), c.end()));
             }
         }
@@ -291,8 +355,8 @@ void test_lexicographical_compare_uses_simd_path(ExPolicy policy)
         // Differ at the last element
         c[sz - 1] = 4;
 
-        bool actual = hpx::lexicographical_compare(
-            policy, c.begin(), c.end(), d.begin(), d.end(), pred);
+        bool actual =
+            compare_test(policy, c.begin(), c.end(), d.begin(), d.end(), pred);
         bool expected = std::lexicographical_compare(
             c.begin(), c.end(), d.begin(), d.end());
 
@@ -331,6 +395,37 @@ void test_lexicographical_compare_non_contiguous()
 void test_lexicographical_compare_bool_returning_predicate()
 {
     auto pred = [](auto const& a, auto const& b) -> bool { return a < b; };
+
+    std::vector<int> c(500, 10);
+    std::vector<int> d(500, 10);
+    c[400] = 5;
+
+    bool expected =
+        std::lexicographical_compare(c.begin(), c.end(), d.begin(), d.end());
+
+    HPX_TEST_EQ(hpx::lexicographical_compare(hpx::execution::simd, c.begin(),
+                    c.end(), d.begin(), d.end(), pred),
+        expected);
+    HPX_TEST_EQ(hpx::lexicographical_compare(hpx::execution::par_simd,
+                    c.begin(), c.end(), d.begin(), d.end(), pred),
+        expected);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+struct custom_bool_convertible
+{
+    bool val;
+    constexpr operator bool() const noexcept
+    {
+        return val;
+    }
+};
+
+void test_lexicographical_compare_bool_convertible_predicate()
+{
+    auto pred = [](auto const& a, auto const& b) -> custom_bool_convertible {
+        return custom_bool_convertible{a < b};
+    };
 
     std::vector<int> c(500, 10);
     std::vector<int> d(500, 10);
@@ -394,6 +489,59 @@ void test_lexicographical_compare_projections()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+template <typename ExPolicy>
+void test_lexicographical_compare_generic_projections(ExPolicy policy)
+{
+    using pack_type = hpx::parallel::traits::vector_pack_type_t<int>;
+    constexpr std::size_t pack_size =
+        hpx::parallel::traits::vector_pack_size_v<pack_type>;
+
+    if constexpr (pack_size > 1)
+    {
+        std::atomic<int> pack_calls(0);
+        auto proj = [&pack_calls](auto const& x) {
+            if constexpr (!std::is_arithmetic_v<std::decay_t<decltype(x)>>)
+            {
+                ++pack_calls;
+            }
+            return -x;
+        };
+
+        std::size_t sz = (std::max) (std::size_t(1000), pack_size * 100 + 3);
+        std::vector<int> c(sz, 5);
+        std::vector<int> d(sz, 5);
+        // At the last element: c has 6, d has 5.
+        // With negation projection, proj(c) has -6, proj(d) has -5.
+        // -6 < -5, so c is lexicographically less than d.
+        c[sz - 1] = 6;
+
+        bool actual = compare_ranges_test(policy, c.begin(), c.end(), d.begin(),
+            d.end(), std::less<>{}, proj, proj);
+        bool expected = std::lexicographical_compare(c.begin(), c.end(),
+            d.begin(), d.end(), [](int a, int b) { return -a < -b; });
+
+        HPX_TEST_EQ(actual, expected);
+        HPX_TEST(actual);
+        HPX_TEST(pack_calls > 0);
+
+        std::atomic<int> ranges_pack_calls(0);
+        auto ranges_proj = [&ranges_pack_calls](auto const& x) {
+            if constexpr (!std::is_arithmetic_v<std::decay_t<decltype(x)>>)
+            {
+                ++ranges_pack_calls;
+            }
+            return -x;
+        };
+
+        bool actual_ranges = compare_ranges_test(
+            policy, c, d, std::less<>{}, ranges_proj, ranges_proj);
+        HPX_TEST_EQ(actual_ranges, expected);
+        HPX_TEST(actual_ranges);
+        HPX_TEST(ranges_pack_calls > 0);
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
 int hpx_main(hpx::program_options::variables_map& vm)
 {
     if (vm.count("seed"))
@@ -408,17 +556,29 @@ int hpx_main(hpx::program_options::variables_map& vm)
 
     test_lexicographical_compare_contiguous(simd);
     test_lexicographical_compare_contiguous(par_simd);
+    test_lexicographical_compare_contiguous(simd(task));
+    test_lexicographical_compare_contiguous(par_simd(task));
 
     test_lexicographical_compare_boundaries(simd);
     test_lexicographical_compare_boundaries(par_simd);
+    test_lexicographical_compare_boundaries(simd(task));
+    test_lexicographical_compare_boundaries(par_simd(task));
 
     test_lexicographical_compare_uses_simd_path(simd);
     test_lexicographical_compare_uses_simd_path(par_simd);
+    test_lexicographical_compare_uses_simd_path(simd(task));
+    test_lexicographical_compare_uses_simd_path(par_simd(task));
 
     test_lexicographical_compare_non_contiguous();
     test_lexicographical_compare_bool_returning_predicate();
+    test_lexicographical_compare_bool_convertible_predicate();
     test_lexicographical_compare_user_type();
     test_lexicographical_compare_projections();
+
+    test_lexicographical_compare_generic_projections(simd);
+    test_lexicographical_compare_generic_projections(par_simd);
+    test_lexicographical_compare_generic_projections(simd(task));
+    test_lexicographical_compare_generic_projections(par_simd(task));
 
     return hpx::local::finalize();
 }
