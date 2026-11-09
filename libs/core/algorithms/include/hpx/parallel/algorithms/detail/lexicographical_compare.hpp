@@ -53,19 +53,16 @@ namespace hpx::parallel::detail {
         {
             using reference = typename ZipIterator::reference;
 
-            // Note: replacing invoke() with HPX_INVOKE() below
+            // Note: replacing hpx::invoke() with HPX_INVOKE() below
             // may make gcc/cuda generate errors
-
-            // MSVC complains if pred or proj is captured by ref below
             util::loop_idx_n<ExPolicy>(base_idx, it, part_count, tok,
-                [pred = HPX_FORWARD(Pred, pred),
-                    proj1 = HPX_FORWARD(Proj1, proj1),
-                    proj2 = HPX_FORWARD(Proj2, proj2),
-                    &tok](reference t, std::size_t i) mutable -> void {
-                    if (hpx::invoke(pred, hpx::invoke(proj1, hpx::get<0>(t)),
-                            hpx::invoke(proj2, hpx::get<1>(t))) ||
-                        hpx::invoke(pred, hpx::invoke(proj2, hpx::get<1>(t)),
-                            hpx::invoke(proj1, hpx::get<0>(t))))
+                [&pred, &tok, &proj1, &proj2](
+                    reference t, std::size_t i) -> void {
+                    using hpx::get;
+                    if (hpx::invoke(pred, hpx::invoke(proj1, get<0>(t)),
+                            hpx::invoke(proj2, get<1>(t))) ||
+                        hpx::invoke(pred, hpx::invoke(proj2, get<1>(t)),
+                            hpx::invoke(proj1, get<0>(t))))
                     {
                         tok.cancel(i);
                     }

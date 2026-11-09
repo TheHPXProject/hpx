@@ -33,10 +33,14 @@ namespace hpx::parallel::detail {
     inline constexpr bool is_lexicographical_compare_datapar_compatible_v =
         requires(std::decay_t<Pred>& pred, std::decay_t<Proj1>& proj1,
             std::decay_t<Proj2>& proj2, Vector1& v1, Vector2& v2) {
-            requires !std::is_arithmetic_v<std::decay_t<decltype(HPX_INVOKE(
-                pred, HPX_INVOKE(proj1, v1), HPX_INVOKE(proj2, v2)))>>;
-            requires !std::is_arithmetic_v<std::decay_t<decltype(HPX_INVOKE(
-                pred, HPX_INVOKE(proj2, v2), HPX_INVOKE(proj1, v1)))>>;
+            requires !std::is_convertible_v<
+                std::decay_t<decltype(HPX_INVOKE(
+                    pred, HPX_INVOKE(proj1, v1), HPX_INVOKE(proj2, v2)))>,
+                bool>;
+            requires !std::is_convertible_v<
+                std::decay_t<decltype(HPX_INVOKE(
+                    pred, HPX_INVOKE(proj2, v2), HPX_INVOKE(proj1, v1)))>,
+                bool>;
             hpx::parallel::traits::find_first_of(
                 HPX_INVOKE(pred, HPX_INVOKE(proj1, v1), HPX_INVOKE(proj2, v2)));
             hpx::parallel::traits::find_first_of(
@@ -67,23 +71,8 @@ namespace hpx::parallel::detail {
             constexpr std::size_t num_lanes2 =
                 traits::vector_pack_size_v<vector_type2>;
 
-            constexpr bool is_contiguous =
-                (std::contiguous_iterator<std::decay_t<InIter1>> ||
-                    hpx::traits::is_contiguous_iterator_v<
-                        std::decay_t<InIter1>>) &&
-                (std::contiguous_iterator<std::decay_t<InIter2>> ||
-                    hpx::traits::is_contiguous_iterator_v<
-                        std::decay_t<InIter2>>);
-
-            constexpr bool is_datapar_compatible =
-                hpx::parallel::util::detail::iterator_datapar_compatible_v<
-                    InIter1> &&
-                hpx::parallel::util::detail::iterator_datapar_compatible_v<
-                    InIter2>;
-
             constexpr bool can_vectorize = (num_lanes1 > 1) &&
-                (num_lanes1 == num_lanes2) && is_contiguous &&
-                is_datapar_compatible &&
+                (num_lanes1 == num_lanes2) &&
                 is_lexicographical_compare_datapar_compatible_v<Pred, Proj1,
                     Proj2, vector_type1, vector_type2>;
 
@@ -176,22 +165,8 @@ namespace hpx::parallel::detail {
             constexpr std::size_t num_lanes2 =
                 traits::vector_pack_size_v<vector_type2>;
 
-            constexpr bool is_contiguous =
-                (std::contiguous_iterator<std::decay_t<Iter1>> ||
-                    hpx::traits::is_contiguous_iterator_v<
-                        std::decay_t<Iter1>>) &&
-                (std::contiguous_iterator<std::decay_t<Iter2>> ||
-                    hpx::traits::is_contiguous_iterator_v<std::decay_t<Iter2>>);
-
-            constexpr bool is_datapar_compatible =
-                hpx::parallel::util::detail::iterator_datapar_compatible_v<
-                    Iter1> &&
-                hpx::parallel::util::detail::iterator_datapar_compatible_v<
-                    Iter2>;
-
             constexpr bool can_vectorize = (num_lanes1 > 1) &&
-                (num_lanes1 == num_lanes2) && is_contiguous &&
-                is_datapar_compatible &&
+                (num_lanes1 == num_lanes2) &&
                 is_lexicographical_compare_datapar_compatible_v<Pred, Proj1,
                     Proj2, vector_type1, vector_type2>;
 
