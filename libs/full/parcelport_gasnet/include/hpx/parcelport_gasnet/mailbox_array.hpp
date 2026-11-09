@@ -156,35 +156,6 @@ namespace hpx::parcelset::policies::gasnet {
             return t;
         }
 
-        inline std::uint32_t crc32c_sw(std::uint32_t crc,
-            unsigned char const* data, std::size_t size) noexcept
-        {
-            static constexpr auto t = make_crc32c_tables();
-            if constexpr (std::endian::native == std::endian::little)
-            {
-                while (size >= 8)
-                {
-                    std::uint32_t lo;
-                    std::uint32_t hi;
-                    std::memcpy(&lo, data, 4);
-                    std::memcpy(&hi, data + 4, 4);
-                    lo ^= crc;
-                    crc = t[7][lo & 0xFFu] ^ t[6][(lo >> 8) & 0xFFu] ^
-                        t[5][(lo >> 16) & 0xFFu] ^ t[4][lo >> 24] ^
-                        t[3][hi & 0xFFu] ^ t[2][(hi >> 8) & 0xFFu] ^
-                        t[1][(hi >> 16) & 0xFFu] ^ t[0][hi >> 24];
-                    data += 8;
-                    size -= 8;
-                }
-            }
-
-            for (std::size_t i = 0; i < size; ++i)
-            {
-                crc = t[0][(crc ^ data[i]) & 0xFFu] ^ (crc >> 8);
-            }
-            return crc;
-        }
-
         // One 8-byte step of CRC-32C (the same update the x86 CRC32
         // instruction performs), table version.
         inline std::uint32_t crc32c_word_sw(
@@ -572,7 +543,6 @@ namespace hpx::parcelset::policies::gasnet {
 
         ~mailbox_array()
         {
-            stat_dump();
             delete[] produced_locals_;
             delete[] consumed_locals_;
             delete[] scan_rotate_;
@@ -828,25 +798,6 @@ namespace hpx::parcelset::policies::gasnet {
             return -1;
         }
 
-        // progress_to(peer): **local no-op** in the GASNet port.  The
-        // openshmem counterpart issues a remote shmem_uint32_atomic_fetch to
-        // the peer purely to *push* delivery of the peer's inbound stores into
-        // local symmetric memory (an OpenSHMEM-over-UCX quirk).  GASNet RMA
-        // puts land directly in our registered segment, so the counter values
-        // are already visible to plain local loads.  Kept as a method so the
-        // call sequence mirrors the openshmem design; the loads it issues are
-        // purely documentary.
-        void progress_to(std::size_t const peer) const noexcept
-        {
-            std::size_t const w = my_pe_ * num_pes_ + peer;
-            (void) std::atomic_ref<std::uint32_t>(
-                produced_beg_[w])
-                .load(std::memory_order_relaxed);
-            (void) std::atomic_ref<std::uint32_t>(
-                consumed_beg_[w])
-                .load(std::memory_order_relaxed);
-        }
-
         // True when the single outstanding data+credit access region to
         // dst_pe (if any) has locally completed, i.e. the TX slot for dst_pe
         // may be restaged and the next region issued; false while the
@@ -870,7 +821,6 @@ namespace hpx::parcelset::policies::gasnet {
                     return false;
                 }
                 cev = GEX_EVENT_INVALID;
-                stat_to(dst_pe, 0);
             }
             if (credit_pending_[dst_pe])
             {
@@ -885,7 +835,6 @@ namespace hpx::parcelset::policies::gasnet {
                 cev = hpx::util::gasnet_environment::put_uint32_nb(
                     static_cast<int>(dst_pe), credit_put_raddr_[dst_pe],
                     &send_credit_src_[dst_pe]);
-                stat_to(dst_pe, 2);
                 return false;
             }
 #endif
@@ -956,7 +905,6 @@ namespace hpx::parcelset::policies::gasnet {
             if (in_flight >= static_cast<int>(slots_per_dst_))
             {
                 note_send_stall(dst_pe);
-                stat_to(dst_pe, 3);
                 return 0;
             }
             return (std::min)(
@@ -1020,11 +968,6 @@ namespace hpx::parcelset::policies::gasnet {
                 static_cast<int>(dst_pe), n, raddr, laddr, counts);
             credit_put_raddr_[dst_pe] = rcredit;
             credit_pending_[dst_pe] = 1;
-            {
-                std::size_t tot = 0;
-                for (std::size_t k = 0; k < n; ++k) tot += counts[k];
-                stat_to(dst_pe, 1, tot);
-            }
 #else
             send_events_[dst_pe] =
                 hpx::util::gasnet_environment::put_batch_and_credit_nb(
@@ -1033,126 +976,6 @@ namespace hpx::parcelset::policies::gasnet {
 #endif
             produced_locals_[dst_pe].store(
                 new_produced, std::memory_order_relaxed);
-        }
-
-        // Non-blocking send of one mtu-sized page (chunk) to dst_pe.
-        // Copies 'count' bytes from our staging page (get_buffer()) into
-        // dst's shared rx slot range and publishes produced.  Returns false
-        // without transferring when no credit is left or the single
-        // outstanding access region to dst has not yet completed locally;
-        // the caller must requeue and retry later.  Never blocks.
-        bool try_send(std::size_t const dst_pe,
-            std::size_t const count) noexcept
-        {
-            HPX_ASSERT(count <= mtu_);
-
-            // Single outstanding region per destination: GASNet orders
-            // operations only within one NBI access region, so successive
-            // regions (successive credit word values) could reach dst out of
-            // order and let a receiver drain a not-yet-arrived page.  We may
-            // stage and issue only after the previous region's event
-            // completes.
-            if (!send_ready(dst_pe))
-            {
-                note_send_stall(dst_pe);
-                return false;
-            }
-
-            // Works for both remote (dst != me) and local (dst == me, a
-            // self-copy into our own rx pool) destinations.
-            std::size_t const w = my_pe_ * num_pes_ + dst_pe;
-
-            // mirrors of the two halves
-            std::uint32_t produced =
-                produced_locals_[dst_pe].load(std::memory_order_relaxed);
-
-            // dst's consumed counter: for a local send it is our own drain
-            // mirror (same thread); otherwise the RDMA-delivered remote copy,
-            // read directly from our segment.
-            // Acquire so that (self path) the receiver's release-store of the
-            // returned credit is ordered after its data-page memcpy, and
-            // (remote path) our subsequent slot reuse observes the credit put
-            // that the dst issued after draining the page.
-            std::uint32_t consumed = (dst_pe == my_pe_) ?
-                consumed_locals_[dst_pe].load(std::memory_order_acquire) :
-                std::atomic_ref<std::uint32_t>(consumed_beg_[w])
-                    .load(std::memory_order_acquire);
-
-            // Poll the credit (max slots_per_dst_ pages in flight).  If the
-            // counter is still short, the caller requeues instead of blocking.
-            if (static_cast<int>(produced - consumed) >=
-                static_cast<int>(slots_per_dst_))
-            {
-                note_send_stall(dst_pe);
-                return false;    // no credit: requeue and retry later
-            }
-
-            std::size_t const slot = produced % slots_per_dst_;
-
-            // Staging source: my per-dst staging page (tx mirror of the rx
-            // slot), keyed by dst_pe so two different destinations use
-            // disjoint staging pages (matches tx_page()).
-            std::size_t const stage_slot =
-                (dst_pe * slots_per_dst_ + slot) * mtu_;
-
-            // Landing target: dst's shared rx pool, keyed by self PE (the
-            // sender), so each sender has its own disjoint per-src ring and
-            // different senders cannot collide on the same guard pages.
-            std::size_t const rx_slot = (my_pe_ * slots_per_dst_ + slot) * mtu_;
-
-            produced = produced + 1;
-
-            if (dst_pe == my_pe_)
-            {
-                // Self-send: local copy of the data and a local store of the
-                // produced credit.  Release-store orders the data-page
-                // memcpy before the credit becomes visible (a progress thread
-                // on another core polls it).  No GASNet traffic is required
-                // for locality-to-self parcels (very common during bootstrap).
-                std::memcpy(
-                    rx_beg_ + rx_slot, tx_beg_ + stage_slot, count);
-                std::atomic_ref<std::uint32_t>(produced_beg_[w])
-                    .store(produced, std::memory_order_release);
-                produced_locals_[dst_pe].store(
-                    produced, std::memory_order_release);
-                return true;
-            }
-
-            // Remote send: stage -> dst's rx page, then publish the produced
-            // credit, both ordered by one NBI access region (the credit is
-            // performed at the target only after the data).  The credit
-            // word is staged into a durable per-dst slot because the async
-            // put reads it after this call returns, and the region event is
-            // recorded so the caller cannot restage the TX slot (or issue the
-            // next region) until the put has locally completed.
-            void* const raddr = remote_ptr(dst_pe, rx_beg_ + rx_slot);
-            void* const rcredit = remote_ptr(dst_pe, &produced_beg_[w]);
-            // Release fence: the staging-page writes done by the caller on
-            // this thread must be globally visible before the GEX put engine
-            // reads that source buffer (weak-memory hosts).
-            std::atomic_thread_fence(std::memory_order_release);
-            send_credit_src_[dst_pe] = produced;
-#if defined(GASNET_CONDUIT_IBV)
-            {
-                void* const ra[1] = {raddr};
-                void const* const la[1] = {tx_beg_ + stage_slot};
-                std::size_t const nb[1] = {count};
-                send_events_[dst_pe] =
-                    hpx::util::gasnet_environment::put_batch_nb(
-                        static_cast<int>(dst_pe), 1, ra, la, nb);
-                credit_put_raddr_[dst_pe] = rcredit;
-                credit_pending_[dst_pe] = 1;
-            }
-#else
-            send_events_[dst_pe] =
-                hpx::util::gasnet_environment::put_data_and_credit_nb(
-                    static_cast<int>(dst_pe), raddr, tx_beg_ + stage_slot,
-                    count, rcredit, &send_credit_src_[dst_pe]);
-#endif
-            produced_locals_[dst_pe].store(
-                produced, std::memory_order_relaxed);    // update our mirror
-
-            return true;
         }
 
         // Non-blocking receive of one page (chunk) from src_pe.  Copies
@@ -1448,42 +1271,6 @@ namespace hpx::parcelset::policies::gasnet {
         //                    alive until the region event completes.
         //   send_stall_ / recv_stall_: cumulative back-pressure counters
         //                    feeding the stall tripwire warnings.
-        // ---- diagnostics (GASNET_PP_STATS=1): time per send state --------
-        // 0 idle/ready, 1 data in flight, 2 credit put in flight, 3 window full
-        void stat_to(std::size_t dst, int st, std::size_t bytes = 0) noexcept
-        {
-            if (!stats_on_)
-                return;
-            auto const now = std::chrono::steady_clock::now();
-            auto& e = stats_[dst];
-            if (e.t0.time_since_epoch().count() != 0)
-                e.ns[e.st] += std::chrono::duration_cast<std::chrono::nanoseconds>(now - e.t0).count();
-            e.t0 = now;
-            e.st = st;
-            e.bytes += bytes;
-            if (bytes) ++e.batches;
-        }
-        struct stat_entry
-        {
-            std::chrono::steady_clock::time_point t0{};
-            int st = 0;
-            long long ns[4] = {0, 0, 0, 0};
-            long long bytes = 0, batches = 0;
-        };
-        bool stats_on_ = std::getenv("GASNET_PP_STATS") != nullptr;
-        std::vector<stat_entry> stats_ = std::vector<stat_entry>(stats_on_ ? 4096 : 0);
-        void stat_dump() noexcept
-        {
-            if (!stats_on_) return;
-            for (std::size_t d = 0; d < num_pes_ && d < stats_.size(); ++d)
-            {
-                auto& e = stats_[d];
-                if (!e.bytes) continue;
-                std::fprintf(stderr, "STAT pe=%zu dst=%zu bytes=%lld batches=%lld idle=%.3f data=%.3f cred=%.3f full=%.3f s\n",
-                    my_pe_, d, e.bytes, e.batches, e.ns[0]*1e-9, e.ns[1]*1e-9, e.ns[2]*1e-9, e.ns[3]*1e-9);
-            }
-        }
-
         std::vector<gex_Event_t> send_events_;
         // ibv-conduit only: the credit word is published in a second step,
         // after the data event has completed (puts are not ordered)
