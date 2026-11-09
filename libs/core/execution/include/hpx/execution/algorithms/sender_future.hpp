@@ -20,7 +20,6 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/errors/try_catch_exception_ptr.hpp>
 #include <hpx/futures/future.hpp>
 #include <hpx/futures/promise.hpp>
 #include <hpx/modules/errors.hpp>
@@ -28,6 +27,7 @@
 
 #include <exception>
 #include <memory>
+#include <system_error>
 #include <type_traits>
 #include <utility>
 
@@ -97,14 +97,16 @@ namespace hpx::execution::experimental {
                 {
                     promise_.set_exception(HPX_FORWARD(E, err));
                 }
+                else if constexpr (std::is_same_v<std::decay_t<E>,
+                                       std::error_code>)
+                {
+                    promise_.set_exception(std::make_exception_ptr(
+                        std::system_error(HPX_FORWARD(E, err))));
+                }
                 else
                 {
-                    auto ep = hpx::detail::try_catch_exception_ptr(
-                        [&]() {
-                            return std::make_exception_ptr(HPX_FORWARD(E, err));
-                        },
-                        [](std::exception_ptr e) { return e; });
-                    promise_.set_exception(HPX_MOVE(ep));
+                    promise_.set_exception(
+                        std::make_exception_ptr(HPX_FORWARD(E, err)));
                 }
             }
 
