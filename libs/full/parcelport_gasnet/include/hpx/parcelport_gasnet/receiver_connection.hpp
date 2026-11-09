@@ -20,7 +20,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
-#include <cstdlib>
 #include <cstring>
 #include <exception>
 #include <memory>
@@ -631,22 +630,29 @@ namespace hpx::parcelset::policies::gasnet {
                 return;
             }
 
-            std::string reason = "unknown exception";
+            // building the message may allocate; this function is noexcept
             try
             {
-                throw;
-            }
-            catch (std::exception const& e)
-            {
-                reason = e.what();
+                std::string reason = "unknown exception";
+                try
+                {
+                    throw;
+                }
+                catch (std::exception const& e)
+                {
+                    reason = e.what();
+                }
+                catch (...)
+                {
+                }
+                LPT_(error) << "PE " << mailboxes_.my_pe() << ": failed while "
+                            << what << ": " << reason << " (src=" << src_
+                            << " size=" << total_size_ << " nzc=" << counts_[0]
+                            << " nnzc=" << counts_[1] << ")";
             }
             catch (...)
             {
             }
-            LPT_(error) << "PE " << mailboxes_.my_pe() << ": failed while "
-                        << what << ": " << reason << " (src=" << src_
-                        << " size=" << total_size_ << " nzc=" << counts_[0]
-                        << " nnzc=" << counts_[1] << ")";
             failed_ = true;
         }
 
