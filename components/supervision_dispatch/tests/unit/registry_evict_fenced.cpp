@@ -134,29 +134,30 @@ namespace {
         }
     };
 
-    // Holds the first mirroring a lifecycle observer starts in flight, until
-    // release() is called or this goes out of scope.
-    struct hold_first_mirror
+    // Holds the first call of the testing hook `install` sets, until release()
+    // is called or this goes out of scope.
+    struct hold_first_call
     {
-        hold_first_mirror()
+        using install_type = void (*)(hpx::function<void()>);
+
+        explicit hold_first_call(install_type const install_hook)
+          : install(install_hook)
         {
-            hpx::supervision::testing::set_lifecycle_mirror_hook_for_testing(
-                [this] {
-                    if (!held.exchange(true))
-                    {
-                        announced.set_value();
-                        released_f.wait();
-                    }
-                });
+            install([this] {
+                if (!held.exchange(true))
+                {
+                    announced.set_value();
+                    released_f.wait();
+                }
+            });
         }
 
-        hold_first_mirror(hold_first_mirror const&) = delete;
-        hold_first_mirror& operator=(hold_first_mirror const&) = delete;
+        hold_first_call(hold_first_call const&) = delete;
+        hold_first_call& operator=(hold_first_call const&) = delete;
 
-        ~hold_first_mirror()
+        ~hold_first_call()
         {
-            hpx::supervision::testing::set_lifecycle_mirror_hook_for_testing(
-                {});
+            install({});
             release();
         }
 
@@ -173,6 +174,7 @@ namespace {
             }
         }
 
+        install_type install;
         std::atomic<bool> held{false};
         std::atomic<bool> release_done{false};
         hpx::promise<void> announced;
@@ -180,6 +182,40 @@ namespace {
         hpx::promise<void> released;
         hpx::shared_future<void> released_f = released.get_future().share();
     };
+
+    // Holds the first mirroring a lifecycle observer starts in flight.
+    struct hold_first_mirror : hold_first_call
+    {
+        hold_first_mirror()
+          : hold_first_call(&hpx::supervision::testing::
+                    set_lifecycle_mirror_hook_for_testing)
+        {
+        }
+    };
+
+    // Holds back the first registry::evict_peer() call before it looks at the
+    // peer's entry.
+    struct hold_first_evict_peer : hold_first_call
+    {
+        hold_first_evict_peer()
+          : hold_first_call(
+                &hpx::supervision::testing::set_evict_peer_hook_for_testing)
+        {
+        }
+    };
+
+    // Waits up to 5 seconds for pred() to become true.
+    template <typename Pred>
+    bool wait_for(Pred&& pred)
+    {
+        auto const deadline =
+            std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (!pred() && std::chrono::steady_clock::now() < deadline)
+        {
+            hpx::this_thread::yield();
+        }
+        return pred();
+    }
 }    // namespace
 
 // The peer comes back with a newer epoch after evict_fenced() found it fenced
@@ -389,6 +425,61 @@ void test_mirror_in_flight_after_terminal_check_backs_off()
     wait_until_evicted(r);
 }
 
+// A terminal notification's eviction runs while a notification for a newer
+// epoch is still being mirrored, before that mirroring moved the entry's
+// join_epoch forward. The eviction waits for the mirroring to finish and then
+// leaves the entry alone: it keeps its generation, moves on to the newer
+// epoch, and its lifecycle observer stays registered.
+void test_terminal_eviction_waits_for_newer_mirror()
+{
+    hpx::id_type const here = hpx::find_here();
+    hpx::supervision::registry const r(here);
+
+    joined const peer = join(r, here);
+    std::uint64_t const generation = peer.generation;
+    std::uint64_t const epoch = peer.epoch;
+
+    // The terminal notification schedules evict_peer(), hold it back.
+    hold_first_evict_peer hold_evict;
+    publish(here, hpx::supervision::event::failed, epoch);
+    hold_evict.wait_until_held();
+
+    hold_first_mirror hold_mirror;
+    hpx::future<void> published = hpx::async(
+        [&] { publish(here, hpx::supervision::event::started, epoch + 1); });
+    hold_mirror.wait_until_held();
+
+    std::size_t const waiting = hpx::supervision::testing::
+        evict_peers_waiting_for_mirrors_for_testing();
+    hold_evict.release();
+    HPX_TEST(wait_for([&] {
+        return hpx::supervision::testing::
+                   evict_peers_waiting_for_mirrors_for_testing() > waiting;
+    }));
+
+    hold_mirror.release();
+    published.get();
+    HPX_TEST(wait_for([&] {
+        return hpx::supervision::testing::
+                   evict_peers_waiting_for_mirrors_for_testing() == waiting;
+    }));
+
+    // snapshot_peers() takes the registry's lock, so it sees what the woken
+    // eviction decided.
+    auto const peers = snapshot(r);
+    HPX_TEST_EQ(peers.size(), static_cast<std::size_t>(1));
+    if (!peers.empty())
+    {
+        HPX_TEST_EQ(peers.front().generation, generation);
+        HPX_TEST_EQ(peers.front().join_epoch, epoch + 1);
+    }
+
+    // The lifecycle observer is still registered.
+    publish(here, hpx::supervision::event::running, epoch + 1);
+    publish(here, hpx::supervision::event::completed, epoch + 1);
+    wait_until_evicted(r);
+}
+
 int main()
 {
     test_newer_lifecycle_between_check_and_removal_wins();
@@ -396,6 +487,7 @@ int main()
     test_peer_that_stays_fenced_is_evicted_by_next_call();
     test_mirror_in_flight_when_eviction_starts_backs_off();
     test_mirror_in_flight_after_terminal_check_backs_off();
+    test_terminal_eviction_waits_for_newer_mirror();
 
     return hpx::util::report_errors();
 }

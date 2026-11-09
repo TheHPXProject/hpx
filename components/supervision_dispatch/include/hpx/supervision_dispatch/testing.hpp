@@ -13,6 +13,8 @@
 /// \page hpx::supervision::testing::stop_background_loops
 /// \page hpx::supervision::testing::set_evict_fenced_hook_for_testing
 /// \page hpx::supervision::testing::set_lifecycle_mirror_hook_for_testing
+/// \page hpx::supervision::testing::set_evict_peer_hook_for_testing
+/// \page hpx::supervision::testing::evict_peers_waiting_for_mirrors_for_testing
 /// \headerfile hpx/supervision_dispatch.hpp
 
 #pragma once
@@ -25,6 +27,7 @@
 #include <hpx/supervision_dispatch/export_definitions.hpp>
 
 #include <chrono>
+#include <cstddef>
 #include <vector>
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -121,4 +124,21 @@ namespace hpx::supervision::testing {
     /// \param hook  The function to call, with no lock held.
     HPX_SUPERVISION_DISPATCH_EXPORT void set_lifecycle_mirror_hook_for_testing(
         hpx::function<void()> hook);
+
+    /// Installs \p hook to be called by registry::evict_peer() on this
+    /// locality before it looks at the peer's registry entry, e.g. for the
+    /// eviction a terminal lifecycle notification schedules. Pass an empty
+    /// function to remove the hook. Not part of the public dispatch API -
+    /// exists only so tests can hold such an eviction back deterministically.
+    ///
+    /// \param hook  The function to call, with no lock held.
+    HPX_SUPERVISION_DISPATCH_EXPORT void set_evict_peer_hook_for_testing(
+        hpx::function<void()> hook);
+
+    /// Returns the number of registry::evict_peer() calls on this locality
+    /// currently waiting for the lifecycle notifications being mirrored for
+    /// the peer's entry to finish. Not part of the public dispatch API -
+    /// exists only so tests can tell that an eviction has reached that wait.
+    HPX_SUPERVISION_DISPATCH_EXPORT std::size_t
+    evict_peers_waiting_for_mirrors_for_testing();
 }    // namespace hpx::supervision::testing
