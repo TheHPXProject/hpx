@@ -225,9 +225,9 @@ annotated_unknown_and_small()
     return 42;
 }
 
-// An explicit specialization without an annotation of its own isn't checked, as
-// compilers differ: Clang finds the annotation of the primary template and
-// GCC 16 doesn't. One with its own annotation is checked.
+// An unannotated explicit specialization isn't checked, as compilers differ:
+// Clang gives it the annotation of the template and GCC 16 doesn't. One with
+// the same annotation as the template works on both, so it is checked.
 template <typename T>
 [[= hpx::task_size::medium]] int annotated_template()
 {
@@ -235,7 +235,7 @@ template <typename T>
 }
 
 template <>
-[[= hpx::task_size::small_]] int annotated_template<double>()
+[[= hpx::task_size::medium]] int annotated_template<double>()
 {
     return 42;
 }
@@ -400,7 +400,7 @@ void test_annotated_actions()
             &annotated_template<int>>> == task_size::medium);
     static_assert(
         action_task_size_v<make_action_t<decltype(&annotated_template<double>),
-            &annotated_template<double>>> == task_size::small_);
+            &annotated_template<double>>> == task_size::medium);
 
     // an action bound to a member function pointer doesn't read annotations
     static_assert(
