@@ -265,7 +265,9 @@ Registry client
         terminal. Fire-and-forget. If a lifecycle event of the peer is being
         mirrored, or was mirrored, while the call checks the terminal state,
         it does not remove anything; the failure-detection loop calls it again
-        on its next sweep.
+        on its next sweep. For a peer that is the registry's own locality, a
+        new epoch the peer starts before its observer runs is not noticed, see
+        the manual.
 
     .. cpp:function:: hpx::future<bool> register_name()
     .. cpp:function:: bool register_name(hpx::launch::sync_policy, hpx::error_code& ec = hpx::throws)
