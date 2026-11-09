@@ -165,7 +165,7 @@ void mismatch_subrange_tests(std::size_t first_partitions,
     auto first2 = std::next(v2.begin(), second_offset);
     using namespace hpx::execution;
 
-    auto check = [&](auto expected1, auto expected2, auto... pred) {
+    auto check_mismatch = [&](auto expected1, auto expected2, auto... pred) {
         auto check_result = [&](auto const& result) {
             HPX_TEST(result.first == expected1);
             HPX_TEST(result.second == expected2);
@@ -178,19 +178,19 @@ void mismatch_subrange_tests(std::size_t first_partitions,
             hpx::mismatch(par(task), first1, last1, first2, pred...).get());
     };
 
-    check(last1, std::next(first2, 6));
+    check_mismatch(last1, std::next(first2, 6));
     *std::next(first2, 6) = T(9999);
-    check(last1, std::next(first2, 6));
+    check_mismatch(last1, std::next(first2, 6));
 
     *std::next(first2, 5) = T(9999);
-    check(std::next(first1, 5), std::next(first2, 5));
+    check_mismatch(std::next(first1, 5), std::next(first2, 5));
     *std::next(first2, 3) = T(9999);
-    check(std::next(first1, 3), std::next(first2, 3));
+    check_mismatch(std::next(first1, 3), std::next(first2, 3));
     *first2 = T(9999);
-    check(first1, first2);
+    check_mismatch(first1, first2);
 
     iota_vector(v2, T(first_offset) - T(second_offset) + T(100));
-    check(last1, std::next(first2, 6),
+    check_mismatch(last1, std::next(first2, 6),
         [](T left, T right) { return left + T(100) == right; });
 }
 
