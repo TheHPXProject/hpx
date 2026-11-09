@@ -191,9 +191,11 @@ namespace hpx::supervision::server {
                 // may have been removed while this callback was mirroring (by
                 // leave(), by evict_peer() for an earlier terminal
                 // notification, or by a failed join()), in which case there is
-                // nothing left to record.
+                // nothing left to record. An evict_peer() waiting for the
+                // mirrorings in flight to finish is woken once the last one
+                // does.
                 auto const record_mirrored = [&]() noexcept {
-                    std::scoped_lock<hpx::spinlock> l(mtx_);
+                    std::unique_lock l(mtx_);
                     if (auto const it = peers_.find(peer_locality);
                         it != peers_.end() &&
                         it->second.generation == generation)
@@ -206,6 +208,11 @@ namespace hpx::supervision::server {
                         if (notification.epoch > entry.join_epoch)
                         {
                             entry.join_epoch = notification.epoch;
+                        }
+
+                        if (entry.mirrors_in_flight == 0)
+                        {
+                            cond_.notify_all(HPX_MOVE(l));
                         }
                     }
                 };
@@ -296,8 +303,8 @@ namespace hpx::supervision::server {
                     // concurrently may already have moved the entry on to a new
                     // epoch, and evict_peer() must then leave it alone.
                     hpx::post(&registry::evict_peer, this, peer_locality,
-                        (std::max) (join_epoch, notification.epoch), keep_alive,
-                        true);
+                        (std::max) (join_epoch, notification.epoch), generation,
+                        keep_alive, true);
                 }
                 return true;
             };
@@ -543,7 +550,17 @@ namespace hpx::supervision::server {
 
             entry.lifecycle_observer = lifecycle_observer;
             entry.activity_observer = activity_observer;
-            entry.join_epoch = reported_join_epoch;
+
+            // The lifecycle observer may already have moved join_epoch forward
+            // to a newer epoch it mirrored while the observers were being
+            // registered (see register_observers()). Keep that, otherwise a
+            // late terminal notification for the older epoch could still evict
+            // the peer.
+            if (entry.join_epoch < reported_join_epoch)
+            {
+                entry.join_epoch = reported_join_epoch;
+            }
+            reported_join_epoch = entry.join_epoch;
             entry.ready = true;
 
             if (entry.evict_pending)
@@ -592,7 +609,8 @@ namespace hpx::supervision::server {
         // forget peer_locality's local supervision state immediately rather
         // than leave a tombstone behind (contrast with the terminal-
         // notification call site in register_observers(), which passes true).
-        evict_peer(peer_locality, join_epoch, hpx::invalid_id, false);
+        evict_peer(
+            peer_locality, join_epoch, any_generation, hpx::invalid_id, false);
     }
 
     void registry::evict_fenced(
@@ -674,7 +692,7 @@ namespace hpx::supervision::server {
     }
 
     void registry::evict_peer(hpx::id_type const& peer_locality,
-        std::uint64_t const join_epoch,
+        std::uint64_t const join_epoch, std::uint64_t const generation,
         [[maybe_unused]] hpx::id_type keep_alive,
         bool const preserve_terminal_state)
     {
@@ -684,25 +702,42 @@ namespace hpx::supervision::server {
         {
             std::unique_lock l(mtx_);
 
-            auto const it = peers_.find(peer_locality);
-
-            // The entry may already be gone (a racing eviction for the same
-            // peer, e.g. a duplicate terminal notification) or may now refer to
-            // a different, freshly re-joined peer (if the peer was re-joined
-            // after the terminal notification fired but before this deferred
-            // task ran); only evict it if it is still the very entry this
-            // notification was published for.
-            if (it == peers_.end() || it->second.join_epoch != join_epoch)
+            auto it = peers_.end();
+            for (;;)
             {
-                return;
-            }
+                it = peers_.find(peer_locality);
 
-            if (!it->second.ready)
-            {
-                it->second.evict_pending = true;
-                it->second.evict_preserve_terminal_state =
-                    preserve_terminal_state;
-                return;
+                // The entry may already be gone (a racing eviction for the same
+                // peer, e.g. a duplicate terminal notification) or may now
+                // refer to a different, freshly re-joined peer (if the peer was
+                // re-joined after the terminal notification fired but before
+                // this deferred task ran, possibly at the same join_epoch);
+                // only evict it if it is still the very entry this notification
+                // was published for.
+                if (it == peers_.end() || it->second.join_epoch != join_epoch ||
+                    (generation != any_generation &&
+                        it->second.generation != generation))
+                {
+                    return;
+                }
+
+                if (!it->second.ready)
+                {
+                    it->second.evict_pending = true;
+                    it->second.evict_preserve_terminal_state =
+                        preserve_terminal_state;
+                    return;
+                }
+
+                // A notification still being mirrored may already have made
+                // the peer active again at a newer epoch without having moved
+                // join_epoch forward yet (see register_observers()). Wait for
+                // the mirrorings in flight to finish, then check again.
+                if (it->second.mirrors_in_flight == 0)
+                {
+                    break;
+                }
+                cond_.wait(l);
             }
 
             lifecycle_observer = it->second.lifecycle_observer;

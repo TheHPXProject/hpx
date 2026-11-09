@@ -222,16 +222,25 @@ namespace hpx::supervision::server {
         // inline in that callback (see the comment on register_observers() for
         // why the callback itself must not take mtx_).
         //
-        // `join_epoch` identifies which entry to evict: if peer_locality has
-        // since been re-joined (fresh join_epoch) or already evicted by a
-        // racing terminal notification, this is a no-op.
+        // `join_epoch` and `generation` identify which entry to evict: if
+        // peer_locality has since been re-joined (new generation, possibly at
+        // the same join_epoch), moved on to a newer epoch, or already been
+        // evicted by a racing terminal notification, this is a no-op.
+        // `generation` is any_generation for a caller that only knows the
+        // join_epoch (leave()). Waits for the lifecycle notifications being
+        // mirrored for the entry to finish before evicting it, since one of
+        // them may move it on to a newer epoch.
         //
         // `preserve_terminal_state` is true for terminal-notification-driven
         // evictions (leaving the peer's last published event in place as a
         // tombstone, see cleanup_peer()) and false for an explicit leave().
         void evict_peer(hpx::id_type const& peer_locality,
-            std::uint64_t join_epoch, hpx::id_type keep_alive,
-            bool preserve_terminal_state);
+            std::uint64_t join_epoch, std::uint64_t generation,
+            hpx::id_type keep_alive, bool preserve_terminal_state);
+
+        // Passed to evict_peer() as `generation` to match an entry of any
+        // generation. Never a peer_entry::generation, which starts at 1.
+        static constexpr std::uint64_t any_generation = 0;
 
         /// Unregisters a peer's observers and, unless
         ///  \p preserve_terminal_state is set, removes its locally tracked
@@ -320,7 +329,8 @@ namespace hpx::supervision::server {
             /// by register_observers() is mirroring onto peer_locality's
             /// local supervision state right now. Incremented before the
             /// callback touches that state and decremented once it is done,
-            /// both under mtx_.
+            /// both under mtx_; cond_ is notified when it drops to zero, for
+            /// evict_peer().
             std::size_t mirrors_in_flight = 0;
 
             /// The number of lifecycle notifications mirrored for this entry
