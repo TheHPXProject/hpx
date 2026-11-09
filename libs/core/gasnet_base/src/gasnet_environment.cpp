@@ -10,9 +10,9 @@
 #include <hpx/modules/gasnet_base.hpp>
 #include <hpx/modules/logging.hpp>
 #include <hpx/modules/runtime_configuration.hpp>
-#include <hpx/modules/string_util.hpp>
 #include <hpx/modules/util.hpp>
 
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
@@ -38,6 +38,41 @@ namespace hpx::util {
 #else
         return false;
 #endif
+    }
+
+    std::size_t gasnet_environment::slots(runtime_configuration const& cfg)
+    {
+        std::size_t const configured = get_entry_as<std::size_t>(
+            cfg, "hpx.parcel.gasnet.slots", default_slots_per_dst);
+        return configured == 0 ? 1 : configured;
+    }
+
+    // Page size: hpx.parcel.gasnet.mtu if given, otherwise the largest power
+    // of two (64 KiB to 1 MiB) that keeps the tx and rx rings of all peers
+    // within a 256 MiB budget.  Must be identical on every PE.
+    std::size_t gasnet_environment::mtu(runtime_configuration const& cfg,
+        std::size_t num_pes, std::size_t slots)
+    {
+        std::size_t const configured =
+            get_entry_as<std::size_t>(cfg, "hpx.parcel.gasnet.mtu", 0);
+        if (configured != 0)
+        {
+            return configured;
+        }
+
+        constexpr std::size_t budget = std::size_t(256) << 20;
+        constexpr std::size_t max_mtu = std::size_t(1) << 20;
+        constexpr std::size_t min_mtu = std::size_t(64) << 10;
+
+        std::size_t const denom =
+            (std::max) (std::size_t(1), num_pes * slots * 2);
+        std::size_t const m = (std::min) (max_mtu, budget / denom);
+        std::size_t p = min_mtu;
+        while (p * 2 <= m)
+        {
+            p *= 2;
+        }
+        return p;
     }
 
     gasnet_environment::mutex_type gasnet_environment::mtx_{};
@@ -116,8 +151,10 @@ namespace hpx::util {
 
         // Size of the single registered segment this locality attaches.  The
         // parcelport mailbox carves its tx/rx pools and credit matrices out
-        // of the first bytes of this segment, so attaching at the largest
-        // size the runtime permits guarantees the carve always fits.
+        // of the first bytes of this segment.  Attaching the largest segment
+        // the runtime permits would pin almost all physical memory of a big
+        // node, so attach only what the mailbox needs (it reports a clear
+        // error if that exceeds what the runtime permits).
         max_local_segment_size_ =
             static_cast<std::size_t>(gasnet_getMaxLocalSegmentSize());
         if (max_local_segment_size_ == 0)
@@ -131,11 +168,16 @@ namespace hpx::util {
                 "parcelport requires a registered segment for RMA");
         }
 
+        std::size_t const num_pes = static_cast<std::size_t>(size());
+        std::size_t const slots_per_dst = slots(cfg);
+        std::size_t const attach_size = (std::min) (max_local_segment_size_,
+            symmetric_bytes(
+                num_pes, slots_per_dst, mtu(cfg, num_pes, slots_per_dst)));
+
         // Collective attach of our (zero-initialized by the runtime, but we
         // still zero the mailbox carve later) segment, bound to the
         // primordial endpoint.  Implicit barrier on return.
-        if (gex_Segment_Attach(&segment_, tm_, max_local_segment_size_) !=
-            GASNET_OK)
+        if (gex_Segment_Attach(&segment_, tm_, attach_size) != GASNET_OK)
         {
             cfg.add_entry("hpx.parcel.gasnet.enable", "0");
             enabled_ = false;
@@ -148,7 +190,7 @@ namespace hpx::util {
         segment_size_ =
             static_cast<std::size_t>(gex_Segment_QuerySize(segment_));
         HPX_ASSERT(segment_addr_ != nullptr);
-        HPX_ASSERT(segment_size_ == max_local_segment_size_);
+        HPX_ASSERT(segment_size_ >= attach_size);
 
         // Discover the base address of every peer's segment in that peer's
         // own address space.  After the collective attach every primordial

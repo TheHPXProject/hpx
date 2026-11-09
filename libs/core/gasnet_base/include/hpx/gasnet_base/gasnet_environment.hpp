@@ -40,6 +40,26 @@ namespace hpx::util {
         static void init(int* argc, char*** argv, runtime_configuration& cfg);
         static void finalize() noexcept;
 
+        // Number of in-flight pages per (sender, receiver) pair, and the
+        // geometry of the mailbox the parcelport carves out of the segment.
+        // The segment attached in init() is sized from these, so that the
+        // parcelport does not pin more memory than its mailbox needs.
+        static constexpr std::size_t default_slots_per_dst = 8;
+
+        static std::size_t slots(runtime_configuration const& cfg);
+        static std::size_t mtu(runtime_configuration const& cfg,
+            std::size_t num_pes, std::size_t slots);
+
+        // Bytes of the mailbox: tx and rx page rings, the produced and
+        // consumed credit matrices, and one scratch word per PE.
+        static constexpr std::size_t symmetric_bytes(
+            std::size_t npes, std::size_t slots, std::size_t mtu) noexcept
+        {
+            return 2 * npes * slots * mtu +
+                2 * npes * npes * sizeof(std::uint32_t) +
+                npes * sizeof(std::uint32_t);
+        }
+
         static bool enabled() noexcept;
         static bool has_called_init() noexcept;
 
@@ -63,7 +83,8 @@ namespace hpx::util {
         static void* segment_addr() noexcept;
         static std::size_t segment_size() noexcept;
 
-        // Largest size (bytes) gex_Segment_Attach() accepts on this runtime.
+        // Largest size (bytes) gex_Segment_Attach() accepts on this runtime
+        // (the attached segment is smaller, see init()).
         static std::size_t max_local_segment_size() noexcept;
 
         // Base address of the segment attached by 'rank' in that rank's own
