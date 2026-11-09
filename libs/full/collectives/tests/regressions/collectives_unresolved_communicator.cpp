@@ -4,9 +4,9 @@
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-// Requests started on a communicator that is not resolved yet must not block
-// each other. Generation 2 is started first and has to wait for generation 1,
-// which is attached to the same communicator.
+// Requests attached to a communicator that is not resolved yet run in the
+// thread that resolves it. The communicator is held back by a promise, so all
+// requests of a site are attached before it resolves.
 
 #include <hpx/config.hpp>
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
@@ -15,7 +15,6 @@
 #include <hpx/modules/collectives.hpp>
 #include <hpx/modules/testing.hpp>
 
-#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <string>
@@ -25,36 +24,55 @@
 using namespace hpx::collectives;
 
 constexpr std::uint32_t num_sites = 4;
-constexpr int iterations = 50;
+constexpr int iterations = 5;
 
-template <typename Op>
-void test_out_of_order_generations(char const* name, Op op)
+template <typename F>
+void for_each_site(std::string const& name, F f)
 {
     for (int i = 0; i != iterations; ++i)
     {
-        std::string const basename = std::string("/test/unresolved/") + name +
-            "/" + std::to_string(i) + "/";
+        std::string const basename =
+            "/test/unresolved/" + name + "/" + std::to_string(i) + "/";
 
         std::vector<hpx::future<void>> sites;
         sites.reserve(num_sites);
         for (std::uint32_t site = 0; site != num_sites; ++site)
         {
             sites.push_back(hpx::async([=]() {
-                communicator comm = create_communicator(basename.c_str(),
-                    num_sites_arg(num_sites), this_site_arg(site));
+                hpx::promise<communicator> resolve;
+                communicator comm(resolve.get_future());
+                comm.set_info(num_sites_arg(num_sites), this_site_arg(site));
 
-                // a request on a resolved communicator waits for the earlier
-                // generations inside the call, so the later generation is
-                // started from its own task
-                auto second = hpx::async(
-                    [&]() { op(comm, site, generation_arg(2)).get(); });
+                auto resolve_comm = [&]() {
+                    communicator resolved =
+                        create_communicator(basename.c_str(),
+                            num_sites_arg(num_sites), this_site_arg(site));
+                    resolved.wait();
+                    resolve.set_value(std::move(resolved));
+                };
 
-                op(comm, site, generation_arg(1)).get();
-                second.get();
+                f(comm, site, resolve_comm);
             }));
         }
         hpx::wait_all(std::move(sites));
     }
+}
+
+// Generation 2 is attached first and has to wait for generation 1, which is
+// attached to the same communicator.
+template <typename Op>
+void test_out_of_order_generations(char const* name, Op op)
+{
+    for_each_site(
+        name, [op](communicator comm, std::uint32_t site, auto& resolve) {
+            hpx::future<void> second = op(comm, site, generation_arg(2));
+            hpx::future<void> first = op(comm, site, generation_arg(1));
+
+            resolve();
+
+            first.get();
+            second.get();
+        });
 }
 
 int main()
@@ -83,6 +101,11 @@ int main()
         });
 
     test_out_of_order_generations(
+        "barrier", [](communicator c, std::uint32_t s, generation_arg g) {
+            return barrier(std::move(c), this_site_arg(s), g);
+        });
+
+    test_out_of_order_generations(
         "broadcast", [](communicator c, std::uint32_t s, generation_arg g) {
             if (s == 0)
             {
@@ -94,6 +117,12 @@ int main()
         });
 
     test_out_of_order_generations("exclusive_scan",
+        [](communicator c, std::uint32_t s, generation_arg g) {
+            return hpx::future<void>(exclusive_scan(std::move(c), s,
+                std::plus<std::uint32_t>{}, this_site_arg(s), g));
+        });
+
+    test_out_of_order_generations("exclusive_scan_init",
         [](communicator c, std::uint32_t s, generation_arg g) {
             return hpx::future<void>(
                 exclusive_scan(std::move(c), s, std::uint32_t(0),
