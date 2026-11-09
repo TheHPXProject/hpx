@@ -5,9 +5,13 @@
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 set(thread_support_headers
-    hpx/thread_support/atomic_count.hpp hpx/thread_support/set_thread_name.hpp
-    hpx/thread_support/spinlock.hpp hpx/thread_support/thread_specific_ptr.hpp
-    hpx/thread_support/unlock_guard.hpp hpx/thread_support/win_nanosleep.hpp
+    hpx/thread_support/atomic_count.hpp
+    hpx/thread_support/set_thread_name.hpp
+    hpx/thread_support/spinlock.hpp
+    hpx/thread_support/task_size.hpp
+    hpx/thread_support/thread_specific_ptr.hpp
+    hpx/thread_support/unlock_guard.hpp
+    hpx/thread_support/win_nanosleep.hpp
 )
 
 # cmake-format: off
