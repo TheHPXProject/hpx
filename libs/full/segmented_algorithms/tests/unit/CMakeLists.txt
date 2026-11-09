@@ -59,6 +59,7 @@ set(tests
     partitioned_vector_reduce
     partitioned_vector_replace
     partitioned_vector_replace_copy
+    partitioned_vector_sort
 )
 
 set(partitioned_vector_inclusive_scan_PARAMETERS RUN_SERIAL)
@@ -95,7 +96,10 @@ foreach(test ${tests})
   set(sources ${test}.cpp)
 
   set(${test}_FLAGS DEPENDENCIES partitioned_vector_component)
-  if(test MATCHES "^partitioned_vector_merge(_extended|_regressions)?$")
+  if(test STREQUAL "partitioned_vector_sort"
+     OR test MATCHES "^partitioned_vector_merge(_extended|_regressions)?$"
+  )
+    # Four localities exercise concurrent merges and remote transfers.
     set(test_localities 4)
   else()
     set(test_localities 2)
@@ -123,3 +127,10 @@ foreach(test ${tests})
   )
 
 endforeach()
+
+if(HPX_WITH_CXX_MODULES)
+  # This test inspects implementation helpers that are not exported by HPX.Full.
+  target_compile_definitions(
+    partitioned_vector_sort_test PRIVATE HPX_HAVE_FORCE_NO_CXX_MODULES
+  )
+endif()

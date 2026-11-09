@@ -494,22 +494,28 @@ The ``hpx.thread_queue`` configuration section
        them. The default is to allow stealing always. A worker thread always
        converts its own staged tasks.
    * * ``hpx.thread_queue.idle_loop_count_steal_staged``
-     * The value of this property defines the number of consecutive empty
-       scheduling loop iterations after which a worker thread starts stealing
-       staged |hpx| tasks from other worker threads (local priority queue
-       scheduler only; values above ``hpx.max_idle_loop_count / 2`` are limited
-       to it. The local and shared priority schedulers steal staged tasks right
-       away, the work-requesting schedulers do not steal staged tasks). It has
-       no effect if fast idle mode is on, which steals staged tasks right away.
-       See :ref:`thread_scheduler_staged_steal`.
+     * The value of this property defines the idle-loop counter value after
+       which a worker thread starts stealing staged |hpx| tasks from other
+       worker threads (local priority queue and work-requesting schedulers
+       only; values above ``hpx.max_idle_loop_count / 2`` are limited to it).
+       The counter normally advances once per empty scheduling loop iteration.
+       In fast idle mode it advances by ``hpx.max_idle_loop_count / 1024`` per
+       empty iteration, so a small threshold may be passed in one iteration.
+       The local and shared priority schedulers steal staged tasks right away.
+       The local priority queue scheduler bypasses this threshold in fast idle
+       mode because it steals directly while scanning victim queues. A
+       work-requesting scheduler instead carries the threshold result in its
+       request, so fast idle mode accelerates the counter without bypassing the
+       check. See :ref:`thread_scheduler_staged_steal`.
    * * ``hpx.thread_queue.min_tasks_to_steal_staged_early``
      * The value of this property defines the number of staged |hpx| tasks that
        need to be available before other worker threads are allowed to steal
-       them (local priority queue scheduler only, not in fast idle mode).
-       Leaving a few staged tasks to the worker thread they were placed on
-       keeps them close to the data in that core's caches. The minimum is
-       ignored for a worker that doesn't get to its few staged tasks. See
-       :ref:`thread_scheduler_staged_steal`.
+       them (local priority queue and work-requesting schedulers only). Fast
+       idle mode disables this minimum for the local priority queue scheduler,
+       but not for work-requesting schedulers. Leaving a few staged tasks to
+       the worker thread they were placed on keeps them close to the data in
+       that core's caches. The minimum is ignored for a worker that doesn't get
+       to its few staged tasks. See :ref:`thread_scheduler_staged_steal`.
    * * ``hpx.thread_queue.min_add_new_count``
      * The value of this property defines the minimal number of staged tasks
        converted into |hpx| threads at a time, see
@@ -1791,7 +1797,8 @@ The predefined command line options for any application using
 
    Controls NUMA-sensitive work stealing. The default and the value used when
    the option is given without an argument are both ``1``. For the local,
-   local-priority, and ABP-priority schedulers the allowed values are:
+   local-priority, ABP-priority, and local-workrequesting schedulers the allowed
+   values are:
 
    * ``0``: all workers may steal across NUMA domains;
    * ``1``: only boundary workers may steal from the nearest NUMA domains;
@@ -1799,8 +1806,7 @@ The predefined command line options for any application using
 
    The static, static-priority, and shared-priority schedulers do not distinguish
    boundary workers. They allow cross-domain stealing for levels ``0`` and ``1``
-   and disable it for level ``2``. Work-requesting schedulers currently ignore
-   this option.
+   and disable it for level ``2``.
 
 
 |hpx| configuration options

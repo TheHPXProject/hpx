@@ -19,21 +19,40 @@ file(READ "${HPX_STDEXEC_SPIN_LOOP_PAUSE_FILE}"
      _stdexec_spin_loop_pause_contents
 )
 
-set(_stdexec_spin_loop_pause_original "${_stdexec_spin_loop_pause_contents}")
-
-string(
-  REPLACE "STDEXEC_ATTRIBUTE(always_inline) inline"
-          "STDEXEC_ATTRIBUTE(always_inline)" _stdexec_spin_loop_pause_contents
-          "${_stdexec_spin_loop_pause_contents}"
+set(_stdexec_spin_loop_pause_legacy "STDEXEC_ATTRIBUTE(always_inline) inline")
+string(FIND "${_stdexec_spin_loop_pause_contents}"
+            "${_stdexec_spin_loop_pause_legacy}"
+            _stdexec_spin_loop_pause_legacy_pos
 )
 
-if(_stdexec_spin_loop_pause_contents STREQUAL _stdexec_spin_loop_pause_original)
-  message(
-    WARNING
-      "Failed to patch ${HPX_STDEXEC_SPIN_LOOP_PAUSE_FILE}: expected pattern not found"
+if(NOT _stdexec_spin_loop_pause_legacy_pos EQUAL -1)
+  string(
+    REPLACE "${_stdexec_spin_loop_pause_legacy}"
+            "STDEXEC_ATTRIBUTE(always_inline)"
+            _stdexec_spin_loop_pause_contents
+            "${_stdexec_spin_loop_pause_contents}"
   )
+  file(WRITE "${HPX_STDEXEC_SPIN_LOOP_PAUSE_FILE}"
+       "${_stdexec_spin_loop_pause_contents}"
+  )
+  return()
 endif()
 
-file(WRITE "${HPX_STDEXEC_SPIN_LOOP_PAUSE_FILE}"
-     "${_stdexec_spin_loop_pause_contents}"
+# Current stdexec versions already use the corrected declaration. Verify both
+# parts explicitly so an upstream rewrite does not silently skip the workaround.
+string(FIND "${_stdexec_spin_loop_pause_contents}"
+            "STDEXEC_ATTRIBUTE(always_inline)"
+            _stdexec_spin_loop_pause_attribute_pos
 )
+string(FIND "${_stdexec_spin_loop_pause_contents}"
+            "void __spin_loop_pause() noexcept"
+            _stdexec_spin_loop_pause_function_pos
+)
+if(_stdexec_spin_loop_pause_attribute_pos EQUAL -1
+   OR _stdexec_spin_loop_pause_function_pos EQUAL -1
+)
+  message(
+    WARNING "Failed to find either the legacy or corrected __spin_loop_pause "
+            "declaration in ${HPX_STDEXEC_SPIN_LOOP_PAUSE_FILE}"
+  )
+endif()

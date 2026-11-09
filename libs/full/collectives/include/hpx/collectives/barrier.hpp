@@ -195,6 +195,15 @@ namespace hpx::collectives {
             return result;
         };
 
+        if (!fid.is_ready())
+        {
+            // The continuation of an unresolved client runs in the thread
+            // that resolves it, which can be another site inside AGAS'
+            // symbol namespace bind. The request may suspend that thread
+            // before the site issued its own part of the barrier, so run it
+            // on a new thread instead.
+            return fid.then(hpx::launch::async, HPX_MOVE(barrier_data));
+        }
         return fid.then(hpx::launch::sync, HPX_MOVE(barrier_data));
     }
 
