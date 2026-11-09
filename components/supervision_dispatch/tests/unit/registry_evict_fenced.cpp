@@ -15,6 +15,11 @@
 // failure-detection fence is simulated by publish_event_no_notify(), which
 // latches the terminal state without notifying that observer, the same way a
 // fence by failure detection never reaches the peer's own observers.
+//
+// testing::set_lifecycle_mirror_hook_for_testing() holds the observer while
+// it mirrors a notification, which evict_fenced() has to treat as in flight.
+// A local publish_event() waits for the observers it notifies, so a
+// notification whose mirroring is held is published from a separate task.
 
 #include <hpx/config.hpp>
 
@@ -22,7 +27,9 @@
 
 #include <hpx/hpx_main.hpp>
 #include <hpx/modules/async_distributed.hpp>
+#include <hpx/modules/async_local.hpp>
 #include <hpx/modules/errors.hpp>
+#include <hpx/modules/futures.hpp>
 #include <hpx/modules/runtime_distributed.hpp>
 #include <hpx/modules/supervision.hpp>
 #include <hpx/modules/testing.hpp>
@@ -30,6 +37,7 @@
 
 #include <hpx/supervision_dispatch.hpp>
 
+#include <atomic>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -124,6 +132,53 @@ namespace {
         {
             hpx::supervision::testing::set_evict_fenced_hook_for_testing({});
         }
+    };
+
+    // Holds the first mirroring a lifecycle observer starts in flight, until
+    // release() is called or this goes out of scope.
+    struct hold_first_mirror
+    {
+        hold_first_mirror()
+        {
+            hpx::supervision::testing::set_lifecycle_mirror_hook_for_testing(
+                [this] {
+                    if (!held.exchange(true))
+                    {
+                        announced.set_value();
+                        released_f.wait();
+                    }
+                });
+        }
+
+        hold_first_mirror(hold_first_mirror const&) = delete;
+        hold_first_mirror& operator=(hold_first_mirror const&) = delete;
+
+        ~hold_first_mirror()
+        {
+            hpx::supervision::testing::set_lifecycle_mirror_hook_for_testing(
+                {});
+            release();
+        }
+
+        void wait_until_held()
+        {
+            announced_f.get();
+        }
+
+        void release()
+        {
+            if (!release_done.exchange(true))
+            {
+                released.set_value();
+            }
+        }
+
+        std::atomic<bool> held{false};
+        std::atomic<bool> release_done{false};
+        hpx::promise<void> announced;
+        hpx::future<void> announced_f = announced.get_future();
+        hpx::promise<void> released;
+        hpx::shared_future<void> released_f = released.get_future().share();
     };
 }    // namespace
 
@@ -243,11 +298,104 @@ void test_peer_that_stays_fenced_is_evicted_by_next_call()
     HPX_TEST_EQ(state.epoch, epoch + 1);
 }
 
+// A notification is being mirrored when evict_fenced() starts. The local state
+// is terminal already (the peer is this locality, so its publish_event()
+// latched the state before notifying), but evict_fenced() cannot know whether
+// the mirroring will leave it so, and backs off right away. Once the mirroring
+// finishes, the terminal event it mirrored evicts the peer through the
+// reactive path.
+void test_mirror_in_flight_when_eviction_starts_backs_off()
+{
+    hpx::id_type const here = hpx::find_here();
+    hpx::supervision::registry const r(here);
+
+    joined const peer = join(r, here);
+    std::uint64_t const generation = peer.generation;
+    std::uint64_t const epoch = peer.epoch;
+
+    hold_first_mirror hold;
+    hpx::future<void> published = hpx::async(
+        [&] { publish(here, hpx::supervision::event::failed, epoch); });
+    hold.wait_until_held();
+    HPX_TEST(hpx::supervision::is_terminal(local_state(here).last_event));
+
+    evict_fenced_sync(r, here, generation);
+
+    auto const peers = snapshot(r);
+    HPX_TEST_EQ(peers.size(), static_cast<std::size_t>(1));
+    if (!peers.empty())
+    {
+        HPX_TEST_EQ(peers.front().generation, generation);
+    }
+
+    hold.release();
+    published.get();
+    wait_until_evicted(r);
+
+    auto const state = local_state(here);
+    HPX_TEST(state.last_event == hpx::supervision::event::failed);
+    HPX_TEST_EQ(state.epoch, epoch);
+}
+
+// The peer comes back with a newer epoch after evict_fenced() found it fenced,
+// and its observer is still mirroring that when evict_fenced() would remove
+// the entry, so no mirroring has been recorded as done yet. evict_fenced()
+// must count the mirroring in flight and back off, leaving the peer
+// monitored.
+void test_mirror_in_flight_after_terminal_check_backs_off()
+{
+    hpx::id_type const here = hpx::find_here();
+    hpx::supervision::registry const r(here);
+
+    joined const peer = join(r, here);
+    std::uint64_t const generation = peer.generation;
+    std::uint64_t const epoch = peer.epoch;
+    fence(here, epoch);
+
+    hold_first_mirror hold;
+    hpx::future<void> published;
+
+    bool hook_ran = false;
+    reset_hook const reset;
+    hpx::supervision::testing::set_evict_fenced_hook_for_testing([&] {
+        hook_ran = true;
+        published = hpx::async([&] {
+            publish(here, hpx::supervision::event::started, epoch + 1);
+        });
+        hold.wait_until_held();
+    });
+
+    evict_fenced_sync(r, here, generation);
+    hpx::supervision::testing::set_evict_fenced_hook_for_testing({});
+    HPX_TEST(hook_ran);
+
+    auto const peers = snapshot(r);
+    HPX_TEST_EQ(peers.size(), static_cast<std::size_t>(1));
+    if (!peers.empty())
+    {
+        HPX_TEST_EQ(peers.front().generation, generation);
+    }
+
+    hold.release();
+    published.get();
+
+    auto const state = local_state(here);
+    HPX_TEST(state.last_event == hpx::supervision::event::started);
+    HPX_TEST_EQ(state.epoch, epoch + 1);
+
+    // The lifecycle observer is still registered.
+    publish(here, hpx::supervision::event::running, epoch + 1);
+    publish(here, hpx::supervision::event::completed, epoch + 1);
+    wait_until_evicted(r);
+}
+
 int main()
 {
     test_newer_lifecycle_between_check_and_removal_wins();
     test_eviction_without_newer_lifecycle_keeps_tombstone();
     test_peer_that_stays_fenced_is_evicted_by_next_call();
+    test_mirror_in_flight_when_eviction_starts_backs_off();
+    test_mirror_in_flight_after_terminal_check_backs_off();
 
     return hpx::util::report_errors();
 }
