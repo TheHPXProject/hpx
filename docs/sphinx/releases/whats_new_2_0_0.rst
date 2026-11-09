@@ -415,7 +415,7 @@ conditions:
   the registry, so ``snapshot_peers()`` no longer lists it; its fence is kept
   (:hpx-pr:`7922`). That removal no longer drops a peer that came back with a
   new epoch while it was being removed, which left the peer unmonitored
-  (:hpx-issue:`7924`).
+  (:hpx-issue:`7924`, :hpx-pr:`8027`).
 
 Parallel Algorithms
 ===================
