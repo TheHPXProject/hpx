@@ -379,6 +379,22 @@ void test_two_run_merge_split(std::vector<hpx::id_type> const& localities)
     verify_sorted(values, expected);
 }
 
+/// Verify convergence when adjacent runs have strongly unequal capacities.
+void test_unequal_explicit_layout(std::vector<hpx::id_type> const& localities)
+{
+    std::vector<std::size_t> const sizes{100, 1, 100};
+    std::vector<hpx::id_type> const owners{localities[0],
+        localities[localities.size() > 1 ? 1 : 0],
+        localities[localities.size() > 2 ? 2 : 0]};
+    hpx::partitioned_vector<int> values(
+        201, 0, hpx::explicit_container_layout(sizes, owners));
+    initialize_values(values, [](std::size_t i) { return i < 100 ? 1 : 0; });
+    auto const expected = copy_values(values);
+
+    hpx::sort(hpx::execution::par, values.begin(), values.end());
+    verify_sorted(values, expected);
+}
+
 void test_large_transfers(std::vector<hpx::id_type> const& localities)
 {
     // Large enough to exercise multiple bounded transfers through the public
@@ -576,6 +592,7 @@ int main()
     test_uneven_merge_split(
         hpx::execution::par(hpx::execution::task), localities);
     test_two_run_merge_split(localities);
+    test_unequal_explicit_layout(localities);
     test_large_transfers(localities);
     test_async_run_collection(hpx::execution::seq(hpx::execution::task));
     test_async_run_collection(hpx::execution::par(hpx::execution::task));

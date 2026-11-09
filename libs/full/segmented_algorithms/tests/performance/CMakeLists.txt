@@ -6,6 +6,10 @@
 
 set(benchmarks minmax_element_performance partitioned_vector_sort_performance)
 
+set(partitioned_vector_sort_performance_PARAMETERS LOCALITIES 2
+                                                   THREADS_PER_LOCALITY 2
+)
+
 foreach(benchmark ${benchmarks})
   set(sources ${benchmark}.cpp)
 
