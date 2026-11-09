@@ -17,6 +17,7 @@
 #include <hpx/supervision_dispatch/dispatch_api.hpp>
 #include <hpx/supervision_dispatch/server/registry.hpp>
 
+#include <algorithm>
 #include <atomic>
 #include <cstdint>
 #include <exception>
@@ -131,8 +132,12 @@ namespace hpx::supervision::server {
     // can still arrive with an epoch strictly greater than the captured
     // `join_epoch` (e.g. the peer's real epoch advanced again between join()'s
     // floor check and this observer's registration). When that happens, the
-    // callback corrects both its own captured copy and the corresponding entry
-    // in `peers_` forward to match.
+    // callback corrects the corresponding entry in `peers_` forward to match.
+    // It never modifies its own captured copy: the supervision manager may
+    // deliver several notifications to this observer at the same time, so the
+    // captured `join_epoch` stays the value join() seeded it with, and each
+    // delivery works out the epoch it needs from that and its own
+    // notification.
     //
     // The callback takes `mtx_` twice, briefly and never across a call into
     // the supervision manager or a remote call: once before mirroring the
@@ -158,7 +163,7 @@ namespace hpx::supervision::server {
             [peer_locality, join_epoch, generation, this,
                 keep_alive = get_id()](
                 hpx::supervision::lifecycle_event_notification const&
-                    notification) mutable {
+                    notification) {
                 // Announce the mirroring below, unless the entry this observer
                 // was registered for is gone already (see the comment on
                 // register_observers() above).
@@ -172,6 +177,46 @@ namespace hpx::supervision::server {
                     }
                     ++it->second.mirrors_in_flight;
                 }
+
+                // Record that the mirroring is done, only once its result is
+                // visible to query_state(), see evict_fenced().
+                //
+                // join()'s floor against the peer's real epoch (see the comment
+                // on register_observers() above) only covers what could be
+                // observed synchronously at join time; if this notification's
+                // epoch has since moved strictly ahead of the stored peers_
+                // entry's join_epoch, correct the entry forward to match, so
+                // snapshot_peers()/leave()/evict_peer() do not keep keying off
+                // a stale seed. Guarded to only ever move forward. The entry
+                // may have been removed while this callback was mirroring (by
+                // leave(), by evict_peer() for an earlier terminal
+                // notification, or by a failed join()), in which case there is
+                // nothing left to record.
+                auto const record_mirrored = [&]() noexcept {
+                    std::scoped_lock<hpx::spinlock> l(mtx_);
+                    if (auto const it = peers_.find(peer_locality);
+                        it != peers_.end() &&
+                        it->second.generation == generation)
+                    {
+                        peer_entry& entry = it->second;
+                        HPX_ASSERT(entry.mirrors_in_flight != 0);
+                        --entry.mirrors_in_flight;
+                        ++entry.mirror_sequence;
+
+                        if (notification.epoch > entry.join_epoch)
+                        {
+                            entry.join_epoch = notification.epoch;
+                        }
+                    }
+                };
+
+                // If mirroring throws, still record it, otherwise the entry
+                // keeps a mirror in flight forever and evict_fenced() never
+                // evicts it. Count it as mirrored as well: the local state may
+                // have changed before the exception, so a concurrent
+                // evict_fenced() has to back off.
+                auto record_on_exit =
+                    hpx::experimental::scope_exit(record_mirrored);
 
                 // Read peer_locality's current local epoch/state before
                 // mirroring. If it hasn't been seeded yet (epoch mismatch or
@@ -224,43 +269,11 @@ namespace hpx::supervision::server {
                         notification.event, notification.epoch, ec2);
                 }
 
-                // Record that the mirroring is done, only now that its result
-                // is visible to query_state(), see evict_fenced().
-                //
-                // join()'s floor against the peer's real epoch (see the comment
-                // on register_observers() above) only covers what could be
-                // observed synchronously at join time; if this notification's
-                // epoch has since moved strictly ahead of the captured
-                // `join_epoch`, correct both the local capture and the stored
-                // peers_ entry forward to match, so snapshot_peers()/ leave()/
-                // evict_peer() do not keep keying off a stale seed. Guarded to
-                // only ever move forward (never on a lower or equal
-                // notification epoch). The entry may have been removed while
-                // this callback was mirroring (by leave(), by evict_peer() for
-                // an earlier terminal notification, or by a failed join()), in
-                // which case there is nothing left to record.
-                {
-                    std::scoped_lock<hpx::spinlock> l(mtx_);
-                    if (auto const it = peers_.find(peer_locality);
-                        it != peers_.end() &&
-                        it->second.generation == generation)
-                    {
-                        peer_entry& entry = it->second;
-                        HPX_ASSERT(entry.mirrors_in_flight != 0);
-                        --entry.mirrors_in_flight;
-                        ++entry.mirror_sequence;
-
-                        if (notification.epoch > join_epoch &&
-                            entry.join_epoch == join_epoch)
-                        {
-                            entry.join_epoch = notification.epoch;
-                        }
-                    }
-                }
-                if (notification.epoch > join_epoch)
-                {
-                    join_epoch = notification.epoch;
-                }
+                // The mirroring is done, record it before scheduling the
+                // eviction below, which compares against the corrected
+                // join_epoch.
+                record_on_exit.release();
+                record_mirrored();
 
                 // Evict the peer if it has reached a terminal event, so peers_
                 // does not grow without bound over the lifetime of a
@@ -277,8 +290,14 @@ namespace hpx::supervision::server {
                     // as a tombstone (see cleanup_peer()): an admission check
                     // racing against this eviction must keep observing the
                     // fence rather than have it vanish once eviction runs.
+                    //
+                    // The epoch is worked out from this notification alone, not
+                    // read back from the entry: a newer notification delivered
+                    // concurrently may already have moved the entry on to a new
+                    // epoch, and evict_peer() must then leave it alone.
                     hpx::post(&registry::evict_peer, this, peer_locality,
-                        join_epoch, keep_alive, true);
+                        (std::max) (join_epoch, notification.epoch), keep_alive,
+                        true);
                 }
                 return true;
             };
