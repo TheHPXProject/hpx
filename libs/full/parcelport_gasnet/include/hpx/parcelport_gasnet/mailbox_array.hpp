@@ -30,6 +30,14 @@
 #include <utility>
 #include <vector>
 
+// Only the smp conduit performs puts in issue order (they are local memcpy's).
+// On every network conduit two puts to one target may complete in any order,
+// even within a single NBI access region, so the credit word must not be put
+// before the data has completed at the target.
+#if !defined(GASNET_CONDUIT_SMP)
+#define HPX_GASNET_TWO_PHASE_CREDIT
+#endif
+
 namespace hpx::parcelset::policies::gasnet {
 
     // TX/RX page-arena + per-pair 64-bit credit-word protocol
@@ -64,15 +72,16 @@ namespace hpx::parcelset::policies::gasnet {
     // Transport rule (mirrors the validated OpenSHMEM harness):
     //   - each side reads its associated counter locally (relaxed load)
     //   - each side writes the peer's counter via GASNet RMA put
-    //   - ordering between the data put and the produced-credit put is
-    //     guaranteed by an NBI access region (see
-    //     gasnet_environment::put_data_and_credit_nb()): the credit becomes
-    //     visible at the receiver only after the data page has been
-    //     performed there, replacing putmem + shmem_fence + atomic_set.
+    //   - GASNet does not order two puts to the same target, not even
+    //     inside one NBI access region.  On every conduit except smp (where a
+    //     put is a local memcpy) the produced-credit put is therefore issued
+    //     only after the data puts have completed (see send_ready()), so the
+    //     credit becomes visible at the receiver only after the data page has
+    //     been performed there.
     //   - GASNet RDMA lands inbound puts directly in our registered segment,
     //     so no delivery-push (the openshmem design's remote atomic_fetch)
-    //     is needed: progress_to() is a local no-op, and counter reads are
-    //     plain local loads.  This removes two remote round-trips per probe.
+    //     is needed and counter reads are plain local loads.  This removes
+    //     two remote round-trips per probe.
     //
     // Receiver j's landing page for a page written by sender i lives in j's
     // shared rx pool at offset (i*SLOTS + (p % SLOTS)) * mtu.  Each sender is
@@ -809,7 +818,7 @@ namespace hpx::parcelset::policies::gasnet {
         // slots_per_dst_ == 1, where every chunk restages the same page).
         bool send_ready(std::size_t const dst_pe) noexcept
         {
-#if defined(GASNET_CONDUIT_IBV)
+#if defined(HPX_GASNET_TWO_PHASE_CREDIT)
             // Two-step publish: the credit word may only be put once the
             // data has completed remotely, and the next batch may only be
             // staged once the credit word (read by the put engine) is out.
@@ -963,7 +972,7 @@ namespace hpx::parcelset::policies::gasnet {
             // staging writes must be visible before the put engine reads them
             std::atomic_thread_fence(std::memory_order_release);
             send_credit_src_[dst_pe] = new_produced;
-#if defined(GASNET_CONDUIT_IBV)
+#if defined(HPX_GASNET_TWO_PHASE_CREDIT)
             send_events_[dst_pe] = hpx::util::gasnet_environment::put_batch_nb(
                 static_cast<int>(dst_pe), n, raddr, laddr, counts);
             credit_put_raddr_[dst_pe] = rcredit;
@@ -1272,8 +1281,8 @@ namespace hpx::parcelset::policies::gasnet {
         //   send_stall_ / recv_stall_: cumulative back-pressure counters
         //                    feeding the stall tripwire warnings.
         std::vector<gex_Event_t> send_events_;
-        // ibv-conduit only: the credit word is published in a second step,
-        // after the data event has completed (puts are not ordered)
+        // all conduits but smp: the credit word is published in a second
+        // step, after the data event has completed (puts are not ordered)
         std::vector<gex_Event_t> credit_put_events_;
         std::vector<void*> credit_put_raddr_;
         std::vector<unsigned char> credit_pending_;

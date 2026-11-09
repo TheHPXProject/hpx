@@ -29,12 +29,10 @@ namespace hpx::util {
     // primitives the gasnet parcelport builds on.
     //
     // All RMA helpers funnel through gex_RMA_* on the primordial team
-    // created by gex_Client_Init().  Ordering between a data transfer and
-    // the credit word that publishes it is provided by an NBI access
-    // region (gex_NBI_BeginAccessRegion()/..EndAccessRegion()+gex_Event_Wait):
-    // operations issued inside the region are performed in order at the
-    // target, which stands in for putmem + shmem_fence + atomic_set in the
-    // openshmem design this parcelport mirrors.
+    // created by gex_Client_Init().  GASNet does not order two puts to the
+    // same target, so the parcelport publishes the credit word that makes a
+    // data page visible only after the data put has completed (except on the
+    // smp conduit, where a put is a local memcpy).
     struct HPX_CORE_EXPORT gasnet_environment
     {
         static bool check_gasnet_environment(runtime_configuration const& cfg);
@@ -87,33 +85,19 @@ namespace hpx::util {
         static void get(int rank, void* laddr, void const* raddr,
             std::size_t nbytes);
 
-        // Ordered data + credit publish, non-blocking.  Transfers 'nbytes'
-        // of data to 'raddr' and then writes the 4-byte credit word to
-        // 'credit_raddr' on the same destination, both inside a single NBI
-        // access region, and returns the region's completion event without
-        // waiting for it.  The credit value is performed at the target only
-        // after the data, which is the guarantee the mailbox_array
-        // single-writer credit protocol needs (GASNet substitute for putmem;
-        // shmem_fence; atomic_set).  'laddr' must stay untouched and
-        // 'credit_laddr' must keep its value until poll_event() reports the
-        // returned event complete.
-        static gex_Event_t put_data_and_credit_nb(int rank, void* raddr,
-            void const* laddr, std::size_t nbytes, void* credit_raddr,
-            void const* credit_laddr);
-
-
-        // Same as put_data_and_credit_nb() for a batch of n pages: n data
-        // puts followed by the credit word, all in one access region.  All
-        // 'laddr' pages and 'credit_laddr' must stay untouched until the
-        // returned event completes.
-        // Data-only variant (no credit word): the caller publishes the credit
-        // with put_uint32_nb() once the returned event has completed.  Needed
-        // where the conduit does not order two puts to the same target
-        // (ibv-conduit).
+        // Data-only batch of n pages, non-blocking: the caller publishes the
+        // credit with put_uint32_nb() once the returned event has completed.
+        // Needed on every conduit that does not order two puts to the same
+        // target, i.e. all but smp.  All 'laddr' pages must stay untouched
+        // until the returned event completes.
         static gex_Event_t put_batch_nb(int rank, std::size_t n,
             void* const* raddr, void const* const* laddr,
             std::size_t const* nbytes);
 
+        // n data puts followed by the 4-byte credit word, all in one NBI
+        // access region.  Only valid where puts are performed in issue order
+        // (smp conduit).  All 'laddr' pages and 'credit_laddr' must stay
+        // untouched until the returned event completes.
         static gex_Event_t put_batch_and_credit_nb(int rank, std::size_t n,
             void* const* raddr, void const* const* laddr,
             std::size_t const* nbytes, void* credit_raddr,
