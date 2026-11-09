@@ -409,7 +409,8 @@ namespace hpx::parcelset::policies::gasnet {
         // HPX_WITH_PARCELPORT_GASNET_SLOTS).  Raisable to pipeline more
         // chunks across high-latency links; every slot costs one MTU page of
         // registered tx/rx memory per PE, so lower it for very large runs.
-        static constexpr std::size_t default_slots_per_dst = 8;
+        static constexpr std::size_t default_slots_per_dst =
+            hpx::util::gasnet_environment::default_slots_per_dst;
 
         // Max number of source PEs probed per receive-scan pass, exactly as
         // in the openshmem mailbox: the scan window slides over the arena (one
@@ -441,9 +442,8 @@ namespace hpx::parcelset::policies::gasnet {
         static constexpr std::size_t symmetric_bytes(
             std::size_t npes, std::size_t slots, std::size_t mtu) noexcept
         {
-            return 2 * npes * slots * mtu +
-                2 * npes * npes * sizeof(std::uint32_t) +
-                npes * sizeof(std::uint32_t);
+            return hpx::util::gasnet_environment::symmetric_bytes(
+                npes, slots, mtu);
         }
 
         mailbox_array() = default;

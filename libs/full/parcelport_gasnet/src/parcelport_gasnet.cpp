@@ -98,27 +98,7 @@ namespace hpx::parcelset {
             static std::size_t mtu(util::runtime_configuration const& ini,
                 std::size_t num_pes, std::size_t slots)
             {
-                std::size_t const configured =
-                    hpx::util::get_entry_as<std::size_t>(
-                        ini, "hpx.parcel.gasnet.mtu", 0);
-                if (configured != 0)
-                {
-                    return configured;
-                }
-
-                constexpr std::size_t budget = std::size_t(256) << 20;
-                constexpr std::size_t max_mtu = std::size_t(1) << 20;
-                constexpr std::size_t min_mtu = std::size_t(64) << 10;
-
-                std::size_t const denom =
-                    (std::max)(std::size_t(1), num_pes * slots * 2);
-                std::size_t const m = (std::min)(max_mtu, budget / denom);
-                std::size_t p = min_mtu;
-                while (p * 2 <= m)
-                {
-                    p *= 2;
-                }
-                return p;
+                return util::gasnet_environment::mtu(ini, num_pes, slots);
             }
 
             // In-flight chunks per (sender,receiver) pair.  Must be
@@ -126,10 +106,7 @@ namespace hpx::parcelset {
             // protocol), same caveat as mtu.
             static std::size_t slots(util::runtime_configuration const& ini)
             {
-                std::size_t const slots = hpx::util::get_entry_as<std::size_t>(
-                    ini, "hpx.parcel.gasnet.slots",
-                    mailbox_array::default_slots_per_dst);
-                return slots == 0 ? 1 : slots;
+                return util::gasnet_environment::slots(ini);
             }
 
             // Bound (seconds) for the empty wait in do_stop(). Shutdown 
