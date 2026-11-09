@@ -74,11 +74,6 @@ namespace hpx::parcelset::policies::gasnet {
             return src_;
         }
 
-        bool is_multi_chunk() const noexcept
-        {
-            return expected_chunks_ > 1;
-        }
-
         bool receive() noexcept
         {
             switch (state_)

@@ -22,35 +22,6 @@
 
 namespace hpx::util {
 
-    namespace detail {
-
-        bool detect_gasnet_environment(
-            util::runtime_configuration const& cfg, char const* default_env)
-        {
-            std::string gasnet_environment_strings =
-                cfg.get_entry("hpx.parcel.gasnet.env", default_env);
-
-            hpx::string_util::char_separator<char> sep(";,: ");
-            hpx::string_util::tokenizer tokens(gasnet_environment_strings, sep);
-            for (auto const& tok : tokens)
-            {
-                char* env = std::getenv(tok.c_str());
-                if (env)
-                {
-                    LBT_(debug)
-                        << "Found GASNET environment variable: " << tok << "="
-                        << std::string(env) << ", enabling GASNET support\n";
-                    return true;
-                }
-            }
-
-            LBT_(info)
-                << "No known GASNET environment variable found, disabling "
-                   "GASNET support\n";
-            return false;
-        }
-    }    // namespace detail
-
     bool gasnet_environment::check_gasnet_environment(
         util::runtime_configuration const& cfg)
     {
