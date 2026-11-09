@@ -126,7 +126,20 @@ namespace hpx::threads::policies {
             return description_;
         }
 
+        /// The idle callback of the workers of most schedulers. It uses
+        /// idle_step_for and free_pass_after_wake.
         bool idle_callback(std::size_t num_thread);
+
+        /// The idle callback of a scheduler that has scheduling rules of its
+        /// own (see local_priority_queue_scheduler): if Rules::tunes_idle,
+        /// rules 6 to 8 come from rules, otherwise from idle_step_for and
+        /// free_pass_after_wake, as in idle_callback. Defined in
+        /// detail/idle_callback.hpp, instantiated for fixed_scheduling_rules
+        /// in scheduler_base.cpp and for tuned_scheduling_rules in
+        /// scheduler_base_tuned.cpp.
+        template <typename Rules>
+        bool idle_callback_with_rules(
+            std::size_t num_thread, Rules const& rules);
 
 #if defined(HPX_HAVE_THREAD_MANAGER_IDLE_BACKOFF)
         /// What the given worker does for its next idle backoff period after
@@ -134,14 +147,15 @@ namespace hpx::threads::policies {
         /// called by idle_callback): the period doubles with every one, up to
         /// hpx.max_idle_backoff_time, and periods shorter than
         /// hpx.min_idle_backoff_time are spent spinning. This uses the
-        /// configured values; a scheduler with tunable rules overrides it.
-        [[nodiscard]] virtual idle_step idle_step_for(
+        /// configured values; a scheduler with tunable rules takes them from
+        /// its rules instead (see idle_callback_with_rules).
+        [[nodiscard]] idle_step idle_step_for(
             std::size_t num_thread, std::uint32_t count) const;
 
         /// Whether a worker woken up by a notification may steal once
         /// without the early minima of the scheduler (rule 8 of
-        /// scheduling_policy, called by idle_callback).
-        [[nodiscard]] virtual bool free_pass_after_wake() const
+        /// scheduling_policy, called by idle_callback, as idle_step_for).
+        [[nodiscard]] constexpr bool free_pass_after_wake() const noexcept
         {
             return true;
         }
@@ -171,7 +185,7 @@ namespace hpx::threads::policies {
         /// Whether this scheduler wakes up workers for new threads of the
         /// given size itself (in create_thread). Then create_thread and
         /// create_work don't call do_some_work for them.
-        [[nodiscard]] bool wakes_up_for(
+        [[nodiscard]] constexpr bool wakes_up_for(
             [[maybe_unused]] threads::task_size size) const noexcept
         {
 #if defined(HPX_HAVE_THREAD_MANAGER_IDLE_BACKOFF)
@@ -550,6 +564,14 @@ namespace hpx::threads::policies {
         void apply_to_matching_modes(
             hpx::threads::mask_cref_type pu_mask, F&& f) noexcept;
     };
+
+    // see scheduler_base.cpp and scheduler_base_tuned.cpp
+    extern template HPX_CORE_EXPORT bool
+    scheduler_base::idle_callback_with_rules<fixed_scheduling_rules>(
+        std::size_t, fixed_scheduling_rules const&);
+    extern template HPX_CORE_EXPORT bool
+    scheduler_base::idle_callback_with_rules<tuned_scheduling_rules>(
+        std::size_t, tuned_scheduling_rules const&);
 
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT std::ostream& operator<<(
         std::ostream& os, scheduler_base const& scheduler);
