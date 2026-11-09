@@ -461,6 +461,13 @@ arrives after the peer was removed is not mirrored at all, so the tombstone
 stays in place and the peer has to be joined again, as after any other
 eviction.
 
+This does not fully cover a registry that joined its own locality. There, the
+peer's own lifecycle events update the shadow directly, before the observer
+that mirrors them runs, so a new epoch that starts after the eviction checked
+the shadow but before the observer runs is not noticed. The peer is then
+removed although its shadow is active again, and stays unmonitored until it
+is joined again.
+
 What this does and does not cover
 ---------------------------------
 
