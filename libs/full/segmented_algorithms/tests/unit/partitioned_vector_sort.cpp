@@ -331,87 +331,27 @@ void test_sort_subranges(
     }
 }
 
-struct move_only_sort_value
+template <typename ExPolicy>
+void test_uneven_merge_split(
+    ExPolicy const& policy, std::vector<hpx::id_type> const& localities)
 {
-    explicit move_only_sort_value(int value)
-      : value(value)
+    // Eleven physical partitions across four localities exercise both parities
+    // of the compare-split network, unequal run sizes, and duplicate values.
+    hpx::partitioned_vector<int> values(
+        257, 0, hpx::container_layout(11, localities));
+    initialize_values(values,
+        [](std::size_t i) { return static_cast<int>((i * 37 + 11) % 23); });
+    auto const expected = copy_values(values);
+
+    if constexpr (hpx::is_async_execution_policy_v<ExPolicy>)
     {
+        hpx::sort(policy, values.begin(), values.end()).get();
     }
-
-    move_only_sort_value() = delete;
-    move_only_sort_value(move_only_sort_value const&) = delete;
-    move_only_sort_value& operator=(move_only_sort_value const&) = delete;
-    move_only_sort_value(move_only_sort_value&&) = default;
-    move_only_sort_value& operator=(move_only_sort_value&&) = default;
-
-    int value;
-};
-
-// Cover arbitrary run counts, short final runs, duplicates, and value types
-// that cannot be copied or default constructed.
-void test_kway_merge()
-{
-    namespace detail = hpx::parallel::detail;
-
-    for (std::size_t run_count : {3, 5, 6, 7})
+    else
     {
-        for (std::size_t tail = 1; tail != 5; ++tail)
-        {
-            for (std::size_t seed = 0; seed != 16; ++seed)
-            {
-                std::vector<int> values;
-                std::vector<std::size_t> offsets;
-                std::vector<std::size_t> counts;
-                std::vector<int> expected;
-                for (std::size_t run = 0; run != run_count; ++run)
-                {
-                    offsets.push_back(values.size());
-                    auto const count = run + 1 == run_count ? tail : 5;
-                    counts.push_back(count);
-                    std::vector<int> part(count);
-                    for (std::size_t i = 0; i != count; ++i)
-                    {
-                        part[i] = static_cast<int>(
-                            (run * 17 + i * 13 + seed * 7) % 11);
-                    }
-                    std::sort(part.begin(), part.end());
-                    expected.insert(expected.end(), part.begin(), part.end());
-                    values.insert(values.end(), part.begin(), part.end());
-                }
-                std::sort(expected.begin(), expected.end());
-
-                std::vector<int> output;
-                output.reserve(values.size());
-                std::less<int> pred;
-                detail::segmented_sort_kway_for_each(values, offsets, counts,
-                    pred,
-                    [&](int&& value) { output.push_back(HPX_MOVE(value)); });
-                HPX_TEST(output == expected);
-            }
-        }
+        hpx::sort(policy, values.begin(), values.end());
     }
-
-    std::vector<move_only_sort_value> values;
-    for (int value : {0, 3, 6, 1, 4, 7, 2, 5, 8})
-    {
-        values.emplace_back(value);
-    }
-    std::vector<std::size_t> const offsets{0, 3, 6};
-    std::vector<std::size_t> const counts{3, 3, 3};
-    auto pred = [](move_only_sort_value const& lhs,
-                    move_only_sort_value const& rhs) {
-        return lhs.value < rhs.value;
-    };
-    std::vector<move_only_sort_value> output;
-    detail::segmented_sort_kway_for_each(
-        values, offsets, counts, pred, [&](move_only_sort_value&& value) {
-            output.push_back(HPX_MOVE(value));
-        });
-    HPX_TEST_EQ(output.size(), std::size_t(9));
-    for (std::size_t i = 0; i != output.size(); ++i)
-    {
-        HPX_TEST_EQ(output[i].value, static_cast<int>(i));
-    }
+    verify_sorted(values, expected);
 }
 
 void test_large_transfers(std::vector<hpx::id_type> const& localities)
@@ -606,7 +546,10 @@ void test_async_run_collection(ExPolicy const& policy)
 int main()
 {
     std::vector<hpx::id_type> localities = hpx::find_all_localities();
-    test_kway_merge();
+    test_uneven_merge_split(hpx::execution::seq, localities);
+    test_uneven_merge_split(hpx::execution::par, localities);
+    test_uneven_merge_split(
+        hpx::execution::par(hpx::execution::task), localities);
     test_large_transfers(localities);
     test_async_run_collection(hpx::execution::seq(hpx::execution::task));
     test_async_run_collection(hpx::execution::par(hpx::execution::task));

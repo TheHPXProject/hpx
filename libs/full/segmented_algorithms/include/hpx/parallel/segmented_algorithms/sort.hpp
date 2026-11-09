@@ -24,7 +24,6 @@
 #include <iterator>
 #include <list>
 #include <map>
-#include <queue>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -248,8 +247,8 @@ namespace hpx::parallel::detail {
         return chunks;
     }
 
-    // Choose the locality holding the most participating data so the k-way
-    // merge transfers as little input as possible.
+    // Choose the locality holding the most participating data so a compare-
+    // split transfers as little input as possible.
     template <typename LocalIter>
     hpx::id_type segmented_sort_host(
         segmented_sort_block<LocalIter> const& left,
@@ -522,47 +521,6 @@ namespace hpx::parallel::detail {
         return first;
     }
 
-    // Merge the sorted input runs without constructing a second full-size
-    // output buffer. Values are selected once into one destination buffer at
-    // a time. Stores are incremental and therefore cannot be rolled back if a
-    // later comparison or destination operation throws.
-    template <typename T, typename Pred, typename Emit>
-    void segmented_sort_kway_for_each(std::vector<T>& values,
-        std::vector<std::size_t> const& offsets,
-        std::vector<std::size_t> const& counts, Pred& pred, Emit&& emit)
-    {
-        struct cursor
-        {
-            std::size_t pos;
-            std::size_t end;
-        };
-
-        auto order = [&](cursor const& lhs, cursor const& rhs) {
-            return pred(values[rhs.pos], values[lhs.pos]);
-        };
-        std::priority_queue<cursor, std::vector<cursor>, decltype(order)> heap(
-            order);
-
-        for (std::size_t i = 0; i != counts.size(); ++i)
-        {
-            if (counts[i] != 0)
-            {
-                heap.push(cursor{offsets[i], offsets[i] + counts[i]});
-            }
-        }
-
-        while (!heap.empty())
-        {
-            auto current = heap.top();
-            heap.pop();
-            emit(HPX_MOVE(values[current.pos]));
-            if (++current.pos != current.end)
-            {
-                heap.push(current);
-            }
-        }
-    }
-
     template <typename LocalIter>
     struct segmented_sort_local_runs_on_host
       : algorithm<segmented_sort_local_runs_on_host<LocalIter>, bool>
@@ -660,86 +618,71 @@ namespace hpx::parallel::detail {
     }
 
     template <typename LocalIter>
-    struct segmented_sort_kway_merge_on_host
-      : algorithm<segmented_sort_kway_merge_on_host<LocalIter>, bool>
+    struct segmented_sort_compare_split_on_host
+      : algorithm<segmented_sort_compare_split_on_host<LocalIter>, bool>
     {
-        constexpr segmented_sort_kway_merge_on_host() noexcept
-          : algorithm<segmented_sort_kway_merge_on_host, bool>(
-                "segmented_sort_kway_merge_on_host")
+        constexpr segmented_sort_compare_split_on_host() noexcept
+          : algorithm<segmented_sort_compare_split_on_host, bool>(
+                "segmented_sort_compare_split_on_host")
         {
         }
 
         template <typename ExPolicy, typename Comp, typename Proj>
         static bool execute(ExPolicy const& policy,
-            segmented_sort_block<LocalIter> const& runs, Comp comp, Proj proj)
+            segmented_sort_run<LocalIter> const& left,
+            segmented_sort_run<LocalIter> const& right, Comp comp, Proj proj)
         {
-            using value_type = std::iterator_traits<LocalIter>::value_type;
+            segmented_sort_block<LocalIter> const pair{left, right};
+            auto values = segmented_sort_fetch_block(policy, pair);
+            auto const left_size = static_cast<std::size_t>(left.size());
+            HPX_ASSERT(values.size() ==
+                left_size + static_cast<std::size_t>(right.size()));
 
-            std::vector<std::size_t> counts;
-            std::vector<std::size_t> offsets;
-            counts.reserve(runs.size());
-            offsets.reserve(runs.size());
-            std::size_t total = 0;
-            for (auto const& run : runs)
+            auto middle = values.begin() +
+                static_cast<typename decltype(values)::difference_type>(
+                    left_size);
+            util::compare_projected<Comp&, Proj&> pred(comp, proj);
+
+            // Avoid rewriting an already ordered pair. The full pair has
+            // already been fetched, but no destination is modified.
+            if (middle == values.end() || !pred(*middle, *(std::prev(middle))))
             {
-                offsets.push_back(total);
-                auto const count = static_cast<std::size_t>(run.size());
-                counts.push_back(count);
-                total += count;
+                return false;
             }
 
-            auto values = segmented_sort_fetch_block(policy, runs);
-            HPX_ASSERT(values.size() == total);
-
-            util::compare_projected<Comp&, Proj&> pred(comp, proj);
-            std::size_t destination = 0;
-            std::vector<value_type> output;
-            output.reserve(counts.front());
-            auto emit = [&](value_type&& value) {
-                output.push_back(HPX_MOVE(value));
-                if (output.size() != counts[destination])
-                {
-                    return;
-                }
-
-                segmented_sort_block<LocalIter> block{runs[destination]};
-                [[maybe_unused]] auto const last =
-                    segmented_sort_store_block(policy, block, output.begin());
-                HPX_ASSERT(last == output.end());
-                output.clear();
-                if (++destination != runs.size())
-                {
-                    output.reserve(counts[destination]);
-                }
-            };
-
-            segmented_sort_kway_for_each(values, offsets, counts, pred, emit);
-            HPX_ASSERT(destination == runs.size());
+            hpx::inplace_merge(
+                policy, values.begin(), middle, values.end(), pred);
+            [[maybe_unused]] auto const last =
+                segmented_sort_store_block(policy, pair, values.begin());
+            HPX_ASSERT(last == values.end());
             return true;
         }
 
         template <typename ExPolicy, typename Comp, typename Proj>
         static bool sequential(ExPolicy const& policy,
-            segmented_sort_block<LocalIter> const& runs, Comp comp, Proj proj)
+            segmented_sort_run<LocalIter> const& left,
+            segmented_sort_run<LocalIter> const& right, Comp comp, Proj proj)
         {
-            return execute(policy, runs, HPX_MOVE(comp), HPX_MOVE(proj));
+            return execute(policy, left, right, HPX_MOVE(comp), HPX_MOVE(proj));
         }
 
         template <typename ExPolicy, typename Comp, typename Proj>
         static bool parallel(ExPolicy const& policy,
-            segmented_sort_block<LocalIter> const& runs, Comp comp, Proj proj)
+            segmented_sort_run<LocalIter> const& left,
+            segmented_sort_run<LocalIter> const& right, Comp comp, Proj proj)
         {
-            // The current first implementation intentionally shares the
-            // serial k-way merge. The policy still controls fetch/store work.
-            return execute(policy, runs, HPX_MOVE(comp), HPX_MOVE(proj));
+            // Disjoint pairs are overlapped by segmented_sort_merge_runs; the
+            // policy is also used by the local merge and stores.
+            return execute(policy, left, right, HPX_MOVE(comp), HPX_MOVE(proj));
         }
     };
 
-    // This first implementation fetches each sorted run onto the locality
-    // already holding the most participating data, performs one serial k-way
-    // merge there, and writes each final run once. Network traffic and peak
-    // coordinator storage are O(N); the merge is O(N log P), where P is the
-    // number of participating runs.
+    // Odd-even compare-split phases keep the data distributed. Each operation
+    // temporarily holds only two adjacent runs, keeps the lower part in the
+    // left run and the upper part in the right run, and uses bounded transfers.
+    // After P phases all P runs are globally ordered. Parallel policies overlap
+    // the disjoint pairs in each phase. Temporary storage is bounded by the
+    // largest adjacent pair, although values can move in multiple phases.
     template <typename ExPolicy, typename LocalIter, typename Comp,
         typename Proj, typename IsSeq>
     void segmented_sort_merge_runs(ExPolicy const& policy,
@@ -751,28 +694,57 @@ namespace hpx::parallel::detail {
             return;
         }
 
-        using operation = segmented_sort_kway_merge_on_host<LocalIter>;
-        segmented_sort_block<LocalIter> const empty;
-        auto const host = segmented_sort_host(runs, empty);
-        std::vector<hpx::future<bool>> pending;
-        std::exception_ptr error;
-        try
+        using operation = segmented_sort_compare_split_on_host<LocalIter>;
+        auto const here = hpx::find_here();
+        for (std::size_t phase = 0; phase != runs.size(); ++phase)
         {
-            if (host == hpx::find_here())
+            std::vector<hpx::future<bool>> pending;
+            pending.reserve(runs.size() / 2);
+            std::exception_ptr error;
+            try
             {
-                operation().call2(policy, is_seq, runs, comp, proj);
+                for (std::size_t i = phase % 2; i + 1 < runs.size(); i += 2)
+                {
+                    segmented_sort_block<LocalIter> const left{runs[i]};
+                    segmented_sort_block<LocalIter> const right{runs[i + 1]};
+                    auto const host = segmented_sort_host(left, right);
+                    if constexpr (IsSeq::value)
+                    {
+                        if (host == here)
+                        {
+                            operation().call2(policy, is_seq, runs[i],
+                                runs[i + 1], comp, proj);
+                        }
+                        else
+                        {
+                            dispatch(host, operation(), policy, is_seq, runs[i],
+                                runs[i + 1], comp, proj);
+                        }
+                    }
+                    else if (host == here)
+                    {
+                        auto left_run = runs[i];
+                        auto right_run = runs[i + 1];
+                        pending.push_back(
+                            hpx::async([policy, left_run, right_run, comp,
+                                           proj]() mutable {
+                                return operation::parallel(policy, left_run,
+                                    right_run, HPX_MOVE(comp), HPX_MOVE(proj));
+                            }));
+                    }
+                    else
+                    {
+                        pending.push_back(dispatch_async(host, operation(),
+                            policy, is_seq, runs[i], runs[i + 1], comp, proj));
+                    }
+                }
             }
-            else
+            catch (...)
             {
-                pending.push_back(dispatch_async(
-                    host, operation(), policy, is_seq, runs, comp, proj));
+                error = std::current_exception();
             }
+            segmented_sort_wait<ExPolicy>(pending, error);
         }
-        catch (...)
-        {
-            error = std::current_exception();
-        }
-        segmented_sort_wait<ExPolicy>(pending, error);
     }
 
     template <typename ExPolicy, typename LocalIter, typename Comp,
@@ -841,11 +813,13 @@ namespace hpx::segmented {
     /// spanning localities, the comparator must be copyable and serializable
     /// by HPX.
     ///
-    /// This first implementation gathers all participating runs on one
-    /// locality. Its final merge is serial, requires O(N) coordinator storage,
-    /// and takes O(N log P) comparisons for P participating runs. Destination
-    /// runs are committed incrementally; an exception during this phase can
-    /// leave a partially reordered range.
+    /// The final merge uses P odd-even compare-split phases for P participating
+    /// runs. Each operation temporarily gathers only two adjacent runs, keeps
+    /// their original sizes, and writes the lower and upper results back to
+    /// their respective owners. No locality gathers the full input; peak
+    /// temporary storage is proportional to the largest adjacent pair, and a
+    /// value can be transferred in multiple phases. An exception after a
+    /// compare-split stores data can leave a partially reordered range.
     HPX_CXX_EXPORT template <typename SegIter,
         typename Comp = hpx::parallel::detail::less>
         requires(hpx::traits::is_iterator_v<SegIter> &&
@@ -871,11 +845,14 @@ namespace hpx::segmented {
     /// serializable by HPX.
     ///
     /// The policy controls local partition sorting and whether independent
-    /// locality operations overlap. This first implementation gathers all
-    /// participating runs on one locality. Its final merge is serial, requires
-    /// O(N) coordinator storage, and takes O(N log P) comparisons for P
-    /// participating runs. Destination runs are committed incrementally; an
-    /// exception during this phase can leave a partially reordered range.
+    /// compare-splits overlap. The final merge uses P odd-even phases for P
+    /// participating runs. Each operation temporarily gathers only two
+    /// adjacent runs, keeps their original sizes, and writes the lower and
+    /// upper results back to their respective owners. No locality gathers the
+    /// full input; peak temporary storage is proportional to the largest
+    /// adjacent pair, and a value can be transferred in multiple phases. An
+    /// exception after a compare-split stores data can leave a partially
+    /// reordered range.
     HPX_CXX_EXPORT template <typename ExPolicy, typename SegIter,
         typename Comp = hpx::parallel::detail::less>
         requires(hpx::is_execution_policy_v<ExPolicy> &&
