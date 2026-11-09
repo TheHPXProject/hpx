@@ -13,6 +13,7 @@
 #include <hpx/modules/util.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
@@ -170,9 +171,12 @@ namespace hpx::util {
 
         std::size_t const num_pes = static_cast<std::size_t>(size());
         std::size_t const slots_per_dst = slots(cfg);
+        // gex_Segment_Attach() wants a whole number of pages
+        std::size_t const needed = symmetric_bytes(
+            num_pes, slots_per_dst, mtu(cfg, num_pes, slots_per_dst));
+        std::size_t const page = static_cast<std::size_t>(GASNET_PAGESIZE);
         std::size_t const attach_size = (std::min) (max_local_segment_size_,
-            symmetric_bytes(
-                num_pes, slots_per_dst, mtu(cfg, num_pes, slots_per_dst)));
+            (needed + page - 1) / page * page);
 
         // Collective attach of our (zero-initialized by the runtime, but we
         // still zero the mailbox carve later) segment, bound to the
@@ -407,7 +411,10 @@ namespace hpx::util {
             gex_RMA_PutNBI(tm_, static_cast<gex_Rank_t>(rank), raddr[i],
                 const_cast<void*>(laddr[i]), nbytes[i], GEX_EVENT_DEFER, 0);
         }
-        // the credit word goes last (ordered only on the smp conduit)
+        // the credit word goes last; on the smp conduit the puts are local
+        // memcpy's, so a release fence keeps the credit behind the data on
+        // weakly ordered hosts
+        std::atomic_thread_fence(std::memory_order_release);
         gex_RMA_PutNBI(tm_, static_cast<gex_Rank_t>(rank), credit_raddr,
             const_cast<void*>(credit_laddr), sizeof(std::uint32_t), GEX_EVENT_DEFER, 0);
 
