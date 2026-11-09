@@ -23,7 +23,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
-#include <chrono>
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -402,16 +401,6 @@ namespace hpx::parcelset::policies::gasnet {
     class HPX_EXPORT mailbox_array
     {
     public:
-        // Default number of in-flight pages (chunks) allowed per
-        // (sender,receiver) pair before the sender must wait for consumed
-        // credit.  Overridable at runtime via hpx.parcel.gasnet.slots
-        // (must be identical on every PE; build-time default comes from
-        // HPX_WITH_PARCELPORT_GASNET_SLOTS).  Raisable to pipeline more
-        // chunks across high-latency links; every slot costs one MTU page of
-        // registered tx/rx memory per PE, so lower it for very large runs.
-        static constexpr std::size_t default_slots_per_dst =
-            hpx::util::gasnet_environment::default_slots_per_dst;
-
         // Max number of source PEs probed per receive-scan pass, exactly as
         // in the openshmem mailbox: the scan window slides over the arena (one
         // source per call, the same rotation that guarantees fairness).  With
@@ -435,7 +424,7 @@ namespace hpx::parcelset::policies::gasnet {
         //
         //   2 * npes * slots * mtu + 2 * npes^2 * 4 + npes * 4 bytes
         //
-        // With the defaults (slots=8, mtu=64 KiB) the footprint is ~1 MiB per
+        // With the defaults (slots=8, mtu=64 KiB, the smallest automatic value) the footprint is ~1 MiB per
         // added PE, so a 1024-PE run occupies ~1 GiB of registered memory.
         // The constructor asserts the carve fits the segment attached in
         // hpx::util::gasnet_environment::init().
@@ -537,7 +526,7 @@ namespace hpx::parcelset::policies::gasnet {
             // Non-blocking RMA transport state: one event slot per dst/src
             // (single outstanding region in each direction), one durable
             // 32-bit credit source word per direction (the async puts read it
-            // after try_send()/try_receive_() return), and the stall
+            // after send_batch()/try_receive_() return), and the stall
             // tripwire counters.
             send_events_.assign(num_pes_, GEX_EVENT_INVALID);
             credit_put_events_.assign(num_pes_, GEX_EVENT_INVALID);
@@ -613,6 +602,7 @@ namespace hpx::parcelset::policies::gasnet {
             {
                 delete[] produced_locals_;
                 delete[] consumed_locals_;
+                delete[] scan_rotate_;
                 base_ = other.base_;
                 carved_bytes_ = other.carved_bytes_;
                 tx_beg_ = other.tx_beg_;
@@ -710,7 +700,7 @@ namespace hpx::parcelset::policies::gasnet {
         // Total number of pages transferred so far (published + consumed),
         // summed over the local mirrors.  Only used by do_stop() to tell a
         // slow-but-moving drain from a stalled one: every successful
-        // try_send()/try_receive_() increments exactly one of the two arrays,
+        // send_batch()/try_receive_() increments exactly one of the two arrays,
         // so a changing sum proves transport activity regardless of how many
         // (or which) connections are queued.  Cheap: two relaxed loads per PE.
         std::uint64_t transfer_count() const noexcept
@@ -776,7 +766,7 @@ namespace hpx::parcelset::policies::gasnet {
             {
                 std::size_t const src = lo + ((start - lo + k) % width);
 
-                // Self is deliberately NOT skipped: try_send()/try_receive_()
+                // Self is deliberately NOT skipped: send_batch()/try_receive_()
                 // handle locality-to-self parcels with a local memcpy and local
                 // credit stores, and the receiver's per-arena scan must detect
                 // them or self-sent parcels (common during bootstrap) are never
@@ -785,9 +775,10 @@ namespace hpx::parcelset::policies::gasnet {
 
                 // Acquire so a same-PE self-send's release-store of produced
                 // is ordered after its data-page memcpy (weak-memory cores).
-                // For a remote send the data/credit pair arrives ordered by
-                // the originator's NBI access region, and the acquire then
-                // orders our downstream reads of the landing page.
+                // For a remote send the credit is put only after the data
+                // has completed (see HPX_GASNET_TWO_PHASE_CREDIT; on smp the
+                // data memcpy precedes a release fence), and the acquire
+                // then orders our downstream reads of the landing page.
                 std::uint32_t const produced =
                     std::atomic_ref<std::uint32_t>(
                         produced_beg_[w])
@@ -1028,7 +1019,7 @@ namespace hpx::parcelset::policies::gasnet {
                 std::atomic_ref<std::uint32_t>(
                     produced_beg_[w])
                     .load(std::memory_order_acquire);
-            // Modular (wrap-safe) comparison, symmetric with try_send(): the
+            // Modular (wrap-safe) comparison, symmetric with send_batch(): the
             // in-flight page count is (produced - consumed) mod 2^32 and is
             // bounded below 2^32 by the credit window, so equality means "no
             // page published yet" regardless of how many 2^32 wraps have
@@ -1106,11 +1097,14 @@ namespace hpx::parcelset::policies::gasnet {
                         .load(std::memory_order_acquire);
                 std::fprintf(stderr,
                     "gasnet: PE %zu peer %zu: sent=%u peer_consumed=%u | "
-                    "peer_produced=%u consumed=%u | send_ev=%d credit_ev=%d\n",
+                    "peer_produced=%u consumed=%u | send_ev=%d credit_ev=%d "
+                    "credit_pending=%d credit_put_ev=%d\n",
                     my_pe_, pe, produced_locals_[pe].load(), out_credit,
                     in_produced, consumed_locals_[pe].load(),
                     send_events_[pe] != GEX_EVENT_INVALID,
-                    credit_events_[pe] != GEX_EVENT_INVALID);
+                    credit_events_[pe] != GEX_EVENT_INVALID,
+                    static_cast<int>(credit_pending_[pe]),
+                    credit_put_events_[pe] != GEX_EVENT_INVALID);
             }
         }
 

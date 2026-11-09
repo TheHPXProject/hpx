@@ -84,7 +84,7 @@ namespace hpx::parcelset::policies::gasnet {
 
         // Non-blocking send driver.  Sends as many chunks as the transport
         // admits in this call (each via the non-blocking
-        // mailbox_array::try_send(), gated by send_ready() so the single
+        // mailbox_array::send_batch(), gated by send_ready() so the single
         // outstanding access region to the destination serializes chunk
         // ordering) and returns true when the connection is complete, false
         // when one or more chunks remain but either no credit is left or the
