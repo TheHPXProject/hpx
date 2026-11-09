@@ -12,6 +12,7 @@
 /// \page hpx::supervision::testing::failure_detection_sweep_in_flight_for_testing
 /// \page hpx::supervision::testing::stop_background_loops
 /// \page hpx::supervision::testing::set_evict_fenced_hook_for_testing
+/// \page hpx::supervision::testing::set_lifecycle_mirror_hook_for_testing
 /// \headerfile hpx/supervision_dispatch.hpp
 
 #pragma once
@@ -107,5 +108,17 @@ namespace hpx::supervision::testing {
     ///
     /// \param hook  The function to call, with no lock held.
     HPX_SUPERVISION_DISPATCH_EXPORT void set_evict_fenced_hook_for_testing(
+        hpx::function<void()> hook);
+
+    /// Installs \p hook to be called by a registry's lifecycle observer on this
+    /// locality after it announced that it is mirroring a notification
+    /// (peer_entry::mirrors_in_flight) and before it mirrors it, i.e. while
+    /// registry::evict_fenced() has to treat the mirroring as in flight. Pass
+    /// an empty function to remove the hook. Not part of the public dispatch
+    /// API - exists only so tests can hold a mirroring in flight
+    /// deterministically.
+    ///
+    /// \param hook  The function to call, with no lock held.
+    HPX_SUPERVISION_DISPATCH_EXPORT void set_lifecycle_mirror_hook_for_testing(
         hpx::function<void()> hook);
 }    // namespace hpx::supervision::testing

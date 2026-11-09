@@ -65,6 +65,24 @@ namespace {
         }
     }
 
+    // Testing infrastructure support: see
+    // hpx::supervision::testing::set_lifecycle_mirror_hook_for_testing().
+    hpx::spinlock lifecycle_mirror_hook_mtx;
+    hpx::function<void()> lifecycle_mirror_hook;
+
+    void run_lifecycle_mirror_hook()
+    {
+        hpx::function<void()> hook;
+        {
+            std::scoped_lock<hpx::spinlock> l(lifecycle_mirror_hook_mtx);
+            hook = lifecycle_mirror_hook;
+        }
+        if (hook)
+        {
+            hook();
+        }
+    }
+
     void unregister_observers(hpx::id_type const& peer_locality,
         hpx::id_type const& lifecycle_observer,
         hpx::id_type const& activity_observer)
@@ -97,6 +115,12 @@ namespace hpx::supervision::testing {
     {
         std::scoped_lock<hpx::spinlock> l(evict_fenced_hook_mtx);
         evict_fenced_hook = HPX_MOVE(hook);
+    }
+
+    void set_lifecycle_mirror_hook_for_testing(hpx::function<void()> hook)
+    {
+        std::scoped_lock<hpx::spinlock> l(lifecycle_mirror_hook_mtx);
+        lifecycle_mirror_hook = HPX_MOVE(hook);
     }
 }    // namespace hpx::supervision::testing
 
@@ -224,6 +248,8 @@ namespace hpx::supervision::server {
                 // evict_fenced() has to back off.
                 auto record_on_exit =
                     hpx::experimental::scope_exit(record_mirrored);
+
+                run_lifecycle_mirror_hook();
 
                 // Read peer_locality's current local epoch/state before
                 // mirroring. If it hasn't been seeded yet (epoch mismatch or

@@ -381,6 +381,7 @@ unit tests for this module deterministic:
 .. cpp:function:: bool hpx::supervision::testing::failure_detection_sweep_in_flight_for_testing()
 .. cpp:function:: void hpx::supervision::testing::stop_background_loops()
 .. cpp:function:: void hpx::supervision::testing::set_evict_fenced_hook_for_testing(hpx::function<void()> hook)
+.. cpp:function:: void hpx::supervision::testing::set_lifecycle_mirror_hook_for_testing(hpx::function<void()> hook)
 
 See the :ref:`API reference <modules_supervision_dispatch_api>` of this
 module for more details, and :ref:`modules_supervision` for the underlying
