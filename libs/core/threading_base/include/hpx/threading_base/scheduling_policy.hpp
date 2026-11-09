@@ -170,6 +170,10 @@ namespace hpx::threads::policies {
     {
         explicit constexpr fixed_scheduling_rules(std::size_t) noexcept {}
 
+        // rules 6 to 8 come from the scheduler's configuration (see
+        // scheduler_base::idle_callback_with_rules)
+        static constexpr bool tunes_idle = false;
+
         template <typename HasSpinningWorker>
         [[nodiscard]] wake_action wake_for_small(
             thread_queue_init_parameters const&, std::size_t const target,
@@ -373,6 +377,10 @@ namespace hpx::threads::policies {
         {
         }
 
+        // rules 6 to 8 come from the tunable settings (see
+        // scheduler_base::idle_callback_with_rules)
+        static constexpr bool tunes_idle = true;
+
         /// Register the settings of all rules, with the values of the given
         /// configuration.
         void register_parameters(thread_queue_init_parameters const& init,
@@ -406,6 +414,23 @@ namespace hpx::threads::policies {
         {
             return policy_;
         }
+
+#if defined(HPX_HAVE_THREAD_MANAGER_IDLE_BACKOFF)
+        // rules 6 and 7 from the tunable settings
+        [[nodiscard]] idle_step idle_step_for(std::size_t const worker,
+            std::uint32_t const count,
+            double const spin_rounds_per_us) const noexcept
+        {
+            return policy_.idle_step_for(
+                parameters_, worker, count, spin_rounds_per_us);
+        }
+
+        // rule 8 from the tunable settings
+        [[nodiscard]] bool free_pass_after_wake() const noexcept
+        {
+            return policy_.free_pass_after_wake(parameters_);
+        }
+#endif
 
         template <typename HasSpinningWorker>
         [[nodiscard]] wake_action wake_for_small(

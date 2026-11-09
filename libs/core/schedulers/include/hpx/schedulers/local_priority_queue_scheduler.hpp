@@ -364,6 +364,13 @@ namespace hpx::threads::policies {
             return "local_priority_queue_scheduler";
         }
 
+        // the idle callback of the workers, with rules 6 to 8 as Rules has
+        // them (see scheduler_base::idle_callback_with_rules)
+        bool idle_callback(std::size_t const num_thread)
+        {
+            return this->idle_callback_with_rules(num_thread, rules_);
+        }
+
 #ifdef HPX_HAVE_THREAD_CREATION_AND_CLEANUP_RATES
         std::uint64_t get_creation_time(bool reset) override
         {

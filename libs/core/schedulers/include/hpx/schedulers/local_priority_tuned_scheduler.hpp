@@ -104,24 +104,6 @@ namespace hpx::threads::policies {
         {
             return this->rules_.parameters();
         }
-
-#if defined(HPX_HAVE_THREAD_MANAGER_IDLE_BACKOFF)
-        // rules 6 and 7 from the tunable settings
-        [[nodiscard]] idle_step idle_step_for(std::size_t const num_thread,
-            std::uint32_t const count) const override
-        {
-            return this->rules_.policy().idle_step_for(
-                this->rules_.parameters(), num_thread, count,
-                this->spin_rounds_per_us_);
-        }
-
-        // rule 8 from the tunable settings
-        [[nodiscard]] bool free_pass_after_wake() const override
-        {
-            return this->rules_.policy().free_pass_after_wake(
-                this->rules_.parameters());
-        }
-#endif
     };
 }    // namespace hpx::threads::policies
 
