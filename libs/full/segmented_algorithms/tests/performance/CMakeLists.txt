@@ -4,7 +4,7 @@
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-set(benchmarks minmax_element_performance)
+set(benchmarks minmax_element_performance partitioned_vector_sort_performance)
 
 foreach(benchmark ${benchmarks})
   set(sources ${benchmark}.cpp)

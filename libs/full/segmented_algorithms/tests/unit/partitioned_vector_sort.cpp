@@ -331,6 +331,7 @@ void test_sort_subranges(
     }
 }
 
+/// Verify compare-split phases with uneven runs and duplicate values.
 template <typename ExPolicy>
 void test_uneven_merge_split(
     ExPolicy const& policy, std::vector<hpx::id_type> const& localities)
@@ -351,6 +352,30 @@ void test_uneven_merge_split(
     {
         hpx::sort(policy, values.begin(), values.end());
     }
+    verify_sorted(values, expected);
+}
+
+/// Verify that a complete two-run exchange remains chunked and distributed.
+void test_two_run_merge_split(std::vector<hpx::id_type> const& localities)
+{
+    // Put two reversed runs on different localities. Every value crosses the
+    // merge partition, exercising the bounded exchange without gathering the
+    // complete input on either locality.
+    std::vector<hpx::id_type> hosts{
+        localities[0], localities[localities.size() > 1 ? 1 : 0]};
+    hpx::partitioned_vector<int> values(
+        2 * (65536 + 7), 0, hpx::container_layout(2, hosts));
+    initialize_values(values, [&](std::size_t i) {
+        auto const run_size = values.size() / 2;
+        if (i < run_size)
+        {
+            return static_cast<int>(run_size + i);
+        }
+        return static_cast<int>(i - run_size);
+    });
+    auto const expected = copy_values(values);
+
+    hpx::sort(hpx::execution::par, values.begin(), values.end());
     verify_sorted(values, expected);
 }
 
@@ -550,6 +575,7 @@ int main()
     test_uneven_merge_split(hpx::execution::par, localities);
     test_uneven_merge_split(
         hpx::execution::par(hpx::execution::task), localities);
+    test_two_run_merge_split(localities);
     test_large_transfers(localities);
     test_async_run_collection(hpx::execution::seq(hpx::execution::task));
     test_async_run_collection(hpx::execution::par(hpx::execution::task));
