@@ -10,6 +10,7 @@
 #include <hpx/modules/testing.hpp>
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cstddef>
 #include <deque>
@@ -442,6 +443,32 @@ void test_lexicographical_compare_bool_convertible_predicate()
         expected);
 }
 
+void test_lexicographical_compare_bool_contiguous()
+{
+    std::array<bool, 5> a = {{true, false, true, false, true}};
+    std::array<bool, 5> b = {{true, false, true, true, false}};
+
+    bool expected =
+        std::lexicographical_compare(a.begin(), a.end(), b.begin(), b.end());
+
+    HPX_TEST_EQ(hpx::lexicographical_compare(hpx::execution::simd, a.begin(),
+                    a.end(), b.begin(), b.end()),
+        expected);
+    HPX_TEST_EQ(hpx::lexicographical_compare(hpx::execution::par_simd,
+                    a.begin(), a.end(), b.begin(), b.end()),
+        expected);
+    HPX_TEST_EQ(
+        hpx::lexicographical_compare(hpx::execution::simd(hpx::execution::task),
+            a.begin(), a.end(), b.begin(), b.end())
+            .get(),
+        expected);
+    HPX_TEST_EQ(hpx::lexicographical_compare(
+                    hpx::execution::par_simd(hpx::execution::task), a.begin(),
+                    a.end(), b.begin(), b.end())
+                    .get(),
+        expected);
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 struct user_payload
 {
@@ -572,6 +599,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
     test_lexicographical_compare_non_contiguous();
     test_lexicographical_compare_bool_returning_predicate();
     test_lexicographical_compare_bool_convertible_predicate();
+    test_lexicographical_compare_bool_contiguous();
     test_lexicographical_compare_user_type();
     test_lexicographical_compare_projections();
 
