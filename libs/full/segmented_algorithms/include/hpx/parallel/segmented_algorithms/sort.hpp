@@ -844,15 +844,17 @@ namespace hpx::parallel::detail {
             segmented_sort_run<LocalIter> const& left,
             segmented_sort_run<LocalIter> const& right, Comp comp, Proj proj)
         {
-            auto const [left_cut, right_cut] =
-                merge_partition(policy, left, right, comp, proj);
-            auto const crossing_size = right_cut;
-            HPX_ASSERT(crossing_size ==
-                static_cast<std::size_t>(left.size()) - left_cut);
-            if (crossing_size == 0)
+            auto const left_size = static_cast<std::size_t>(left.size());
+            if (!less_at(policy, right, 0, left, left_size - 1, comp, proj))
             {
                 return false;
             }
+
+            auto const [left_cut, right_cut] =
+                merge_partition(policy, left, right, comp, proj);
+            auto const crossing_size = right_cut;
+            HPX_ASSERT(crossing_size == left_size - left_cut);
+            HPX_ASSERT(crossing_size != 0);
 
             exchange_crossing_ranges(
                 policy, left, right, left_cut, crossing_size);
@@ -884,10 +886,10 @@ namespace hpx::parallel::detail {
 
     /// Run odd-even compare-split phases while keeping data distributed. Each
     /// operation exchanges only the crossing suffix and prefix using bounded
-    /// buffers, then merges both runs on their owning localities. After P
-    /// phases all P runs are globally ordered. Parallel policies overlap the
-    /// disjoint pairs in each phase, although values can move in multiple
-    /// phases.
+    /// buffers, then merges both runs on their owning localities. Alternating
+    /// phases continue until both parities report no changes. Parallel policies
+    /// overlap the disjoint pairs in each phase, although values can move in
+    /// multiple phases.
     template <typename ExPolicy, typename LocalIter, typename Comp,
         typename Proj, typename IsSeq>
     void segmented_sort_merge_runs(ExPolicy const& policy,
@@ -901,8 +903,11 @@ namespace hpx::parallel::detail {
 
         using operation = segmented_sort_compare_split_on_host<LocalIter>;
         auto const here = hpx::find_here();
-        for (std::size_t phase = 0; phase != runs.size(); ++phase)
+        std::size_t phase = 0;
+        std::size_t unchanged_phases = 0;
+        while (unchanged_phases != 2)
         {
+            bool phase_changed = false;
             std::vector<hpx::future<bool>> pending;
             pending.reserve(runs.size() / 2);
             std::exception_ptr error;
@@ -917,13 +922,17 @@ namespace hpx::parallel::detail {
                     {
                         if (host == here)
                         {
-                            operation().call2(policy, is_seq, runs[i],
-                                runs[i + 1], comp, proj);
+                            phase_changed =
+                                operation().call2(policy, is_seq, runs[i],
+                                    runs[i + 1], comp, proj) ||
+                                phase_changed;
                         }
                         else
                         {
-                            dispatch(host, operation(), policy, is_seq, runs[i],
-                                runs[i + 1], comp, proj);
+                            phase_changed =
+                                dispatch(host, operation(), policy, is_seq,
+                                    runs[i], runs[i + 1], comp, proj) ||
+                                phase_changed;
                         }
                     }
                     else if (host == here)
@@ -949,6 +958,12 @@ namespace hpx::parallel::detail {
                 error = std::current_exception();
             }
             segmented_sort_wait<ExPolicy>(pending, error);
+            for (auto& result : pending)
+            {
+                phase_changed = result.get() || phase_changed;
+            }
+            unchanged_phases = phase_changed ? 0 : unchanged_phases + 1;
+            ++phase;
         }
     }
 
@@ -1018,12 +1033,13 @@ namespace hpx::segmented {
     /// spanning localities, the comparator must be copyable and serializable
     /// by HPX.
     ///
-    /// The final merge uses P odd-even compare-split phases for P participating
-    /// runs. Each operation finds the merge partition, exchanges only the
-    /// crossing suffix and prefix in bounded chunks, and merges both runs on
-    /// their owning localities. No locality gathers the full input, although a
-    /// value can be transferred in multiple phases. An exception after a
-    /// compare-split stores data can leave a partially reordered range.
+    /// The final merge uses alternating odd-even compare-split phases until
+    /// both parities are unchanged. Each operation finds the merge partition,
+    /// exchanges only the crossing suffix and prefix in bounded chunks, and
+    /// merges both runs on their owning localities. No locality gathers the
+    /// full input, although a value can be transferred in multiple phases. An
+    /// exception after a compare-split stores data can leave a partially
+    /// reordered range.
     HPX_CXX_EXPORT template <typename SegIter,
         typename Comp = hpx::parallel::detail::less>
         requires(hpx::traits::is_iterator_v<SegIter> &&
@@ -1049,12 +1065,13 @@ namespace hpx::segmented {
     /// serializable by HPX.
     ///
     /// The policy controls local partition sorting and whether independent
-    /// compare-splits overlap. The final merge uses P odd-even phases for P
-    /// participating runs. Each operation finds the merge partition, exchanges
-    /// only the crossing suffix and prefix in bounded chunks, and merges both
-    /// runs on their owning localities. No locality gathers the full input,
-    /// although a value can be transferred in multiple phases. An exception
-    /// after a compare-split stores data can leave a partially reordered range.
+    /// compare-splits overlap. The final merge uses alternating odd-even phases
+    /// until both parities are unchanged. Each operation finds the merge
+    /// partition, exchanges only the crossing suffix and prefix in bounded
+    /// chunks, and merges both runs on their owning localities. No locality
+    /// gathers the full input, although a value can be transferred in multiple
+    /// phases. An exception after a compare-split stores data can leave a
+    /// partially reordered range.
     HPX_CXX_EXPORT template <typename ExPolicy, typename SegIter,
         typename Comp = hpx::parallel::detail::less>
         requires(hpx::is_execution_policy_v<ExPolicy> &&

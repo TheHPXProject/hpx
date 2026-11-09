@@ -13,11 +13,12 @@
 #include <hpx/include/partitioned_vector.hpp>
 #include <hpx/include/partitioned_vector_predef.hpp>
 #include <hpx/modules/program_options.hpp>
-#include <hpx/modules/testing.hpp>
 
 #include <algorithm>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <iostream>
 #include <numeric>
 #include <random>
 #include <string>
@@ -32,6 +33,26 @@ namespace {
         std::vector<int> const& input)
     {
         values.set_values(hpx::launch::sync, positions, input);
+    }
+
+    /// Measure an operation while restoring its input outside the timed region.
+    template <typename Reset, typename Operation>
+    double measure(std::size_t test_count, Reset&& reset, Operation&& operation)
+    {
+        using clock = std::chrono::steady_clock;
+
+        reset();
+        operation();
+
+        std::chrono::duration<double> elapsed{};
+        for (std::size_t i = 0; i != test_count; ++i)
+        {
+            reset();
+            auto const start = clock::now();
+            operation();
+            elapsed += clock::now() - start;
+        }
+        return elapsed.count() / static_cast<double>(test_count);
     }
 }    // namespace
 
@@ -62,22 +83,24 @@ int hpx_main(hpx::program_options::variables_map& vm)
     std::generate(
         input.begin(), input.end(), [&]() { return distribution(generator); });
 
-    hpx::util::perftests_init(vm, "partitioned_vector_sort_performance");
-    hpx::util::perftests_report(
-        "partitioned_vector_sort", "distributed", test_count, 1,
-        [&]() { hpx::sort(hpx::execution::par, values.begin(), values.end()); },
-        [&]() { set_input(values, positions, input); });
+    if (test_count == 0)
+    {
+        return hpx::finalize();
+    }
 
-    hpx::util::perftests_report(
-        "partitioned_vector_sort", "centralized_gather_sort", test_count, 1,
-        [&]() {
-            auto gathered = values.get_values(hpx::launch::sync, positions);
-            std::sort(gathered.begin(), gathered.end());
-            values.set_values(hpx::launch::sync, positions, gathered);
-        },
-        [&]() { set_input(values, positions, input); });
+    auto const reset = [&]() { set_input(values, positions, input); };
+    auto const distributed = measure(test_count, reset, [&]() {
+        hpx::sort(hpx::execution::par, values.begin(), values.end());
+    });
+    auto const centralized = measure(test_count, reset, [&]() {
+        auto gathered = values.get_values(hpx::launch::sync, positions);
+        std::sort(gathered.begin(), gathered.end());
+        values.set_values(hpx::launch::sync, positions, gathered);
+    });
 
-    hpx::util::perftests_print_times();
+    std::cout << "partitioned_vector_sort distributed " << distributed
+              << " s\npartitioned_vector_sort centralized_gather_sort "
+              << centralized << " s\n";
     return hpx::finalize();
 }
 
@@ -95,7 +118,6 @@ int main(int argc, char* argv[])
         "number of timed iterations")("seed",
         hpx::program_options::value<std::uint32_t>()->default_value(0),
         "random-number seed");
-    hpx::util::perftests_cfg(cmdline);
 
     hpx::init_params init_args;
     init_args.desc_cmdline = cmdline;
