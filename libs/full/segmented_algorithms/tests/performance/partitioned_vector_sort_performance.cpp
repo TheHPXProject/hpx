@@ -28,6 +28,10 @@ namespace {
     using vector_type = hpx::partitioned_vector<int>;
 
     /// Restore the distributed input before a timed benchmark iteration.
+    ///
+    /// \param values The distributed vector to restore.
+    /// \param positions The global positions corresponding to \a input.
+    /// \param input The values to store at \a positions.
     void set_input(vector_type& values,
         std::vector<std::size_t> const& positions,
         std::vector<int> const& input)
@@ -35,28 +39,70 @@ namespace {
         values.set_values(hpx::launch::sync, positions, input);
     }
 
-    /// Measure an operation while restoring its input outside the timed region.
-    template <typename Reset, typename Operation>
-    double measure(std::size_t test_count, Reset&& reset, Operation&& operation)
+    struct benchmark_sample
+    {
+        double distributed = 0.0;
+        double centralized = 0.0;
+        bool distributed_first = true;
+    };
+
+    /// Measure both operations in alternating order with untimed input resets.
+    ///
+    /// \tparam Reset A nullary callable that restores the benchmark input.
+    /// \tparam Distributed A nullary callable running the distributed sort.
+    /// \tparam Centralized A nullary callable running the centralized sort.
+    /// \param test_count The number of timed samples for each operation.
+    /// \param distributed_first Whether the first sample runs the distributed
+    ///        operation first. Subsequent samples alternate the order.
+    /// \param reset The input restoration callable.
+    /// \param distributed The distributed operation to measure.
+    /// \param centralized The centralized operation to measure.
+    /// \return The raw timings and execution order for every sample.
+    template <typename Reset, typename Distributed, typename Centralized>
+    std::vector<benchmark_sample> measure(std::size_t test_count,
+        bool distributed_first, Reset&& reset, Distributed&& distributed,
+        Centralized&& centralized)
     {
         using clock = std::chrono::steady_clock;
 
         reset();
-        operation();
+        distributed();
+        reset();
+        centralized();
 
-        std::chrono::duration<double> elapsed{};
-        for (std::size_t i = 0; i != test_count; ++i)
-        {
+        std::vector<benchmark_sample> samples;
+        samples.reserve(test_count);
+        auto measure_one = [&](auto&& operation) {
             reset();
             auto const start = clock::now();
             operation();
-            elapsed += clock::now() - start;
+            return std::chrono::duration<double>(clock::now() - start).count();
+        };
+        for (std::size_t i = 0; i != test_count; ++i)
+        {
+            benchmark_sample sample;
+            sample.distributed_first = distributed_first == (i % 2 == 0);
+            if (sample.distributed_first)
+            {
+                sample.distributed = measure_one(distributed);
+                sample.centralized = measure_one(centralized);
+            }
+            else
+            {
+                sample.centralized = measure_one(centralized);
+                sample.distributed = measure_one(distributed);
+            }
+            samples.push_back(sample);
         }
-        return elapsed.count() / static_cast<double>(test_count);
+        return samples;
     }
 }    // namespace
 
 /// Compare distributed sorting with a centralized gather-sort-scatter.
+///
+/// \param vm The parsed benchmark command-line options.
+/// \return Zero after initiating HPX shutdown, or immediately on localities
+///         that do not run the benchmark driver.
 int hpx_main(hpx::program_options::variables_map& vm)
 {
     if (hpx::get_locality_id() != 0)
@@ -89,14 +135,29 @@ int hpx_main(hpx::program_options::variables_map& vm)
     }
 
     auto const reset = [&]() { set_input(values, positions, input); };
-    auto const distributed = measure(test_count, reset, [&]() {
-        hpx::sort(hpx::execution::par, values.begin(), values.end());
-    });
-    auto const centralized = measure(test_count, reset, [&]() {
-        auto gathered = values.get_values(hpx::launch::sync, positions);
-        std::sort(gathered.begin(), gathered.end());
-        values.set_values(hpx::launch::sync, positions, gathered);
-    });
+    auto const samples = measure(
+        test_count, (seed % 2) == 0, reset,
+        [&]() { hpx::sort(hpx::execution::par, values.begin(), values.end()); },
+        [&]() {
+            auto gathered = values.get_values(hpx::launch::sync, positions);
+            std::sort(gathered.begin(), gathered.end());
+            values.set_values(hpx::launch::sync, positions, gathered);
+        });
+
+    double distributed = 0.0;
+    double centralized = 0.0;
+    for (std::size_t i = 0; i != samples.size(); ++i)
+    {
+        auto const& sample = samples[i];
+        distributed += sample.distributed;
+        centralized += sample.centralized;
+        std::cout << "partitioned_vector_sort sample " << i << " first "
+                  << (sample.distributed_first ? "distributed" : "centralized")
+                  << " distributed " << sample.distributed << " s centralized "
+                  << sample.centralized << " s\n";
+    }
+    distributed /= static_cast<double>(samples.size());
+    centralized /= static_cast<double>(samples.size());
 
     std::cout << "partitioned_vector_sort distributed " << distributed
               << " s\npartitioned_vector_sort centralized_gather_sort "
@@ -105,6 +166,10 @@ int hpx_main(hpx::program_options::variables_map& vm)
 }
 
 /// Configure and launch the distributed performance benchmark.
+///
+/// \param argc The number of command-line arguments.
+/// \param argv The command-line argument array.
+/// \return The HPX runtime exit code.
 int main(int argc, char* argv[])
 {
     hpx::program_options::options_description cmdline(
