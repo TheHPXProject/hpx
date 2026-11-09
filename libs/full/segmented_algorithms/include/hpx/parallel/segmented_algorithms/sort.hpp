@@ -74,6 +74,45 @@ namespace hpx::parallel::detail {
         }
     };
 
+    /// Merge two adjacent sorted ranges stored in one physical partition.
+    template <typename Iter>
+    struct segmented_local_merge : algorithm<segmented_local_merge<Iter>, Iter>
+    {
+        constexpr segmented_local_merge() noexcept
+          : algorithm<segmented_local_merge, Iter>("segmented_local_merge")
+        {
+        }
+
+        /// Merge two local ranges using the supplied policy and projection.
+        template <typename ExPolicy, typename InIter, typename Comp,
+            typename Proj>
+        static InIter sequential(ExPolicy&& policy, InIter first, InIter middle,
+            InIter last, Comp&& comp, Proj&& proj)
+        {
+            using local_traits =
+                hpx::traits::segmented_local_iterator_traits<InIter>;
+            using predicate_type =
+                util::compare_projected<std::decay_t<Comp>, std::decay_t<Proj>>;
+            predicate_type pred(
+                HPX_FORWARD(Comp, comp), HPX_FORWARD(Proj, proj));
+            hpx::inplace_merge(hpx::execution::experimental::to_non_task(
+                                   HPX_FORWARD(ExPolicy, policy)),
+                local_traits::local(first), local_traits::local(middle),
+                local_traits::local(last), pred);
+            return last;
+        }
+
+        /// Parallel entry point for merging two local ranges.
+        template <typename ExPolicy, typename InIter, typename Comp,
+            typename Proj>
+        static InIter parallel(ExPolicy&& policy, InIter first, InIter middle,
+            InIter last, Comp&& comp, Proj&& proj)
+        {
+            return sequential(HPX_FORWARD(ExPolicy, policy), first, middle,
+                last, HPX_FORWARD(Comp, comp), HPX_FORWARD(Proj, proj));
+        }
+    };
+
     // Bound outstanding transport and namespace requests independently of
     // the number of partitions.
     inline constexpr std::size_t segmented_sort_transfer_limit = 8;
@@ -627,37 +666,202 @@ namespace hpx::parallel::detail {
         {
         }
 
+        /// Return a subrange of a physical sorted run.
+        static segmented_sort_run<LocalIter> subrun(
+            segmented_sort_run<LocalIter> const& run, std::size_t offset,
+            std::size_t count)
+        {
+            auto const first = run.first + static_cast<std::ptrdiff_t>(offset);
+            return {run.id, run.locality, first,
+                first + static_cast<std::ptrdiff_t>(count)};
+        }
+
+        /// Compare projected values at two positions without gathering either
+        /// complete run on the coordinating locality.
+        template <typename ExPolicy, typename Comp, typename Proj>
+        static bool less_at(ExPolicy const& policy,
+            segmented_sort_run<LocalIter> const& lhs, std::size_t lhs_offset,
+            segmented_sort_run<LocalIter> const& rhs, std::size_t rhs_offset,
+            Comp& comp, Proj& proj)
+        {
+            segmented_sort_block<LocalIter> const values_to_fetch{
+                subrun(lhs, lhs_offset, 1), subrun(rhs, rhs_offset, 1)};
+            auto values = segmented_sort_fetch_block(policy, values_to_fetch);
+            HPX_ASSERT(values.size() == 2);
+            util::compare_projected<Comp&, Proj&> pred(comp, proj);
+            return pred(values[0], values[1]);
+        }
+
+        /// Find the stable merge partition that leaves left.size() values in
+        /// the left run. The two returned offsets delimit equally sized
+        /// crossing ranges: left[i, end) and right[begin, j).
+        template <typename ExPolicy, typename Comp, typename Proj>
+        static std::pair<std::size_t, std::size_t> merge_partition(
+            ExPolicy const& policy, segmented_sort_run<LocalIter> const& left,
+            segmented_sort_run<LocalIter> const& right, Comp& comp, Proj& proj)
+        {
+            auto const left_size = static_cast<std::size_t>(left.size());
+            auto const right_size = static_cast<std::size_t>(right.size());
+            std::size_t low =
+                left_size > right_size ? left_size - right_size : 0;
+            std::size_t high = left_size;
+
+            while (low <= high)
+            {
+                auto const left_cut = low + (high - low) / 2;
+                auto const right_cut = left_size - left_cut;
+
+                if (left_cut != 0 && right_cut != right_size &&
+                    less_at(policy, right, right_cut, left, left_cut - 1, comp,
+                        proj))
+                {
+                    high = left_cut - 1;
+                }
+                else if (right_cut != 0 && left_cut != left_size &&
+                    less_at(policy, left, left_cut, right, right_cut - 1, comp,
+                        proj))
+                {
+                    low = left_cut + 1;
+                }
+                else
+                {
+                    return {left_cut, right_cut};
+                }
+            }
+
+            HPX_ASSERT(false);
+            return {left_size, 0};
+        }
+
+        /// Exchange the crossing suffix and prefix in bounded chunks. At most
+        /// two transfer chunks are materialized on the coordinator at once.
+        template <typename ExPolicy>
+        static void exchange_crossing_ranges(ExPolicy const& policy,
+            segmented_sort_run<LocalIter> const& left,
+            segmented_sort_run<LocalIter> const& right, std::size_t left_cut,
+            std::size_t crossing_size)
+        {
+            for (std::size_t offset = 0; offset != crossing_size;)
+            {
+                auto const count =
+                    (std::min) (segmented_sort_transfer_chunk_size,
+                        crossing_size - offset);
+                auto const left_chunk = subrun(left, left_cut + offset, count);
+                auto const right_chunk = subrun(right, offset, count);
+                segmented_sort_block<LocalIter> const chunks{
+                    left_chunk, right_chunk};
+                auto values = segmented_sort_fetch_block(policy, chunks);
+                HPX_ASSERT(values.size() == 2 * count);
+
+                segmented_sort_block<LocalIter> const left_destination{
+                    left_chunk};
+                segmented_sort_block<LocalIter> const right_destination{
+                    right_chunk};
+                auto const middle = values.begin() +
+                    static_cast<typename decltype(values)::difference_type>(
+                        count);
+                [[maybe_unused]] auto const left_last =
+                    segmented_sort_store_block(
+                        policy, left_destination, middle);
+                [[maybe_unused]] auto const right_last =
+                    segmented_sort_store_block(
+                        policy, right_destination, values.begin());
+                HPX_ASSERT(left_last == values.end());
+                HPX_ASSERT(right_last == middle);
+                offset += count;
+            }
+        }
+
+        /// Merge the two exchanged runs independently on their owning
+        /// localities. Parallel policies overlap the two local merges.
+        template <typename ExPolicy, typename Comp, typename Proj,
+            typename IsSeq>
+        static void merge_exchanged_runs(ExPolicy const& policy,
+            segmented_sort_run<LocalIter> const& left,
+            segmented_sort_run<LocalIter> const& right, std::size_t left_cut,
+            std::size_t right_cut, Comp const& comp, Proj const& proj,
+            IsSeq is_seq)
+        {
+            using operation = segmented_local_merge<LocalIter>;
+            auto const here = hpx::find_here();
+            std::vector<hpx::future<LocalIter>> pending;
+            std::exception_ptr error;
+            auto merge_run = [&](segmented_sort_run<LocalIter> const& run,
+                                 std::size_t middle_offset) {
+                if (middle_offset == 0 ||
+                    middle_offset == static_cast<std::size_t>(run.size()))
+                {
+                    return;
+                }
+
+                auto const middle =
+                    run.first + static_cast<std::ptrdiff_t>(middle_offset);
+                if constexpr (IsSeq::value)
+                {
+                    if (run.locality == here)
+                    {
+                        operation::sequential(
+                            policy, run.first, middle, run.last, comp, proj);
+                    }
+                    else
+                    {
+                        dispatch(run.locality, operation(), policy, is_seq,
+                            run.first, middle, run.last, comp, proj);
+                    }
+                }
+                else if (run.locality == here)
+                {
+                    pending.push_back(
+                        hpx::async([policy, first = run.first, middle,
+                                       last = run.last, comp, proj]() mutable {
+                            return operation::parallel(policy, first, middle,
+                                last, HPX_MOVE(comp), HPX_MOVE(proj));
+                        }));
+                }
+                else
+                {
+                    pending.push_back(
+                        dispatch_async(run.locality, operation(), policy,
+                            is_seq, run.first, middle, run.last, comp, proj));
+                }
+            };
+
+            try
+            {
+                merge_run(left, left_cut);
+                merge_run(right, right_cut);
+            }
+            catch (...)
+            {
+                error = std::current_exception();
+            }
+            segmented_sort_wait<ExPolicy>(pending, error);
+        }
+
+        /// Perform a bounded merge-split of two adjacent sorted runs.
         template <typename ExPolicy, typename Comp, typename Proj>
         static bool execute(ExPolicy const& policy,
             segmented_sort_run<LocalIter> const& left,
             segmented_sort_run<LocalIter> const& right, Comp comp, Proj proj)
         {
-            segmented_sort_block<LocalIter> const pair{left, right};
-            auto values = segmented_sort_fetch_block(policy, pair);
-            auto const left_size = static_cast<std::size_t>(left.size());
-            HPX_ASSERT(values.size() ==
-                left_size + static_cast<std::size_t>(right.size()));
-
-            auto middle = values.begin() +
-                static_cast<typename decltype(values)::difference_type>(
-                    left_size);
-            util::compare_projected<Comp&, Proj&> pred(comp, proj);
-
-            // Avoid rewriting an already ordered pair. The full pair has
-            // already been fetched, but no destination is modified.
-            if (middle == values.end() || !pred(*middle, *(std::prev(middle))))
+            auto const [left_cut, right_cut] =
+                merge_partition(policy, left, right, comp, proj);
+            auto const crossing_size = right_cut;
+            HPX_ASSERT(crossing_size ==
+                static_cast<std::size_t>(left.size()) - left_cut);
+            if (crossing_size == 0)
             {
                 return false;
             }
 
-            hpx::inplace_merge(
-                policy, values.begin(), middle, values.end(), pred);
-            [[maybe_unused]] auto const last =
-                segmented_sort_store_block(policy, pair, values.begin());
-            HPX_ASSERT(last == values.end());
+            exchange_crossing_ranges(
+                policy, left, right, left_cut, crossing_size);
+            merge_exchanged_runs(policy, left, right, left_cut, right_cut, comp,
+                proj, hpx::is_sequenced_execution_policy<ExPolicy>{});
             return true;
         }
 
+        /// Sequenced dispatch entry point for a compare-split.
         template <typename ExPolicy, typename Comp, typename Proj>
         static bool sequential(ExPolicy const& policy,
             segmented_sort_run<LocalIter> const& left,
@@ -666,6 +870,7 @@ namespace hpx::parallel::detail {
             return execute(policy, left, right, HPX_MOVE(comp), HPX_MOVE(proj));
         }
 
+        /// Parallel dispatch entry point for a compare-split.
         template <typename ExPolicy, typename Comp, typename Proj>
         static bool parallel(ExPolicy const& policy,
             segmented_sort_run<LocalIter> const& left,
@@ -677,12 +882,12 @@ namespace hpx::parallel::detail {
         }
     };
 
-    // Odd-even compare-split phases keep the data distributed. Each operation
-    // temporarily holds only two adjacent runs, keeps the lower part in the
-    // left run and the upper part in the right run, and uses bounded transfers.
-    // After P phases all P runs are globally ordered. Parallel policies overlap
-    // the disjoint pairs in each phase. Temporary storage is bounded by the
-    // largest adjacent pair, although values can move in multiple phases.
+    /// Run odd-even compare-split phases while keeping data distributed. Each
+    /// operation exchanges only the crossing suffix and prefix using bounded
+    /// buffers, then merges both runs on their owning localities. After P
+    /// phases all P runs are globally ordered. Parallel policies overlap the
+    /// disjoint pairs in each phase, although values can move in multiple
+    /// phases.
     template <typename ExPolicy, typename LocalIter, typename Comp,
         typename Proj, typename IsSeq>
     void segmented_sort_merge_runs(ExPolicy const& policy,
@@ -814,10 +1019,9 @@ namespace hpx::segmented {
     /// by HPX.
     ///
     /// The final merge uses P odd-even compare-split phases for P participating
-    /// runs. Each operation temporarily gathers only two adjacent runs, keeps
-    /// their original sizes, and writes the lower and upper results back to
-    /// their respective owners. No locality gathers the full input; peak
-    /// temporary storage is proportional to the largest adjacent pair, and a
+    /// runs. Each operation finds the merge partition, exchanges only the
+    /// crossing suffix and prefix in bounded chunks, and merges both runs on
+    /// their owning localities. No locality gathers the full input, although a
     /// value can be transferred in multiple phases. An exception after a
     /// compare-split stores data can leave a partially reordered range.
     HPX_CXX_EXPORT template <typename SegIter,
@@ -846,13 +1050,11 @@ namespace hpx::segmented {
     ///
     /// The policy controls local partition sorting and whether independent
     /// compare-splits overlap. The final merge uses P odd-even phases for P
-    /// participating runs. Each operation temporarily gathers only two
-    /// adjacent runs, keeps their original sizes, and writes the lower and
-    /// upper results back to their respective owners. No locality gathers the
-    /// full input; peak temporary storage is proportional to the largest
-    /// adjacent pair, and a value can be transferred in multiple phases. An
-    /// exception after a compare-split stores data can leave a partially
-    /// reordered range.
+    /// participating runs. Each operation finds the merge partition, exchanges
+    /// only the crossing suffix and prefix in bounded chunks, and merges both
+    /// runs on their owning localities. No locality gathers the full input,
+    /// although a value can be transferred in multiple phases. An exception
+    /// after a compare-split stores data can leave a partially reordered range.
     HPX_CXX_EXPORT template <typename ExPolicy, typename SegIter,
         typename Comp = hpx::parallel::detail::less>
         requires(hpx::is_execution_policy_v<ExPolicy> &&
