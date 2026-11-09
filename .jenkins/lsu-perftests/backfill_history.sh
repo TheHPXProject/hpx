@@ -257,9 +257,10 @@ fi
 # The reports of runs that are in the history now aren't needed anymore (a
 # run's directory is runs/<position>-<commit>, see backfill.sh)
 for dir in "${base}"/runs/*-*/; do
-    short=${dir%/}
-    short=${short##*-}
-    if [[ -n "${short}" ]] && grep -q "	${short}" "${data}/runs.tsv"; then
+    run_commit=${dir%/}
+    run_commit=${run_commit##*-}
+    if [[ -n "${run_commit}" ]] &&
+        grep -q "	${run_commit}	" "${data}/runs.tsv"; then
         rm -rf "${dir:?}"
     fi
 done

@@ -153,12 +153,12 @@ n=0
 while read -r commit; do
     n=$((n + 1))
     short=${commit:0:10}
-    run_dir=${base}/runs/$(printf %02d "${n}")-${short}
+    run_dir=${base}/runs/$(printf %02d "${n}")-${commit}
     if grep -q "	${commit}	" "${base}/upload/data/runs.tsv" 2> /dev/null; then
         log "[${n}/${total}] ${short}: already in runs.tsv, skipped"
         continue
     fi
-    kept=$(ls -d "${base}"/runs/*-"${short}"/perftests-reports 2> /dev/null | tail -1)
+    kept=$(ls -d "${base}"/runs/*-"${commit}"/perftests-reports 2> /dev/null | tail -1)
     if [[ -n "${kept}" ]] && recorded "${kept}"; then
         log "[${n}/${total}] ${short}: reports kept in ${kept%/perftests-reports}"
         add_reports "${kept}" "${kept%/perftests-reports}/upload.log"
