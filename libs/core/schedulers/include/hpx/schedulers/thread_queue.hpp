@@ -1217,15 +1217,16 @@ namespace hpx::threads::policies {
             if (thread_schedule_state::unknown == state)
             {
                 // Read the counters in the order in which a thread leaves
-                // them, so that a thread that changes state while they are
-                // read may be counted once too often, but is never missed if
-                // it stays in this queue (scheduled_thread_pool::
-                // suspend_internal waits for the sum over all queues to
-                // drop): add_new increments thread_map_count_ before it
-                // decrements new_tasks_count_, and the cleanup decrements
-                // terminated_items_count_ before thread_map_count_. An
-                // acquire load that sees the later write of such a pair makes
-                // the earlier one visible to the loads after it.
+                // them, so that a thread that moves from the staged tasks to
+                // the thread map, or is cleaned up after it terminated, while
+                // they are read may be counted once too often, but is not
+                // missed (scheduled_thread_pool::suspend_internal waits for
+                // the sum over all queues to drop): add_new increments
+                // thread_map_count_ before it decrements new_tasks_count_,
+                // and the cleanup decrements terminated_items_count_ before
+                // thread_map_count_. An acquire load that sees the later
+                // write of such a pair makes the earlier one visible to the
+                // loads after it.
                 // A thread that enters the map after thread_map_count_ is
                 // read and terminates before terminated_items_count_ is read
                 // still lowers the result by one; no read order avoids both
