@@ -589,7 +589,8 @@ namespace hpx::collectives {
                 return result;
             };
 
-            return fid.then(hpx::launch::sync, HPX_MOVE(scatter_from_data));
+            return detail::then_on_communicator(
+                fid, HPX_MOVE(scatter_from_data));
         }
 
         template <typename T>
@@ -916,7 +917,7 @@ namespace hpx::collectives {
                 return result;
             };
 
-            return fid.then(hpx::launch::sync, HPX_MOVE(scatter_to_data));
+            return detail::then_on_communicator(fid, HPX_MOVE(scatter_to_data));
         }
 
         template <typename T>
