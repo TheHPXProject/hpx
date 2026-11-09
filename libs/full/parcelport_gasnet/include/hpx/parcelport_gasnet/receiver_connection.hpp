@@ -10,6 +10,7 @@
 
 #if defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_PARCELPORT_GASNET)
 #include <hpx/assert.hpp>
+#include <hpx/modules/logging.hpp>
 #include <hpx/parcelport_gasnet/mailbox_array.hpp>
 #include <hpx/parcelset/decode_parcels.hpp>
 #include <hpx/parcelset/parcel_buffer.hpp>
@@ -328,6 +329,7 @@ namespace hpx::parcelset::policies::gasnet {
         // consume(), which routes the bytes to their final destination
         // (descriptor, the parcel data buffer, or a zero-copy chunk buffer).
         enum class stream_stage : std::uint8_t
+        {
             counts,
             tchunks,
             data,
@@ -554,10 +556,24 @@ namespace hpx::parcelset::policies::gasnet {
                 chunk_buffers_.clear();
             }
             } catch (std::exception const& e) {
-                std::fprintf(stderr, "gasnet: PE %zu: decode failed: %s (size=%zu nzc=%u nnzc=%u tch=%zu data=%zu)\n",
-                    mailboxes_.my_pe(), e.what(), total_size_, counts_[0], counts_[1],
-                    buffer_.transmission_chunks_.size(), buffer_.data_.size());
-                std::abort();
+                // A malformed or truncated parcel must not take down the
+                // whole job: report it, discard the message, and let the
+                // connection retire as failed.  The stream itself is still
+                // aligned (every page was consumed), so only this message is
+                // lost.
+                LPT_(error)
+                    << "PE " << mailboxes_.my_pe() << ": decode of "
+                    << total_size_ << "-byte message from src " << src_
+                    << " failed: " << e.what() << " (nzc=" << counts_[0]
+                    << " nnzc=" << counts_[1]
+                    << " tchunks=" << buffer_.transmission_chunks_.size()
+                    << " data=" << buffer_.data_.size() << ")";
+                parcels_.clear();
+                chunk_buffers_.clear();
+                buffer_ = buffer_type{};
+                post_credit_state_ = connection_state::failed;
+                state_ = connection_state::reaping_credit;
+                return false;
             }
 
             // The final page's credit-return region is still in flight; wait
