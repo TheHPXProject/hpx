@@ -11,11 +11,13 @@
 /// \page hpx::supervision::testing::suspend_heartbeat_for_testing
 /// \page hpx::supervision::testing::failure_detection_sweep_in_flight_for_testing
 /// \page hpx::supervision::testing::stop_background_loops
+/// \page hpx::supervision::testing::set_evict_fenced_hook_for_testing
 /// \headerfile hpx/supervision_dispatch.hpp
 
 #pragma once
 
 #include <hpx/config.hpp>
+#include <hpx/modules/functional.hpp>
 #include <hpx/modules/naming_base.hpp>
 #include <hpx/modules/timing.hpp>
 
@@ -94,4 +96,16 @@ namespace hpx::supervision::testing {
     /// examples/tests that need to simulate this exact scenario
     /// deterministically.
     HPX_SUPERVISION_DISPATCH_EXPORT void stop_background_loops();
+
+    /// Installs \p hook to be called by registry::evict_fenced() on this
+    /// locality after it found the peer's local supervision state terminal
+    /// and before it removes the peer's registry entry, i.e. in the window in
+    /// which a newer lifecycle transition of the peer has to be detected (see
+    /// registry::evict_fenced()). Pass an empty function to remove the hook.
+    /// Not part of the public dispatch API - exists only so tests can force a
+    /// lifecycle transition into that window deterministically.
+    ///
+    /// \param hook  The function to call, with no lock held.
+    HPX_SUPERVISION_DISPATCH_EXPORT void set_evict_fenced_hook_for_testing(
+        hpx::function<void()> hook);
 }    // namespace hpx::supervision::testing
