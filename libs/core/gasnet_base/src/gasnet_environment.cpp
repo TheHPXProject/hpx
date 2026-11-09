@@ -365,31 +365,7 @@ namespace hpx::util {
             gex_RMA_PutNBI(tm_, static_cast<gex_Rank_t>(rank), raddr[i],
                 const_cast<void*>(laddr[i]), nbytes[i], GEX_EVENT_DEFER, 0);
         }
-        // the credit word goes last, exactly as in put_data_and_credit_nb()
-        gex_RMA_PutNBI(tm_, static_cast<gex_Rank_t>(rank), credit_raddr,
-            const_cast<void*>(credit_laddr), sizeof(std::uint32_t), GEX_EVENT_DEFER, 0);
-
-        return gex_NBI_EndAccessRegion(0);
-    }
-
-    gex_Event_t gasnet_environment::put_data_and_credit_nb(int rank, void* raddr,
-        void const* laddr, std::size_t nbytes, void* credit_raddr,
-        void const* credit_laddr)
-    {
-        HPX_ASSERT(tm_ != GEX_TM_INVALID);
-
-        // The credit word is read by the asynchronous NBI put from
-        // 'credit_laddr', so the caller must keep that word unchanged until
-        // the returned region event completes (poll_event() == true).
-        gex_NBI_BeginAccessRegion(0);
-
-        // Ordering is the whole point: the credit word is performed at the
-        // target only after the data bytes have been performed there, so a
-        // receiver that observes produced>buffered sees the complete page.
-        // Both destinations live in the target's registered segment, which
-        // is exactly what GASNet requires for remote RMA targets.
-        gex_RMA_PutNBI(tm_, static_cast<gex_Rank_t>(rank), raddr,
-            const_cast<void*>(laddr), nbytes, GEX_EVENT_DEFER, 0);
+        // the credit word goes last (ordered only on the smp conduit)
         gex_RMA_PutNBI(tm_, static_cast<gex_Rank_t>(rank), credit_raddr,
             const_cast<void*>(credit_laddr), sizeof(std::uint32_t), GEX_EVENT_DEFER, 0);
 
