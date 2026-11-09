@@ -461,7 +461,8 @@ namespace hpx::collectives {
                 return result;
             };
 
-            return fid.then(hpx::launch::sync, HPX_MOVE(exclusive_scan_data));
+            return detail::then_on_communicator(
+                fid, HPX_MOVE(exclusive_scan_data));
         }
     }    // namespace detail
 
@@ -647,7 +648,8 @@ namespace hpx::collectives {
                 return result;
             };
 
-            return fid.then(hpx::launch::sync, HPX_MOVE(exclusive_scan_data));
+            return detail::then_on_communicator(
+                fid, HPX_MOVE(exclusive_scan_data));
         }
     }    // namespace detail
 
