@@ -126,7 +126,7 @@ namespace hpx::parcelset::policies::gasnet {
     }
 
     // Non-blocking send driver: stage and transfer as many chunks as the
-    // transport admits in this call via mailbox_array::try_send() (which
+    // transport admits in this call via mailbox_array::send_batch() (which
     // polls credit once).  Returns true when the entire multi-chunk transfer
     // is complete AND the final access region's completion event has been
     // reaped, false while chunks remain but either no credit is left or an
