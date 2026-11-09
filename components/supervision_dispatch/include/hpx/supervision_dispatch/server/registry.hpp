@@ -349,6 +349,14 @@ namespace hpx::supervision::server {
             /// state consistently with what the racing terminal notification
             /// requested.
             bool evict_preserve_terminal_state = false;
+
+            /// The join_epoch evict_peer() was called with when it set
+            /// evict_pending above. join() only carries out the pending
+            /// eviction if the entry is still at this epoch once the
+            /// lifecycle notifications being mirrored have finished, so an
+            /// eviction for an older epoch cannot remove a peer that came
+            /// back meanwhile.
+            std::uint64_t evict_pending_epoch = 0;
         };
 
         mutable hpx::spinlock mtx_;

@@ -384,6 +384,8 @@ unit tests for this module deterministic:
 .. cpp:function:: void hpx::supervision::testing::stop_background_loops()
 .. cpp:function:: void hpx::supervision::testing::set_evict_fenced_hook_for_testing(hpx::function<void()> hook)
 .. cpp:function:: void hpx::supervision::testing::set_lifecycle_mirror_hook_for_testing(hpx::function<void()> hook)
+.. cpp:function:: void hpx::supervision::testing::set_evict_peer_hook_for_testing(hpx::function<void()> hook)
+.. cpp:function:: std::size_t hpx::supervision::testing::evict_peers_waiting_for_mirrors_for_testing()
 
 See the :ref:`API reference <modules_supervision_dispatch_api>` of this
 module for more details, and :ref:`modules_supervision` for the underlying

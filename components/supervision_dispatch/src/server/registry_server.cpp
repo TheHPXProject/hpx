@@ -19,6 +19,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <exception>
 #include <mutex>
@@ -47,41 +48,45 @@ namespace {
     hpx::spinlock last_join_locality_mtx;
     hpx::id_type last_join_locality_target;
 
-    // Testing infrastructure support: see
-    // hpx::supervision::testing::set_evict_fenced_hook_for_testing().
-    hpx::spinlock evict_fenced_hook_mtx;
-    hpx::function<void()> evict_fenced_hook;
-
-    void run_evict_fenced_hook()
+    // Testing infrastructure support: a function tests install to run code at
+    // a specific point of the registry, called with no lock held.
+    struct testing_hook
     {
-        hpx::function<void()> hook;
+        void set(hpx::function<void()> hook)
         {
-            std::scoped_lock<hpx::spinlock> l(evict_fenced_hook_mtx);
-            hook = evict_fenced_hook;
+            std::scoped_lock<hpx::spinlock> l(mtx);
+            f = HPX_MOVE(hook);
         }
-        if (hook)
-        {
-            hook();
-        }
-    }
 
-    // Testing infrastructure support: see
-    // hpx::supervision::testing::set_lifecycle_mirror_hook_for_testing().
-    hpx::spinlock lifecycle_mirror_hook_mtx;
-    hpx::function<void()> lifecycle_mirror_hook;
+        void run()
+        {
+            hpx::function<void()> hook;
+            {
+                std::scoped_lock<hpx::spinlock> l(mtx);
+                hook = f;
+            }
+            if (hook)
+            {
+                hook();
+            }
+        }
 
-    void run_lifecycle_mirror_hook()
-    {
-        hpx::function<void()> hook;
-        {
-            std::scoped_lock<hpx::spinlock> l(lifecycle_mirror_hook_mtx);
-            hook = lifecycle_mirror_hook;
-        }
-        if (hook)
-        {
-            hook();
-        }
-    }
+        hpx::spinlock mtx;
+        hpx::function<void()> f;
+    };
+
+    // See hpx::supervision::testing::set_evict_fenced_hook_for_testing().
+    testing_hook evict_fenced_hook;
+
+    // See hpx::supervision::testing::set_lifecycle_mirror_hook_for_testing().
+    testing_hook lifecycle_mirror_hook;
+
+    // See hpx::supervision::testing::set_evict_peer_hook_for_testing().
+    testing_hook evict_peer_hook;
+
+    // See
+    // hpx::supervision::testing::evict_peers_waiting_for_mirrors_for_testing().
+    std::atomic<std::size_t> evict_peers_waiting_for_mirrors{0};
 
     void unregister_observers(hpx::id_type const& peer_locality,
         hpx::id_type const& lifecycle_observer,
@@ -113,14 +118,22 @@ namespace hpx::supervision::testing {
 
     void set_evict_fenced_hook_for_testing(hpx::function<void()> hook)
     {
-        std::scoped_lock<hpx::spinlock> l(evict_fenced_hook_mtx);
-        evict_fenced_hook = HPX_MOVE(hook);
+        evict_fenced_hook.set(HPX_MOVE(hook));
     }
 
     void set_lifecycle_mirror_hook_for_testing(hpx::function<void()> hook)
     {
-        std::scoped_lock<hpx::spinlock> l(lifecycle_mirror_hook_mtx);
-        lifecycle_mirror_hook = HPX_MOVE(hook);
+        lifecycle_mirror_hook.set(HPX_MOVE(hook));
+    }
+
+    void set_evict_peer_hook_for_testing(hpx::function<void()> hook)
+    {
+        evict_peer_hook.set(HPX_MOVE(hook));
+    }
+
+    std::size_t evict_peers_waiting_for_mirrors_for_testing()
+    {
+        return evict_peers_waiting_for_mirrors.load();
     }
 }    // namespace hpx::supervision::testing
 
@@ -249,7 +262,7 @@ namespace hpx::supervision::server {
                 auto record_on_exit =
                     hpx::experimental::scope_exit(record_mirrored);
 
-                run_lifecycle_mirror_hook();
+                lifecycle_mirror_hook.run();
 
                 // Read peer_locality's current local epoch/state before
                 // mirroring. If it hasn't been seeded yet (epoch mismatch or
@@ -574,6 +587,18 @@ namespace hpx::supervision::server {
             HPX_ASSERT(!entry.ready);
             HPX_ASSERT(entry.peer_locality == peer_locality);
 
+            // A terminal notification that arrived while the observers were
+            // being registered left an eviction pending (see evict_peer()). A
+            // newer notification still being mirrored may already have made
+            // the peer active again without having moved join_epoch forward
+            // yet, so wait for the mirrorings in flight to finish before
+            // deciding below. Nothing else removes an entry that is not ready
+            // yet, so `entry` stays valid while waiting.
+            while (entry.evict_pending && entry.mirrors_in_flight != 0)
+            {
+                cond_.wait(l);
+            }
+
             entry.lifecycle_observer = lifecycle_observer;
             entry.activity_observer = activity_observer;
 
@@ -588,6 +613,15 @@ namespace hpx::supervision::server {
             }
             reported_join_epoch = entry.join_epoch;
             entry.ready = true;
+
+            // Only carry out the pending eviction if the peer did not move on
+            // to a newer epoch since it was requested. If it did, drop it, so
+            // snapshot_peers() lists the peer again.
+            if (entry.evict_pending &&
+                entry.join_epoch != entry.evict_pending_epoch)
+            {
+                entry.evict_pending = false;
+            }
 
             if (entry.evict_pending)
             {
@@ -683,7 +717,7 @@ namespace hpx::supervision::server {
             return;
         }
 
-        run_evict_fenced_hook();
+        evict_fenced_hook.run();
 
         hpx::id_type lifecycle_observer;
         hpx::id_type activity_observer;
@@ -722,6 +756,8 @@ namespace hpx::supervision::server {
         [[maybe_unused]] hpx::id_type keep_alive,
         bool const preserve_terminal_state)
     {
+        evict_peer_hook.run();
+
         hpx::id_type lifecycle_observer;
         hpx::id_type activity_observer;
 
@@ -747,9 +783,12 @@ namespace hpx::supervision::server {
                     return;
                 }
 
+                // join() carries out the eviction once it completes, if the
+                // peer is still at join_epoch by then.
                 if (!it->second.ready)
                 {
                     it->second.evict_pending = true;
+                    it->second.evict_pending_epoch = join_epoch;
                     it->second.evict_preserve_terminal_state =
                         preserve_terminal_state;
                     return;
@@ -763,7 +802,10 @@ namespace hpx::supervision::server {
                 {
                     break;
                 }
+
+                ++evict_peers_waiting_for_mirrors;
                 cond_.wait(l);
+                --evict_peers_waiting_for_mirrors;
             }
 
             lifecycle_observer = it->second.lifecycle_observer;
