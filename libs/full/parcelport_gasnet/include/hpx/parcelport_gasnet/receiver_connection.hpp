@@ -490,11 +490,12 @@ namespace hpx::parcelset::policies::gasnet {
                 catch (...)
                 {
                     // Decoding schedules the actions, which throws once the
-                    // runtime is shutting down.  Any other failure is a real
-                    // error and is fatal.  Still consume the chunk bytes
+                    // runtime is shutting down.  Any other failure is
+                    // reported and fails the connection.  Still consume the
+                    // chunk bytes
                     // (into scratch buffers) so the stream stays in sync, and
                     // drop the message in finish_message().
-                    drop_or_abort("decoding a parcel");
+                    report_drop("decoding a parcel");
                     parcels_.clear();
                     buffer_.chunks_.clear();
                     dropped_ = true;
@@ -592,7 +593,7 @@ namespace hpx::parcelset::policies::gasnet {
                 }
                 catch (...)
                 {
-                    drop_or_abort("dispatching a parcel");
+                    report_drop("dispatching a parcel");
                     parcels_.clear();
                     chunk_buffers_.clear();
                 }
@@ -603,17 +604,19 @@ namespace hpx::parcelset::policies::gasnet {
             // reap_credit()), so a drained receiver queue implies no access
             // region is left outstanding when do_stop() shuts the transport
             // down.
-            post_credit_state_ = connection_state::decoded;
+            post_credit_state_ =
+                failed_ ? connection_state::failed : connection_state::decoded;
             state_ = connection_state::reaping_credit;
             return false;
         }
 
-        // A message may only be dropped while the runtime is shutting down
-        // (a late parcel, e.g. an AGAS credit decrement, can no longer be
-        // dispatched then).  A failure at any other time is a real error: say
-        // what happened and abort instead of losing the parcel silently.
+        // A message is dropped silently only while the runtime is shutting
+        // down (a late parcel, e.g. an AGAS credit decrement, can no longer
+        // be dispatched then).  A failure at any other time is logged and
+        // marks the connection as failed, but the job keeps running: the
+        // stream stays aligned because every page of the message is consumed.
         // Must be called from inside a catch handler.
-        void drop_or_abort(char const* what) const
+        void report_drop(char const* what) noexcept
         {
             if (detail::g_discard_received.load(std::memory_order_acquire) ||
                 hpx::is_stopped_or_shutting_down())
@@ -640,12 +643,11 @@ namespace hpx::parcelset::policies::gasnet {
             catch (...)
             {
             }
-            std::fprintf(stderr,
-                "gasnet: PE %zu: failed while %s: %s (src=%d size=%zu "
-                "nzc=%u nnzc=%u)\n",
-                mailboxes_.my_pe(), what, reason.c_str(), src_, total_size_,
-                counts_[0], counts_[1]);
-            std::abort();
+            LPT_(error) << "PE " << mailboxes_.my_pe() << ": failed while "
+                        << what << ": " << reason << " (src=" << src_
+                        << " size=" << total_size_ << " nzc=" << counts_[0]
+                        << " nnzc=" << counts_[1] << ")";
+            failed_ = true;
         }
 
         connection_state state_;
@@ -662,6 +664,7 @@ namespace hpx::parcelset::policies::gasnet {
         std::size_t zc_seen_ = 0;
         bool optimized_ = false;
         bool dropped_ = false;
+        bool failed_ = false;
         std::vector<parcelset::parcel> parcels_;
         std::vector<std::unique_ptr<char[]>> chunk_buffers_;
         std::uint32_t expected_chunks_;
