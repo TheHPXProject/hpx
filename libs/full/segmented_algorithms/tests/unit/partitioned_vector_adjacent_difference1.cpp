@@ -76,8 +76,7 @@ template <typename T>
 void adjacent_difference_tests(std::vector<hpx::id_type>& localities)
 {
     {
-        hpx::partitioned_vector<T> in_place(
-            8, T(0), hpx::container_layout(2));
+        hpx::partitioned_vector<T> in_place(8, T(0), hpx::container_layout(2));
         auto it = in_place.begin();
         for (T value = T(10); it != in_place.end(); ++it, ++value)
         {
@@ -87,8 +86,8 @@ void adjacent_difference_tests(std::vector<hpx::id_type>& localities)
         hpx::adjacent_difference(in_place.begin(), in_place.end(),
             in_place.begin(), std::minus<T>{});
 
-        std::vector<T> const expected{T(10), T(1), T(1), T(1),
-            T(1), T(1), T(1), T(1)};
+        std::vector<T> const expected{
+            T(10), T(1), T(1), T(1), T(1), T(1), T(1), T(1)};
         auto verify = [&]() {
             auto result = in_place.begin();
             for (T value : expected)
@@ -123,20 +122,18 @@ void adjacent_difference_tests(std::vector<hpx::id_type>& localities)
     {
         hpx::partitioned_vector<T> empty(0, hpx::container_layout(1));
         auto const dest = empty.begin();
-        HPX_TEST(hpx::adjacent_difference(
-                     hpx::execution::seq, empty.begin(), empty.end(), dest) ==
-            dest);
-        HPX_TEST(hpx::adjacent_difference(hpx::execution::seq(
-                                                 hpx::execution::task),
-                     empty.begin(), empty.end(), dest)
-                     .get() == dest);
-        HPX_TEST(hpx::adjacent_difference(
-                     hpx::execution::par, empty.begin(), empty.end(), dest) ==
-            dest);
-        HPX_TEST(hpx::adjacent_difference(hpx::execution::par(
-                                                 hpx::execution::task),
-                     empty.begin(), empty.end(), dest)
-                     .get() == dest);
+        HPX_TEST(hpx::adjacent_difference(hpx::execution::seq, empty.begin(),
+                     empty.end(), dest) == dest);
+        HPX_TEST(
+            hpx::adjacent_difference(hpx::execution::seq(hpx::execution::task),
+                empty.begin(), empty.end(), dest)
+                .get() == dest);
+        HPX_TEST(hpx::adjacent_difference(hpx::execution::par, empty.begin(),
+                     empty.end(), dest) == dest);
+        HPX_TEST(
+            hpx::adjacent_difference(hpx::execution::par(hpx::execution::task),
+                empty.begin(), empty.end(), dest)
+                .get() == dest);
     }
 
     {
@@ -153,13 +150,11 @@ void adjacent_difference_tests(std::vector<hpx::id_type>& localities)
         }
         for (std::size_t i = 0; i != out_sizes.size(); ++i)
         {
-            out_localities.push_back(
-                localities[(i + 1) % localities.size()]);
+            out_localities.push_back(localities[(i + 1) % localities.size()]);
         }
         hpx::partitioned_vector<T> src(
             length, hpx::explicit_container_layout(src_sizes, src_localities));
-        hpx::partitioned_vector<T> out(
-            length, T(-1),
+        hpx::partitioned_vector<T> out(length, T(-1),
             hpx::explicit_container_layout(out_sizes, out_localities));
 
         auto it = src.begin();
@@ -178,8 +173,8 @@ void adjacent_difference_tests(std::vector<hpx::id_type>& localities)
             }
         };
 
-        hpx::adjacent_difference(hpx::execution::seq, src.begin(), src.end(),
-            out.begin());
+        hpx::adjacent_difference(
+            hpx::execution::seq, src.begin(), src.end(), out.begin());
         verify();
 
         hpx::fill(hpx::execution::seq, out.begin(), out.end(), T(-1));
@@ -189,8 +184,8 @@ void adjacent_difference_tests(std::vector<hpx::id_type>& localities)
         verify();
 
         hpx::fill(hpx::execution::seq, out.begin(), out.end(), T(-1));
-        hpx::adjacent_difference(hpx::execution::par, src.begin(), src.end(),
-            out.begin());
+        hpx::adjacent_difference(
+            hpx::execution::par, src.begin(), src.end(), out.begin());
         verify();
 
         hpx::fill(hpx::execution::seq, out.begin(), out.end(), T(-1));
