@@ -19,6 +19,7 @@
 #include <hpx/supervision_dispatch/export_definitions.hpp>
 #include <hpx/supervision_dispatch/testing.hpp>
 
+#include <cstddef>
 #include <cstdint>
 #include <iosfwd>
 #include <map>
@@ -158,6 +159,25 @@ namespace hpx::supervision::server {
         /// that failure detection fenced. The terminal state is left in place
         /// as a tombstone (see cleanup_peer()), so the peer stays fenced.
         ///
+        /// Ordering with the peer's lifecycle notifications: the terminal
+        /// check and the removal are validated against the entry's
+        /// lifecycle mirroring (see peer_entry::mirror_sequence), so exactly
+        /// one of the following holds for every notification the entry's
+        /// lifecycle observer receives:
+        ///   - its mirrored state is visible to the terminal check, so a peer
+        ///     that came back with a newer, non-terminal epoch is not
+        ///     evicted;
+        ///   - it was in flight or finished between the terminal check and
+        ///     the removal, in which case this call backs off without
+        ///     evicting anything (the next failure-detection sweep calls it
+        ///     again if the state is still terminal by then);
+        ///   - it arrived after the removal, in which case it is not mirrored
+        ///     at all, so the tombstone stays in place and the peer has to
+        ///     join again to be monitored, as after any other eviction.
+        ///
+        /// No lock is held while the local supervision state is queried or
+        /// while the observers are unregistered on the peer's locality.
+        ///
         /// \param peer_locality The peer locality to remove.
         /// \param generation The peer_snapshot::generation of the entry to
         ///        remove. If \p peer_locality has since been evicted, or left
@@ -184,8 +204,13 @@ namespace hpx::supervision::server {
         std::tuple<hpx::id_type, std::uint64_t, bool> reserve_ownership(
             hpx::id_type const& peer_locality);
 
+        // `generation` is the peer_entry::generation of the entry the
+        // observers are registered for: the lifecycle callback only mirrors
+        // notifications while that very entry is still in peers_ (see
+        // peer_entry::mirror_sequence).
         std::pair<hpx::id_type, hpx::id_type> register_observers(
-            hpx::id_type const& peer_locality, std::uint64_t join_epoch);
+            hpx::id_type const& peer_locality, std::uint64_t join_epoch,
+            std::uint64_t generation);
 
         // Evicts a peer that has reached a terminal lifecycle event: erases its
         // entry from peers_, unregisters its lifecycle_observer and
@@ -290,6 +315,22 @@ namespace hpx::supervision::server {
             /// it was asked to remove apart from a later one for the same
             /// peer locality.
             std::uint64_t generation = 0;
+
+            /// The number of lifecycle notifications the observer installed
+            /// by register_observers() is mirroring onto peer_locality's
+            /// local supervision state right now. Incremented before the
+            /// callback touches that state and decremented once it is done,
+            /// both under mtx_.
+            std::size_t mirrors_in_flight = 0;
+
+            /// The number of lifecycle notifications mirrored for this entry
+            /// so far, incremented under mtx_ once the mirrored state has
+            /// been published. evict_fenced() reads it before its terminal
+            /// check and only removes the entry if nothing was in flight then,
+            /// nothing is in flight at the removal, and the count has not
+            /// changed in between, so a newer lifecycle transition cannot slip
+            /// in between the check and the removal unnoticed.
+            std::uint64_t mirror_sequence = 0;
 
             /// The preserve_terminal_state argument evict_peer() was called
             /// with when it set evict_pending above, remembered so that

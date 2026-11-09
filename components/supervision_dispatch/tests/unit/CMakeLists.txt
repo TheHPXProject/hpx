@@ -15,6 +15,7 @@ set(tests
     fenced_dispatch
     finalize_with_pending_sweep
     query_publish
+    registry_evict_fenced
     registry_join
     registry_mirroring
     registry_snapshot

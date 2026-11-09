@@ -255,6 +255,18 @@ Registry client
         Returns a point-in-time snapshot of all fully joined, non-evicting
         peers.
 
+    .. cpp:function:: void evict_fenced(hpx::id_type const& peer_locality, std::uint64_t generation) const
+
+        Removes a joined peer whose local supervision state was fenced by
+        failure detection, keeping the terminal state as a tombstone so the
+        peer stays fenced until it is joined again. ``generation`` is the
+        ``peer_snapshot::generation`` of the entry to remove; the call is a
+        no-op if that entry is gone, or the peer's state is no longer
+        terminal. Fire-and-forget. If a lifecycle event of the peer is being
+        mirrored, or was mirrored, while the call checks the terminal state,
+        it does not remove anything; the failure-detection loop calls it again
+        on its next sweep.
+
     .. cpp:function:: hpx::future<bool> register_name()
     .. cpp:function:: bool register_name(hpx::launch::sync_policy, hpx::error_code& ec = hpx::throws)
     .. cpp:function:: hpx::future<hpx::id_type> unregister_name() const
@@ -368,6 +380,7 @@ unit tests for this module deterministic:
 .. cpp:function:: void hpx::supervision::testing::suspend_heartbeat_for_testing()
 .. cpp:function:: bool hpx::supervision::testing::failure_detection_sweep_in_flight_for_testing()
 .. cpp:function:: void hpx::supervision::testing::stop_background_loops()
+.. cpp:function:: void hpx::supervision::testing::set_evict_fenced_hook_for_testing(hpx::function<void()> hook)
 
 See the :ref:`API reference <modules_supervision_dispatch_api>` of this
 module for more details, and :ref:`modules_supervision` for the underlying
