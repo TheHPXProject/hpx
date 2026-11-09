@@ -12,8 +12,8 @@ if(HPX_WITH_NETWORKING)
       broadcast_unwrap_future_2885
       broadcast_wait_for_2822
       channel_communicator_6881
-      collectives_unresolved_communicator
       collectives_bool_5940
+      collectives_unresolved_communicator
       exclusive_scan_6636
       multiple_gather_ops_2001
       reduce_vector_bool
