@@ -23,6 +23,7 @@
 
 #include <exception>
 #include <memory>
+#include <system_error>
 #include <type_traits>
 #include <utility>
 
@@ -89,9 +90,25 @@ namespace hpx::execution::experimental {
             }
 
         public:
-            void set_error(std::exception_ptr ep) && noexcept
+            template <typename E>
+            void set_error(E&& err) && noexcept
             {
-                data->set_exception(HPX_MOVE(ep));
+                if constexpr (std::is_same_v<std::decay_t<E>,
+                                  std::exception_ptr>)
+                {
+                    data->set_exception(HPX_FORWARD(E, err));
+                }
+                else if constexpr (std::is_same_v<std::decay_t<E>,
+                                       std::error_code>)
+                {
+                    data->set_exception(std::make_exception_ptr(
+                        std::system_error(HPX_FORWARD(E, err))));
+                }
+                else
+                {
+                    data->set_exception(
+                        std::make_exception_ptr(HPX_FORWARD(E, err)));
+                }
                 data.reset();
             }
 
