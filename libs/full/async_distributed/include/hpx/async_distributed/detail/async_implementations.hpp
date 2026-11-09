@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2024 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -428,6 +428,22 @@ namespace hpx::traits {
     };
 }    // namespace hpx::traits
 #endif
+
+// a local invocation of an action has the size of the action
+template <typename Action, hpx::threads::task_size Size>
+struct hpx::traits::get_task_size<hpx::detail::action_invoker<Action>, Size>
+{
+    static constexpr threads::task_size value =
+        action_task_size_v<Action> != threads::task_size::unknown ?
+        action_task_size_v<Action> :
+        Size;
+
+    [[nodiscard]] static constexpr threads::task_size call(
+        hpx::detail::action_invoker<Action> const&) noexcept
+    {
+        return value;
+    }
+};
 
 namespace hpx::detail {
 

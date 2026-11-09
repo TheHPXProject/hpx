@@ -18,7 +18,7 @@
 
 #include <algorithm>
 #include <cstddef>
-#include <iosfwd>
+#include <ios>
 
 // Source that reads only one byte every time read() is called.
 class read_one_source

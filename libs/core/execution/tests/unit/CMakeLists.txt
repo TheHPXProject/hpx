@@ -26,6 +26,7 @@ set(tests
     algorithm_when_all
     algorithm_when_all_vector
     algorithm_when_all_vector_allocator
+    async_rw_mutex_exception
     bulk_async
     environment_queries
     executor_parameters
@@ -49,7 +50,8 @@ set(tests
 
 set(future_then_executor_PARAMETERS THREADS_PER_LOCALITY 4)
 
-if(HPX_WITH_CUDA)
+# stdexec can't be compiled by nvcc with MSVC as the host compiler
+if(HPX_WITH_CUDA AND NOT (MSVC AND CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA"))
   list(APPEND tests algorithm_sender_cuda)
 endif()
 

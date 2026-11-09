@@ -18,8 +18,8 @@
 #include <hpx/modules/threading_base.hpp>
 #include <hpx/modules/timing.hpp>
 #include <hpx/modules/topology.hpp>
+#include <hpx/modules/util.hpp>
 #include <hpx/threadmanager/threadmanager_fwd.hpp>
-#include <hpx/util/get_entry_as.hpp>
 
 #include <cstddef>
 #include <cstdint>

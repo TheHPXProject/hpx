@@ -398,6 +398,7 @@ namespace hpx { namespace collectives {
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/async_distributed.hpp>
 #include <hpx/modules/components_base.hpp>
+#include <hpx/modules/errors.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/type_support.hpp>
 
@@ -519,6 +520,12 @@ namespace hpx::collectives {
                 return hpx::make_exceptional_future<arg_type>(HPX_GET_EXCEPTION(
                     hpx::error::bad_parameter, "hpx::collectives::reduce_here",
                     "the generation number shouldn't be zero"));
+            }
+            if (!fid.valid())
+            {
+                return hpx::make_exceptional_future<arg_type>(HPX_GET_EXCEPTION(
+                    hpx::error::invalid_status, "hpx::collectives::reduce_here",
+                    "the communicator is not valid"));
             }
 
             // Handle operation right away if there is only one value.
@@ -731,6 +738,13 @@ namespace hpx::collectives {
                     hpx::error::bad_parameter, "hpx::collectives::reduce_there",
                     "the generation number shouldn't be zero"));
             }
+            if (!fid.valid())
+            {
+                return hpx::make_exceptional_future<void>(
+                    HPX_GET_EXCEPTION(hpx::error::invalid_status,
+                        "hpx::collectives::reduce_there",
+                        "the communicator is not valid"));
+            }
 
             auto reduction_data =
                 [local_result = HPX_FORWARD(T, local_result), this_site,
@@ -917,6 +931,11 @@ namespace hpx::collectives {
         if (this_site.is_default())
         {
             this_site = static_cast<std::size_t>(agas::get_locality_id());
+        }
+        if (!comm.valid())
+        {
+            HPX_THROW_EXCEPTION(hpx::error::invalid_status,
+                "hpx::collectives::reduce", "the communicator is not valid");
         }
 
         comm.wait();    // make sure communicator was created

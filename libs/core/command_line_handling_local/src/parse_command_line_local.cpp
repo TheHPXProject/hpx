@@ -596,13 +596,12 @@ namespace hpx::local::detail {
                 "--hpx:queuing=abp-priority-lifo only)")
             ("hpx:numa-sensitive", value<std::size_t>()->implicit_value(1),
                 "controls NUMA-sensitive work stealing (for local, "
-                "local-priority, and ABP-priority schedulers: 0 - all workers "
-                "may steal across NUMA domains, 1 - only boundary workers may "
-                "steal from the nearest NUMA domains, 2 - no cross-domain "
-                "stealing; static, static-priority, and shared-priority "
-                "schedulers allow cross-domain stealing for 0 and 1, and "
-                "disable it for 2; work-requesting schedulers currently "
-                "ignore this option; "
+                "local-priority, ABP-priority, and local-workrequesting "
+                "schedulers: 0 - all workers may steal across NUMA domains, "
+                "1 - only boundary workers may steal from the nearest NUMA "
+                "domains, 2 - no cross-domain stealing; static, "
+                "static-priority, and shared-priority schedulers allow "
+                "cross-domain stealing for 0 and 1, and disable it for 2; "
                 "default and implicit value: 1)")
         ;
 

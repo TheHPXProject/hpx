@@ -9,6 +9,7 @@ set(tests
     annotation_property
     async_scope
     bulk_completion
+    bulk_completion_scheduler
     created_executor
     execution_policy_mappings
     executor_scheduler

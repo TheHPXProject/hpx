@@ -8,3 +8,4 @@
 
 #include <hpx/config.hpp>
 #include <hpx/modules/algorithms.hpp>
+#include <hpx/modules/segmented_algorithms.hpp>

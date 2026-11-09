@@ -13,7 +13,10 @@
 #include <hpx/modules/synchronization.hpp>
 #include <hpx/modules/testing.hpp>
 
+#include <atomic>
 #include <chrono>
+#include <optional>
+#include <thread>
 #include <utility>
 
 void test_stop_token_basic_api()
@@ -375,12 +378,122 @@ void test_stop_callback_without_stop_source()
     HPX_TEST(!cb2called);
 }
 
+// request_stop() and the destruction of a stop_callback run on two different
+// non-HPX threads while the callback is executing. The destructor has to
+// block until the callback has returned.
+template <typename StopSource, template <typename> class StopCallback>
+void test_stop_callback_destruction_on_os_threads()
+{
+    std::atomic<bool> callback_started{false};
+    std::atomic<bool> release_callback{false};
+    std::atomic<bool> callback_finished{false};
+    std::atomic<bool> destructor_returned{false};
+    std::atomic<bool> destroyer_started{false};
+    std::atomic<bool> finished_before_destructor_returned{false};
+
+    auto cb = [&] {
+        callback_started = true;
+        while (!release_callback)
+            std::this_thread::yield();
+        callback_finished = true;
+    };
+
+    StopSource ssrc;
+
+    // Keep the storage alive after the stop_callback is destroyed, so that
+    // a callback that is still running doesn't access freed memory if the
+    // destructor returns too early.
+    std::optional<StopCallback<decltype(cb)>> scb;
+    scb.emplace(ssrc.get_token(), cb);
+
+    std::thread signaller([&] { ssrc.request_stop(); });
+
+    while (!callback_started)
+        std::this_thread::yield();
+
+    std::thread destroyer([&] {
+        destroyer_started = true;
+        scb.reset();    // must block until the callback has returned
+        finished_before_destructor_returned = callback_finished.load();
+        destructor_returned = true;
+    });
+
+    while (!destroyer_started)
+        std::this_thread::yield();
+
+    // give the destructor time to return early, if it doesn't wait
+    auto const until =
+        std::chrono::steady_clock::now() + std::chrono::milliseconds(200);
+    while (!destructor_returned && std::chrono::steady_clock::now() < until)
+        std::this_thread::yield();
+
+    release_callback = true;
+
+    signaller.join();
+    destroyer.join();
+
+    HPX_TEST(finished_before_destructor_returned.load());
+}
+
+void test_stop_source_assignment()
+{
+    // copy assignment: the previous stop state has to give up its source
+    {
+        hpx::stop_source a;
+        hpx::stop_token old_token = a.get_token();
+        HPX_TEST(old_token.stop_possible());
+
+        hpx::stop_source b;
+        a = b;
+
+        HPX_TEST(!old_token.stop_possible());
+        HPX_TEST(a.stop_possible());
+    }
+
+    // move assignment: same requirement, and the moved-from source is empty
+    {
+        hpx::stop_source a;
+        hpx::stop_token old_token = a.get_token();
+
+        hpx::stop_source b;
+        a = std::move(b);
+
+        HPX_TEST(!old_token.stop_possible());
+        HPX_TEST(a.stop_possible());
+        // NOLINTNEXTLINE(bugprone-use-after-move)
+        HPX_TEST(!b.stop_possible());
+    }
+
+    // self assignment must not change the source count
+    {
+        hpx::stop_token token;
+        {
+            hpx::stop_source a;
+            token = a.get_token();
+
+            hpx::stop_source& ref = a;
+            a = ref;
+
+            HPX_TEST(a.stop_possible());
+            HPX_TEST(token.stop_possible());
+        }
+        // the only source is gone and no stop was requested
+        HPX_TEST(!token.stop_possible());
+    }
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 int hpx_main()
 {
     test_stop_token_basic_api();
     test_stop_token_api();
     test_stop_callback_without_stop_source();
+    test_stop_callback_destruction_on_os_threads<hpx::stop_source,
+        hpx::stop_callback>();
+    test_stop_callback_destruction_on_os_threads<
+        hpx::experimental::in_place_stop_source,
+        hpx::experimental::in_place_stop_callback>();
+    test_stop_source_assignment();
     test_stoken(std::chrono::seconds{0});
     test_stoken(std::chrono::milliseconds{500});
 

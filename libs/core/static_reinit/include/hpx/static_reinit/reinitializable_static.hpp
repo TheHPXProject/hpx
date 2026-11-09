@@ -101,9 +101,13 @@ namespace hpx::util {
         using reference = T&;
         using const_reference = T const&;
 
+        // Skip the construction only in a device compilation pass. nvcc
+        // defines __CUDACC__ in its host pass as well, which left the static
+        // unconstructed in any .cu file, and the copy of the static in an
+        // executable built from .cu files can replace the one in libhpx.
         reinitializable_static()
         {
-#if !defined(__CUDACC__)
+#if !defined(HPX_COMPUTE_DEVICE_CODE)
             // do not rely on ADL to find the proper call_once
             std::call_once(
                 constructed_, &reinitializable_static::default_constructor);
@@ -114,7 +118,7 @@ namespace hpx::util {
             requires(!std::is_same_v<U, reinitializable_static>)
         reinitializable_static(U const& val)
         {
-#if !defined(__CUDACC__)
+#if !defined(HPX_COMPUTE_DEVICE_CODE)
             // do not rely on ADL to find the proper call_once
             std::call_once(constructed_,
                 hpx::bind_front(&reinitializable_static::value_constructor<U>,
