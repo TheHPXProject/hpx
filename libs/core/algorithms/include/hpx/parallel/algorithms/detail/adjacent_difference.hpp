@@ -43,8 +43,8 @@ namespace hpx::parallel::detail {
 
         template <typename InIter, typename Sent, typename OutIter, typename Op,
             typename Value>
-        static constexpr inline OutIter invoke_default(InIter first, Sent last,
-            OutIter dest, Op&& op, Value&& previous)
+        static constexpr inline OutIter invoke_default(
+            InIter first, Sent last, OutIter dest, Op&& op, Value&& previous)
         {
             using value_t = typename std::iterator_traits<InIter>::value_type;
             value_t acc = HPX_FORWARD(Value, previous);
@@ -77,8 +77,8 @@ namespace hpx::parallel::detail {
     template <typename ExPolicy, typename InIter, typename Sent,
         typename OutIter, typename Op, typename Value>
     HPX_HOST_DEVICE HPX_FORCEINLINE constexpr OutIter
-    sequential_adjacent_difference(InIter first, Sent last, OutIter dest,
-        Op&& op, Value&& previous)
+    sequential_adjacent_difference(
+        InIter first, Sent last, OutIter dest, Op&& op, Value&& previous)
     {
         return sequential_adjacent_difference_t<ExPolicy>{}(first, last, dest,
             HPX_FORWARD(Op, op), HPX_FORWARD(Value, previous));

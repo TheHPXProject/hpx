@@ -51,25 +51,23 @@ namespace hpx::parallel::detail {
         template <typename ExPolicy, typename OutIterator, typename Op>
         static raw_output_iterator sequential(ExPolicy policy,
             hpx::id_type source_id, raw_input_iterator first,
-            raw_input_iterator last,
-            OutIterator dest, Op op, value_type previous, bool has_previous)
+            raw_input_iterator last, OutIterator dest, Op op,
+            value_type previous, bool has_previous)
         {
-            return invoke(HPX_MOVE(policy), source_id,
-                HPX_MOVE(first), HPX_MOVE(last), HPX_MOVE(dest),
-                HPX_MOVE(op), HPX_MOVE(previous), has_previous,
-                std::true_type{});
+            return invoke(HPX_MOVE(policy), source_id, HPX_MOVE(first),
+                HPX_MOVE(last), HPX_MOVE(dest), HPX_MOVE(op),
+                HPX_MOVE(previous), has_previous, std::true_type{});
         }
 
         template <typename ExPolicy, typename OutIterator, typename Op>
         static raw_output_iterator parallel(ExPolicy policy,
             hpx::id_type source_id, raw_input_iterator first,
-            raw_input_iterator last,
-            OutIterator dest, Op op, value_type previous, bool has_previous)
+            raw_input_iterator last, OutIterator dest, Op op,
+            value_type previous, bool has_previous)
         {
-            return invoke(HPX_MOVE(policy), source_id,
-                HPX_MOVE(first), HPX_MOVE(last), HPX_MOVE(dest),
-                HPX_MOVE(op), HPX_MOVE(previous), has_previous,
-                std::false_type{});
+            return invoke(HPX_MOVE(policy), source_id, HPX_MOVE(first),
+                HPX_MOVE(last), HPX_MOVE(dest), HPX_MOVE(op),
+                HPX_MOVE(previous), has_previous, std::false_type{});
         }
 
     private:
@@ -81,24 +79,22 @@ namespace hpx::parallel::detail {
             value_type previous, bool has_previous, IsSeq)
         {
             using range_type = partition_range<LocalIterator>;
-            using indexed_range_type =
-                indexed_partition_range<LocalIterator>;
+            using indexed_range_type = indexed_partition_range<LocalIterator>;
 
             std::vector<indexed_range_type> ranges;
-            ranges.push_back(
-                indexed_range_type{0,
-                    range_type{source_id, input_traits::remote(HPX_MOVE(first)),
-                        input_traits::remote(HPX_MOVE(last))}});
+            ranges.push_back(indexed_range_type{0,
+                range_type{source_id, input_traits::remote(HPX_MOVE(first)),
+                    input_traits::remote(HPX_MOVE(last))}});
 
             auto captured = get_capture_result<ExPolicy>(
                 capture_async<value_type, LocalIterator>(
                     source_id, HPX_MOVE(ranges)));
 
             OutIterator const first_dest = dest;
-            raw_output_iterator out = Algo{}.call2(
-                policy(hpx::execution::non_task), IsSeq{},
-                captured.values.begin(),
-                captured.values.end(), HPX_MOVE(dest), op);
+            raw_output_iterator out =
+                Algo{}.call2(policy(hpx::execution::non_task), IsSeq{},
+                    captured.values.begin(), captured.values.end(),
+                    HPX_MOVE(dest), op);
 
             if (has_previous)
             {
@@ -129,8 +125,7 @@ namespace hpx::parallel::detail {
 
         using result =
             hpx::parallel::util::detail::algorithm_result<ExPolicy, FwdIter2>;
-        using value_type1 =
-            typename std::iterator_traits<FwdIter1>::value_type;
+        using value_type1 = typename std::iterator_traits<FwdIter1>::value_type;
 
         if (first == last)
         {
@@ -149,16 +144,13 @@ namespace hpx::parallel::detail {
         segment_iterator1 sit = traits1::segment(first);
         segment_iterator1 send = traits1::segment(input_last_element);
         segment_iterator2 sdest = traits2::segment(dest);
-        segment_iterator2 send_dest =
-            traits2::segment(output_last_element);
+        segment_iterator2 send_dest = traits2::segment(output_last_element);
 
         local_iterator_type1 input = traits1::local(first);
         local_iterator_type2 output = traits2::local(dest);
-        local_iterator_type1 input_last =
-            traits1::local(input_last_element);
+        local_iterator_type1 input_last = traits1::local(input_last_element);
         ++input_last;
-        local_iterator_type2 output_last =
-            traits2::local(output_last_element);
+        local_iterator_type2 output_last = traits2::local(output_last_element);
         ++output_last;
 
         FwdIter1 input_position = first;
@@ -182,22 +174,22 @@ namespace hpx::parallel::detail {
                 input_end = sit == send ? input_last : traits1::end(sit);
             }
 
-            local_iterator_type2 output_end = sdest == send_dest ?
-                output_last : traits2::end(sdest);
+            local_iterator_type2 output_end =
+                sdest == send_dest ? output_last : traits2::end(sdest);
             while (output == output_end && sdest != send_dest)
             {
                 ++sdest;
                 output = traits2::begin(sdest);
-                output_end = sdest == send_dest ?
-                    output_last : traits2::end(sdest);
+                output_end =
+                    sdest == send_dest ? output_last : traits2::end(sdest);
             }
 
-            std::size_t const chunk_size = (std::min) (
-                (std::min) (static_cast<std::size_t>(
-                                std::distance(input, input_end)),
-                    static_cast<std::size_t>(
-                        std::distance(output, output_end))),
-                (std::min) (remaining, max_chunk_size));
+            std::size_t const chunk_size =
+                (std::min) ((std::min) (static_cast<std::size_t>(
+                                            std::distance(input, input_end)),
+                                static_cast<std::size_t>(
+                                    std::distance(output, output_end))),
+                    (std::min) (remaining, max_chunk_size));
 
             HPX_ASSERT(chunk_size != 0);
 
@@ -208,8 +200,9 @@ namespace hpx::parallel::detail {
 
             FwdIter1 last_position = input_position;
             std::advance(last_position,
-                static_cast<typename std::iterator_traits<
-                    FwdIter1>::difference_type>(chunk_size - 1));
+                static_cast<
+                    typename std::iterator_traits<FwdIter1>::difference_type>(
+                    chunk_size - 1));
             value_type1 last_value = *last_position;
 
             hpx::id_type const source_id = traits1::get_id(sit);
@@ -236,19 +229,21 @@ namespace hpx::parallel::detail {
                     captured_adjacent_difference<Algo, local_iterator_type1>;
 
                 dispatch(destination_id, captured_algo{}, policy,
-                    std::true_type(), source_id, input, input_chunk_end,
-                    output, op, previous, has_previous);
+                    std::true_type(), source_id, input, input_chunk_end, output,
+                    op, previous, has_previous);
             }
 
             previous = HPX_MOVE(last_value);
             remaining -= chunk_size;
             chunk_index++;
             std::advance(input_position,
-                static_cast<typename std::iterator_traits<
-                    FwdIter1>::difference_type>(chunk_size));
+                static_cast<
+                    typename std::iterator_traits<FwdIter1>::difference_type>(
+                    chunk_size));
             std::advance(output_position,
-                static_cast<typename std::iterator_traits<
-                    FwdIter2>::difference_type>(chunk_size));
+                static_cast<
+                    typename std::iterator_traits<FwdIter2>::difference_type>(
+                    chunk_size));
             std::advance(input,
                 static_cast<typename std::iterator_traits<
                     local_iterator_type1>::difference_type>(chunk_size));
@@ -291,8 +286,7 @@ namespace hpx::parallel::detail {
         using forced_seq =
             std::integral_constant<bool, !std::forward_iterator<FwdIter1>>;
 
-        using value_type1 =
-            typename std::iterator_traits<FwdIter1>::value_type;
+        using value_type1 = typename std::iterator_traits<FwdIter1>::value_type;
 
         if (first == last)
         {
@@ -321,16 +315,13 @@ namespace hpx::parallel::detail {
         segment_iterator1 sit = traits1::segment(first);
         segment_iterator1 send = traits1::segment(input_last_element);
         segment_iterator2 sdest = traits2::segment(dest);
-        segment_iterator2 send_dest =
-            traits2::segment(output_last_element);
+        segment_iterator2 send_dest = traits2::segment(output_last_element);
 
         local_iterator_type1 input = traits1::local(first);
         local_iterator_type2 output = traits2::local(dest);
-        local_iterator_type1 input_last =
-            traits1::local(input_last_element);
+        local_iterator_type1 input_last = traits1::local(input_last_element);
         ++input_last;
-        local_iterator_type2 output_last =
-            traits2::local(output_last_element);
+        local_iterator_type2 output_last = traits2::local(output_last_element);
         ++output_last;
 
         using segment_type = std::vector<future<local_iterator_type2>>;
@@ -369,23 +360,23 @@ namespace hpx::parallel::detail {
                 input_end = sit == send ? input_last : traits1::end(sit);
             }
 
-            local_iterator_type2 output_end = sdest == send_dest ?
-                output_last : traits2::end(sdest);
+            local_iterator_type2 output_end =
+                sdest == send_dest ? output_last : traits2::end(sdest);
             while (output == output_end && sdest != send_dest)
             {
                 ++sdest;
                 output = traits2::begin(sdest);
-                output_end = sdest == send_dest ?
-                    output_last : traits2::end(sdest);
+                output_end =
+                    sdest == send_dest ? output_last : traits2::end(sdest);
             }
 
-            auto const input_available = static_cast<std::size_t>(
-                std::distance(input, input_end));
-            auto const output_available = static_cast<std::size_t>(
-                std::distance(output, output_end));
-            std::size_t const chunk_size = (std::min) (
-                (std::min) (input_available, output_available),
-                (std::min) (remaining, max_chunk_size));
+            auto const input_available =
+                static_cast<std::size_t>(std::distance(input, input_end));
+            auto const output_available =
+                static_cast<std::size_t>(std::distance(output, output_end));
+            std::size_t const chunk_size =
+                (std::min) ((std::min) (input_available, output_available),
+                    (std::min) (remaining, max_chunk_size));
 
             HPX_ASSERT(chunk_size != 0);
 
@@ -396,8 +387,9 @@ namespace hpx::parallel::detail {
             bool const has_previous = chunk_index != 0;
             FwdIter1 last_position = input_position;
             std::advance(last_position,
-                static_cast<typename std::iterator_traits<
-                    FwdIter1>::difference_type>(chunk_size - 1));
+                static_cast<
+                    typename std::iterator_traits<FwdIter1>::difference_type>(
+                    chunk_size - 1));
             value_type1 last_value = *last_position;
 
             hpx::id_type const source_id = traits1::get_id(sit);
@@ -409,11 +401,11 @@ namespace hpx::parallel::detail {
                 if (has_previous)
                 {
                     FwdIter2 boundary_dest = dest;
-                    std::advance(boundary_dest,
-                        std::distance(first, input_position));
-                    boundaries.push_back(boundary_values{
-                        HPX_MOVE(boundary_dest), value_type1(*input_position),
-                        previous});
+                    std::advance(
+                        boundary_dest, std::distance(first, input_position));
+                    boundaries.push_back(
+                        boundary_values{HPX_MOVE(boundary_dest),
+                            value_type1(*input_position), previous});
                 }
 
                 segments.push_back(dispatch_async(destination_id, algo, policy,
@@ -433,8 +425,9 @@ namespace hpx::parallel::detail {
             remaining -= chunk_size;
             chunk_index++;
             std::advance(input_position,
-                static_cast<typename std::iterator_traits<
-                    FwdIter1>::difference_type>(chunk_size));
+                static_cast<
+                    typename std::iterator_traits<FwdIter1>::difference_type>(
+                    chunk_size));
             std::advance(input,
                 static_cast<typename std::iterator_traits<
                     local_iterator_type1>::difference_type>(chunk_size));
@@ -467,8 +460,8 @@ namespace hpx::parallel::detail {
                 }
                 for (auto& boundary : boundaries)
                 {
-                    *boundary.dest = HPX_INVOKE(
-                        op, boundary.current, boundary.previous);
+                    *boundary.dest =
+                        HPX_INVOKE(op, boundary.current, boundary.previous);
                 }
                 return end_dest;
             },
