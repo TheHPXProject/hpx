@@ -695,6 +695,16 @@ namespace hpx::parallel::detail {
         /// Find the stable merge partition that leaves left.size() values in
         /// the left run. The two returned offsets delimit equally sized
         /// crossing ranges: left[i, end) and right[begin, j).
+        ///
+        /// \tparam ExPolicy The execution policy type.
+        /// \tparam Comp The comparison function type.
+        /// \tparam Proj The projection function type.
+        /// \param policy The execution policy instance.
+        /// \param left The sorted left run.
+        /// \param right The sorted right run.
+        /// \param comp The comparison function.
+        /// \param proj The projection function.
+        /// \return The left and right offsets delimiting the crossing ranges.
         template <typename ExPolicy, typename Comp, typename Proj>
         static std::pair<std::size_t, std::size_t> merge_partition(
             ExPolicy const& policy, segmented_sort_run<LocalIter> const& left,
@@ -735,6 +745,14 @@ namespace hpx::parallel::detail {
 
         /// Exchange the crossing suffix and prefix in bounded chunks. At most
         /// two transfer chunks are materialized on the coordinator at once.
+        ///
+        /// \tparam ExPolicy The execution policy type.
+        /// \param policy The execution policy instance.
+        /// \param left The run containing the suffix to exchange.
+        /// \param right The run containing the prefix to exchange.
+        /// \param left_cut The offset of the crossing suffix in \a left.
+        /// \param crossing_size The number of values exchanged in each
+        ///        direction.
         template <typename ExPolicy>
         static void exchange_crossing_ranges(ExPolicy const& policy,
             segmented_sort_run<LocalIter> const& left,
@@ -774,6 +792,19 @@ namespace hpx::parallel::detail {
 
         /// Merge the two exchanged runs independently on their owning
         /// localities. Parallel policies overlap the two local merges.
+        ///
+        /// \tparam ExPolicy The execution policy type.
+        /// \tparam Comp The comparison function type.
+        /// \tparam Proj The projection function type.
+        /// \tparam IsSeq A compile-time flag selecting sequenced dispatch.
+        /// \param policy The execution policy instance.
+        /// \param left The left run after exchanging its crossing suffix.
+        /// \param right The right run after exchanging its crossing prefix.
+        /// \param left_cut The merge boundary in \a left.
+        /// \param right_cut The merge boundary in \a right.
+        /// \param comp The comparison function.
+        /// \param proj The projection function.
+        /// \param is_seq The sequenced-dispatch flag.
         template <typename ExPolicy, typename Comp, typename Proj,
             typename IsSeq>
         static void merge_exchanged_runs(ExPolicy const& policy,
@@ -839,6 +870,17 @@ namespace hpx::parallel::detail {
         }
 
         /// Perform a bounded merge-split of two adjacent sorted runs.
+        ///
+        /// \tparam ExPolicy The execution policy used for transfers and local
+        ///         merges.
+        /// \tparam Comp The comparison function type.
+        /// \tparam Proj The projection function type.
+        /// \param policy The execution policy instance.
+        /// \param left The sorted run that retains the lower values.
+        /// \param right The sorted run that retains the higher values.
+        /// \param comp The comparison function.
+        /// \param proj The projection function.
+        /// \return True if values crossed the run boundary; otherwise false.
         template <typename ExPolicy, typename Comp, typename Proj>
         static bool execute(ExPolicy const& policy,
             segmented_sort_run<LocalIter> const& left,
@@ -890,6 +932,17 @@ namespace hpx::parallel::detail {
     /// phases continue until both parities report no changes. Parallel policies
     /// overlap the disjoint pairs in each phase, although values can move in
     /// multiple phases.
+    ///
+    /// \tparam ExPolicy The execution policy type.
+    /// \tparam LocalIter The local iterator type of each run.
+    /// \tparam Comp The comparison function type.
+    /// \tparam Proj The projection function type.
+    /// \tparam IsSeq A compile-time flag selecting sequenced dispatch.
+    /// \param policy The execution policy instance.
+    /// \param runs The sorted distributed runs to merge globally.
+    /// \param comp The comparison function.
+    /// \param proj The projection function.
+    /// \param is_seq The sequenced-dispatch flag.
     template <typename ExPolicy, typename LocalIter, typename Comp,
         typename Proj, typename IsSeq>
     void segmented_sort_merge_runs(ExPolicy const& policy,

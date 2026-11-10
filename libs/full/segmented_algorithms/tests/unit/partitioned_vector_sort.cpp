@@ -332,6 +332,10 @@ void test_sort_subranges(
 }
 
 /// Verify compare-split phases with uneven runs and duplicate values.
+///
+/// \tparam ExPolicy The execution policy type.
+/// \param policy The policy used to invoke segmented sort.
+/// \param localities The localities that own the test partitions.
 template <typename ExPolicy>
 void test_uneven_merge_split(
     ExPolicy const& policy, std::vector<hpx::id_type> const& localities)
@@ -356,6 +360,8 @@ void test_uneven_merge_split(
 }
 
 /// Verify that a complete two-run exchange remains chunked and distributed.
+///
+/// \param localities The localities that own the two test partitions.
 void test_two_run_merge_split(std::vector<hpx::id_type> const& localities)
 {
     // Put two reversed runs on different localities. Every value crosses the
@@ -380,6 +386,8 @@ void test_two_run_merge_split(std::vector<hpx::id_type> const& localities)
 }
 
 /// Verify convergence when adjacent runs have strongly unequal capacities.
+///
+/// \param localities The localities used by the explicit partition layout.
 void test_unequal_explicit_layout(std::vector<hpx::id_type> const& localities)
 {
     std::vector<std::size_t> const sizes{100, 1, 100};
