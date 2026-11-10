@@ -175,6 +175,14 @@ namespace hpx::supervision::server {
         ///     at all, so the tombstone stays in place and the peer has to
         ///     join again to be monitored, as after any other eviction.
         ///
+        /// This assumes that the peer's local supervision state is changed
+        /// only through this registry's mirroring, which holds for a remote
+        /// peer joined by a single registry (discovery never joins the own
+        /// locality). It does not hold for a registry that joined its own
+        /// locality, whose lifecycle events change that state directly, nor
+        /// for several registries on one locality joining the same peer,
+        /// which share that state (see #8030).
+        ///
         /// No lock is held while the local supervision state is queried or
         /// while the observers are unregistered on the peer's locality.
         ///
@@ -209,8 +217,7 @@ namespace hpx::supervision::server {
         // notifications while that very entry is still in peers_ (see
         // peer_entry::mirror_sequence).
         std::pair<hpx::id_type, hpx::id_type> register_observers(
-            hpx::id_type const& peer_locality, std::uint64_t join_epoch,
-            std::uint64_t generation);
+            hpx::id_type const& peer_locality, std::uint64_t generation);
 
         // Evicts a peer that has reached a terminal lifecycle event: erases its
         // entry from peers_, unregisters its lifecycle_observer and
