@@ -26,7 +26,7 @@
 
 namespace hpx::execution::experimental {
 
-    template <typename T = void, typename TaskEnv = empty_env>
+    template <typename T = void>
     class [[nodiscard]] task;
 
     namespace detail {
@@ -155,11 +155,10 @@ namespace hpx::execution::experimental {
 
         ///////////////////////////////////////////////////////////////////////
         // task_promise: C++26 P3552 coroutine promise type
-        template <typename T, typename TaskEnv>
+        template <typename T>
         struct task_promise
           : task_promise_base<T>
-          , hpx::execution::experimental::with_awaitable_senders<
-                task_promise<T, TaskEnv>>
+          , hpx::execution::experimental::with_awaitable_senders<task_promise<T>>
         {
             task_operation_base* state_{nullptr};
             bool stopped_{false};
@@ -167,7 +166,7 @@ namespace hpx::execution::experimental {
             hpx::experimental::in_place_stop_token stop_token_{
                 stop_source_.get_token()};
 
-            task<T, TaskEnv> get_return_object() noexcept;
+            task<T> get_return_object() noexcept;
 
             hpx::suspend_always initial_suspend() noexcept
             {
@@ -263,10 +262,10 @@ namespace hpx::execution::experimental {
 
         ///////////////////////////////////////////////////////////////////////
         // task_operation_state: operation state when connecting task to receiver
-        template <typename T, typename TaskEnv, typename Receiver>
+        template <typename T, typename Receiver>
         struct task_operation_state : task_operation_base
         {
-            using promise_type = task_promise<T, TaskEnv>;
+            using promise_type = task_promise<T>;
             using receiver_type = std::decay_t<Receiver>;
 
             using stop_token_type =
@@ -402,13 +401,13 @@ namespace hpx::execution::experimental {
 
     ///////////////////////////////////////////////////////////////////////////
     // Production C++26 task<T> conforming to P3552
-    template <typename T, typename TaskEnv>
+    template <typename T>
     class [[nodiscard]] task
     {
     public:
         using is_sender = void;
         using sender_concept = hpx::execution::experimental::sender_t;
-        using promise_type = detail::task_promise<T, TaskEnv>;
+        using promise_type = detail::task_promise<T>;
 
         task() noexcept = default;
 
@@ -457,10 +456,9 @@ namespace hpx::execution::experimental {
         }
 
         template <typename Receiver>
-        detail::task_operation_state<T, TaskEnv, Receiver> connect(
-            Receiver&& rcvr) &&
+        detail::task_operation_state<T, Receiver> connect(Receiver&& rcvr) &&
         {
-            return detail::task_operation_state<T, TaskEnv, Receiver>{
+            return detail::task_operation_state<T, Receiver>{
                 std::exchange(coro_, {}), HPX_FORWARD(Receiver, rcvr)};
         }
 
@@ -633,10 +631,10 @@ namespace hpx::execution::experimental {
     };
 
     namespace detail {
-        template <typename T, typename TaskEnv>
-        task<T, TaskEnv> task_promise<T, TaskEnv>::get_return_object() noexcept
+        template <typename T>
+        task<T> task_promise<T>::get_return_object() noexcept
         {
-            return task<T, TaskEnv>(
+            return task<T>(
                 hpx::coroutine_handle<task_promise>::from_promise(*this));
         }
     }    // namespace detail
