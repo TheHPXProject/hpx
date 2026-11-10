@@ -28,9 +28,7 @@ if(HPX_WITH_NETWORKING)
   set(broadcast_wait_for_2822_PARAMETERS LOCALITIES 2 THREADS_PER_LOCALITY 4)
   set(barrier_3792_PARAMETERS LOCALITIES 3 THREADS_PER_LOCALITY 1)
   set(collectives_bool_5940_PARAMETERS LOCALITIES 2)
-  set(collectives_early_generation_PARAMETERS THREADS_PER_LOCALITY 4 TIMEOUT
-                                              120
-  )
+  set(collectives_early_generation_PARAMETERS THREADS_PER_LOCALITY 4 TIMEOUT 60)
   set(collectives_unresolved_communicator_PARAMETERS THREADS_PER_LOCALITY 4
                                                      TIMEOUT 120
   )
