@@ -17,12 +17,12 @@
 #include <hpx/supervision_dispatch/dispatch_api.hpp>
 #include <hpx/supervision_dispatch/server/registry.hpp>
 
-#include <algorithm>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
 #include <mutex>
+#include <optional>
 #include <ostream>
 #include <tuple>
 #include <utility>
@@ -156,49 +156,47 @@ namespace hpx::supervision::server {
     // one), so that any local consumer consulting that state
     // (check_admission(), await_terminal(), ...) observes the peer's terminal
     // state without having to talk to the peer's locality itself.
-    // `peer_locality`, `join_epoch` and `generation` are captured by value
-    // rather than looked up from `peers_` on every callback invocation: join()
-    // is idempotent and never reassigns a peer's peer_locality once created
-    // (see the re-join handling above), so that captured value can never go
-    // stale.
+    // `peer_locality` and `generation` are captured by value rather than
+    // looked up from `peers_` on every callback invocation: join() is
+    // idempotent and never reassigns a peer's peer_locality once created (see
+    // the re-join handling above), and `generation` identifies the entry the
+    // observers are registered for, so neither can go stale.
     //
-    // `join_epoch` is nearly as stable as `peer_locality`, but not quite:
-    // join()'s floor against the peer's real epoch (see
-    // hpx::supervision::current_epoch()) only covers what it can observe
-    // synchronously at join time, so this callback's very first notification
-    // can still arrive with an epoch strictly greater than the captured
-    // `join_epoch` (e.g. the peer's real epoch advanced again between join()'s
-    // floor check and this observer's registration). When that happens, the
-    // callback corrects the corresponding entry in `peers_` forward to match.
-    // It never modifies its own captured copy: the supervision manager may
-    // deliver several notifications to this observer at the same time, so the
-    // captured `join_epoch` stays the value join() seeded it with, and each
-    // delivery works out the epoch it needs from that and its own
-    // notification.
+    // The entry's join_epoch is not captured: join()'s floor against the
+    // peer's real epoch (see hpx::supervision::current_epoch()) only covers
+    // what it can observe synchronously at join time, so a notification can
+    // still arrive with an epoch strictly greater than the stored join_epoch
+    // (e.g. the peer's real epoch advanced again between join()'s floor check
+    // and this observer's registration), in which case the callback moves the
+    // entry's join_epoch forward to match. The supervision manager may deliver
+    // several notifications to this observer at the same time, so the callback
+    // only ever reads and writes join_epoch on the entry, under `mtx_`.
     //
     // The callback takes `mtx_` twice, briefly and never across a call into
     // the supervision manager or a remote call: once before mirroring the
     // notification onto peer_locality's local state, to announce the mirroring
     // (peer_entry::mirrors_in_flight), and once after it, to record that it is
-    // done (peer_entry::mirror_sequence) and to apply the epoch correction
-    // above. evict_fenced() relies on that to tell whether a lifecycle
-    // transition was mirrored between its terminal check and its removal (see
-    // there). A notification for an entry that is no longer in `peers_` (it
+    // done (peer_entry::mirror_sequence), to apply the epoch correction above,
+    // and to decide whether a terminal notification evicts the entry. It does
+    // only if the notification is for the entry's join_epoch, so a terminal
+    // event of an older epoch, delivered after the peer started a newer one,
+    // does not evict the newer lifecycle. evict_fenced() relies on the
+    // mirroring bookkeeping to tell whether a lifecycle transition was
+    // mirrored between its terminal check and its removal (see there). A
+    // notification for an entry that is no longer in `peers_` (it
     // was evicted, or left and joined again, which creates a new entry with a
     // new generation and observers of its own) is not mirrored at all, so it
     // cannot overwrite the tombstone an eviction left behind. The supervision
     // manager calls observers with its own lock released, so neither section
     // nests the two locks.
     std::pair<hpx::id_type, hpx::id_type> registry::register_observers(
-        hpx::id_type const& peer_locality, std::uint64_t join_epoch,
-        std::uint64_t const generation)
+        hpx::id_type const& peer_locality, std::uint64_t const generation)
     {
         // Register for lifecycle-event notifications published for the
         // peer's locality. Terminal notifications are re-published onto
         // peer_locality's local supervision state (see below).
         auto observer =
-            [peer_locality, join_epoch, generation, this,
-                keep_alive = get_id()](
+            [peer_locality, generation, this, keep_alive = get_id()](
                 hpx::supervision::lifecycle_event_notification const&
                     notification) {
                 // Announce the mirroring below, unless the entry this observer
@@ -231,36 +229,56 @@ namespace hpx::supervision::server {
                 // nothing left to record. An evict_peer() waiting for the
                 // mirrorings in flight to finish is woken once the last one
                 // does.
-                auto const record_mirrored = [&]() noexcept {
+                //
+                // Returns the epoch to evict the entry at if this is a terminal
+                // notification for the entry's (corrected) join_epoch, see the
+                // comment on register_observers() above.
+                auto const record_mirrored = [&]() {
+                    std::optional<std::uint64_t> evict_epoch;
+
                     std::unique_lock l(mtx_);
-                    if (auto const it = peers_.find(peer_locality);
-                        it != peers_.end() &&
-                        it->second.generation == generation)
+                    auto const it = peers_.find(peer_locality);
+                    if (it == peers_.end() ||
+                        it->second.generation != generation)
                     {
-                        peer_entry& entry = it->second;
-                        HPX_ASSERT(entry.mirrors_in_flight != 0);
-                        --entry.mirrors_in_flight;
-                        ++entry.mirror_sequence;
-
-                        if (notification.epoch > entry.join_epoch)
-                        {
-                            entry.join_epoch = notification.epoch;
-                        }
-
-                        if (entry.mirrors_in_flight == 0)
-                        {
-                            cond_.notify_all(HPX_MOVE(l));
-                        }
+                        return evict_epoch;
                     }
+
+                    peer_entry& entry = it->second;
+                    HPX_ASSERT(entry.mirrors_in_flight != 0);
+                    --entry.mirrors_in_flight;
+                    ++entry.mirror_sequence;
+
+                    if (notification.epoch > entry.join_epoch)
+                    {
+                        entry.join_epoch = notification.epoch;
+                    }
+
+                    if (hpx::supervision::is_terminal(notification.event) &&
+                        notification.epoch == entry.join_epoch)
+                    {
+                        evict_epoch = entry.join_epoch;
+                    }
+
+                    if (entry.mirrors_in_flight == 0)
+                    {
+                        cond_.notify_all(HPX_MOVE(l));
+                    }
+                    return evict_epoch;
                 };
 
                 // If mirroring throws, still record it, otherwise the entry
                 // keeps a mirror in flight forever and evict_fenced() never
                 // evicts it. Count it as mirrored as well: the local state may
                 // have changed before the exception, so a concurrent
-                // evict_fenced() has to back off.
-                auto record_on_exit =
-                    hpx::experimental::scope_exit(record_mirrored);
+                // evict_fenced() has to back off. Don't evict on this path,
+                // and don't let a failure to wake a waiting evict_peer()
+                // escape the scope guard while unwinding.
+                auto record_on_exit = hpx::experimental::scope_exit([&] {
+                    hpx::detail::try_catch_exception_ptr(
+                        [&] { static_cast<void>(record_mirrored()); },
+                        [](std::exception_ptr const&) {});
+                });
 
                 lifecycle_mirror_hook.run();
 
@@ -315,35 +333,30 @@ namespace hpx::supervision::server {
                         notification.event, notification.epoch, ec2);
                 }
 
-                // The mirroring is done, record it before scheduling the
-                // eviction below, which compares against the corrected
-                // join_epoch.
+                // The mirroring is done, record it, and decide whether it
+                // evicts the entry.
                 record_on_exit.release();
-                record_mirrored();
+                auto const evict_epoch = record_mirrored();
 
                 // Evict the peer if it has reached a terminal event, so peers_
                 // does not grow without bound over the lifetime of a
                 // long-running registry. Deferred via hpx::post() rather than
-                // done inline here: this callback intentionally avoids taking
-                // mtx_ (see the comment on register_observers() above
-                // explaining why `peer_locality` is captured by value), so the
-                // eviction - which does need mtx_ to safely mutate peers_ -
-                // runs as a separate task once this terminal publish has
-                // completed.
-                if (hpx::supervision::is_terminal(notification.event))
+                // done inline here: the eviction unregisters this very
+                // observer, which waits for its callbacks in flight to return,
+                // this one included, and it may have to wait for other
+                // mirrorings to finish first (see evict_peer()).
+                if (evict_epoch)
                 {
                     // Preserve the mirrored terminal state just published above
                     // as a tombstone (see cleanup_peer()): an admission check
                     // racing against this eviction must keep observing the
                     // fence rather than have it vanish once eviction runs.
                     //
-                    // The epoch is worked out from this notification alone, not
-                    // read back from the entry: a newer notification delivered
-                    // concurrently may already have moved the entry on to a new
-                    // epoch, and evict_peer() must then leave it alone.
+                    // evict_peer() checks the generation and epoch again: a
+                    // newer notification may move the entry on to a new epoch
+                    // before it runs.
                     hpx::post(&registry::evict_peer, this, peer_locality,
-                        (std::max) (join_epoch, notification.epoch), generation,
-                        keep_alive, true);
+                        *evict_epoch, generation, keep_alive, true);
                 }
                 return true;
             };
@@ -511,8 +524,7 @@ namespace hpx::supervision::server {
                     // it in between.
                     //
                     // seed_epoch itself must NOT be escalated here: it feeds
-                    // publish_event(..., event::started, seed_epoch, ...) below
-                    // and register_observers()'s join_epoch baseline, both of
+                    // publish_event(..., event::started, seed_epoch, ...) below,
                     // which must stay in the shadow's own epoch numbering so
                     // that peer_locality's own lifecycle events (which
                     // legitimately start at epoch 0 for a fresh locality) are
@@ -548,12 +560,11 @@ namespace hpx::supervision::server {
                 }
 
                 // Register for lifecycle-event notifications published for the
-                // peer's locality. The baseline must match the epoch recorded
-                // in `peers_` above, otherwise evict_peer()'s epoch guard and
-                // the callback's epoch-forward correction can never match.
+                // peer's locality. The observer compares notifications against
+                // the join_epoch recorded in `peers_` above (see
+                // register_observers()).
                 std::tie(lifecycle_observer, activity_observer) =
-                    register_observers(
-                        peer_locality, reported_join_epoch, generation);
+                    register_observers(peer_locality, generation);
             },
             [&](std::exception_ptr const& e) {
                 // Clean up any target state seeded by this failed join *before*
