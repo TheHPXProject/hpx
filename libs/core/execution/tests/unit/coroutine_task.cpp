@@ -92,8 +92,8 @@ void test_sender_and_nested_await()
 
 ///////////////////////////////////////////////////////////////////////////////
 // 3. Scheduler Affinity & Multi-threaded Suspension/Resumption
-hpx::experimental::task<int> scheduler_affinity_coroutine(
-    ex::run_loop& loop, std::thread::id& initial_id, std::thread::id& resumed_id)
+hpx::experimental::task<int> scheduler_affinity_coroutine(ex::run_loop& loop,
+    std::thread::id& initial_id, std::thread::id& resumed_id)
 {
     initial_id = std::this_thread::get_id();
 
@@ -343,9 +343,7 @@ struct test_stopped_receiver
     {
     }
 
-    void set_error(std::exception_ptr) noexcept
-    {
-    }
+    void set_error(std::exception_ptr) noexcept {}
 
     void set_stopped() noexcept
     {

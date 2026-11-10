@@ -75,8 +75,7 @@ namespace hpx::execution::experimental {
                 auto alloc = HPX_MOVE(alloc_);
                 std::destroy_at(this);
                 std::allocator_traits<Alloc>::deallocate(alloc,
-                    static_cast<memblock*>(ptr),
-                    promise_blocks + alloc_blocks);
+                    static_cast<memblock*>(ptr), promise_blocks + alloc_blocks);
             }
 
             Alloc alloc_;
@@ -249,8 +248,7 @@ namespace hpx::execution::experimental {
                     palloc, promise_blocks + alloc_blocks);
 
                 void* const alloc_loc = ptr + promise_blocks;
-                std::construct_at(
-                    static_cast<any_alloc<palloc_t>*>(alloc_loc),
+                std::construct_at(static_cast<any_alloc<palloc_t>*>(alloc_loc),
                     HPX_MOVE(palloc));
                 return ptr;
             }
@@ -283,8 +281,8 @@ namespace hpx::execution::experimental {
             std::optional<stop_callback_type> stop_callback_{};
 
             task_operation_state(hpx::coroutine_handle<promise_type> coro,
-                Receiver&& rcvr) noexcept(
-                std::is_nothrow_move_constructible_v<receiver_type>)
+                Receiver&& rcvr) noexcept(std::
+                    is_nothrow_move_constructible_v<receiver_type>)
               : coro_(coro)
               , rcvr_(HPX_FORWARD(Receiver, rcvr))
             {
@@ -293,7 +291,8 @@ namespace hpx::execution::experimental {
             task_operation_state(task_operation_state&&) = delete;
             task_operation_state(task_operation_state const&) = delete;
             task_operation_state& operator=(task_operation_state&&) = delete;
-            task_operation_state& operator=(task_operation_state const&) = delete;
+            task_operation_state& operator=(
+                task_operation_state const&) = delete;
 
             ~task_operation_state() override
             {
@@ -319,8 +318,7 @@ namespace hpx::execution::experimental {
                 {
                     auto coro = std::exchange(coro_, {});
                     coro.destroy();
-                    hpx::execution::experimental::set_stopped(
-                        HPX_MOVE(rcvr_));
+                    hpx::execution::experimental::set_stopped(HPX_MOVE(rcvr_));
                     return;
                 }
 
@@ -342,13 +340,11 @@ namespace hpx::execution::experimental {
                 if (coro.promise().stopped_)
                 {
                     coro.destroy();
-                    hpx::execution::experimental::set_stopped(
-                        HPX_MOVE(rcvr_));
+                    hpx::execution::experimental::set_stopped(HPX_MOVE(rcvr_));
                 }
                 else if (coro.promise().data_.index() == 2)
                 {
-                    auto ep =
-                        std::get<2>(HPX_MOVE(coro.promise().data_));
+                    auto ep = std::get<2>(HPX_MOVE(coro.promise().data_));
                     coro.destroy();
                     hpx::execution::experimental::set_error(
                         HPX_MOVE(rcvr_), HPX_MOVE(ep));
@@ -363,8 +359,7 @@ namespace hpx::execution::experimental {
                     }
                     else
                     {
-                        auto val =
-                            std::get<1>(HPX_MOVE(coro.promise().data_));
+                        auto val = std::get<1>(HPX_MOVE(coro.promise().data_));
                         coro.destroy();
                         hpx::execution::experimental::set_value(
                             HPX_MOVE(rcvr_), HPX_MOVE(val));
@@ -376,8 +371,7 @@ namespace hpx::execution::experimental {
             hpx::coroutine_handle<> canceled() noexcept override
             {
                 stop_callback_.reset();
-                hpx::execution::experimental::set_stopped(
-                    HPX_MOVE(rcvr_));
+                hpx::execution::experimental::set_stopped(HPX_MOVE(rcvr_));
                 return hpx::noop_coroutine();
             }
         };
@@ -396,9 +390,8 @@ namespace hpx::execution::experimental {
             }
         struct parent_stop_token<ParentPromise>
         {
-            using type =
-                decltype(hpx::execution::experimental::get_stop_token(
-                    std::declval<ParentPromise const&>().get_env()));
+            using type = decltype(hpx::execution::experimental::get_stop_token(
+                std::declval<ParentPromise const&>().get_env()));
         };
 
         template <typename ParentPromise>
@@ -474,10 +467,10 @@ namespace hpx::execution::experimental {
         template <typename ParentPromise = void>
         struct awaiter : detail::task_operation_base
         {
-            using stop_token_type = std::conditional_t<
-                std::is_void_v<ParentPromise>,
-                hpx::experimental::in_place_stop_token,
-                detail::parent_stop_token_t<ParentPromise>>;
+            using stop_token_type =
+                std::conditional_t<std::is_void_v<ParentPromise>,
+                    hpx::experimental::in_place_stop_token,
+                    detail::parent_stop_token_t<ParentPromise>>;
 
             using stop_callback_type =
                 typename stop_token_type::template callback_type<
@@ -490,8 +483,7 @@ namespace hpx::execution::experimental {
             void* parent_promise_{nullptr};
             hpx::coroutine_handle<> (*unhandled_stopped_fn_)(void*){nullptr};
 
-            explicit awaiter(
-                hpx::coroutine_handle<promise_type> coro) noexcept
+            explicit awaiter(hpx::coroutine_handle<promise_type> coro) noexcept
               : coro_(coro)
             {
             }
@@ -539,8 +531,8 @@ namespace hpx::execution::experimental {
                               })
                 {
                     parent_promise_ = &parent.promise();
-                    unhandled_stopped_fn_ = [](void* p) noexcept
-                        -> hpx::coroutine_handle<> {
+                    unhandled_stopped_fn_ =
+                        [](void* p) noexcept -> hpx::coroutine_handle<> {
                         return static_cast<ParentPromise2*>(p)
                             ->unhandled_stopped();
                     };
@@ -556,9 +548,8 @@ namespace hpx::execution::experimental {
                                       parent.promise().get_env());
                               })
                 {
-                    auto token =
-                        hpx::execution::experimental::get_stop_token(
-                            parent.promise().get_env());
+                    auto token = hpx::execution::experimental::get_stop_token(
+                        parent.promise().get_env());
 
                     if constexpr (std::is_constructible_v<stop_callback_type,
                                       decltype(token),
