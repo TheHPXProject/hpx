@@ -262,7 +262,7 @@ namespace hpx::collectives::detail {
                 [current](auto const& e) { return e.first > current; });
 
             std::vector<hpx::move_only_function<void()>> ready;
-            ready.reserve(end - pending_.begin());
+            ready.reserve(static_cast<std::size_t>(end - pending_.begin()));
             for (auto it = pending_.begin(); it != end; ++it)
             {
                 ready.push_back(HPX_MOVE(it->second));
