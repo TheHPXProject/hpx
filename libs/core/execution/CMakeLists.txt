@@ -21,6 +21,7 @@ set(execution_headers
     hpx/execution/algorithms/run_loop.hpp
     hpx/execution/algorithms/sender_future.hpp
     hpx/execution/algorithms/sync_wait.hpp
+    hpx/execution/algorithms/task.hpp
     hpx/execution/algorithms/when_all.hpp
     hpx/execution/algorithms/when_all_vector.hpp
     hpx/execution/detail/async_launch_policy_dispatch.hpp
