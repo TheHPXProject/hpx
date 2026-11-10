@@ -160,6 +160,22 @@ namespace hpx::threads::policies {
                 return true;
             }
 
+            // A worker that would go to sleep becomes the sentinel if there
+            // is none, and spins through the period instead (see
+            // spin_as_sentinel). So one idle worker stays awake: a new thread
+            // is found within a round instead of after a wake up, which takes
+            // a few microseconds on Linux and up to the resolution of the
+            // timer, a millisecond or more, on Windows.
+            std::size_t no_sentinel = 0;
+            if (sentinel_.data_.worker.compare_exchange_strong(
+                    no_sentinel, num_thread + 1, std::memory_order_relaxed))
+            {
+                l.unlock();
+                spin_as_sentinel(num_thread,
+                    static_cast<std::uint64_t>(step.period.count()));
+                return true;
+            }
+
             // Announce, then check for work once more. There is no fence
             // between the two: it would only help together with a fence in
             // wake_one and wake_if_sleeping, on the path of every new nano and
