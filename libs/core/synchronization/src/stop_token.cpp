@@ -116,15 +116,35 @@ namespace hpx::detail {
     }
 
     ///////////////////////////////////////////////////////////////////////////
+    static void execute_callback_safely(stop_callback_base* cb) noexcept
+    {
+        cb->executing_thread_ = hpx::threads::get_self_id();
+        if (cb->executing_thread_ == hpx::threads::invalid_thread_id)
+        {
+            cb->executing_os_thread_id_ = std::this_thread::get_id();
+        }
+
+        bool is_removed = false;
+        cb->is_removed_ = &is_removed;
+
+        cb->execute();
+
+        if (!is_removed)
+        {
+            cb->is_removed_ = nullptr;
+            cb->callback_finished_executing_.store(
+                true, std::memory_order_release);
+        }
+    }
+
+    ///////////////////////////////////////////////////////////////////////////
     bool stop_state::lock_if_not_stopped(stop_callback_base* cb) noexcept
     {
         std::uint64_t old_state = state_.load(std::memory_order_acquire);
 
         if (stop_requested(old_state))
         {
-            cb->execute();
-            cb->callback_finished_executing_.store(
-                true, std::memory_order_release);
+            execute_callback_safely(cb);
             return false;
         }
         else if (!stop_possible(old_state))
@@ -142,9 +162,7 @@ namespace hpx::detail {
 
                 if (stop_requested(old_state))
                 {
-                    cb->execute();
-                    cb->callback_finished_executing_.store(
-                        true, std::memory_order_release);
+                    execute_callback_safely(cb);
                     return false;
                 }
                 else if (!stop_possible(old_state))
