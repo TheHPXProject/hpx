@@ -66,6 +66,9 @@ namespace hpx {
             stop_callback_base* next_ = nullptr;
             stop_callback_base** prev_ = nullptr;
             bool* is_removed_ = nullptr;
+            hpx::threads::thread_id_type executing_thread_{
+                hpx::threads::invalid_thread_id};
+            std::thread::id executing_os_thread_id_{};
 
             std::atomic<bool> callback_finished_executing_{false};
 
