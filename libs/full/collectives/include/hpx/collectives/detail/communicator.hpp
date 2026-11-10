@@ -23,6 +23,7 @@
 #include <hpx/modules/synchronization.hpp>
 #include <hpx/modules/type_support.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <exception>
 #include <mutex>
@@ -130,7 +131,9 @@ namespace hpx::collectives::detail {
             [[maybe_unused]] logging_helper<Operation> log(
                 which, generation, "get");
 
-            return run_or_defer<Result>(generation,
+            return run_or_defer<Result>(
+                traits::communication::communicator_data<Operation>::name(),
+                which, generation,
                 [this, which, generation, ... args = HPX_MOVE(args)]() mutable {
                     return collective_operation::template get<Result>(
                         *this, which, generation, HPX_MOVE(args)...);
@@ -165,7 +168,9 @@ namespace hpx::collectives::detail {
             [[maybe_unused]] logging_helper<Operation> log(
                 which, generation, "set");
 
-            return run_or_defer<Result>(generation,
+            return run_or_defer<Result>(
+                traits::communication::communicator_data<Operation>::name(),
+                which, generation,
                 [this, which, generation, ... args = HPX_MOVE(args)]() mutable {
                     return collective_operation::template set<Result>(
                         *this, which, generation, HPX_MOVE(args)...);
@@ -196,16 +201,39 @@ namespace hpx::collectives::detail {
         // would suspend the thread that runs the request, which may be the
         // thread that still has to send the request for the earlier generation.
         template <typename Result, typename F>
-        Result run_or_defer(std::size_t generation, F&& f)
+        Result run_or_defer(char const* operation, std::size_t which,
+            std::size_t generation, F&& f)
         {
             if (generation != generation_arg{})
             {
+                // Report now what handle_data would report on arrival, a kept
+                // request could otherwise wait forever.
+                check_site(which);
+
                 std::unique_lock l(mtx_);
                 if (generation > gate_.generation(l))
                 {
+                    if (auto_generation_used_)
+                    {
+                        throw_explicit_after_auto(
+                            l, operation, which, generation);
+                    }
+
+                    // The request passed the check above, it is not checked
+                    // again when it runs after an auto-generation operation.
+                    admitted_.emplace_back(which, generation);
+
                     hpx::promise<Result> p;
                     Result result(p.get_future());
-                    pending_.emplace_back(generation,
+
+                    // Keep the requests sorted by generation, so that they
+                    // run in generation order.
+                    auto const pos =
+                        std::upper_bound(pending_.begin(), pending_.end(),
+                            generation, [](std::size_t g, auto const& e) {
+                                return g < e.first;
+                            });
+                    pending_.emplace(pos, generation,
                         [p = HPX_MOVE(p), f = HPX_FORWARD(F, f)]() mutable {
                             try
                             {
@@ -229,21 +257,89 @@ namespace hpx::collectives::detail {
         {
             HPX_ASSERT_OWNS_LOCK(l);
 
-            std::vector<hpx::move_only_function<void()>> ready;
             std::size_t const current = gate_.generation(l);
-            for (auto it = pending_.begin(); it != pending_.end();)
+            auto const end = std::find_if(pending_.begin(), pending_.end(),
+                [current](auto const& e) { return e.first > current; });
+
+            std::vector<hpx::move_only_function<void()>> ready;
+            ready.reserve(end - pending_.begin());
+            for (auto it = pending_.begin(); it != end; ++it)
             {
-                if (it->first <= current)
-                {
-                    ready.push_back(HPX_MOVE(it->second));
-                    it = pending_.erase(it);
-                }
-                else
-                {
-                    ++it;
-                }
+                ready.push_back(HPX_MOVE(it->second));
             }
+            pending_.erase(pending_.begin(), end);
             return ready;
+        }
+
+        // Run the kept requests whose generation the gate has reached. They
+        // enter handle_data again, so the lock is released while they run. A
+        // nested call leaves the requests it makes ready to the outer loop,
+        // so the stack does not grow with the number of kept generations.
+        template <typename Lock>
+        void run_ready_requests(Lock& l)
+        {
+            HPX_ASSERT_OWNS_LOCK(l);
+
+            if (running_ready_requests_)
+            {
+                return;
+            }
+
+            running_ready_requests_ = true;
+            auto on_exit = hpx::experimental::scope_exit(
+                [this] { running_ready_requests_ = false; });
+
+            for (auto ready = take_ready_requests(l); !ready.empty();
+                ready = take_ready_requests(l))
+            {
+                l.unlock();
+                for (auto& request : ready)
+                {
+                    request();
+                }
+                l.lock();
+            }
+        }
+
+        void check_site(std::size_t which) const
+        {
+            if (which >= num_sites_)
+            {
+                HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
+                    "communicator::handle_data",
+                    "site index must be smaller than the number of "
+                    "participating sites");
+            }
+        }
+
+        template <typename Lock>
+        [[noreturn]] void throw_explicit_after_auto(Lock& l,
+            char const* operation, std::size_t which, std::size_t generation)
+        {
+            l.unlock();
+            HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
+                "communicator::handle_data",
+                "communicator {}: an explicit generation number cannot "
+                "follow auto-generation operations on the same "
+                "communicator: operation {}, which {}, generation {}.",
+                basename_, operation, which, generation);
+        }
+
+        // Remove the entry run_or_defer made for a kept request, return
+        // whether there was one.
+        template <typename Lock>
+        bool take_admitted(Lock& l, std::size_t which, std::size_t generation)
+        {
+            HPX_ASSERT_OWNS_LOCK(l);
+
+            auto const it = std::find(admitted_.begin(), admitted_.end(),
+                std::pair(which, generation));
+            if (it == admitted_.end())
+            {
+                return false;
+            }
+            admitted_.erase(it);
+            return true;
         }
 
         [[nodiscard]] constexpr std::size_t get_num_sites(
@@ -367,13 +463,7 @@ namespace hpx::collectives::detail {
             generation_mode num_generations = generation_mode::single_step,
             std::size_t num_values = static_cast<std::size_t>(-1))
         {
-            if (which >= num_sites_)
-            {
-                HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
-                    "communicator::handle_data",
-                    "site index must be smaller than the number of "
-                    "participating sites");
-            }
+            check_site(which);
 
             auto on_ready = [this, operation, which, generation, num_values,
                                 finalizer = HPX_FORWARD(Finalizer, finalizer)](
@@ -480,20 +570,16 @@ namespace hpx::collectives::detail {
             // next explicit number: too small throws, too large waits forever.
             // Latch the first auto use and reject the transition up front; the
             // reverse order stays valid because an auto generation always
-            // synchronizes on the gate's current position.
+            // synchronizes on the gate's current position. A request that
+            // run_or_defer kept was checked when it arrived.
             if (generation == generation_arg{})
             {
                 auto_generation_used_ = true;
             }
-            else if (auto_generation_used_)
+            else if (!take_admitted(l, which, generation) &&
+                auto_generation_used_)
             {
-                l.unlock();
-                HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
-                    "communicator::handle_data",
-                    "communicator {}: an explicit generation number cannot "
-                    "follow auto-generation operations on the same "
-                    "communicator: operation {}, which {}, generation {}.",
-                    basename_, operation, which, generation);
+                throw_explicit_after_auto(l, operation, which, generation);
             }
 
             // Verify that there is no overlap between different types of
@@ -604,13 +690,7 @@ namespace hpx::collectives::detail {
                 });
 
             // Run the kept requests whose generation has been reached now.
-            // They enter handle_data again, so the lock is released first.
-            auto ready = take_ready_requests(l);
-            l.unlock();
-            for (auto& request : ready)
-            {
-                request();
-            }
+            run_ready_requests(l);
 
             return f;
         }
@@ -639,8 +719,13 @@ namespace hpx::collectives::detail {
         bool needs_initialization_ = true;
         bool data_available_ = false;
         bool auto_generation_used_ = false;
-        // Requests that arrived before the gate reached their generation.
+        bool running_ready_requests_ = false;
+        // Requests that arrived before the gate reached their generation,
+        // sorted by generation.
         std::vector<std::pair<std::size_t, hpx::move_only_function<void()>>>
             pending_;
+        // Site and generation of each kept request that passed the
+        // explicit-after-auto check on arrival.
+        std::vector<std::pair<std::size_t, std::size_t>> admitted_;
     };
 }    // namespace hpx::collectives::detail
