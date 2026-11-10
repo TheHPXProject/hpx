@@ -15,6 +15,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <functional>
 #include <optional>
 #include <thread>
 #include <utility>
@@ -482,6 +483,26 @@ void test_stop_source_assignment()
     }
 }
 
+template <typename StopSource, template <typename> class StopCallback>
+void test_stop_callback_self_destruction()
+{
+    // Self-destruction when stop is triggered via request_stop
+    {
+        StopSource ssrc;
+        std::optional<StopCallback<std::function<void()>>> scb;
+        bool called = false;
+        scb.emplace(ssrc.get_token(), [&] {
+            called = true;
+            scb.reset();
+        });
+
+        HPX_TEST(!called);
+        ssrc.request_stop();
+        HPX_TEST(called);
+        HPX_TEST(!scb.has_value());
+    }
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 int hpx_main()
 {
@@ -491,6 +512,11 @@ int hpx_main()
     test_stop_callback_destruction_on_os_threads<hpx::stop_source,
         hpx::stop_callback>();
     test_stop_callback_destruction_on_os_threads<
+        hpx::experimental::in_place_stop_source,
+        hpx::experimental::in_place_stop_callback>();
+    test_stop_callback_self_destruction<hpx::stop_source,
+        hpx::stop_callback>();
+    test_stop_callback_self_destruction<
         hpx::experimental::in_place_stop_source,
         hpx::experimental::in_place_stop_callback>();
     test_stop_source_assignment();
