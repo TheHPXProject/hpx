@@ -1,0 +1,12 @@
+# Copyright (c) 2026 Hartmut Kaiser
+#
+# SPDX-License-Identifier: BSL-1.0
+# Distributed under the Boost Software License, Version 1.0. (See accompanying
+# file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+
+# Master commits whose runs are left out of the performance history on
+# purpose: backfill_history.sh doesn't add them. One full commit hash at the
+# start of a line, anything after it is a comment.
+50701568b76cf1a44a823fe2525af5aa18fe977f #7822
+8b614d9a1f0d040b1534851b67f705be4537aed5 #7824
+841608872d26546ea234b075fc3755ed46b03bc3 #7838
