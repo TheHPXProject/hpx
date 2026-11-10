@@ -284,10 +284,10 @@ task is usually done before a sleeping worker thread has woken up, so:
 * a task placed on another worker thread wakes up that worker thread only, and
   only if it sleeps;
 * a task a worker thread places on itself wakes up no other worker thread as
-  long as an idle worker thread spins (see ``hpx.min_idle_backoff_time``) that
-  will find it; the creating worker thread runs it itself once it is done with
-  its current |hpx| thread. If no idle worker thread spins, it wakes up one
-  sleeping worker thread;
+  long as an idle worker thread spins (see ``hpx.min_idle_backoff_time``):
+  that worker thread may steal it, else the creating worker thread runs it
+  once it is done with its current |hpx| thread. If no idle worker thread
+  spins, it wakes up one sleeping worker thread;
 * a task that round-robin placement put on the creating worker thread wakes up
   one sleeping worker thread, since its creator may wait for it without
   yielding.
