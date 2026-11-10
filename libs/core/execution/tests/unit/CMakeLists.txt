@@ -54,6 +54,10 @@ if(HPX_WITH_CUDA AND NOT (MSVC AND CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA"))
   list(APPEND tests algorithm_sender_cuda)
 endif()
 
+if(HPX_WITH_CXX20_COROUTINES)
+  list(APPEND tests coroutine_task)
+endif()
+
 foreach(test ${tests})
   if(test STREQUAL "algorithm_sender_cuda")
     set(sources ${test}.cu)
