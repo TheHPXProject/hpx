@@ -284,6 +284,21 @@ add_run() {
         -m "Add the performance test results of ${target##*/}"
 }
 
+# A commit gets one run in the history. Another build may have added this
+# commit's run meanwhile, for example a backfill while this build waited for
+# the node (see backfill_history.sh); then this run isn't added a second time.
+commit="$(cut -f2 "${record_dir}/run.tsv" | tr -d '\r' | head -n 1)"
+already_added() {
+    if [[ -n "${commit}" ]] &&
+        grep -q "	${commit}	" "${work_dir}/data/runs.tsv" 2> /dev/null; then
+        perftest_log "The history has a run of ${commit:0:10} already, this" \
+            "run isn't added"
+        return 0
+    fi
+    return 1
+}
+
+already_added && exit 0
 add_run
 
 # Other builds may push at the same time. Add the run again on top of their
@@ -301,6 +316,7 @@ for attempt in 1 2 3; do
     git_history -C data fetch --quiet --depth 1 --filter=blob:none origin main
     git_history -C data reset --quiet --hard FETCH_HEAD
     git_history -C data clean --quiet -fdx
+    already_added && exit 0
     add_run
 done
 

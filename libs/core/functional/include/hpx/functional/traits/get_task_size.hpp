@@ -114,17 +114,20 @@ namespace hpx::traits {
             threads::task_size size = threads::task_size::unknown;
         };
 
-        // Only class types have a declaration to annotate. Annotations are not
+        // Only functions and class types are looked at. Annotations are not
         // inherited, so a derived type has to be annotated itself and the base
         // classes are not scanned. An unknown size counts as no annotation.
         HPX_CXX_CORE_EXPORT consteval task_size_annotation
-        find_task_size_annotation(std::meta::info const type)
+        find_task_size_annotation(std::meta::info const entity)
         {
             task_size_annotation result;
-            if (!std::meta::is_class_type(type))
+            if (!std::meta::is_function(entity) &&
+                !std::meta::is_class_type(entity))
+            {
                 return result;
+            }
 
-            for (std::meta::info const a : std::meta::annotations_of(type))
+            for (std::meta::info const a : std::meta::annotations_of(entity))
             {
                 if (std::meta::remove_const(std::meta::type_of(a)) !=
                     ^^threads::task_size)
@@ -160,6 +163,22 @@ namespace hpx::traits {
                 "annotations");
 
             return annotation.found ? annotation.size : Size;
+        }
+
+        // The size a function is annotated with, unknown if it has none. Fn
+        // reflects the function rather than its type, because functions of
+        // the same type can have different sizes.
+        HPX_CXX_CORE_EXPORT template <std::meta::info Fn>
+        consteval threads::task_size annotated_function_task_size()
+        {
+            constexpr task_size_annotation annotation =
+                find_task_size_annotation(Fn);
+
+            static_assert(!annotation.conflicting,
+                "a function must not have two different hpx::task_size "
+                "annotations");
+
+            return annotation.size;
         }
     }    // namespace detail
 #endif

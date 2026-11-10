@@ -37,6 +37,25 @@ foreach(test ${tests})
   add_hpx_unit_test("modules.actions" ${test} ${${test}_PARAMETERS})
 endforeach()
 
+# two different annotations on one function have to be rejected, which needs a
+# compiler that supports annotations
+if(HPX_WITH_COMPILE_ONLY_TESTS
+   AND HPX_WITH_FAIL_COMPILE_TESTS
+   AND HPX_WITH_CXX26_REFLECTION
+   AND HPX_WITH_CXX26_REFLECTION_ANNOTATIONS
+)
+  set(sources fail_action_task_size_annotations.cpp)
+
+  source_group("Source Files" FILES ${sources})
+
+  add_hpx_unit_compile_test(
+    "modules.actions" fail_action_task_size_annotations
+    SOURCES ${sources}
+    FAILURE_EXPECTED
+    FOLDER "Tests/Unit/Modules/Full/Actions/CompileOnly"
+  )
+endif()
+
 if(HPX_WITH_THREAD_STACKOVERFLOW_DETECTION)
   set_tests_properties(
     tests.unit.threads.thread_stacksize_overflow

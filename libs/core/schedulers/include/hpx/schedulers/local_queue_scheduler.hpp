@@ -544,6 +544,57 @@ namespace hpx::threads::policies {
             return count;
         }
 
+        // Is there work the given worker could take: in its own queue and,
+        // if it may steal, in the queues of the NUMA domains it steals from
+        // (see get_next_thread) that hold at least the stealing minima.
+        bool has_work_for(
+            std::size_t const num_thread, bool const may_steal) const override
+        {
+            std::size_t const queues_size = queues_.size();
+            HPX_ASSERT(num_thread < queues_size);
+
+            if (queues_[num_thread]->get_queue_length() != 0)
+                return true;
+
+            if (!may_steal)
+                return false;
+
+            auto const has_work_in = [&](mask_cref_type domain) {
+                for (std::size_t i = 1; i != queues_size; ++i)
+                {
+                    std::size_t const idx = (i + num_thread) % queues_size;
+                    if (test(domain, affinity_data_.get_pu_num(idx)) &&
+                        queues_[idx]->has_stealable_work())
+                    {
+                        return true;
+                    }
+                }
+                return false;
+            };
+
+            std::size_t const pu_number = affinity_data_.get_pu_num(num_thread);
+
+#if !defined(HPX_NATIVE_MIC)
+            if (test(steals_in_numa_domain_, pu_number))    //-V600 //-V111
+#endif
+            {
+                if (has_work_in(numa_domain_masks_[num_thread]))
+                    return true;
+            }
+
+#if !defined(HPX_NATIVE_MIC)
+            if (has_scheduler_mode(
+                    policies::scheduler_mode::enable_stealing_numa,
+                    num_thread) &&
+                numa_sensitive_ != numa_sensitive_mode::strict &&
+                test(steals_outside_numa_domain_, pu_number))    //-V600 //-V111
+            {
+                return has_work_in(outside_numa_domain_masks_[num_thread]);
+            }
+#endif
+            return false;
+        }
+
         ///////////////////////////////////////////////////////////////////////
         // Queries the current thread count of the queues.
         std::int64_t get_thread_count(

@@ -459,6 +459,30 @@
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
+// Idle backoff periods (in microseconds) shorter than this are spent spinning
+// instead of sleeping (used only if HPX_HAVE_THREAD_MANAGER_IDLE_BACKOFF is
+// defined). A timed wait lasts at least the time the OS needs to wake the
+// thread up again, at least a millisecond on Windows and the timer slack on
+// Linux (50 us by default), so shorter sleeps don't exist. Can be changed at
+// runtime with hpx.min_idle_backoff_time.
+#if !defined(HPX_IDLE_BACKOFF_TIME_MIN)
+#  define HPX_IDLE_BACKOFF_TIME_MIN 50
+#endif
+
+///////////////////////////////////////////////////////////////////////////////
+// A worker that spins for a short idle backoff period looks at its own queues
+// in every round (16 pause instructions), but only every this many
+// microseconds at the queues it steals from, since that reads the queue of
+// every victim (used only if HPX_HAVE_THREAD_MANAGER_IDLE_BACKOFF is defined).
+// The interval is a time and not a number of rounds because a pause takes
+// very different times on different CPUs; the spin converts it to rounds with
+// a rate measured at startup. Can be changed at runtime with
+// hpx.idle_backoff_steal_check_interval.
+#if !defined(HPX_IDLE_BACKOFF_STEAL_CHECK_INTERVAL)
+#  define HPX_IDLE_BACKOFF_STEAL_CHECK_INTERVAL 8
+#endif
+
+///////////////////////////////////////////////////////////////////////////////
 #if !defined(HPX_WRAPPER_HEAP_STEP)
 #  define HPX_WRAPPER_HEAP_STEP 0xFFFFU
 #endif

@@ -148,6 +148,21 @@ namespace hpx::threads::policies {
         /// possibly idling OS threads
         void do_some_work(std::size_t);
 
+        /// Whether this scheduler wakes up workers for new threads of the
+        /// given size itself (in create_thread). Then create_thread and
+        /// create_work don't call do_some_work for them.
+        [[nodiscard]] bool wakes_up_for(
+            [[maybe_unused]] threads::task_size size) const noexcept
+        {
+#if defined(HPX_HAVE_THREAD_MANAGER_IDLE_BACKOFF)
+            return wakes_up_for_small_ &&
+                (size == threads::task_size::nano ||
+                    size == threads::task_size::small_);
+#else
+            return false;
+#endif
+        }
+
         virtual void suspend(std::size_t num_thread);
         virtual void resume(std::size_t num_thread);
 
@@ -241,6 +256,20 @@ namespace hpx::threads::policies {
 
         virtual std::int64_t get_queue_length(
             std::size_t num_thread = static_cast<std::size_t>(-1)) const = 0;
+
+        // Is there work the given worker could take: in its own queues, in
+        // queues all workers share, and, if it may steal, in the queues it
+        // steals from? Used by idle workers (see has_visible_work).
+        // Schedulers that steal only from some queues (bound threads can't
+        // be stolen, NUMA domains limit the victims) should look only at
+        // those.
+        virtual bool has_work_for(
+            std::size_t const num_thread, bool const may_steal) const
+        {
+            return get_queue_length(num_thread) != 0 ||
+                (may_steal &&
+                    get_queue_length(static_cast<std::size_t>(-1)) != 0);
+        }
 
         virtual std::int64_t get_thread_count(
             thread_schedule_state state = thread_schedule_state::unknown,
@@ -367,6 +396,12 @@ namespace hpx::threads::policies {
 #if defined(HPX_HAVE_THREAD_MANAGER_IDLE_BACKOFF)
         // support for suspension on idle queues
         double max_idle_backoff_time_;
+        // shorter backoff periods are spent spinning, see idle_callback
+        double min_idle_backoff_time_;
+        // spin rounds per microsecond, measured at startup
+        double spin_rounds_per_us_;
+        // spin rounds between two looks at the queues to steal from
+        std::uint64_t idle_backoff_steal_check_rounds_;
         struct idle_backoff_data
         {
             pu_mutex_type wait_mtx;
@@ -379,6 +414,46 @@ namespace hpx::threads::policies {
         };
         std::vector<util::aligned_line_data<idle_backoff_data>>
             wait_count_data_;
+
+        // set by schedulers that wake up workers for nano and small threads
+        // themselves, see wakes_up_for
+        bool wakes_up_for_small_ = false;
+
+        // one bit per worker that announced it is going to sleep
+        std::vector<util::aligned_line_data<std::atomic<std::uint64_t>>>
+            sleep_mask_;
+        std::atomic<std::size_t> wake_start_{0};
+
+        // the number of idle workers that spin for a short backoff period
+        // (see idle_callback); they find new work without being woken up
+        util::aligned_line_data<std::atomic<std::size_t>> spinning_workers_{0};
+
+        void notify_worker(std::size_t i);
+        bool has_visible_work(std::size_t num_thread) const;
+
+        // Is an idle worker spinning, so that it will probably find work
+        // queued before this call without being woken up? Call it after
+        // queuing the work.
+        bool has_spinning_worker() const noexcept
+        {
+            // No fence between queuing the work and this load: it would run
+            // for each small thread a worker queues for itself (see
+            // idle_callback for the one it would pair with). Without it, this
+            // may still see a worker spinning that has just stopped and
+            // missed the new work, and then nobody is woken up. That work
+            // waits for its caller, for the next look for work of that
+            // worker, or for a sleeper's backoff period to end (at most
+            // max_idle_backoff_time), and is never lost.
+            return spinning_workers_.data_.load(std::memory_order_relaxed) != 0;
+        }
+
+        // Wake up one sleeping worker (one that announced itself in
+        // sleep_mask_), the given one if it sleeps, otherwise the next one
+        // after it. Returns whether a worker was woken up.
+        bool wake_one(std::size_t hint);
+
+        // Wake up the given worker if it sleeps. Returns whether it did.
+        bool wake_if_sleeping(std::size_t num_thread);
 
         // may this worker ignore the early stealing minima once?
         bool has_free_pass(std::size_t num_thread) const noexcept
