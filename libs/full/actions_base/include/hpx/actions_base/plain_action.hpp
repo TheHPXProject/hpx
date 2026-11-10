@@ -15,6 +15,7 @@
 #include <hpx/assert.hpp>
 #include <hpx/modules/components_base.hpp>
 #include <hpx/modules/format.hpp>
+#include <hpx/modules/functional.hpp>
 #include <hpx/modules/naming_base.hpp>
 #include <hpx/modules/preprocessor.hpp>
 
@@ -26,6 +27,11 @@
 #include <type_traits>
 #endif
 #include <utility>
+
+#if defined(HPX_HAVE_CXX26_REFLECTION) &&                                      \
+    defined(HPX_HAVE_CXX26_REFLECTION_ANNOTATIONS)
+#include <meta>
+#endif
 
 #include <hpx/config/warnings_prefix.hpp>
 
@@ -69,6 +75,18 @@ namespace hpx::actions {
                 detail::get_action_name<derived_type>());
         }
 
+#if defined(HPX_HAVE_CXX26_REFLECTION) &&                                      \
+    defined(HPX_HAVE_CXX26_REFLECTION_ANNOTATIONS)
+        // A function pointer has no annotations, but reflect_function gets
+        // back to the declaration of the function F points to. A sized
+        // function bound to the action hides this with its own size.
+        static constexpr threads::task_size function_task_size() noexcept
+        {
+            return hpx::traits::detail::annotated_function_task_size<
+                std::meta::reflect_function(*F)>();
+        }
+#endif
+
         template <typename... Ts>
         static R invoke(naming::address::address_type /*lva*/,
             naming::address::component_type /*comptype*/, Ts&&... vs)
@@ -95,6 +113,18 @@ namespace hpx::actions {
             return detail::make_plain_action_name(
                 detail::get_action_name<derived_type>());
         }
+
+#if defined(HPX_HAVE_CXX26_REFLECTION) &&                                      \
+    defined(HPX_HAVE_CXX26_REFLECTION_ANNOTATIONS)
+        // A function pointer has no annotations, but reflect_function gets
+        // back to the declaration of the function F points to. A sized
+        // function bound to the action hides this with its own size.
+        static constexpr threads::task_size function_task_size() noexcept
+        {
+            return hpx::traits::detail::annotated_function_task_size<
+                std::meta::reflect_function(*F)>();
+        }
+#endif
 
         template <typename... Ts>
         static R invoke(naming::address::address_type /*lva*/,
