@@ -224,20 +224,12 @@ namespace hpx::detail {
         // Callback has either already executed or is executing concurrently
         // on another thread.
         auto const self = hpx::threads::get_self_id();
-        bool is_signalling_thread = false;
-        if (self == hpx::threads::invalid_thread_id)
-        {
-            // Not an HPX thread. signalling_os_thread_id_ is only set if the
-            // signalling thread is not an HPX thread either, otherwise it
-            // never compares equal to this thread's id.
-            is_signalling_thread =
-                std::this_thread::get_id() == signalling_os_thread_id_;
-        }
-        else
-        {
-            // An HPX thread.
-            is_signalling_thread = self == signalling_thread_;
-        }
+        bool const is_signalling_thread =
+            (self != hpx::threads::invalid_thread_id) ?
+                (self == cb->executing_thread_ || self == signalling_thread_) :
+                (std::this_thread::get_id() == cb->executing_os_thread_id_ ||
+                 std::this_thread::get_id() == signalling_os_thread_id_);
+
         if (is_signalling_thread)
         {
             // Callback executed on this thread or is still currently executing
@@ -329,6 +321,12 @@ namespace hpx::detail {
 
             // Mark this item as removed from the list.
             cb->prev_ = nullptr;
+
+            cb->executing_thread_ = signalling_thread_;
+            if (cb->executing_thread_ == hpx::threads::invalid_thread_id)
+            {
+                cb->executing_os_thread_id_ = signalling_os_thread_id_;
+            }
 
             bool is_removed = false;
             cb->is_removed_ = &is_removed;    //-V506
