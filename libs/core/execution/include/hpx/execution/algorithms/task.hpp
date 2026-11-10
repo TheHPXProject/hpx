@@ -526,21 +526,11 @@ namespace hpx::execution::experimental {
 
                 // 1. Extract unhandled_stopped continuation for symmetric
                 // transfer
-                if constexpr (requires {
-                                  parent.promise().unhandled_stopped();
-                              })
-                {
-                    parent_promise_ = &parent.promise();
-                    unhandled_stopped_fn_ =
-                        [](void* p) noexcept -> hpx::coroutine_handle<> {
-                        return static_cast<ParentPromise2*>(p)
-                            ->unhandled_stopped();
-                    };
-                }
-                else
-                {
-                    stopped_continuation_ = hpx::noop_coroutine();
-                }
+                parent_promise_ = &parent.promise();
+                unhandled_stopped_fn_ =
+                    [](void* p) noexcept -> hpx::coroutine_handle<> {
+                    return static_cast<ParentPromise2*>(p)->unhandled_stopped();
+                };
 
                 // 2. Safely bridge the parent stop token to nested child task
                 if constexpr (requires {
