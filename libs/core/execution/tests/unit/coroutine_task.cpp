@@ -245,11 +245,92 @@ void test_exception_handling()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// 7. Cancellation Protocol via in_place_stop_source
+// 7. Cancellation Protocol via in_place_stop_source & just_stopped
 hpx::experimental::task<int> cancellable_coroutine()
 {
     co_await ex::just();
     co_return 42;
+}
+
+hpx::experimental::task<int> task_awaiting_just_stopped()
+{
+    co_await ex::just_stopped();
+    co_return 42;
+}
+
+hpx::experimental::task<int> nested_inner_just_stopped()
+{
+    co_await ex::just_stopped();
+    co_return 100;
+}
+
+hpx::experimental::task<int> nested_outer_just_stopped()
+{
+    int val = co_await nested_inner_just_stopped();
+    co_return val + 1;
+}
+
+struct wait_for_stop_sender
+{
+    using is_sender = void;
+    using sender_concept = ex::sender_t;
+
+    using completion_signatures =
+        ex::completion_signatures<ex::set_value_t(), ex::set_stopped_t()>;
+
+    template <typename Receiver>
+    struct operation_state
+    {
+        using receiver_type = std::decay_t<Receiver>;
+        receiver_type rcvr_;
+
+        using stop_token_type =
+            ex::stop_token_of_t<ex::env_of_t<receiver_type>>;
+
+        struct stop_cb
+        {
+            operation_state* op_;
+            void operator()() noexcept
+            {
+                ex::set_stopped(HPX_MOVE(op_->rcvr_));
+            }
+        };
+
+        using callback_type =
+            typename stop_token_type::template callback_type<stop_cb>;
+        std::optional<callback_type> cb_{};
+
+        template <typename R>
+        operation_state(R&& r)
+          : rcvr_(HPX_FORWARD(R, r))
+        {
+        }
+
+        void start() & noexcept
+        {
+            auto token = ex::get_stop_token(ex::get_env(rcvr_));
+            if (token.stop_requested())
+            {
+                ex::set_stopped(HPX_MOVE(rcvr_));
+            }
+            else if (token.stop_possible())
+            {
+                cb_.emplace(token, stop_cb{this});
+            }
+        }
+    };
+
+    template <typename Receiver>
+    operation_state<Receiver> connect(Receiver&& rcvr) const
+    {
+        return operation_state<Receiver>{HPX_FORWARD(Receiver, rcvr)};
+    }
+};
+
+hpx::experimental::task<int> inflight_cancellable_coroutine()
+{
+    co_await wait_for_stop_sender{};
+    co_return 99;
 }
 
 struct test_stopped_receiver
@@ -257,7 +338,8 @@ struct test_stopped_receiver
     using receiver_concept = ex::receiver_t;
     bool* stopped_called_;
 
-    void set_value(int) noexcept
+    template <typename... Args>
+    void set_value(Args&&...) noexcept
     {
     }
 
@@ -290,17 +372,62 @@ struct test_stopped_receiver
 
 void test_cancellation()
 {
-    hpx::experimental::in_place_stop_source stop_source;
-    stop_source.request_stop();
+    // Initial pre-cancelled stop source
+    {
+        hpx::experimental::in_place_stop_source stop_source;
+        stop_source.request_stop();
 
-    bool stopped_called = false;
-    test_stopped_receiver rcvr{&stopped_called, stop_source.get_token()};
+        bool stopped_called = false;
+        test_stopped_receiver rcvr{&stopped_called, stop_source.get_token()};
 
-    auto t = cancellable_coroutine();
-    auto op = ex::connect(HPX_MOVE(t), rcvr);
-    ex::start(op);
+        auto t = cancellable_coroutine();
+        auto op = ex::connect(HPX_MOVE(t), rcvr);
+        ex::start(op);
 
-    HPX_TEST(stopped_called);
+        HPX_TEST(stopped_called);
+    }
+
+    // 1. A task that directly awaits just_stopped()
+    {
+        bool stopped_called = false;
+        hpx::experimental::in_place_stop_source stop_source;
+        test_stopped_receiver rcvr{&stopped_called, stop_source.get_token()};
+
+        auto t = task_awaiting_just_stopped();
+        auto op = ex::connect(HPX_MOVE(t), rcvr);
+        ex::start(op);
+
+        HPX_TEST(stopped_called);
+
+        // Also verify via sync_wait
+        auto res = tt::sync_wait(task_awaiting_just_stopped());
+        HPX_TEST(!res.has_value());
+    }
+
+    // 2. Nested task: inner awaits just_stopped(), outer awaits inner
+    {
+        auto t = nested_outer_just_stopped();
+        auto res = tt::sync_wait(HPX_MOVE(t));
+        HPX_TEST(!res.has_value());
+    }
+
+    // 3. In-flight cancellation: request_stop() called after start()
+    {
+        hpx::experimental::in_place_stop_source stop_source;
+        bool stopped_called = false;
+        test_stopped_receiver rcvr{&stopped_called, stop_source.get_token()};
+
+        auto t = inflight_cancellable_coroutine();
+        auto op = ex::connect(HPX_MOVE(t), rcvr);
+        ex::start(op);
+
+        // Task suspended inside co_await wait_for_stop_sender{}
+        HPX_TEST(!stopped_called);
+
+        // Cancel in-flight
+        stop_source.request_stop();
+        HPX_TEST(stopped_called);
+    }
 }
 
 int hpx_main()
