@@ -10,6 +10,6 @@
 
 #if defined(HPX_HAVE_CXX20_COROUTINES)
 
-#include <hpx/execution/algorithms/task.hpp>
+#include <hpx/modules/execution.hpp>
 
 #endif

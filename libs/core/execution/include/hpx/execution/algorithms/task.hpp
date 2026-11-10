@@ -158,7 +158,8 @@ namespace hpx::execution::experimental {
         template <typename T>
         struct task_promise
           : task_promise_base<T>
-          , hpx::execution::experimental::with_awaitable_senders<task_promise<T>>
+          , hpx::execution::experimental::with_awaitable_senders<
+                task_promise<T>>
         {
             task_operation_base* state_{nullptr};
             bool stopped_{false};
