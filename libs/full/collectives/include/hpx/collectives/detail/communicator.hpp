@@ -16,6 +16,7 @@
 #include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/functional.hpp>
+#include <hpx/modules/futures.hpp>
 #include <hpx/modules/lcos_local.hpp>
 #include <hpx/modules/lock_registration.hpp>
 #include <hpx/modules/logging.hpp>
@@ -129,8 +130,11 @@ namespace hpx::collectives::detail {
             [[maybe_unused]] logging_helper<Operation> log(
                 which, generation, "get");
 
-            return collective_operation::template get<Result>(
-                *this, which, generation, HPX_MOVE(args)...);
+            return run_or_defer<Result>(generation,
+                [this, which, generation, ... args = HPX_MOVE(args)]() mutable {
+                    return collective_operation::template get<Result>(
+                        *this, which, generation, HPX_MOVE(args)...);
+                });
         }
 
         template <typename Operation, typename Result, typename... Args>
@@ -161,8 +165,11 @@ namespace hpx::collectives::detail {
             [[maybe_unused]] logging_helper<Operation> log(
                 which, generation, "set");
 
-            return collective_operation::template set<Result>(
-                *this, which, generation, HPX_MOVE(args)...);
+            return run_or_defer<Result>(generation,
+                [this, which, generation, ... args = HPX_MOVE(args)]() mutable {
+                    return collective_operation::template set<Result>(
+                        *this, which, generation, HPX_MOVE(args)...);
+                });
         }
 
         template <typename Operation, typename Result, typename... Args>
@@ -184,6 +191,61 @@ namespace hpx::collectives::detail {
         };
 
     private:
+        // A request for a generation the gate has not reached yet is kept
+        // until the earlier generations have finished. Waiting for them here
+        // would suspend the thread that runs the request, which may be the
+        // thread that still has to send the request for the earlier generation.
+        template <typename Result, typename F>
+        Result run_or_defer(std::size_t generation, F&& f)
+        {
+            if (generation != generation_arg{})
+            {
+                std::unique_lock l(mtx_);
+                if (generation > gate_.generation(l))
+                {
+                    hpx::promise<Result> p;
+                    Result result(p.get_future());
+                    pending_.emplace_back(generation,
+                        [p = HPX_MOVE(p), f = HPX_FORWARD(F, f)]() mutable {
+                            try
+                            {
+                                p.set_value(f());
+                            }
+                            catch (...)
+                            {
+                                p.set_exception(std::current_exception());
+                            }
+                        });
+                    return result;
+                }
+            }
+            return HPX_FORWARD(F, f)();
+        }
+
+        // Remove the kept requests whose generation the gate has reached.
+        template <typename Lock>
+        std::vector<hpx::move_only_function<void()>> take_ready_requests(
+            Lock& l)
+        {
+            HPX_ASSERT_OWNS_LOCK(l);
+
+            std::vector<hpx::move_only_function<void()>> ready;
+            std::size_t const current = gate_.generation(l);
+            for (auto it = pending_.begin(); it != pending_.end();)
+            {
+                if (it->first <= current)
+                {
+                    ready.push_back(HPX_MOVE(it->second));
+                    it = pending_.erase(it);
+                }
+                else
+                {
+                    ++it;
+                }
+            }
+            return ready;
+        }
+
         [[nodiscard]] constexpr std::size_t get_num_sites(
             std::size_t num_values) const noexcept
         {
@@ -541,6 +603,15 @@ namespace hpx::collectives::detail {
                     gate.next_generation(l, next_gen, ec);
                 });
 
+            // Run the kept requests whose generation has been reached now.
+            // They enter handle_data again, so the lock is released first.
+            auto ready = take_ready_requests(l);
+            l.unlock();
+            for (auto& request : ready)
+            {
+                request();
+            }
+
             return f;
         }
 
@@ -568,5 +639,8 @@ namespace hpx::collectives::detail {
         bool needs_initialization_ = true;
         bool data_available_ = false;
         bool auto_generation_used_ = false;
+        // Requests that arrived before the gate reached their generation.
+        std::vector<std::pair<std::size_t, hpx::move_only_function<void()>>>
+            pending_;
     };
 }    // namespace hpx::collectives::detail
