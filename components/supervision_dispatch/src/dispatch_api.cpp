@@ -245,6 +245,11 @@ namespace {
     //     needed.
     //   - Any other outcome is a genuinely delivered terminal event - nothing
     //     to do; the reactive path already handles it.
+    //   - A fenced peer would otherwise stay in the registry forever, since
+    //     the reactive eviction path only runs for a terminal event the peer
+    //     reports itself. The next sweep finds its local copy terminal and
+    //     evicts it via registry::evict_fenced(), keeping the fence as a
+    //     tombstone. The probe itself never does this, see below.
     //   - check_admission() itself is never called from this loop; it remains
     //     exclusively the caller-side gate inside dispatch_work.hpp.
     //
@@ -520,6 +525,23 @@ namespace {
                         }
                         query_failures.erase(peer.peer_locality);
                     }
+                    continue;
+                }
+
+                // A local state that already latched a terminal event means an
+                // earlier sweep fenced the peer (a peer that reports its own
+                // terminal event is evicted by the registry right away), so
+                // there is nothing left to detect. Evict it, keeping the fence
+                // in place, so snapshot_peers() stops listing it. This is done
+                // here rather than by the probe that fenced it, since only
+                // this loop may touch registry_ (see above). Checked before
+                // state.ec, which is also set if recording the failure
+                // reported an error.
+                if (hpx::supervision::is_terminal(state.last_event))
+                {
+                    ds.registry_.evict_fenced(
+                        peer.peer_locality, peer.generation);
+                    query_failures.erase(peer.peer_locality);
                     continue;
                 }
 

@@ -11,6 +11,7 @@
 #include <hpx/preprocessor/cat.hpp>
 #include <hpx/tracing/macros.hpp>
 #include <cstddef>
+#include <cstdint>
 #include <type_traits>
 
 #if defined(DOXYGEN)
@@ -74,6 +75,15 @@ namespace hpx::util::external_timer {
     HPX_CXX_CORE_EXPORT struct task_wrapper;
 }    // namespace hpx::util::external_timer
 
+namespace hpx::tracing::detail {
+
+    // naming::invalid_locality_id, which core can't include: a locality the
+    // caller doesn't know. If that constant ever changes, change this too, or
+    // the backends record unknown localities as 4294967295.
+    HPX_CXX_CORE_EXPORT inline constexpr std::uint64_t invalid_locality =
+        0xFFFFFFFFULL;
+}    // namespace hpx::tracing::detail
+
 #if defined(HPX_HAVE_TRACY)
 #include <hpx/tracing/backends/tracy.hpp>
 #elif defined(HPX_HAVE_ITTNOTIFY) && HPX_HAVE_ITTNOTIFY != 0
@@ -92,8 +102,9 @@ namespace hpx::tracing {
     /// \brief Context for annotating lock acquisitions and releases.
     ///
     /// This struct is used to provide tracing annotations for synchronization
-    /// primitives such as spinlocks and mutexes. It registers the creation,
-    /// acquisition, and release of locks to the active tracing backend.
+    /// primitives such as spinlocks and mutexes. With
+    /// HPX_WITH_TRACING_LOCK_EVENTS=ON, it registers the creation,
+    /// acquisition, and release of locks with the Tracy or ITT backend.
     struct lock_context
     {
         /// \brief Constructs a lock context.

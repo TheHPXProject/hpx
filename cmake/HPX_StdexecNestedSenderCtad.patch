@@ -1,0 +1,213 @@
+Work around GCC 11 limitations in stdexec sender declarations.
+
+Copyright (c) 2026 Pratyksh Gupta
+
+Current stdexec uses deduction guides for class templates nested in sender
+customization point types. GCC 11 rejects those guides because it requires them
+at namespace scope. Spell the sender template arguments explicitly instead;
+this preserves the deduced, decayed types without relying on the unsupported
+syntax.
+
+GCC 11 also performs the non-dependent lookup of __nothrow_transform before it
+reaches that member's declaration in __sequence_t. Move the private helpers
+before their first use without changing their implementation.
+
+SPDX-License-Identifier: BSL-1.0
+
+diff --git a/include/stdexec/__detail/__just.hpp b/include/stdexec/__detail/__just.hpp
+index f0c3ab8e..c6a4adf1 100644
+--- a/include/stdexec/__detail/__just.hpp
++++ b/include/stdexec/__detail/__just.hpp
+@@ -162,9 +162,6 @@ namespace STDEXEC
+     template <class... _Ts>
+     struct __sender;
+ 
+-    template <class... _Ts>
+-    STDEXEC_HOST_DEVICE_DEDUCTION_GUIDE __sender(just_t, __tuple<_Ts...>) -> __sender<_Ts...>;
+-
+     template <__movable_value... _Ts>
+     STDEXEC_ATTRIBUTE(host, device)
+     constexpr auto operator()(_Ts&&... __ts) const noexcept(__nothrow_decay_copyable<_Ts...>);
+@@ -193,7 +190,8 @@ namespace STDEXEC
+   inline constexpr auto just_t::operator()(_Ts&&... __ts) const
+     noexcept(__nothrow_decay_copyable<_Ts...>)
+   {
+-    return just_t::__sender{just_t(), __tuple{static_cast<_Ts&&>(__ts)...}};
++    return just_t::__sender<std::decay_t<_Ts>...>{
++      just_t(), __tuple{static_cast<_Ts&&>(__ts)...}};
+   }
+ 
+   //! @brief A sender factory that produces a sender which completes
+@@ -244,9 +242,6 @@ namespace STDEXEC
+     template <class _Error>
+     struct __sender;
+ 
+-    template <class _Error>
+-    STDEXEC_HOST_DEVICE_DEDUCTION_GUIDE __sender(just_error_t, __tuple<_Error>) -> __sender<_Error>;
+-
+     template <__movable_value _Error>
+     STDEXEC_ATTRIBUTE(host, device)
+     constexpr auto operator()(_Error&& __err) const noexcept(__nothrow_decay_copyable<_Error>);
+@@ -273,7 +268,8 @@ namespace STDEXEC
+   inline constexpr auto just_error_t::operator()(_Error && __err) const
+     noexcept(__nothrow_decay_copyable<_Error>)
+   {
+-    return just_error_t::__sender{just_error_t(), __tuple{static_cast<_Error&&>(__err)}};
++    return just_error_t::__sender<std::decay_t<_Error>>{
++      just_error_t(), __tuple{static_cast<_Error&&>(__err)}};
+   }
+ 
+   //! @brief A sender factory that produces a sender which completes
+diff --git a/include/stdexec/__detail/__sequence.hpp b/include/stdexec/__detail/__sequence.hpp
+index 73e16379..f1b2a44f 100644
+--- a/include/stdexec/__detail/__sequence.hpp
++++ b/include/stdexec/__detail/__sequence.hpp
+@@ -460,6 +460,35 @@ namespace STDEXEC
+ 
+   struct __sequence_t
+   {
++   private:
++    static constexpr auto __mk_sndr =
++      []<class... _Child>(__ignore, __ignore, _Child &&...__child)  //
++      noexcept(__nothrow_decay_copyable<_Child...>)
++    {
++      return __seq::__sndr<__decay_t<_Child>...>{static_cast<_Child &&>(__child)...};
++    };
++
++    //! whether transform_sender, given a sequence of type _Self, can't throw
++    template <class _Self>
++    static consteval auto __nothrow_transform() noexcept -> bool
++    {
++      constexpr std::size_t __nbr_sndrs = __nbr_children_of<_Self>;
++      if constexpr (__nbr_sndrs == 0)
++      {
++        return true;
++      }
++      else if constexpr (__nbr_sndrs == 1)
++      {
++        return noexcept(
++          static_cast<__tuple_element_t<2, _Self>>(STDEXEC::__get<2>(__declval<_Self>())));
++      }
++      else
++      {
++        return __nothrow_applicable<decltype(__mk_sndr) const &, _Self>;
++      }
++    }
++
++   public:
+     template <class... _Senders>
+     [[nodiscard]]
+     constexpr auto operator()(_Senders &&...__sndrs) const  //
+@@ -487,34 +516,6 @@ namespace STDEXEC
+         return __apply(__mk_sndr, static_cast<_Self &&>(__self));
+       }
+     }
+-
+-   private:
+-    static constexpr auto __mk_sndr =
+-      []<class... _Child>(__ignore, __ignore, _Child &&...__child)  //
+-      noexcept(__nothrow_decay_copyable<_Child...>)
+-    {
+-      return __seq::__sndr<__decay_t<_Child>...>{static_cast<_Child &&>(__child)...};
+-    };
+-
+-    //! whether transform_sender, given a sequence of type _Self, can't throw
+-    template <class _Self>
+-    static consteval auto __nothrow_transform() noexcept -> bool
+-    {
+-      constexpr std::size_t __nbr_sndrs = __nbr_children_of<_Self>;
+-      if constexpr (__nbr_sndrs == 0)
+-      {
+-        return true;
+-      }
+-      else if constexpr (__nbr_sndrs == 1)
+-      {
+-        return noexcept(
+-          static_cast<__tuple_element_t<2, _Self>>(STDEXEC::__get<2>(__declval<_Self>())));
+-      }
+-      else
+-      {
+-        return __nothrow_applicable<decltype(__mk_sndr) const &, _Self>;
+-      }
+-    }
+   };
+ 
+   inline constexpr __sequence_t __sequence{};
+diff --git a/include/stdexec/__detail/__then.hpp b/include/stdexec/__detail/__then.hpp
+index 76639072..9ad3ebcd 100644
+--- a/include/stdexec/__detail/__then.hpp
++++ b/include/stdexec/__detail/__then.hpp
+@@ -192,9 +192,6 @@ namespace STDEXEC
+     template <class _Fun, class _Sender>
+     struct __sender;
+ 
+-    template <class _Fun, class _Sender>
+-    STDEXEC_HOST_DEVICE_DEDUCTION_GUIDE __sender(then_t, _Fun, _Sender) -> __sender<_Fun, _Sender>;
+-
+     //! @brief Construct a sender that adapts @c __sndr by invoking @c __fun
+     //!        with each value-completion argument pack it produces.
+     //!
+@@ -258,7 +255,8 @@ namespace STDEXEC
+   inline constexpr auto then_t::operator()(_Sender && __sndr, _Fun __fun) const
+     noexcept(__nothrow_decay_copyable<_Sender, _Fun>) -> __well_formed_sender auto
+   {
+-    return then_t::__sender{then_t(), static_cast<_Fun&&>(__fun), static_cast<_Sender&&>(__sndr)};
++    return then_t::__sender<std::decay_t<_Fun>, std::decay_t<_Sender>>{
++      then_t(), static_cast<_Fun&&>(__fun), static_cast<_Sender&&>(__sndr)};
+   }
+ 
+   //! @brief The customization point object for the @c then sender adaptor.
+diff --git a/include/stdexec/__detail/__upon_error.hpp b/include/stdexec/__detail/__upon_error.hpp
+index a9f088bb..1ac92d73 100644
+--- a/include/stdexec/__detail/__upon_error.hpp
++++ b/include/stdexec/__detail/__upon_error.hpp
+@@ -192,10 +192,6 @@ namespace STDEXEC
+     template <class _Fun, class _Sender>
+     struct __sender;
+ 
+-    template <class _Fun, class _Sender>
+-    STDEXEC_HOST_DEVICE_DEDUCTION_GUIDE
+-      __sender(upon_error_t, _Fun, _Sender) -> __sender<_Fun, _Sender>;
+-
+     //! @brief Construct a sender that handles each error completion of
+     //!        @c __sndr by invoking @c __fun on the error datum.
+     //!
+@@ -258,9 +254,8 @@ namespace STDEXEC
+   inline constexpr auto upon_error_t::operator()(_Sender && __sndr, _Fun __fun) const
+     noexcept(__nothrow_decay_copyable<_Sender, _Fun>) -> __well_formed_sender auto
+   {
+-    return upon_error_t::__sender{upon_error_t(),
+-                                  static_cast<_Fun&&>(__fun),
+-                                  static_cast<_Sender&&>(__sndr)};
++    return upon_error_t::__sender<std::decay_t<_Fun>, std::decay_t<_Sender>>{
++      upon_error_t(), static_cast<_Fun&&>(__fun), static_cast<_Sender&&>(__sndr)};
+   }
+ 
+   //! @brief The customization point object for the @c upon_error sender
+diff --git a/include/stdexec/__detail/__upon_stopped.hpp b/include/stdexec/__detail/__upon_stopped.hpp
+index 8ccd258b..84f158aa 100644
+--- a/include/stdexec/__detail/__upon_stopped.hpp
++++ b/include/stdexec/__detail/__upon_stopped.hpp
+@@ -161,10 +161,6 @@ namespace STDEXEC
+     template <class _Fun, class _Sender>
+     struct __sender;
+ 
+-    template <class _Fun, class _Sender>
+-    STDEXEC_HOST_DEVICE_DEDUCTION_GUIDE
+-      __sender(upon_stopped_t, _Fun, _Sender) -> __sender<_Fun, _Sender>;
+-
+     //! @brief Construct a sender that handles a stopped completion of @c __sndr
+     //!        by invoking @c __fun and delivering its return value.
+     //!
+@@ -227,9 +223,8 @@ namespace STDEXEC
+   inline constexpr auto upon_stopped_t::operator()(_Sender && __sndr, _Fun __fun) const
+     noexcept(__nothrow_decay_copyable<_Sender, _Fun>) -> __well_formed_sender auto
+   {
+-    return upon_stopped_t::__sender{upon_stopped_t(),
+-                                    static_cast<_Fun&&>(__fun),
+-                                    static_cast<_Sender&&>(__sndr)};
++    return upon_stopped_t::__sender<std::decay_t<_Fun>, std::decay_t<_Sender>>{
++      upon_stopped_t(), static_cast<_Fun&&>(__fun), static_cast<_Sender&&>(__sndr)};
+   }
+ 
+   //! @brief The customization point object for the @c upon_stopped sender

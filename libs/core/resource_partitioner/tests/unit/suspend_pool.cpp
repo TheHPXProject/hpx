@@ -20,6 +20,7 @@
 #include <hpx/semaphore.hpp>
 #include <hpx/thread.hpp>
 
+#include <chrono>
 #include <cstddef>
 #include <string>
 #include <utility>
@@ -134,6 +135,37 @@ int hpx_main()
             HPX_TEST(hpx::when_all(std::move(fs)).is_ready());
 
             hpx::threads::resume_pool(worker_pool).get();
+        }
+    }
+
+    {
+        // Suspend pool with tasks that block on a future before finishing
+        hpx::chrono::high_resolution_timer const t;
+
+        while (t.elapsed() < 1)
+        {
+            hpx::promise<void> p;
+            hpx::shared_future<void> sf = p.get_future();
+
+            std::vector<hpx::future<void>> fs;
+
+            for (std::size_t i = 0; i < worker_pool_threads * 100; ++i)
+            {
+                fs.push_back(hpx::async(worker_exec, [sf]() { sf.get(); }));
+            }
+
+            hpx::future<void> setter = hpx::async([&p]() {
+                hpx::this_thread::sleep_for(std::chrono::milliseconds(1));
+                p.set_value();
+            });
+
+            hpx::threads::suspend_pool(worker_pool).get();
+
+            // All work should be done when pool has been suspended
+            HPX_TEST(hpx::when_all(std::move(fs)).is_ready());
+
+            hpx::threads::resume_pool(worker_pool).get();
+            setter.get();
         }
     }
 

@@ -17,6 +17,10 @@
 
 #include <hpx/modules/itt_notify.hpp>
 
+#if !defined(HPX_HAVE_TRACING_LOCK_EVENTS)
+#include <hpx/tracing/backends/empty_lock_context.hpp>
+#endif
+
 namespace hpx::tracing {
 
     HPX_CXX_CORE_EXPORT using enable_parent_task_handler_type = bool (*)();
@@ -134,6 +138,9 @@ namespace hpx::tracing {
         util::itt::task task_;
     };
 
+    // Off by default, as for Tracy, so that a build without the option has no
+    // ITT calls in hpx::mutex and the spinlocks.
+#if defined(HPX_HAVE_TRACING_LOCK_EVENTS)
     ////////////////////////////////////////////////////////////////////////////
     /// \cond NOINTERNAL
     HPX_CXX_CORE_EXPORT struct [[maybe_unused]] lock_context
@@ -201,6 +208,7 @@ namespace hpx::tracing {
         void const* addr_ = nullptr;
     };
     /// \endcond
+#endif    // HPX_HAVE_TRACING_LOCK_EVENTS
 
     ////////////////////////////////////////////////////////////////////////////
     namespace detail {
@@ -421,6 +429,27 @@ namespace hpx::tracing {
         std::string const& name, std::string const& short_name,
         double value) noexcept;
 
+#if defined(HPX_HAVE_PARCEL_PROFILING)
+    // The parcel signals are only called when parcel profiling is enabled,
+    // so they are emitted out-of-line under the same guard and stay no-ops
+    // otherwise.
+
+    /// \brief Parcel-send signal: emitted from the parcelport's write
+    ///        handler, once the write of the parcel has completed.
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void send_parcel(std::uint64_t tag_msb,
+        std::uint64_t tag_lsb, std::uint64_t size,
+        std::uint64_t target_locality_id) noexcept;
+
+    /// \brief Parcel-receive signal: parcel arrived.
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void recv_parcel(std::uint64_t tag_msb,
+        std::uint64_t tag_lsb, std::uint64_t source_locality_id) noexcept;
+
+    /// \brief Parcel-scheduled signal: action entered local scheduler.
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void parcel_scheduled(
+        std::uint64_t tag_msb, std::uint64_t tag_lsb,
+        std::uint64_t source_locality_id,
+        std::uint64_t source_thread_id) noexcept;
+#else
     /// \brief Parcel-send signal: parcel handed to parcelport
     ///        (no-op stub for ITTNotify).
     HPX_CXX_CORE_EXPORT constexpr void send_parcel(std::uint64_t /*tag_msb*/,
@@ -444,6 +473,7 @@ namespace hpx::tracing {
         std::uint64_t /*source_thread_id*/) noexcept
     {
     }
+#endif
 
     HPX_CXX_CORE_EXPORT constexpr void set_enable_parent_task_handler(
         enable_parent_task_handler_type) noexcept

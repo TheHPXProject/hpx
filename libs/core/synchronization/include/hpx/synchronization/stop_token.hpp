@@ -19,6 +19,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <thread>
 #include <type_traits>
 #include <utility>
 
@@ -107,7 +108,7 @@ namespace hpx {
                 << 32;    // -V112
 
         public:
-            constexpr stop_state() noexcept
+            stop_state() noexcept
               : state_(token_ref_increment)
             {
             }
@@ -208,6 +209,9 @@ namespace hpx {
             std::atomic<std::uint64_t> state_;
             stop_callback_base* callbacks_ = nullptr;
             hpx::threads::thread_id_type signalling_thread_;
+            // signalling_thread_ is the invalid id for every non-HPX thread
+            // so the OS thread id identifies the signalling thread in that case
+            std::thread::id signalling_os_thread_id_;
         };
     }    // namespace detail
 
@@ -398,12 +402,15 @@ namespace hpx {
 
         stop_source& operator=(stop_source const& rhs) noexcept
         {
-            state_ = rhs.state_;
-            if (state_)
-                state_->add_source_count();
+            stop_source(rhs).swap(*this);
             return *this;
         }
-        stop_source& operator=(stop_source&&) noexcept = default;
+
+        stop_source& operator=(stop_source&& rhs) noexcept
+        {
+            stop_source(std::move(rhs)).swap(*this);
+            return *this;
+        }
 
         // Effects: Releases ownership of the stop state, if any.
         ~stop_source()

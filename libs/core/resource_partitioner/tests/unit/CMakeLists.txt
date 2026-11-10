@@ -10,6 +10,7 @@ set(tests
     named_pool_executor
     resource_partitioner_info
     scheduler_binding_check
+    scheduler_pool_pus
     scheduler_priority_check
     scheduling_policy_wiring
     shutdown_left_work
@@ -33,6 +34,7 @@ set(named_pool_executor_PARAMETERS THREADS_PER_LOCALITY 4)
 set(resource_partitioner_info_PARAMETERS THREADS_PER_LOCALITY 4)
 set(used_pus_PARAMETERS THREADS_PER_LOCALITY 4 RUN_SERIAL)
 
+set(scheduler_pool_pus_PARAMETERS THREADS_PER_LOCALITY -1)
 set(scheduler_priority_check_PARAMETERS THREADS_PER_LOCALITY -1)
 # the default pool and two workers of the pool "work"
 set(shutdown_left_work_PARAMETERS THREADS_PER_LOCALITY 3)

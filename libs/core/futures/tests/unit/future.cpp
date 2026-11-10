@@ -261,6 +261,86 @@ void test_invoking_a_packaged_task_twice_throws()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+void test_invoking_a_packaged_task_twice_does_not_rerun_callable()
+{
+    // a callable that returns normally
+    {
+        int calls = 0;
+        hpx::packaged_task<int()> pt([&calls]() { return ++calls; });
+        hpx::future<int> f = pt.get_future();
+
+        pt();
+        HPX_TEST_EQ(calls, 1);
+
+        try
+        {
+            pt();
+            HPX_TEST(false);
+        }
+        catch (hpx::exception const& e)
+        {
+            HPX_TEST_EQ(e.get_error(), hpx::error::promise_already_satisfied);
+        }
+        catch (...)
+        {
+            HPX_TEST(false);
+        }
+
+        // the rejected second call must not have run the callable again
+        HPX_TEST_EQ(calls, 1);
+        HPX_TEST_EQ(f.get(), 1);
+    }
+
+    // a callable that throws: its exception is the stored result, so the
+    // second call must not run it again either
+    {
+        int calls = 0;
+        hpx::packaged_task<int()> pt([&calls]() -> int {
+            ++calls;
+            throw std::runtime_error("first call");
+        });
+        hpx::future<int> f = pt.get_future();
+
+        pt();
+        HPX_TEST_EQ(calls, 1);
+
+        try
+        {
+            pt();
+            HPX_TEST(false);
+        }
+        catch (hpx::exception const& e)
+        {
+            HPX_TEST_EQ(e.get_error(), hpx::error::promise_already_satisfied);
+        }
+        catch (...)
+        {
+            HPX_TEST(false);
+        }
+
+        HPX_TEST_EQ(calls, 1);
+        HPX_TEST_THROW(f.get(), std::runtime_error);
+    }
+
+    // reset() installs a fresh shared state, so the task may run again
+    {
+        int calls = 0;
+        hpx::packaged_task<int()> pt([&calls]() { return ++calls; });
+        hpx::future<int> f1 = pt.get_future();
+
+        pt();
+        HPX_TEST_EQ(f1.get(), 1);
+
+        pt.reset();
+        hpx::future<int> f2 = pt.get_future();
+        pt();
+
+        HPX_TEST_EQ(calls, 2);
+        HPX_TEST_EQ(f2.get(), 2);
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
 void test_cannot_get_future_twice_from_task()
 {
     hpx::packaged_task<int()> pt(make_int);
@@ -688,6 +768,7 @@ int hpx_main(variables_map&)
         test_future_from_packaged_task_is_waiting();
         test_invoking_a_packaged_task_populates_future();
         test_invoking_a_packaged_task_twice_throws();
+        test_invoking_a_packaged_task_twice_does_not_rerun_callable();
         test_cannot_get_future_twice_from_task();
         test_task_stores_exception_if_function_throws();
         test_void_promise();

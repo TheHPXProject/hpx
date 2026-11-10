@@ -14,6 +14,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
+#include <numeric>
 #include <random>
 #include <string>
 #include <vector>
@@ -229,11 +230,57 @@ void test_partial_sort_edge_cases()
     }
 }
 
+void test_partial_sort_sorted_prefix_with_smaller_tail()
+{
+    using namespace hpx::execution;
+
+    constexpr std::size_t size = 2048;
+    constexpr std::size_t middle_index = 1025;
+
+    std::vector<std::uint64_t> input(size);
+    std::iota(input.begin(), input.end(), std::uint64_t{1});
+    input.back() = 0;
+
+    std::vector<std::uint64_t> expected = input;
+    std::partial_sort(
+        expected.begin(), expected.begin() + middle_index, expected.end());
+
+    auto check_prefix = [&expected](std::vector<std::uint64_t> const& values) {
+        HPX_TEST(std::equal(values.begin(), values.begin() + middle_index,
+            expected.begin(), expected.begin() + middle_index));
+    };
+
+    {
+        std::vector<std::uint64_t> values = input;
+        auto result = hpx::partial_sort(
+            values.begin(), values.begin() + middle_index, values.end());
+        HPX_TEST(result == values.end());
+        check_prefix(values);
+    }
+
+    {
+        std::vector<std::uint64_t> values = input;
+        auto result = hpx::partial_sort(
+            par, values.begin(), values.begin() + middle_index, values.end());
+        HPX_TEST(result == values.end());
+        check_prefix(values);
+    }
+
+    {
+        std::vector<std::uint64_t> values = input;
+        auto result = hpx::partial_sort(par(task), values.begin(),
+            values.begin() + middle_index, values.end());
+        HPX_TEST(result.get() == values.end());
+        check_prefix(values);
+    }
+}
+
 void partial_sort_test()
 {
     test_partial_sort<std::random_access_iterator_tag>();
     test_partial_sort<std::forward_iterator_tag>();
     test_partial_sort_edge_cases();
+    test_partial_sort_sorted_prefix_with_smaller_tail();
 }
 
 int hpx_main(hpx::program_options::variables_map& vm)

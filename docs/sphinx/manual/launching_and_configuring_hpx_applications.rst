@@ -184,11 +184,14 @@ The |hpx| configuration section
    max_idle_loop_count = ${HPX_MAX_IDLE_LOOP_COUNT:<hpx_idle_loop_count_max>}
    max_busy_loop_count = ${HPX_MAX_BUSY_LOOP_COUNT:<hpx_busy_loop_count_max>}
    max_idle_backoff_time = ${HPX_MAX_IDLE_BACKOFF_TIME:<hpx_idle_backoff_time_max>}
+   min_idle_backoff_time = ${HPX_MIN_IDLE_BACKOFF_TIME:<hpx_idle_backoff_time_min>}
+   idle_backoff_steal_check_interval = ${HPX_IDLE_BACKOFF_STEAL_CHECK_INTERVAL:<hpx_idle_backoff_steal_check_interval>}
    default_scheduler_mode = ${HPX_DEFAULT_SCHEDULER_MODE}
    exception_verbosity = ${HPX_EXCEPTION_VERBOSITY:2}
    trace_depth = ${HPX_TRACE_DEPTH:20}
    handle_signals = ${HPX_HANDLE_SIGNALS:1}
    handle_failed_new = ${HPX_HANDLE_FAILED_NEW:1}
+   use_itt_notify = ${HPX_HAVE_ITTNOTIFY:0}
 
    [hpx.stacks]
    small_size = ${HPX_SMALL_STACK_SIZE:<hpx_small_stack_size>}
@@ -298,6 +301,25 @@ The |hpx| configuration section
        applicable only if ``HPX_WITH_THREAD_MANAGER_IDLE_BACKOFF`` is set
        during configuration in |cmake|_. By default this is defined by the
        preprocessor constant ``HPX_IDLE_BACKOFF_TIME_MAX`` (``1000``).
+   * * ``hpx.min_idle_backoff_time``
+     * This setting defines the shortest idle backoff period (in
+       microseconds) a worker thread sleeps for; shorter periods are spent
+       spinning instead, since a timed wait lasts at least as long as the
+       operating system takes to wake the thread up again, see
+       :ref:`thread_scheduler_idle_backoff`. Values above
+       ``hpx.max_idle_backoff_time`` make idle worker threads spin and never
+       sleep. This setting is applicable only if
+       ``HPX_WITH_THREAD_MANAGER_IDLE_BACKOFF`` is set during configuration in
+       |cmake|_. By default this is defined by the preprocessor constant
+       ``HPX_IDLE_BACKOFF_TIME_MIN`` (``50``).
+   * * ``hpx.idle_backoff_steal_check_interval``
+     * This setting defines how often (in microseconds) a spinning worker
+       thread looks at the queues it may steal from; it looks at its own
+       queues in every round of the spin, see
+       :ref:`thread_scheduler_idle_backoff`. This setting is applicable only if
+       ``HPX_WITH_THREAD_MANAGER_IDLE_BACKOFF`` is set during configuration in
+       |cmake|_. By default this is defined by the preprocessor constant
+       ``HPX_IDLE_BACKOFF_STEAL_CHECK_INTERVAL`` (``8``).
    * * ``hpx.default_scheduler_mode``
      * This setting defines the scheduler mode of the default thread pool as a
        number (the bitwise or of the values of
@@ -329,6 +351,13 @@ The |hpx| configuration section
        The default is ``1``. Setting this value to ``0`` can be useful in cases
        when generating a core-dump on segmentation faults or similar signals
        is desired.
+   * * ``hpx.use_itt_notify``
+     * This setting defines whether |hpx| sends events to the |ittnotify|
+       at runtime. The default is ``0`` (off), and can be changed with the
+       environment variable ``HPX_HAVE_ITTNOTIFY``. Set it to ``1``, for
+       example with ``--hpx:ini=hpx.use_itt_notify=1``, to record events.
+       Only present when |hpx| was built with
+       :option:`HPX_WITH_ITTNOTIFY`\ ``=ON``. See :ref:`profiling_with_itt`.
    * * ``hpx.stacks.small_size``
      * This is initialized to the small stack size to be used by |hpx| threads.
        Set by default to the value of the compile time preprocessor constant
@@ -486,22 +515,28 @@ The ``hpx.thread_queue`` configuration section
        them. The default is to allow stealing always. A worker thread always
        converts its own staged tasks.
    * * ``hpx.thread_queue.idle_loop_count_steal_staged``
-     * The value of this property defines the number of consecutive empty
-       scheduling loop iterations after which a worker thread starts stealing
-       staged |hpx| tasks from other worker threads (local priority queue
-       scheduler only; values above ``hpx.max_idle_loop_count / 2`` are limited
-       to it. The local and shared priority schedulers steal staged tasks right
-       away, the work-requesting schedulers do not steal staged tasks). It has
-       no effect if fast idle mode is on, which steals staged tasks right away.
-       See :ref:`thread_scheduler_staged_steal`.
+     * The value of this property defines the idle-loop counter value after
+       which a worker thread starts stealing staged |hpx| tasks from other
+       worker threads (local priority queue and work-requesting schedulers
+       only; values above ``hpx.max_idle_loop_count / 2`` are limited to it).
+       The counter normally advances once per empty scheduling loop iteration.
+       In fast idle mode it advances by ``hpx.max_idle_loop_count / 1024`` per
+       empty iteration, so a small threshold may be passed in one iteration.
+       The local and shared priority schedulers steal staged tasks right away.
+       The local priority queue scheduler bypasses this threshold in fast idle
+       mode because it steals directly while scanning victim queues. A
+       work-requesting scheduler instead carries the threshold result in its
+       request, so fast idle mode accelerates the counter without bypassing the
+       check. See :ref:`thread_scheduler_staged_steal`.
    * * ``hpx.thread_queue.min_tasks_to_steal_staged_early``
      * The value of this property defines the number of staged |hpx| tasks that
        need to be available before other worker threads are allowed to steal
-       them (local priority queue scheduler only, not in fast idle mode).
-       Leaving a few staged tasks to the worker thread they were placed on
-       keeps them close to the data in that core's caches. The minimum is
-       ignored for a worker that doesn't get to its few staged tasks. See
-       :ref:`thread_scheduler_staged_steal`.
+       them (local priority queue and work-requesting schedulers only). Fast
+       idle mode disables this minimum for the local priority queue scheduler,
+       but not for work-requesting schedulers. Leaving a few staged tasks to
+       the worker thread they were placed on keeps them close to the data in
+       that core's caches. The minimum is ignored for a worker that doesn't get
+       to its few staged tasks. See :ref:`thread_scheduler_staged_steal`.
    * * ``hpx.thread_queue.min_add_new_count``
      * The value of this property defines the minimal number of staged tasks
        converted into |hpx| threads at a time, see
@@ -1783,7 +1818,8 @@ The predefined command line options for any application using
 
    Controls NUMA-sensitive work stealing. The default and the value used when
    the option is given without an argument are both ``1``. For the local,
-   local-priority, and ABP-priority schedulers the allowed values are:
+   local-priority, ABP-priority, and local-workrequesting schedulers the allowed
+   values are:
 
    * ``0``: all workers may steal across NUMA domains;
    * ``1``: only boundary workers may steal from the nearest NUMA domains;
@@ -1791,8 +1827,7 @@ The predefined command line options for any application using
 
    The static, static-priority, and shared-priority schedulers do not distinguish
    boundary workers. They allow cross-domain stealing for levels ``0`` and ``1``
-   and disable it for level ``2``. Work-requesting schedulers currently ignore
-   this option.
+   and disable it for level ``2``.
 
 
 |hpx| configuration options

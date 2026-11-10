@@ -11,11 +11,14 @@
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/execution_base.hpp>
+#include <hpx/modules/functional.hpp>
 #include <hpx/modules/memory.hpp>
 #include <hpx/modules/synchronization.hpp>
 #include <hpx/modules/thread_support.hpp>
 #include <hpx/modules/type_support.hpp>
 
+#include <atomic>
+#include <cstddef>
 #include <exception>
 #include <mutex>
 #include <type_traits>
@@ -288,6 +291,7 @@ namespace hpx::execution::experimental {
 
     private:
         bool stop = false;
+        std::atomic<std::size_t> active_threads{0};
 
         void push_back(run_loop_opstate_base* t)
         {
@@ -339,7 +343,7 @@ namespace hpx::execution::experimental {
         // Otherwise, has no effects.
         ~run_loop()
         {
-            if (head.next != &head || !stop)
+            if (head.next != &head || active_threads != 0)
             {
                 std::terminate();
             }
@@ -355,6 +359,10 @@ namespace hpx::execution::experimental {
         {
             // Precondition: state is starting.
             //HPX_ASSERT(head.next != &head || !stop);
+            ++active_threads;
+            auto on_exit =
+                hpx::experimental::scope_exit([this]() { --active_threads; });
+
             for (run_loop_opstate_base* t; (t = pop_front()) != &head; /**/)
             {
                 t->execute();

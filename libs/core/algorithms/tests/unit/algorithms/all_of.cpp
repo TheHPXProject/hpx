@@ -15,6 +15,7 @@
 #include <cstddef>
 #include <iostream>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "all_of_tests.hpp"
@@ -41,15 +42,21 @@ void test_all_of()
     test_all_of(par, IteratorTag());
     test_all_of(par_unseq, IteratorTag());
 
-    test_all_of_ranges(seq, IteratorTag(), proj());
-    test_all_of_ranges(par, IteratorTag(), proj());
-    test_all_of_ranges(par_unseq, IteratorTag(), proj());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_all_of_ranges(seq, IteratorTag(), proj());
+        test_all_of_ranges(par, IteratorTag(), proj());
+        test_all_of_ranges(par_unseq, IteratorTag(), proj());
+    }
 
     test_all_of_async(seq(task), IteratorTag());
     test_all_of_async(par(task), IteratorTag());
 
-    test_all_of_ranges_async(seq(task), IteratorTag(), proj());
-    test_all_of_ranges_async(par(task), IteratorTag(), proj());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_all_of_ranges_async(seq(task), IteratorTag(), proj());
+        test_all_of_ranges_async(par(task), IteratorTag(), proj());
+    }
 }
 
 // template <typename IteratorTag>

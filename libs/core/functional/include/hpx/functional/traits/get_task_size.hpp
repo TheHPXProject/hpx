@@ -15,6 +15,11 @@
 #include <initializer_list>
 #include <type_traits>
 
+#if defined(HPX_HAVE_CXX26_REFLECTION) &&                                      \
+    defined(HPX_HAVE_CXX26_REFLECTION_ANNOTATIONS)
+#include <meta>
+#endif
+
 namespace hpx::threads {
 
     ///////////////////////////////////////////////////////////////////////////
@@ -98,9 +103,91 @@ namespace hpx {
 
 namespace hpx::traits {
 
+#if defined(HPX_HAVE_CXX26_REFLECTION) &&                                      \
+    defined(HPX_HAVE_CXX26_REFLECTION_ANNOTATIONS)
+    namespace detail {
+
+        HPX_CXX_CORE_EXPORT struct task_size_annotation
+        {
+            bool found = false;
+            bool conflicting = false;
+            threads::task_size size = threads::task_size::unknown;
+        };
+
+        // Only functions and class types are looked at. Annotations are not
+        // inherited, so a derived type has to be annotated itself and the base
+        // classes are not scanned. An unknown size counts as no annotation.
+        HPX_CXX_CORE_EXPORT consteval task_size_annotation
+        find_task_size_annotation(std::meta::info const entity)
+        {
+            task_size_annotation result;
+            if (!std::meta::is_function(entity) &&
+                !std::meta::is_class_type(entity))
+            {
+                return result;
+            }
+
+            for (std::meta::info const a : std::meta::annotations_of(entity))
+            {
+                if (std::meta::remove_const(std::meta::type_of(a)) !=
+                    ^^threads::task_size)
+                {
+                    continue;
+                }
+
+                auto const size = std::meta::extract<threads::task_size>(a);
+                if (size == threads::task_size::unknown)
+                {
+                    continue;
+                }
+
+                if (result.found && size != result.size)
+                    result.conflicting = true;
+                result.found = true;
+                result.size = size;
+            }
+            return result;
+        }
+
+        // An alias does not have the annotations of the type it stands for, and
+        // finding none is not an error: the type would silently keep the
+        // default size. dealias makes sure that the type itself is looked at.
+        HPX_CXX_CORE_EXPORT template <typename F, threads::task_size Size>
+        consteval threads::task_size annotated_task_size()
+        {
+            constexpr task_size_annotation annotation =
+                find_task_size_annotation(std::meta::dealias(^^F));
+
+            static_assert(!annotation.conflicting,
+                "a type must not have two different hpx::task_size "
+                "annotations");
+
+            return annotation.found ? annotation.size : Size;
+        }
+
+        // The size a function is annotated with, unknown if it has none. Fn
+        // reflects the function rather than its type, because functions of
+        // the same type can have different sizes.
+        HPX_CXX_CORE_EXPORT template <std::meta::info Fn>
+        consteval threads::task_size annotated_function_task_size()
+        {
+            constexpr task_size_annotation annotation =
+                find_task_size_annotation(Fn);
+
+            static_assert(!annotation.conflicting,
+                "a function must not have two different hpx::task_size "
+                "annotations");
+
+            return annotation.size;
+        }
+    }    // namespace detail
+#endif
+
     // By default, we don't know how long the function runs. Size stays
     // unknown for callers; it is an extension point for specializations,
-    // which pass it on to the function they wrap.
+    // which pass it on to the function they wrap. A class type can give its
+    // size with an annotation if the compiler supports them, which wins over
+    // Size but not over a specialization.
     //
     // value is the size known from the type of F. call(f) returns the size of
     // the function object f, which can be known only at run time, for
@@ -112,12 +199,18 @@ namespace hpx::traits {
         typename Enable = void>
     struct get_task_size
     {
+#if defined(HPX_HAVE_CXX26_REFLECTION) &&                                      \
+    defined(HPX_HAVE_CXX26_REFLECTION_ANNOTATIONS)
+        static constexpr threads::task_size value =
+            detail::annotated_task_size<F, Size>();
+#else
         static constexpr threads::task_size value = Size;
+#endif
 
         [[nodiscard]] static constexpr threads::task_size call(
             F const& /*f*/) noexcept
         {
-            return Size;
+            return value;
         }
     };
 

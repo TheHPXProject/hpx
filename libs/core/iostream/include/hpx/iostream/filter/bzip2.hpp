@@ -15,7 +15,7 @@
 #include <hpx/iostream/constants.hpp>
 #include <hpx/iostream/filter/symmetric.hpp>
 
-#include <iosfwd>
+#include <ios>
 #include <memory>
 #include <new>
 #include <type_traits>

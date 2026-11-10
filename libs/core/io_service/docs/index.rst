@@ -19,5 +19,26 @@ This module provides an abstraction over Boost.ASIO, combining multiple
 :hpx:class:`hpx::util::io_service_pool` into an interface derived from
 :hpx:class:`hpx::threads::detail::thread_pool_base`.
 
+The module also provides sender-based timers. The
+:hpx:function:`hpx::io::experimental::schedule_timer_after` and
+:hpx:function:`hpx::io::experimental::schedule_timer_at` functions create
+senders that complete on an ``asio::io_context``. Timer expiry produces
+``set_value``, cancellation through the receiver's stop token produces
+``set_stopped``, and other timer errors produce ``set_error``. The I/O context
+must be run until the operation completes.
+
+Connecting a timer sender allocates shared operation state and an Asio timer.
+Callback storage may allocate as well. Applications creating timers in a hot
+loop should account for these allocations.
+
+The following example creates a sender that completes after one second::
+
+  asio::io_context context;
+  auto sender = hpx::io::experimental::schedule_timer_after(
+      context, std::chrono::seconds(1));
+
+The sender can be composed with the other sender algorithms in HPX. Starting
+the sender does not itself run the I/O context.
+
 See the :ref:`API reference <modules_io_service_api>` of this module for more
 details.

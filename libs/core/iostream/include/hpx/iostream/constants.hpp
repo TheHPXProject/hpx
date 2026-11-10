@@ -15,7 +15,7 @@
 
 #include <hpx/config.hpp>
 
-#include <iosfwd>
+#include <ios>
 
 namespace hpx::iostream {
 

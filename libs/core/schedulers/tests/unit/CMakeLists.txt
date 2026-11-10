@@ -17,12 +17,22 @@ set(tests
     steal_staged_early
     thread_queue_get_next_threads
     thread_queue_parameters
+    wake_by_task_size
 )
 
 if(HPX_WITH_WORK_REQUESTING_SCHEDULERS)
-  list(APPEND tests workrequesting_random_victim workrequesting_steal
-       workrequesting_scheduler_mode workrequesting_suspend_resume
+  list(
+    APPEND
+    tests
+    workrequesting_numa
+    workrequesting_random_victim
+    workrequesting_run_as_child
+    workrequesting_steal
+    workrequesting_scheduler_mode
+    workrequesting_staged_stealing
+    workrequesting_suspend_resume
   )
+  set(workrequesting_staged_stealing_PARAMETERS THREADS_PER_LOCALITY 4)
 endif()
 
 set(min_tasks_to_steal_staged_PARAMETERS THREADS_PER_LOCALITY 4)
@@ -34,6 +44,7 @@ set(shared_priority_queue_external_cleanup_PARAMETERS THREADS_PER_LOCALITY 1)
 
 set(steal_staged_early_PARAMETERS THREADS_PER_LOCALITY 4)
 set(steal_pending_early_PARAMETERS THREADS_PER_LOCALITY 4)
+set(wake_by_task_size_PARAMETERS THREADS_PER_LOCALITY 4)
 
 # ##############################################################################
 foreach(test ${tests})
@@ -89,3 +100,14 @@ add_hpx_unit_test(
   THREADS_PER_LOCALITY 4
   ARGS --mode=fast-idle
 )
+
+if(HPX_WITH_THREAD_MANAGER_IDLE_BACKOFF)
+  # without spinning idle workers
+  add_hpx_unit_test(
+    "modules.schedulers" wake_by_task_size_no_spin
+    EXECUTABLE wake_by_task_size
+    PSEUDO_DEPS_NAME wake_by_task_size
+    THREADS_PER_LOCALITY 4
+    ARGS --hpx:ini=hpx.min_idle_backoff_time=0
+  )
+endif()
