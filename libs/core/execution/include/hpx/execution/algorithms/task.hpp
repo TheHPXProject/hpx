@@ -376,8 +376,6 @@ namespace hpx::execution::experimental {
             hpx::coroutine_handle<> canceled() noexcept override
             {
                 stop_callback_.reset();
-                auto coro = std::exchange(coro_, {});
-                coro.destroy();
                 hpx::execution::experimental::set_stopped(
                     HPX_MOVE(rcvr_));
                 return hpx::noop_coroutine();
