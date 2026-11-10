@@ -109,6 +109,25 @@ namespace hpx::execution::experimental {
         };
 
         ///////////////////////////////////////////////////////////////////////
+        // final_awaiter: symmetric transfer back to parent coroutine
+        struct final_awaiter
+        {
+            static constexpr bool await_ready() noexcept
+            {
+                return false;
+            }
+
+            template <typename Promise>
+            static hpx::coroutine_handle<> await_suspend(
+                hpx::coroutine_handle<Promise> h) noexcept
+            {
+                return h.promise().continuation();
+            }
+
+            static void await_resume() noexcept {}
+        };
+
+        ///////////////////////////////////////////////////////////////////////
         // task_promise: C++26 P3552 coroutine promise type
         template <typename T, typename TaskEnv>
         struct task_promise
@@ -123,7 +142,7 @@ namespace hpx::execution::experimental {
                 return {};
             }
 
-            hpx::suspend_always final_suspend() noexcept
+            final_awaiter final_suspend() noexcept
             {
                 return {};
             }
@@ -217,6 +236,87 @@ namespace hpx::execution::experimental {
             {
                 coro_.destroy();
             }
+        }
+
+        template <typename ParentPromise = void>
+        struct awaiter
+        {
+            hpx::coroutine_handle<promise_type> coro_;
+
+            explicit awaiter(hpx::coroutine_handle<promise_type> coro) noexcept
+              : coro_(coro)
+            {
+            }
+
+            awaiter(awaiter&& other) noexcept
+              : coro_(std::exchange(other.coro_, {}))
+            {
+            }
+
+            awaiter(awaiter const&) = delete;
+            awaiter& operator=(awaiter const&) = delete;
+            awaiter& operator=(awaiter&&) = delete;
+
+            ~awaiter()
+            {
+                if (coro_)
+                {
+                    coro_.destroy();
+                }
+            }
+
+            static constexpr bool await_ready() noexcept
+            {
+                return false;
+            }
+
+            template <typename ParentPromise2>
+            hpx::coroutine_handle<> await_suspend(
+                hpx::coroutine_handle<ParentPromise2> parent) noexcept
+            {
+                coro_.promise().set_continuation(parent);
+                return coro_;
+            }
+
+            T await_resume()
+            {
+                auto coro = std::exchange(coro_, {});
+                struct scoped_destroy
+                {
+                    hpx::coroutine_handle<promise_type> c;
+                    ~scoped_destroy()
+                    {
+                        if (c)
+                        {
+                            c.destroy();
+                        }
+                    }
+                } cleanup{coro};
+
+                if (coro.promise().data_.index() == 2)
+                {
+                    std::rethrow_exception(
+                        std::get<2>(HPX_MOVE(coro.promise().data_)));
+                }
+
+                if constexpr (!std::is_void_v<T>)
+                {
+                    return std::get<1>(HPX_MOVE(coro.promise().data_));
+                }
+            }
+        };
+
+        // General operator co_await
+        friend awaiter<> operator co_await(task&& self) noexcept
+        {
+            return awaiter<>{std::exchange(self.coro_, {})};
+        }
+
+        // Context-aware as_awaitable
+        template <typename ParentPromise>
+        awaiter<ParentPromise> as_awaitable(ParentPromise&) && noexcept
+        {
+            return awaiter<ParentPromise>{std::exchange(coro_, {})};
         }
 
     private:
