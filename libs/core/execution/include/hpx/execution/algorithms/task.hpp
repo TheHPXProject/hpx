@@ -384,6 +384,29 @@ namespace hpx::execution::experimental {
             }
         };
 
+        ///////////////////////////////////////////////////////////////////////
+        // Helper to deduce parent coroutine stop token
+        template <typename ParentPromise, typename = void>
+        struct parent_stop_token
+        {
+            using type = hpx::experimental::in_place_stop_token;
+        };
+
+        template <typename ParentPromise>
+            requires requires(ParentPromise const& p) {
+                hpx::execution::experimental::get_stop_token(p.get_env());
+            }
+        struct parent_stop_token<ParentPromise>
+        {
+            using type =
+                decltype(hpx::execution::experimental::get_stop_token(
+                    std::declval<ParentPromise const&>().get_env()));
+        };
+
+        template <typename ParentPromise>
+        using parent_stop_token_t =
+            typename parent_stop_token<ParentPromise>::type;
+
     }    // namespace detail
 
     ///////////////////////////////////////////////////////////////////////////
@@ -453,8 +476,21 @@ namespace hpx::execution::experimental {
         template <typename ParentPromise = void>
         struct awaiter : detail::task_operation_base
         {
+            using stop_token_type = std::conditional_t<
+                std::is_void_v<ParentPromise>,
+                hpx::experimental::in_place_stop_token,
+                detail::parent_stop_token_t<ParentPromise>>;
+
+            using stop_callback_type =
+                typename stop_token_type::template callback_type<
+                    detail::forward_task_stop_request>;
+
             hpx::coroutine_handle<promise_type> coro_;
             hpx::coroutine_handle<> continuation_{};
+            hpx::coroutine_handle<> stopped_continuation_{};
+            std::optional<stop_callback_type> stop_callback_{};
+            void* parent_promise_{nullptr};
+            hpx::coroutine_handle<> (*unhandled_stopped_fn_)(void*){nullptr};
 
             explicit awaiter(
                 hpx::coroutine_handle<promise_type> coro) noexcept
@@ -465,6 +501,11 @@ namespace hpx::execution::experimental {
             awaiter(awaiter&& other) noexcept
               : coro_(std::exchange(other.coro_, {}))
               , continuation_(std::exchange(other.continuation_, {}))
+              , stopped_continuation_(
+                    std::exchange(other.stopped_continuation_, {}))
+              , parent_promise_(std::exchange(other.parent_promise_, nullptr))
+              , unhandled_stopped_fn_(
+                    std::exchange(other.unhandled_stopped_fn_, nullptr))
             {
             }
 
@@ -492,19 +533,69 @@ namespace hpx::execution::experimental {
                 coro_.promise().set_continuation(parent);
                 coro_.promise().state_ = this;
                 continuation_ = parent;
+
+                // 1. Extract unhandled_stopped continuation for symmetric
+                // transfer
+                if constexpr (requires {
+                                  parent.promise().unhandled_stopped();
+                              })
+                {
+                    parent_promise_ = &parent.promise();
+                    unhandled_stopped_fn_ = [](void* p) noexcept
+                        -> hpx::coroutine_handle<> {
+                        return static_cast<ParentPromise2*>(p)
+                            ->unhandled_stopped();
+                    };
+                }
+                else
+                {
+                    stopped_continuation_ = hpx::noop_coroutine();
+                }
+
+                // 2. Safely bridge the parent stop token to nested child task
+                if constexpr (requires {
+                                  hpx::execution::experimental::get_stop_token(
+                                      parent.promise().get_env());
+                              })
+                {
+                    auto token =
+                        hpx::execution::experimental::get_stop_token(
+                            parent.promise().get_env());
+
+                    if constexpr (std::is_constructible_v<stop_callback_type,
+                                      decltype(token),
+                                      detail::forward_task_stop_request>)
+                    {
+                        if (token.stop_possible())
+                        {
+                            stop_callback_.emplace(token,
+                                detail::forward_task_stop_request{
+                                    coro_.promise().stop_source_});
+                        }
+                    }
+                }
+
                 return coro_;
             }
 
             hpx::coroutine_handle<> completed() noexcept override
             {
+                stop_callback_.reset();
                 return continuation_;
             }
 
             hpx::coroutine_handle<> canceled() noexcept override
             {
-                auto coro = std::exchange(coro_, {});
-                coro.destroy();
-                return continuation_;
+                stop_callback_.reset();
+                // Transfer control to parent's stop path (bypassing
+                // await_resume)
+                if (unhandled_stopped_fn_)
+                {
+                    stopped_continuation_ =
+                        unhandled_stopped_fn_(parent_promise_);
+                }
+                return stopped_continuation_ ? stopped_continuation_ :
+                                               continuation_;
             }
 
             T await_resume()
@@ -521,11 +612,6 @@ namespace hpx::execution::experimental {
                         }
                     }
                 } cleanup{coro};
-
-                if (coro.promise().stopped_)
-                {
-                    throw hpx::thread_interrupted{};
-                }
 
                 if (coro.promise().data_.index() == 2)
                 {
