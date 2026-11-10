@@ -226,9 +226,9 @@ namespace hpx::detail {
         auto const self = hpx::threads::get_self_id();
         bool const is_signalling_thread =
             (self != hpx::threads::invalid_thread_id) ?
-                (self == cb->executing_thread_ || self == signalling_thread_) :
-                (std::this_thread::get_id() == cb->executing_os_thread_id_ ||
-                 std::this_thread::get_id() == signalling_os_thread_id_);
+            (self == cb->executing_thread_ || self == signalling_thread_) :
+            (std::this_thread::get_id() == cb->executing_os_thread_id_ ||
+                std::this_thread::get_id() == signalling_os_thread_id_);
 
         if (is_signalling_thread)
         {
