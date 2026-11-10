@@ -501,6 +501,22 @@ void test_stop_callback_self_destruction()
         HPX_TEST(called);
         HPX_TEST(!scb.has_value());
     }
+
+    {
+        StopSource ssrc;
+        std::optional<StopCallback<std::function<void()>>> scb;
+        bool called = false;
+        scb.emplace(ssrc.get_token(), [&] {
+            called = true;
+            scb.reset();
+        });
+
+        HPX_TEST(!called);
+        std::thread signaller([&] { ssrc.request_stop(); });
+        signaller.join();
+        HPX_TEST(called);
+        HPX_TEST(!scb.has_value());
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -514,10 +530,8 @@ int hpx_main()
     test_stop_callback_destruction_on_os_threads<
         hpx::experimental::in_place_stop_source,
         hpx::experimental::in_place_stop_callback>();
-    test_stop_callback_self_destruction<hpx::stop_source,
-        hpx::stop_callback>();
-    test_stop_callback_self_destruction<
-        hpx::experimental::in_place_stop_source,
+    test_stop_callback_self_destruction<hpx::stop_source, hpx::stop_callback>();
+    test_stop_callback_self_destruction<hpx::experimental::in_place_stop_source,
         hpx::experimental::in_place_stop_callback>();
     test_stop_source_assignment();
     test_stoken(std::chrono::seconds{0});
