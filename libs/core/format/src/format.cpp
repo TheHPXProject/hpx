@@ -88,7 +88,7 @@ namespace hpx::util::detail {
         {
             if (format_str[0] == '{' || format_str[0] == '}')
             {
-                if (format_str[1] == format_str[0])
+                if (format_str.size() > 1 && format_str[1] == format_str[0])
                 {
                     // NOLINTNEXTLINE(bugprone-suspicious-stringview-data-usage)
                     os.write(format_str.data(), 1);    // '{' or '}'
@@ -100,6 +100,10 @@ namespace hpx::util::detail {
                         throw std::runtime_error("bad format string");
                     }
                     std::size_t const end = format_str.find('}');
+                    if (end == std::string_view::npos)
+                    {
+                        throw std::runtime_error("bad format string");
+                    }
                     std::string_view const field_str =
                         format_substr(format_str, 1, end);
                     format_field const field = parse_field(field_str);
