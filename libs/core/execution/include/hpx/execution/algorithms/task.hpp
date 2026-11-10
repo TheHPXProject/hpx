@@ -11,6 +11,7 @@
 #if defined(HPX_HAVE_CXX20_COROUTINES)
 
 #include <hpx/execution_base/stdexec_forward.hpp>
+#include <hpx/synchronization/stop_token.hpp>
 #include <hpx/type_support/coroutines_support.hpp>
 
 #include <cstddef>
@@ -18,6 +19,7 @@
 #include <exception>
 #include <memory>
 #include <new>
+#include <optional>
 #include <type_traits>
 #include <utility>
 #include <variant>
@@ -81,6 +83,27 @@ namespace hpx::execution::experimental {
         };
 
         ///////////////////////////////////////////////////////////////////////
+        // Forward stop request callback functor
+        struct forward_task_stop_request
+        {
+            hpx::experimental::in_place_stop_source& stop_source_;
+
+            void operator()() const noexcept
+            {
+                stop_source_.request_stop();
+            }
+        };
+
+        ///////////////////////////////////////////////////////////////////////
+        // Abstract base for operation state or awaiter driving the task
+        struct task_operation_base
+        {
+            virtual ~task_operation_base() = default;
+            virtual hpx::coroutine_handle<> completed() noexcept = 0;
+            virtual hpx::coroutine_handle<> canceled() noexcept = 0;
+        };
+
+        ///////////////////////////////////////////////////////////////////////
         // promise_base: return value storage specialization
         template <typename T>
         struct task_promise_base
@@ -109,7 +132,7 @@ namespace hpx::execution::experimental {
         };
 
         ///////////////////////////////////////////////////////////////////////
-        // final_awaiter: symmetric transfer back to parent coroutine
+        // final_awaiter: symmetric transfer back to continuation or opstate
         struct final_awaiter
         {
             static constexpr bool await_ready() noexcept
@@ -121,7 +144,11 @@ namespace hpx::execution::experimental {
             static hpx::coroutine_handle<> await_suspend(
                 hpx::coroutine_handle<Promise> h) noexcept
             {
-                return h.promise().continuation();
+                if (h.promise().state_)
+                {
+                    return h.promise().state_->completed();
+                }
+                return h.promise().continuation().handle();
             }
 
             static void await_resume() noexcept {}
@@ -135,6 +162,12 @@ namespace hpx::execution::experimental {
           , hpx::execution::experimental::with_awaitable_senders<
                 task_promise<T, TaskEnv>>
         {
+            task_operation_base* state_{nullptr};
+            bool stopped_{false};
+            hpx::experimental::in_place_stop_source stop_source_{};
+            hpx::experimental::in_place_stop_token stop_token_{
+                stop_source_.get_token()};
+
             task<T, TaskEnv> get_return_object() noexcept;
 
             hpx::suspend_always initial_suspend() noexcept
@@ -150,6 +183,32 @@ namespace hpx::execution::experimental {
             void unhandled_exception() noexcept
             {
                 this->data_.template emplace<2>(std::current_exception());
+            }
+
+            hpx::coroutine_handle<> unhandled_stopped() noexcept
+            {
+                stopped_ = true;
+                if (state_)
+                {
+                    return state_->canceled();
+                }
+                return hpx::noop_coroutine();
+            }
+
+            struct env_type
+            {
+                task_promise const* promise_;
+
+                auto query(hpx::execution::experimental::get_stop_token_t)
+                    const noexcept
+                {
+                    return promise_->stop_token_;
+                }
+            };
+
+            env_type get_env() const noexcept
+            {
+                return env_type{this};
             }
 
             // P3552 Allocator Support
@@ -204,6 +263,127 @@ namespace hpx::execution::experimental {
             }
         };
 
+        ///////////////////////////////////////////////////////////////////////
+        // task_operation_state: operation state when connecting task to receiver
+        template <typename T, typename TaskEnv, typename Receiver>
+        struct task_operation_state : task_operation_base
+        {
+            using promise_type = task_promise<T, TaskEnv>;
+            using receiver_type = std::decay_t<Receiver>;
+
+            using stop_token_type =
+                hpx::execution::experimental::stop_token_of_t<
+                    hpx::execution::experimental::env_of_t<receiver_type>>;
+            using stop_callback_type =
+                typename stop_token_type::template callback_type<
+                    forward_task_stop_request>;
+
+            hpx::coroutine_handle<promise_type> coro_;
+            receiver_type rcvr_;
+            std::optional<stop_callback_type> stop_callback_{};
+
+            task_operation_state(hpx::coroutine_handle<promise_type> coro,
+                Receiver&& rcvr) noexcept(
+                std::is_nothrow_move_constructible_v<receiver_type>)
+              : coro_(coro)
+              , rcvr_(HPX_FORWARD(Receiver, rcvr))
+            {
+            }
+
+            task_operation_state(task_operation_state&&) = delete;
+            task_operation_state(task_operation_state const&) = delete;
+            task_operation_state& operator=(task_operation_state&&) = delete;
+            task_operation_state& operator=(task_operation_state const&) = delete;
+
+            ~task_operation_state() override
+            {
+                if (coro_)
+                {
+                    coro_.destroy();
+                }
+            }
+
+            void start() & noexcept
+            {
+                if (!coro_)
+                {
+                    return;
+                }
+
+                coro_.promise().state_ = this;
+
+                auto token = hpx::execution::experimental::get_stop_token(
+                    hpx::execution::experimental::get_env(rcvr_));
+
+                if (token.stop_requested())
+                {
+                    auto coro = std::exchange(coro_, {});
+                    coro.destroy();
+                    hpx::execution::experimental::set_stopped(
+                        HPX_MOVE(rcvr_));
+                    return;
+                }
+
+                if (token.stop_possible())
+                {
+                    stop_callback_.emplace(token,
+                        forward_task_stop_request{
+                            coro_.promise().stop_source_});
+                }
+
+                coro_.resume();
+            }
+
+            hpx::coroutine_handle<> completed() noexcept override
+            {
+                stop_callback_.reset();
+                auto coro = std::exchange(coro_, {});
+
+                if (coro.promise().stopped_)
+                {
+                    coro.destroy();
+                    hpx::execution::experimental::set_stopped(
+                        HPX_MOVE(rcvr_));
+                }
+                else if (coro.promise().data_.index() == 2)
+                {
+                    auto ep =
+                        std::get<2>(HPX_MOVE(coro.promise().data_));
+                    coro.destroy();
+                    hpx::execution::experimental::set_error(
+                        HPX_MOVE(rcvr_), HPX_MOVE(ep));
+                }
+                else
+                {
+                    if constexpr (std::is_void_v<T>)
+                    {
+                        coro.destroy();
+                        hpx::execution::experimental::set_value(
+                            HPX_MOVE(rcvr_));
+                    }
+                    else
+                    {
+                        auto val =
+                            std::get<1>(HPX_MOVE(coro.promise().data_));
+                        coro.destroy();
+                        hpx::execution::experimental::set_value(
+                            HPX_MOVE(rcvr_), HPX_MOVE(val));
+                    }
+                }
+                return hpx::noop_coroutine();
+            }
+
+            hpx::coroutine_handle<> canceled() noexcept override
+            {
+                stop_callback_.reset();
+                auto coro = std::exchange(coro_, {});
+                coro.destroy();
+                hpx::execution::experimental::set_stopped(
+                    HPX_MOVE(rcvr_));
+                return hpx::noop_coroutine();
+            }
+        };
+
     }    // namespace detail
 
     ///////////////////////////////////////////////////////////////////////////
@@ -212,6 +392,8 @@ namespace hpx::execution::experimental {
     class [[nodiscard]] task
     {
     public:
+        using is_sender = void;
+        using sender_concept = hpx::execution::experimental::sender_t;
         using promise_type = detail::task_promise<T, TaskEnv>;
 
         task() noexcept = default;
@@ -238,18 +420,51 @@ namespace hpx::execution::experimental {
             }
         }
 
+        template <typename Self, typename... Env>
+        static consteval auto get_completion_signatures(
+            Self&&, Env&&...) noexcept
+        {
+            if constexpr (std::is_void_v<T>)
+            {
+                return hpx::execution::experimental::completion_signatures<
+                    hpx::execution::experimental::set_value_t(),
+                    hpx::execution::experimental::set_error_t(
+                        std::exception_ptr),
+                    hpx::execution::experimental::set_stopped_t()>{};
+            }
+            else
+            {
+                return hpx::execution::experimental::completion_signatures<
+                    hpx::execution::experimental::set_value_t(T),
+                    hpx::execution::experimental::set_error_t(
+                        std::exception_ptr),
+                    hpx::execution::experimental::set_stopped_t()>{};
+            }
+        }
+
+        template <typename Receiver>
+        detail::task_operation_state<T, TaskEnv, Receiver> connect(
+            Receiver&& rcvr) &&
+        {
+            return detail::task_operation_state<T, TaskEnv, Receiver>{
+                std::exchange(coro_, {}), HPX_FORWARD(Receiver, rcvr)};
+        }
+
         template <typename ParentPromise = void>
-        struct awaiter
+        struct awaiter : detail::task_operation_base
         {
             hpx::coroutine_handle<promise_type> coro_;
+            hpx::coroutine_handle<> continuation_{};
 
-            explicit awaiter(hpx::coroutine_handle<promise_type> coro) noexcept
+            explicit awaiter(
+                hpx::coroutine_handle<promise_type> coro) noexcept
               : coro_(coro)
             {
             }
 
             awaiter(awaiter&& other) noexcept
               : coro_(std::exchange(other.coro_, {}))
+              , continuation_(std::exchange(other.continuation_, {}))
             {
             }
 
@@ -257,7 +472,7 @@ namespace hpx::execution::experimental {
             awaiter& operator=(awaiter const&) = delete;
             awaiter& operator=(awaiter&&) = delete;
 
-            ~awaiter()
+            ~awaiter() override
             {
                 if (coro_)
                 {
@@ -275,7 +490,21 @@ namespace hpx::execution::experimental {
                 hpx::coroutine_handle<ParentPromise2> parent) noexcept
             {
                 coro_.promise().set_continuation(parent);
+                coro_.promise().state_ = this;
+                continuation_ = parent;
                 return coro_;
+            }
+
+            hpx::coroutine_handle<> completed() noexcept override
+            {
+                return continuation_;
+            }
+
+            hpx::coroutine_handle<> canceled() noexcept override
+            {
+                auto coro = std::exchange(coro_, {});
+                coro.destroy();
+                return continuation_;
             }
 
             T await_resume()
@@ -292,6 +521,11 @@ namespace hpx::execution::experimental {
                         }
                     }
                 } cleanup{coro};
+
+                if (coro.promise().stopped_)
+                {
+                    throw hpx::thread_interrupted{};
+                }
 
                 if (coro.promise().data_.index() == 2)
                 {
@@ -339,4 +573,3 @@ namespace hpx::experimental {
 }
 
 #endif    // HPX_HAVE_CXX20_COROUTINES
-
