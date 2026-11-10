@@ -14,12 +14,33 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <mutex>
 #include <string>
+#include <unordered_set>
 
 #include <tracy/Tracy.hpp>
 #include <tracy/TracyC.h>
 
 namespace hpx::tracy {
+
+    namespace {
+
+        // Tracy keys a plot by the address of its name and reads the name
+        // later, so it must stay valid and be the same for the same name.
+        // The set is never freed, as Tracy can still read names during exit.
+        char const* plot_name(std::string const& name)
+        {
+            struct names_type
+            {
+                std::mutex mtx;
+                std::unordered_set<std::string> names;
+            };
+            static names_type* const names = new names_type;
+
+            std::lock_guard<std::mutex> l(names->mtx);
+            return names->names.insert(name).first->c_str();
+        }
+    }    // namespace
 
     void set_thread_name(char const* name) noexcept
     {
@@ -76,7 +97,7 @@ namespace hpx::tracy {
 
     void create_counter(std::string const& name) noexcept
     {
-        create_counter(name.c_str());
+        create_counter(plot_name(name));
     }
 
     // Pass a plot value to Tracy
@@ -87,7 +108,7 @@ namespace hpx::tracy {
 
     void sample_value(std::string const& name, double const value) noexcept
     {
-        sample_value(name.c_str(), value);
+        sample_value(plot_name(name), value);
     }
 
     void message(

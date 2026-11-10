@@ -60,6 +60,9 @@ namespace hpx::tracy {
         bool active;
     };
 
+    // Tracy reads a plot name after the call returns, so a char const* name
+    // must stay valid for the whole run, like a string literal. The
+    // std::string overloads keep their own copy of the name.
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void create_counter(
         char const* name) noexcept;
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void create_counter(
