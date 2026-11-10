@@ -116,9 +116,13 @@ namespace hpx::threads::detail {
 #endif
             ;
 
-        scheduler->do_some_work(data.schedulehint.mode() ==
-                    hpx::threads::thread_schedule_hint_mode::numa ?
-                static_cast<std::size_t>(-1) :
-                data.schedulehint.hint);
+        // the scheduler may have woken up a worker for this thread already
+        if (!scheduler->wakes_up_for(data.schedulehint.task_size()))
+        {
+            scheduler->do_some_work(data.schedulehint.mode() ==
+                        hpx::threads::thread_schedule_hint_mode::numa ?
+                    static_cast<std::size_t>(-1) :
+                    data.schedulehint.hint);
+        }
     }
 }    // namespace hpx::threads::detail

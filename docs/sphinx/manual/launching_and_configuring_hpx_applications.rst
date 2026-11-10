@@ -184,6 +184,8 @@ The |hpx| configuration section
    max_idle_loop_count = ${HPX_MAX_IDLE_LOOP_COUNT:<hpx_idle_loop_count_max>}
    max_busy_loop_count = ${HPX_MAX_BUSY_LOOP_COUNT:<hpx_busy_loop_count_max>}
    max_idle_backoff_time = ${HPX_MAX_IDLE_BACKOFF_TIME:<hpx_idle_backoff_time_max>}
+   min_idle_backoff_time = ${HPX_MIN_IDLE_BACKOFF_TIME:<hpx_idle_backoff_time_min>}
+   idle_backoff_steal_check_interval = ${HPX_IDLE_BACKOFF_STEAL_CHECK_INTERVAL:<hpx_idle_backoff_steal_check_interval>}
    default_scheduler_mode = ${HPX_DEFAULT_SCHEDULER_MODE}
    exception_verbosity = ${HPX_EXCEPTION_VERBOSITY:2}
    trace_depth = ${HPX_TRACE_DEPTH:20}
@@ -299,6 +301,25 @@ The |hpx| configuration section
        applicable only if ``HPX_WITH_THREAD_MANAGER_IDLE_BACKOFF`` is set
        during configuration in |cmake|_. By default this is defined by the
        preprocessor constant ``HPX_IDLE_BACKOFF_TIME_MAX`` (``1000``).
+   * * ``hpx.min_idle_backoff_time``
+     * This setting defines the shortest idle backoff period (in
+       microseconds) a worker thread sleeps for; shorter periods are spent
+       spinning instead, since a timed wait lasts at least as long as the
+       operating system takes to wake the thread up again, see
+       :ref:`thread_scheduler_idle_backoff`. Values above
+       ``hpx.max_idle_backoff_time`` make idle worker threads spin and never
+       sleep. This setting is applicable only if
+       ``HPX_WITH_THREAD_MANAGER_IDLE_BACKOFF`` is set during configuration in
+       |cmake|_. By default this is defined by the preprocessor constant
+       ``HPX_IDLE_BACKOFF_TIME_MIN`` (``50``).
+   * * ``hpx.idle_backoff_steal_check_interval``
+     * This setting defines how often (in microseconds) a spinning worker
+       thread looks at the queues it may steal from; it looks at its own
+       queues in every round of the spin, see
+       :ref:`thread_scheduler_idle_backoff`. This setting is applicable only if
+       ``HPX_WITH_THREAD_MANAGER_IDLE_BACKOFF`` is set during configuration in
+       |cmake|_. By default this is defined by the preprocessor constant
+       ``HPX_IDLE_BACKOFF_STEAL_CHECK_INTERVAL`` (``8``).
    * * ``hpx.default_scheduler_mode``
      * This setting defines the scheduler mode of the default thread pool as a
        number (the bitwise or of the values of
