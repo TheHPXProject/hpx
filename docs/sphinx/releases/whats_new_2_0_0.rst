@@ -411,11 +411,7 @@ conditions:
   thread manager hung (:hpx-pr:`7866`). A notification that can't be
   delivered to an observer whose locality went away no longer marks the
   publishing target as failed; the observer is unregistered instead
-  (:hpx-pr:`7897`). A peer fenced by failure detection is now removed from
-  the registry, so ``snapshot_peers()`` no longer lists it; its fence is kept
-  (:hpx-pr:`7922`). That removal no longer drops a peer that came back with a
-  new epoch while it was being removed, which left the peer unmonitored
-  (:hpx-issue:`7924`, :hpx-pr:`8027`).
+  (:hpx-pr:`7897`).
 
 Parallel Algorithms
 ===================
