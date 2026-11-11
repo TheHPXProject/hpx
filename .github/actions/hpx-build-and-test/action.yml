@@ -24,7 +24,7 @@ inputs:
     required: false
     default: ""
   build-jobs:
-    description: "Parallelism for ninja, empty means use nproc"
+    description: "Parallelism for ninja, empty means the number of online processors"
     required: false
     default: ""
   run-tests:
@@ -36,7 +36,7 @@ inputs:
     required: false
     default: "180"
   ctest-jobs:
-    description: "Parallelism for ctest, empty means use nproc"
+    description: "Parallelism for ctest, empty means the number of online processors"
     required: false
     default: ""
   ctest-regex:
@@ -66,6 +66,16 @@ inputs:
 runs:
   using: "composite"
   steps:
+    # The checkout gives every source file the current time, which is newer
+    # than the objects in the build archive (tar keeps their times), so ninja
+    # would rebuild everything. Make the sources older than any build output.
+    - name: Make the sources older than the build
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      run: |
+        find . \( -path ./build -o -path ./.git \) -prune -o \
+          -type f -exec touch -t 200001010000 {} +
+
     - name: Download build artifacts
       uses: actions/download-artifact@v8
       with:
@@ -89,7 +99,10 @@ runs:
           # set of ninja targets for this shard.
           IFS=' ' read -r -a targets <<< "${{ inputs.build-targets }}"
         elif [ -n "${{ inputs.target-file }}" ]; then
-          mapfile -t targets < <(grep -v -e '^#' -e '^$' "$GITHUB_WORKSPACE/${{ inputs.target-file }}")
+          # no mapfile: the bash of the macOS runners may be bash 3.2
+          while IFS= read -r target; do
+            targets+=("$target")
+          done < <(grep -v -e '^#' -e '^$' "$GITHUB_WORKSPACE/${{ inputs.target-file }}")
         elif [ -n "${{ inputs.build-target }}" ]; then
           targets=("${{ inputs.build-target }}")
         fi
@@ -101,7 +114,8 @@ runs:
 
         jobs="${{ inputs.build-jobs }}"
         if [ -z "$jobs" ]; then
-          jobs="$(nproc)"
+          # nproc does not exist on macOS
+          jobs="$(getconf _NPROCESSORS_ONLN)"
         fi
 
         ninja -j"$jobs" -k 0 "${targets[@]}"
@@ -130,7 +144,8 @@ runs:
               ;;
           esac
 
-          regex="$(printf '%s\n' "$regex_source" | sed ':b;N;$!bb;s/\n/|/g')"
+          # join the lines with '|' (BSD sed can't join lines this way)
+          regex="$(printf '%s\n' "$regex_source" | paste -sd'|' -)"
         fi
 
         if [ -z "$regex" ]; then
@@ -147,7 +162,8 @@ runs:
 
         jobs="${{ inputs.ctest-jobs }}"
         if [ -z "$jobs" ]; then
-          jobs="$(nproc)"
+          # nproc does not exist on macOS
+          jobs="$(getconf _NPROCESSORS_ONLN)"
         fi
         ctest_args+=(-j "$jobs")
 
