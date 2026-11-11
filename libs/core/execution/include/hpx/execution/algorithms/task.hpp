@@ -443,14 +443,6 @@ namespace hpx::execution::experimental {
                 auto token = hpx::execution::experimental::get_stop_token(
                     hpx::execution::experimental::get_env(rcvr_));
 
-                if (token.stop_requested())
-                {
-                    auto coro = std::exchange(coro_, {});
-                    coro.destroy();
-                    hpx::execution::experimental::set_stopped(HPX_MOVE(rcvr_));
-                    return;
-                }
-
                 if (token.stop_possible())
                 {
                     stop_callback_.emplace(token,
@@ -466,7 +458,8 @@ namespace hpx::execution::experimental {
                 stop_callback_.reset();
                 auto coro = std::exchange(coro_, {});
 
-                if (coro.promise().stopped_)
+                if (coro.promise().stopped_ ||
+                    coro.promise().stop_token_.stop_requested())
                 {
                     coro.destroy();
                     hpx::execution::experimental::set_stopped(HPX_MOVE(rcvr_));
@@ -500,8 +493,6 @@ namespace hpx::execution::experimental {
             hpx::coroutine_handle<> canceled() noexcept override
             {
                 stop_callback_.reset();
-                auto coro = std::exchange(coro_, {});
-                coro.destroy();
                 hpx::execution::experimental::set_stopped(HPX_MOVE(rcvr_));
                 return hpx::noop_coroutine();
             }
@@ -609,7 +600,6 @@ namespace hpx::execution::experimental {
 
             hpx::coroutine_handle<promise_type> coro_;
             hpx::coroutine_handle<> continuation_{};
-            hpx::coroutine_handle<> stopped_continuation_{};
             std::optional<stop_callback_type> stop_callback_{};
             void* parent_promise_{nullptr};
             hpx::coroutine_handle<> (*unhandled_stopped_fn_)(void*){nullptr};
@@ -622,8 +612,6 @@ namespace hpx::execution::experimental {
             awaiter(awaiter&& other) noexcept
               : coro_(std::exchange(other.coro_, {}))
               , continuation_(std::exchange(other.continuation_, {}))
-              , stopped_continuation_(
-                    std::exchange(other.stopped_continuation_, {}))
               , parent_promise_(std::exchange(other.parent_promise_, nullptr))
               , unhandled_stopped_fn_(
                     std::exchange(other.unhandled_stopped_fn_, nullptr))
@@ -701,11 +689,9 @@ namespace hpx::execution::experimental {
                 // await_resume)
                 if (unhandled_stopped_fn_)
                 {
-                    stopped_continuation_ =
-                        unhandled_stopped_fn_(parent_promise_);
+                    return unhandled_stopped_fn_(parent_promise_);
                 }
-                return stopped_continuation_ ? stopped_continuation_ :
-                                               continuation_;
+                return continuation_;
             }
 
             T await_resume()
