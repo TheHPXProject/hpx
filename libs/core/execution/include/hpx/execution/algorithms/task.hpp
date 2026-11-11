@@ -26,7 +26,20 @@
 
 namespace hpx::execution::experimental {
 
-    HPX_CXX_CORE_EXPORT template <typename T = void>
+    ///////////////////////////////////////////////////////////////////////////
+    // with_error: P3552 error yield value wrapper
+    template <typename Error>
+    struct with_error
+    {
+        using type = std::decay_t<Error>;
+        type error;
+    };
+
+    template <typename Error>
+    with_error(Error) -> with_error<Error>;
+
+    HPX_CXX_CORE_EXPORT template <typename T = void,
+        typename TaskEnv = hpx::execution::experimental::empty_env>
     class [[nodiscard]] task;
 
     namespace detail {
@@ -79,6 +92,36 @@ namespace hpx::execution::experimental {
             }
 
             Alloc alloc_;
+        };
+
+        ///////////////////////////////////////////////////////////////////////
+        // Helper to locate std::allocator_arg in any parameter position
+        template <typename... Args>
+        struct find_allocator
+        {
+            static auto get(Args const&...)
+            {
+                return std::allocator<std::byte>{};
+            }
+        };
+
+        template <typename Alloc, typename... Rest>
+        struct find_allocator<std::allocator_arg_t, Alloc, Rest...>
+        {
+            static auto get(
+                std::allocator_arg_t, Alloc const& alloc, Rest const&...)
+            {
+                return alloc;
+            }
+        };
+
+        template <typename First, typename... Rest>
+        struct find_allocator<First, Rest...>
+        {
+            static auto get(First const&, Rest const&... rest)
+            {
+                return find_allocator<Rest...>::get(rest...);
+            }
         };
 
         ///////////////////////////////////////////////////////////////////////
@@ -155,19 +198,21 @@ namespace hpx::execution::experimental {
 
         ///////////////////////////////////////////////////////////////////////
         // task_promise: C++26 P3552 coroutine promise type
-        HPX_CXX_CORE_EXPORT template <typename T>
+        HPX_CXX_CORE_EXPORT template <typename T,
+            typename TaskEnv = hpx::execution::experimental::empty_env>
         struct task_promise
           : task_promise_base<T>
           , hpx::execution::experimental::with_awaitable_senders<
-                task_promise<T>>
+                task_promise<T, TaskEnv>>
         {
             task_operation_base* state_{nullptr};
             bool stopped_{false};
             hpx::experimental::in_place_stop_source stop_source_{};
             hpx::experimental::in_place_stop_token stop_token_{
                 stop_source_.get_token()};
+            [[no_unique_address]] TaskEnv env_{};
 
-            task<T> get_return_object() noexcept;
+            task<T, TaskEnv> get_return_object() noexcept;
 
             hpx::suspend_always initial_suspend() noexcept
             {
@@ -194,6 +239,22 @@ namespace hpx::execution::experimental {
                 return hpx::noop_coroutine();
             }
 
+            template <typename Error>
+            auto yield_value(with_error<Error> e) noexcept
+            {
+                if constexpr (std::is_same_v<std::decay_t<Error>,
+                                  std::exception_ptr>)
+                {
+                    this->data_.template emplace<2>(HPX_MOVE(e.error));
+                }
+                else
+                {
+                    this->data_.template emplace<2>(
+                        std::make_exception_ptr(HPX_MOVE(e.error)));
+                }
+                return final_awaiter{};
+            }
+
             struct env_type
             {
                 task_promise const* promise_;
@@ -203,6 +264,69 @@ namespace hpx::execution::experimental {
                 {
                     return promise_->stop_token_;
                 }
+
+                auto query(hpx::execution::experimental::get_allocator_t)
+                    const noexcept
+                {
+                    if constexpr (requires {
+                                      hpx::execution::experimental::
+                                          get_allocator(promise_->env_);
+                                  })
+                    {
+                        return hpx::execution::experimental::get_allocator(
+                            promise_->env_);
+                    }
+                    else
+                    {
+                        return std::allocator<std::byte>{};
+                    }
+                }
+
+                auto query(hpx::execution::experimental::get_scheduler_t)
+                    const noexcept
+                {
+                    if constexpr (requires {
+                                      hpx::execution::experimental::
+                                          get_scheduler(promise_->env_);
+                                  })
+                    {
+                        return hpx::execution::experimental::get_scheduler(
+                            promise_->env_);
+                    }
+                    else
+                    {
+                        return stdexec::task_scheduler(
+                            stdexec::inline_scheduler{});
+                    }
+                }
+
+                auto query(hpx::execution::experimental::get_start_scheduler_t)
+                    const noexcept
+                {
+                    if constexpr (requires {
+                                      hpx::execution::experimental::
+                                          get_start_scheduler(promise_->env_);
+                                  })
+                    {
+                        return hpx::execution::experimental::
+                            get_start_scheduler(promise_->env_);
+                    }
+                    else
+                    {
+                        return stdexec::task_scheduler(
+                            stdexec::inline_scheduler{});
+                    }
+                }
+
+                template <typename Tag>
+                    requires requires(Tag tag, TaskEnv const& env) {
+                        tag(env);
+                    }
+                decltype(auto) query(Tag tag) const noexcept(
+                    noexcept(tag(promise_->env_)))
+                {
+                    return tag(promise_->env_);
+                }
             };
 
             env_type get_env() const noexcept
@@ -211,25 +335,8 @@ namespace hpx::execution::experimental {
             }
 
             // P3552 Allocator Support
-            static void* operator new(std::size_t bytes)
-            {
-                return operator new(
-                    bytes, std::allocator_arg, std::allocator<std::byte>{});
-            }
-
-            static void operator delete(void* ptr, std::size_t bytes) noexcept
-            {
-                std::size_t const promise_blocks =
-                    divmod(bytes, sizeof(memblock));
-                void* const alloc_loc =
-                    static_cast<memblock*>(ptr) + promise_blocks;
-                auto* alloc = static_cast<any_alloc_base*>(alloc_loc);
-                alloc->deallocate(ptr, bytes);
-            }
-
-            template <typename Alloc, typename... Args>
-            static void* operator new(std::size_t bytes, std::allocator_arg_t,
-                Alloc const& alloc, Args const&...)
+            template <typename Alloc>
+            static void* allocate_with(std::size_t bytes, Alloc const& alloc)
             {
                 using palloc_t = typename std::allocator_traits<
                     Alloc>::template rebind_alloc<memblock>;
@@ -253,9 +360,31 @@ namespace hpx::execution::experimental {
                 return ptr;
             }
 
-            template <typename Alloc, typename... Args>
-            static void operator delete(void* ptr, std::size_t bytes,
-                std::allocator_arg_t, Alloc const&, Args const&...) noexcept
+            static void* operator new(std::size_t bytes)
+            {
+                return allocate_with(bytes, std::allocator<std::byte>{});
+            }
+
+            template <typename... Args>
+            static void* operator new(std::size_t bytes, Args const&... args)
+            {
+                return allocate_with(
+                    bytes, find_allocator<Args...>::get(args...));
+            }
+
+            static void operator delete(void* ptr, std::size_t bytes) noexcept
+            {
+                std::size_t const promise_blocks =
+                    divmod(bytes, sizeof(memblock));
+                void* const alloc_loc =
+                    static_cast<memblock*>(ptr) + promise_blocks;
+                auto* alloc = static_cast<any_alloc_base*>(alloc_loc);
+                alloc->deallocate(ptr, bytes);
+            }
+
+            template <typename... Args>
+            static void operator delete(
+                void* ptr, std::size_t bytes, Args const&...) noexcept
             {
                 operator delete(ptr, bytes);
             }
@@ -263,10 +392,10 @@ namespace hpx::execution::experimental {
 
         ///////////////////////////////////////////////////////////////////////
         // task_operation_state: operation state when connecting task to receiver
-        template <typename T, typename Receiver>
+        template <typename T, typename TaskEnv, typename Receiver>
         struct task_operation_state : task_operation_base
         {
-            using promise_type = task_promise<T>;
+            using promise_type = task_promise<T, TaskEnv>;
             using receiver_type = std::decay_t<Receiver>;
 
             using stop_token_type =
@@ -403,14 +532,14 @@ namespace hpx::execution::experimental {
     }    // namespace detail
 
     ///////////////////////////////////////////////////////////////////////////
-    // Production C++26 task<T> conforming to P3552
-    HPX_CXX_CORE_EXPORT template <typename T>
+    // Production C++26 task<T, TaskEnv> conforming to P3552
+    HPX_CXX_CORE_EXPORT template <typename T, typename TaskEnv>
     class [[nodiscard]] task
     {
     public:
         using is_sender = void;
         using sender_concept = hpx::execution::experimental::sender_t;
-        using promise_type = detail::task_promise<T>;
+        using promise_type = detail::task_promise<T, TaskEnv>;
 
         task() noexcept = default;
 
@@ -459,9 +588,10 @@ namespace hpx::execution::experimental {
         }
 
         template <typename Receiver>
-        detail::task_operation_state<T, Receiver> connect(Receiver&& rcvr) &&
+        detail::task_operation_state<T, TaskEnv, Receiver> connect(
+            Receiver&& rcvr) &&
         {
-            return detail::task_operation_state<T, Receiver>{
+            return detail::task_operation_state<T, TaskEnv, Receiver>{
                 std::exchange(coro_, {}), HPX_FORWARD(Receiver, rcvr)};
         }
 
@@ -624,10 +754,10 @@ namespace hpx::execution::experimental {
     };
 
     namespace detail {
-        template <typename T>
-        task<T> task_promise<T>::get_return_object() noexcept
+        template <typename T, typename TaskEnv>
+        task<T, TaskEnv> task_promise<T, TaskEnv>::get_return_object() noexcept
         {
-            return task<T>(
+            return task<T, TaskEnv>(
                 hpx::coroutine_handle<task_promise>::from_promise(*this));
         }
     }    // namespace detail

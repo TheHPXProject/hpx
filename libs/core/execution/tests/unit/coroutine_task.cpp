@@ -197,6 +197,15 @@ ex::task<int> coroutine_with_custom_alloc(
     co_return val * 3;
 }
 
+struct member_coro_class
+{
+    ex::task<int> member_coroutine_with_alloc(
+        std::allocator_arg_t, test_counting_allocator<std::byte>, int val)
+    {
+        co_return val * 4;
+    }
+};
+
 void test_allocator_awareness()
 {
     test_alloc_state state{};
@@ -210,6 +219,15 @@ void test_allocator_awareness()
         HPX_TEST_EQ(hpx::get<0>(res.value()), 21);
     }
 
+    // Member function coroutine using allocator
+    {
+        member_coro_class obj;
+        auto t = obj.member_coroutine_with_alloc(std::allocator_arg, alloc, 5);
+        auto res = tt::sync_wait(HPX_MOVE(t));
+        HPX_TEST(res.has_value());
+        HPX_TEST_EQ(hpx::get<0>(res.value()), 20);
+    }
+
     HPX_TEST(state.deallocated > 0);
     HPX_TEST_EQ(state.allocated, state.deallocated);
 }
@@ -220,6 +238,13 @@ ex::task<int> throwing_coroutine()
 {
     co_await ex::just();
     throw std::runtime_error("coroutine error");
+    co_return 0;
+}
+
+ex::task<int> yielding_error_coroutine()
+{
+    co_await ex::just();
+    co_yield ex::with_error(std::runtime_error("yielded error"));
     co_return 0;
 }
 
@@ -241,6 +266,24 @@ void test_exception_handling()
         HPX_TEST(false);
     }
     HPX_TEST(caught_exception);
+
+    // Test co_yield with_error
+    bool caught_yield_error = false;
+    try
+    {
+        auto t = yielding_error_coroutine();
+        (void) tt::sync_wait(HPX_MOVE(t));
+    }
+    catch (std::runtime_error const& e)
+    {
+        caught_yield_error = true;
+        HPX_TEST_EQ(std::string(e.what()), std::string("yielded error"));
+    }
+    catch (...)
+    {
+        HPX_TEST(false);
+    }
+    HPX_TEST(caught_yield_error);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
