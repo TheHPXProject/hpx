@@ -14,10 +14,10 @@
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/thread_support.hpp>
 #include <hpx/synchronization/channel_spsc.hpp>
-#include <hpx/synchronization/spinlock.hpp>
 
 #include <algorithm>
 #include <atomic>
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -236,6 +236,16 @@ namespace hpx::lcos::local {
         std::atomic<bool> closed_;
     };
 
+    /// \brief A bounded, lock-free MPSC channel without close support.
+    ///
+    /// This implementation is based on Dmitry Vyukov's bounded MPSC queue algorithm.
+    /// The internal ring buffer capacity is rounded up to the nearest power of
+    /// two (at least 8) using \c std::bit_ceil for sequence bitmasking.
+    /// \c capacity() returns the requested size, matching the behavior of the
+    /// normal \c base_channel_mpsc specialization.
+    ///
+    /// \note \a Mutex is an unused template parameter retained for compatibility
+    /// with the primary template \c base_channel_mpsc<T, Mutex, Mode>.
     template <typename T, typename Mutex>
     class base_channel_mpsc<T, Mutex, channel_mode::dont_support_close>
     {
@@ -250,29 +260,13 @@ namespace hpx::lcos::local {
             T data_;
         };
 
-        static constexpr std::size_t round_up_power_of_two(
-            std::size_t v) noexcept
-        {
-            if (v == 0)
-            {
-                return 1;
-            }
-            --v;
-            v |= v >> 1;
-            v |= v >> 2;
-            v |= v >> 4;
-            v |= v >> 8;
-            v |= v >> 16;
-            v |= v >> 32;
-            return ++v;
-        }
-
     public:
         explicit base_channel_mpsc(std::size_t size)
+          : size_(size)
         {
             HPX_ASSERT(size != 0);
             std::size_t const capacity =
-                (std::max) (std::size_t(8), round_up_power_of_two(size + 1));
+                (std::max) (std::size_t(8), std::bit_ceil(size));
             buffer_mask_ = capacity - 1;
             buffer_ = std::make_unique<cell_type[]>(capacity);
             for (std::size_t i = 0; i != capacity; ++i)
@@ -287,7 +281,8 @@ namespace hpx::lcos::local {
         base_channel_mpsc& operator=(base_channel_mpsc const& rhs) = delete;
 
         base_channel_mpsc(base_channel_mpsc&& rhs) noexcept
-          : buffer_mask_(rhs.buffer_mask_)
+          : size_(rhs.size_)
+          , buffer_mask_(rhs.buffer_mask_)
           , buffer_(HPX_MOVE(rhs.buffer_))
         {
             head_.data_.store(rhs.head_.data_.load(std::memory_order_relaxed),
@@ -300,6 +295,7 @@ namespace hpx::lcos::local {
         {
             if (this != &rhs)
             {
+                size_ = rhs.size_;
                 buffer_mask_ = rhs.buffer_mask_;
                 buffer_ = HPX_MOVE(rhs.buffer_);
                 head_.data_.store(
@@ -383,14 +379,16 @@ namespace hpx::lcos::local {
             }
         }
 
+        /// \brief Returns the requested capacity of the channel.
         [[nodiscard]] constexpr std::size_t capacity() const noexcept
         {
-            return buffer_mask_ + 1;
+            return size_;
         }
 
     private:
         mutable hpx::util::cache_aligned_data<std::atomic<std::size_t>> head_;
         mutable hpx::util::cache_aligned_data<std::atomic<std::size_t>> tail_;
+        std::size_t size_ = 0;
         std::size_t buffer_mask_ = 0;
         std::unique_ptr<cell_type[]> buffer_;
     };
@@ -400,5 +398,5 @@ namespace hpx::lcos::local {
     // of this channel with non-HPX threads.
     HPX_CXX_CORE_EXPORT template <typename T,
         channel_mode Mode = channel_mode::normal>
-    using channel_mpsc = base_channel_mpsc<T, hpx::spinlock, Mode>;
+    using channel_mpsc = base_channel_mpsc<T, hpx::util::spinlock, Mode>;
 }    // namespace hpx::lcos::local
