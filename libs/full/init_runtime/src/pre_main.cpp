@@ -74,6 +74,13 @@ namespace hpx::detail {
     }
 #endif
 
+#if !defined(HPX_COMPUTE_DEVICE_CODE)
+    static void detach_global_barrier()
+    {
+        hpx::distributed::barrier::get_global_barrier().detach();
+    }
+#endif
+
     ///////////////////////////////////////////////////////////////////////////
     // Install performance counter startup functions for core subsystems.
     static void register_counter_types()
@@ -140,6 +147,10 @@ namespace hpx::detail {
         // Tidy supervision state on every locality at actual shutdown; see
         // tidy_supervision() for why post_main() is not the right place.
         register_pre_shutdown_function(&tidy_supervision);
+#endif
+
+#if !defined(HPX_COMPUTE_DEVICE_CODE)
+        register_pre_shutdown_function(&detach_global_barrier);
 #endif
 
         using components::stubs::runtime_support;
@@ -301,9 +312,6 @@ namespace hpx::detail {
         hpx::collectives::detail::reset_local_communicator();
         hpx::collectives::detail::reset_world_channel_communicator();
         hpx::collectives::detail::reset_cached_channel_communicators();
-
-        // simply destroy global barrier
-        hpx::distributed::barrier::get_global_barrier().detach();
 #endif
     }
 }    // namespace hpx::detail
