@@ -75,11 +75,23 @@ namespace hpx::detail {
 #endif
 
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
+    // Detaching the global barrier releases its communicator, which queues a
+    // decref for the communicator id. The final garbage_collect() shutdown
+    // function has already run at this point, so flush that decref here.
     static void detach_global_barrier()
     {
         hpx::distributed::barrier::get_global_barrier().detach();
+        garbage_collect();
     }
 
+    // post_main() runs on worker localities as soon as their (empty) hpx_main
+    // returns, so detaching there breaks later remote uses of the global
+    // barrier (see #6430). Register the detach as a shutdown function only
+    // once pre-shutdown starts: shutdown functions run in registration order,
+    // so this places it after every pre-shutdown and shutdown function that
+    // was registered before shutdown started. The global barrier can be used
+    // from those functions, but not from shutdown functions that are
+    // themselves registered during pre-shutdown or shutdown.
     static void register_global_barrier_detach()
     {
         register_shutdown_function(&detach_global_barrier);
