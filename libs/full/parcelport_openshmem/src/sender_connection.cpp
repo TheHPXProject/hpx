@@ -140,26 +140,17 @@ namespace hpx::parcelset::policies::openshmem {
                 return false;    // no credit: requeue and retry later
             }
 
-            std::size_t const n = (std::min)(
-                credits, static_cast<std::size_t>(num_chunks_ - chunk_idx_));
-            std::uint64_t const t0 =
-                detail::g_io_stats_on.load(std::memory_order_relaxed) ?
-                detail::ns_now() : 0;
-            std::size_t bytes = 0;
+            std::size_t const n = (std::min) (credits,
+                static_cast<std::size_t>(num_chunks_ - chunk_idx_));
             for (std::size_t k = 0; k < n; ++k)
             {
                 std::size_t const chunk_size = stage_chunk(
                     chunk_idx_ + static_cast<std::uint32_t>(k),
                     mailboxes.tx_page_at(dst, k));
-                std::size_t const transfer_size =
-                    detail::header_size + chunk_size;
-                mailboxes.put_page_nbi(dst, k, transfer_size);
-                bytes += transfer_size;
+                mailboxes.put_page_nbi(
+                    dst, k, detail::header_size + chunk_size);
             }
-            mailboxes.publish_pages(dst, n, bytes);
-            if (t0 != 0)
-                detail::g_io_stats.put_ns.fetch_add(
-                    detail::ns_now() - t0, std::memory_order_relaxed);
+            mailboxes.publish_pages(dst, n);
 
             chunk_idx_ += static_cast<std::uint32_t>(n);
         }

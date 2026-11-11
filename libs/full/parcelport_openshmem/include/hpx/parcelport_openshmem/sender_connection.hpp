@@ -83,7 +83,7 @@ namespace hpx::parcelset::policies::openshmem {
         }
 
         // Non-blocking send driver.  Sends as many chunks as credit allows in
-        // this call (each via the non-blocking mailbox_array::try_send())
+        // this call (each via the non-blocking mailbox_array::put_page_nbi())
         // and returns true when the connection is complete, false when one
         // or more chunks remain but no credit is left, in which case the
         // connection must be re-queued.  The sender holds this connection's

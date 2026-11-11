@@ -237,9 +237,6 @@ namespace hpx::parcelset {
                 mailboxes_.set_remote_delivery(
                     hpx::util::get_entry_as<int>(
                         ini, "hpx.parcel.openshmem.remote_delivery", 0) != 0);
-                detail::g_io_stats_on.store(
-                    hpx::util::get_entry_as<int>(
-                        ini, "hpx.parcel.openshmem.stats", 0) != 0);
                 worker_progress_ =
                     hpx::util::get_entry_as<int>(
                         ini, "hpx.parcel.openshmem.worker_progress", 0) != 0;
@@ -463,31 +460,6 @@ namespace hpx::parcelset {
                 // Under SHMEM_THREAD_SERIALIZED nothing below may touch
                 // shmem_* until the last driver has left (io_service_work
                 // decrements drivers_running_), so wait for them here.
-                if (detail::g_io_stats_on.load())
-                {
-                    auto const& g = detail::g_io_stats;
-                    auto ms = [](std::atomic<std::uint64_t> const& v) {
-                        return static_cast<double>(v.load()) * 1e-6;
-                    };
-                    std::fprintf(stderr,
-                        "oshstats PE %zu: send_step=%.0fms recv_step=%.0fms "
-                        "stage=%.0fms put=%.0fms decode=%.0fms | pages_sent=%llu "
-                        "(%.0f MB) pages_recv=%llu nocredit=%llu | loops=%llu "
-                        "recv_calls=%llu recv_with_work=%llu | recv parts: "
-                        "local_progress=%.0fms crc=%.0fms resize=%.0fms "
-                        "copy=%.0fms release=%.0fms\n",
-                        my_pe_, ms(g.send_ns), ms(g.recv_ns), ms(g.stage_ns),
-                        ms(g.put_ns), ms(g.decode_ns),
-                        static_cast<unsigned long long>(g.pages_sent.load()),
-                        static_cast<double>(g.bytes_sent.load()) * 1e-6,
-                        static_cast<unsigned long long>(g.pages_recv.load()),
-                        static_cast<unsigned long long>(g.nocredit.load()),
-                        static_cast<unsigned long long>(g.send_calls.load()),
-                        static_cast<unsigned long long>(g.recv_calls.load()),
-                        static_cast<unsigned long long>(g.recv_work.load()),
-                        ms(g.prog_ns), ms(g.crc_ns), ms(g.resize_ns),
-                        ms(g.copy_ns), ms(g.rel_ns));
-                }
 
                 stopped_.store(true, std::memory_order_seq_cst);
                 while (drivers_running_.load(std::memory_order_acquire) != 0 ||
@@ -538,32 +510,15 @@ namespace hpx::parcelset {
                 std::size_t arena_idx, parcelport_background_mode mode)
             {
                 bool has_work = false;
-                bool const st =
-                    detail::g_io_stats_on.load(std::memory_order_relaxed);
-                std::uint64_t const t0 = st ? detail::ns_now() : 0;
                 if (mode & parcelport_background_mode::send)
                 {
                     has_work = sender_.background_work();
                 }
-                std::uint64_t const t1 = st ? detail::ns_now() : 0;
                 if (mode & parcelport_background_mode::receive)
                 {
                     bool const r =
                         receiver_.background_work(arena_idx, arena_count_);
-                    if (st)
-                    {
-                        detail::g_io_stats.recv_calls.fetch_add(1, std::memory_order_relaxed);
-                        if (r)
-                            detail::g_io_stats.recv_work.fetch_add(1, std::memory_order_relaxed);
-                    }
                     has_work = r || has_work;
-                }
-                if (st)
-                {
-                    std::uint64_t const t2 = detail::ns_now();
-                    detail::g_io_stats.send_ns.fetch_add(t1 - t0, std::memory_order_relaxed);
-                    detail::g_io_stats.recv_ns.fetch_add(t2 - t1, std::memory_order_relaxed);
-                    detail::g_io_stats.send_calls.fetch_add(1, std::memory_order_relaxed);
                 }
                 return has_work;
             }
@@ -792,7 +747,6 @@ struct hpx::traits::plugin_config_data<
                // local progress every Nth scan (1 = every scan, 0 = never)
                "progress_interval = 16\n"
                // 1 prints io-thread timing/page statistics when stopping
-               "stats = 0\n"
                // Number of io_service threads driving progress.  The base
                // parcelport reads hpx.parcel.<pp>.io_pool_size (default 2).
                "io_pool_size = 2\n";
