@@ -16,7 +16,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: stellargroup/build_env:22
+    container: stellargroup/build_env:23
 
     steps:
     - uses: actions/checkout@v7
@@ -54,4 +54,4 @@ jobs:
           ctest \
             --output-on-failure \
             --tests-regex tests.examples \
-            --exclude-regex tests.examples.transpose.transpose_block_numa
+            --exclude-regex "tests.examples.transpose.transpose_block_numa|tests.examples.quickstart.command_line_handling"

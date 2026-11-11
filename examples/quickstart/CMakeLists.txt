@@ -46,9 +46,7 @@ if(NOT ${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD" AND NOT HPX_WITH_STATIC_LINKING)
   set(example_programs ${example_programs} init_globally)
 endif()
 
-if(NOT ((MSVC OR CMAKE_CXX_COMPILER_ID MATCHES "Clang") AND HPX_WITH_CXX_MODULES
-       )
-)
+if(NOT (MSVC AND HPX_WITH_CXX_MODULES))
   list(APPEND example_programs sender_diamond)
 endif()
 

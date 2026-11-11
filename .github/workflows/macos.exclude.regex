@@ -1,0 +1,43 @@
+#  Copyright (c) 2026 The STE||AR Group
+#
+#  SPDX-License-Identifier: BSL-1.0
+#  Distributed under the Boost Software License, Version 1.0. (See accompanying
+#  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+
+# Tests left out on macOS, as regular expressions matched anywhere in the test
+# name (as by ctest --exclude-regex, see generate_test_matrix.py
+# --exclude-regex). Moved here from the ctest command line of macos_debug.yml.
+
+tests.examples.quickstart.1d_wave_equation
+tests.examples.transpose.transpose_block_numa
+tests.performance.local.wait_all_timings
+tests.regressions.components.distributed.tcp.bulk_new_3054
+tests.regressions.dynamic_counters_loaded_1508
+tests.regressions.lcos.wait_all_hang_1946
+tests.regressions.modules.async_combinators.wait_all_hang_1946
+tests.regressions.modules.collectives.distributed.tcp.broadcast_apply
+tests.regressions.modules.collectives.distributed.tcp.broadcast_unwrap_future_2885
+tests.regressions.modules.collectives.distributed.tcp.remote_latch
+tests.regressions.modules.compute_local.parallel_fill_4132
+tests.regressions.util.distributed.tcp.zero_copy_parcels_1001_no_zero_copy_optimization
+tests.regressions.modules.performance_counters.dynamic_counters_loaded_1508
+tests.regressions.modules.performance_counters.statistics_2666
+tests.unit.modules.runtime_components.distributed.tcp.migrate_component
+tests.unit.modules.runtime_components.distributed.tcp.migrate_polymorphic_component
+tests.unit.modules.algorithms.default_construct
+tests.unit.modules.algorithms.destroy
+tests.unit.modules.algorithms.foreach_executors
+tests.unit.modules.algorithms.max_element
+tests.unit.modules.algorithms.replace_copy_if
+tests.unit.modules.compute_local.numa_allocator
+tests.unit.modules.execution.standalone_thread_pool_executor
+tests.unit.modules.resource_partitioner.used_pus
+tests.unit.modules.runtime_components.launch_process
+tests.unit.modules.segmented_algorithms.distributed.tcp.partitioned_vector
+tests.unit.threads.distributed.tcp.thread_stacksize
+tests.unit.topology.numa_allocator
+tests.unit.modules.executors.limiting_executor
+tests.unit.modules.compute_local.block_fork_join_executor
+tests.unit.modules.algorithms.algorithms.all_of
+tests.unit.modules.algorithms.algorithms.any_of
+tests.unit.modules.algorithms.algorithms.uninitialized_relocate_sender

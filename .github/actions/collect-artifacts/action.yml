@@ -35,8 +35,13 @@ runs:
       run: |
         cd build
         mkdir -p ${{ inputs.job-name }}
-        cp core.* ${{ inputs.job-name }} || true
-    
+        # Linux writes core files to the working directory, macOS to /cores
+        for core in core.* /cores/core.*; do
+          if [ -f "$core" ]; then
+            cp "$core" ${{ inputs.job-name }}
+          fi
+        done
+
     - name: Move debug logs
       if: failure() && inputs.collect-failure-artifacts == 'true'
       shell: bash
