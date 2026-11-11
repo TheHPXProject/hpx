@@ -44,6 +44,10 @@ namespace hpx::util {
                     return false;
             }
 
+            // The next character is read below, make sure it exists.
+            if ((input.size() - 1) < search_end)
+                return false;
+
             if ('/' == input.at(search_end))
             {
                 --search_end;

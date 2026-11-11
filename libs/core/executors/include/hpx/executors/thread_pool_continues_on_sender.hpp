@@ -41,7 +41,7 @@
 namespace hpx::execution::experimental::detail {
 
     // Forward declarations
-    template <typename Sender, typename Scheduler>
+    HPX_CXX_CORE_EXPORT template <typename Sender, typename Scheduler>
     struct thread_pool_continues_on_sender;
 
     template <typename Receiver, typename Scheduler>
@@ -237,7 +237,7 @@ namespace hpx::execution::experimental::detail {
     // Completion signatures are dynamically computed from the source
     // sender's signatures, augmented with set_error(exception_ptr) for the
     // scheduling hop.
-    template <typename Sender, typename Scheduler>
+    HPX_CXX_CORE_EXPORT template <typename Sender, typename Scheduler>
     struct thread_pool_continues_on_sender
     {
         using sender_concept = hpx::execution::experimental::sender_t;
