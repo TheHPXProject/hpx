@@ -116,6 +116,7 @@ namespace hpx {
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
+#include <hpx/parallel/algorithms/detail/find.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/util/cancellation_token.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
@@ -182,24 +183,12 @@ namespace hpx::parallel {
             static constexpr bool sequential(
                 ExPolicy, InIter first, InSent last, Pred&& pred, Proj&& proj)
             {
-                util::invoke_projected<Pred, Proj> pred_projected{
-                    HPX_FORWARD(Pred, pred), HPX_FORWARD(Proj, proj)};
-
-                for (; first != last; ++first)
-                {
-                    if (!HPX_INVOKE(pred_projected, *first))
-                        break;
-                }
-
+                first = detail::sequential_find_if_not<ExPolicy>(
+                    first, last, pred, proj);
                 if (first != last)
                 {
-                    ++first;
-                }
-
-                for (; first != last; ++first)
-                {
-                    if (HPX_INVOKE(pred_projected, *first))
-                        return false;
+                    return detail::sequential_find_if<ExPolicy>(
+                               ++first, last, pred, proj) == last;
                 }
                 return true;
             }
