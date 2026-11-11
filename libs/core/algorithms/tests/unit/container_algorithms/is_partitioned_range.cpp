@@ -475,8 +475,8 @@ void test_is_partitioned_sentinel()
     HPX_TEST(result6);
 
     auto proj = [](int x) { return x * 2; };
-    bool result_proj = hpx::ranges::is_partitioned(
-        v1, [](int n) { return n % 4 == 0; }, proj);
+    bool result_proj =
+        hpx::ranges::is_partitioned(v1, [](int n) { return n % 4 == 0; }, proj);
     HPX_TEST(result_proj);
 }
 
