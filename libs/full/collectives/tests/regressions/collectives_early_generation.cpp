@@ -219,18 +219,23 @@ void test_explicit_after_auto()
             make_communicator("/test/early_generation/after_auto/", site);
         barrier(comm, this_site_arg(site)).get();
 
-        bool rejected = false;
-        try
+        // the gate is at generation 2 now: 2 runs at once, 5 would be kept
+        for (std::size_t generation : {2, 5})
         {
-            all_reduce(comm, value(site, 5), std::plus<std::uint32_t>{},
-                this_site_arg(site), generation_arg(5))
-                .get();
+            bool rejected = false;
+            try
+            {
+                all_reduce(comm, value(site, generation),
+                    std::plus<std::uint32_t>{}, this_site_arg(site),
+                    generation_arg(generation))
+                    .get();
+            }
+            catch (hpx::exception const& e)
+            {
+                rejected = e.get_error() == hpx::error::bad_parameter;
+            }
+            HPX_TEST(rejected);
         }
-        catch (hpx::exception const& e)
-        {
-            rejected = e.get_error() == hpx::error::bad_parameter;
-        }
-        HPX_TEST(rejected);
     });
 }
 

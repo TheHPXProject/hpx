@@ -211,18 +211,24 @@ namespace hpx::collectives::detail {
                 check_site(which);
 
                 std::unique_lock l(mtx_);
+
+                // An explicit generation number is usable only while the gate
+                // position remains a pure function of the numbers supplied so
+                // far. An auto (default) generation advances the gate without
+                // telling the caller by how much, leaving no reliable way to
+                // choose the next explicit number: too small throws, too large
+                // waits forever. Reject the transition when the request
+                // arrives, so a kept request is not checked again when it
+                // runs. The reverse order stays valid because an auto
+                // generation always synchronizes on the gate's current
+                // position.
+                if (auto_generation_used_)
+                {
+                    throw_explicit_after_auto(l, operation, which, generation);
+                }
+
                 if (generation > gate_.generation(l))
                 {
-                    if (auto_generation_used_)
-                    {
-                        throw_explicit_after_auto(
-                            l, operation, which, generation);
-                    }
-
-                    // The request passed the check above, it is not checked
-                    // again when it runs after an auto-generation operation.
-                    admitted_.emplace_back(which, generation);
-
                     hpx::promise<Result> p;
                     Result result(p.get_future());
 
@@ -323,23 +329,6 @@ namespace hpx::collectives::detail {
                 "follow auto-generation operations on the same "
                 "communicator: operation {}, which {}, generation {}.",
                 basename_, operation, which, generation);
-        }
-
-        // Remove the entry run_or_defer made for a kept request, return
-        // whether there was one.
-        template <typename Lock>
-        bool take_admitted(Lock& l, std::size_t which, std::size_t generation)
-        {
-            HPX_ASSERT_OWNS_LOCK(l);
-
-            auto const it = std::find(admitted_.begin(), admitted_.end(),
-                std::pair(which, generation));
-            if (it == admitted_.end())
-            {
-                return false;
-            }
-            admitted_.erase(it);
-            return true;
         }
 
         [[nodiscard]] constexpr std::size_t get_num_sites(
@@ -563,23 +552,11 @@ namespace hpx::collectives::detail {
             std::unique_lock l(mtx_);
             [[maybe_unused]] util::ignore_all_while_checking il;
 
-            // An explicit generation number is usable only while the gate
-            // position remains a pure function of the numbers supplied so far.
-            // An auto (default) generation advances the gate without telling
-            // the caller by how much, leaving no reliable way to choose the
-            // next explicit number: too small throws, too large waits forever.
-            // Latch the first auto use and reject the transition up front; the
-            // reverse order stays valid because an auto generation always
-            // synchronizes on the gate's current position. A request that
-            // run_or_defer kept was checked when it arrived.
+            // Latch the first auto use. run_or_defer rejects an explicit
+            // generation that arrives after it.
             if (generation == generation_arg{})
             {
                 auto_generation_used_ = true;
-            }
-            else if (!take_admitted(l, which, generation) &&
-                auto_generation_used_)
-            {
-                throw_explicit_after_auto(l, operation, which, generation);
             }
 
             // Verify that there is no overlap between different types of
@@ -724,8 +701,5 @@ namespace hpx::collectives::detail {
         // sorted by generation.
         std::vector<std::pair<std::size_t, hpx::move_only_function<void()>>>
             pending_;
-        // Site and generation of each kept request that passed the
-        // explicit-after-auto check on arrival.
-        std::vector<std::pair<std::size_t, std::size_t>> admitted_;
     };
 }    // namespace hpx::collectives::detail
