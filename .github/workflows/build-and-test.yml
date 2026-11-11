@@ -129,11 +129,10 @@ jobs:
       matrix: ${{ fromJson(needs.configure-core-core_local-components.outputs.test_matrix) }}
 
     steps:
+      # The shards compile their tests, so they need the sources, not only
+      # .github (a sparse checkout worked only because the git of the image is
+      # too old for it, and the checkout fell back to the full archive)
       - uses: actions/checkout@v7
-        with:
-          sparse-checkout: |
-            .github
-          sparse-checkout-cone-mode: false
 
       - uses: ./.github/actions/hpx-build-and-test
         with:

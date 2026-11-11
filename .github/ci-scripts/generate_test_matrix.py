@@ -5,18 +5,22 @@
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
+import argparse
 import sys
 import json
 import re
 import math
 import os
 
-def get_excluded_tests():
-    exclude_file = os.path.abspath(os.path.join(
-        os.path.dirname(__file__), "..", "workflows", "exclude.targets"
-    ))
+DEFAULT_EXCLUDE_FILE = os.path.abspath(os.path.join(
+    os.path.dirname(__file__), "..", "workflows", "exclude.targets"
+))
+
+def get_excluded_tests(exclude_files):
     excluded = set()
-    if os.path.exists(exclude_file):
+    for exclude_file in exclude_files:
+        if not os.path.exists(exclude_file):
+            raise FileNotFoundError(f"exclude file not found: {exclude_file}")
         with open(exclude_file, "r") as f:
             for line in f:
                 line = line.strip()
@@ -24,11 +28,11 @@ def get_excluded_tests():
                     excluded.add(line)
     return excluded
 
-def generate_matrix(ctest_output, num_buckets):
+def generate_matrix(ctest_output, num_buckets, exclude_files):
     tests = []
     pattern = re.compile(r"^\s*Test\s*#\d+:\s*(.+)$")
 
-    excluded = get_excluded_tests()
+    excluded = get_excluded_tests(exclude_files)
 
     for line in ctest_output.splitlines():
         match = pattern.match(line)
@@ -88,13 +92,23 @@ def generate_matrix(ctest_output, num_buckets):
     return matrix
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Split the tests listed by 'ctest -N' (read from stdin) "
+        "into a GitHub Actions job matrix")
+    parser.add_argument("num_jobs", nargs="?", type=int, default=10,
+        help="number of matrix entries (default: 10)")
+    parser.add_argument("--exclude", action="append", default=None,
+        metavar="FILE",
+        help="file listing tests to leave out, one per line ('#' starts a "
+        "comment); may be given more than once (default: "
+        ".github/workflows/exclude.targets)")
+    args = parser.parse_args()
+
     try:
         input_data = sys.stdin.read()
-        num_jobs = 10
-        if len(sys.argv) > 1:
-            num_jobs = int(sys.argv[1])
+        exclude_files = args.exclude if args.exclude else [DEFAULT_EXCLUDE_FILE]
 
-        matrix = generate_matrix(input_data, num_jobs)
+        matrix = generate_matrix(input_data, args.num_jobs, exclude_files)
         print(json.dumps(matrix))
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
