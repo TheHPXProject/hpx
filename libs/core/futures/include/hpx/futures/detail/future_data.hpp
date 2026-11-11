@@ -701,13 +701,7 @@ namespace hpx::lcos::detail {
             return *reinterpret_cast<std::exception_ptr const*>(&storage_);
         }
 
-    protected:
-        using base_type::mtx_;
-        using base_type::on_completed_;
-        using base_type::state_;
-
     private:
-        using base_type::cond_;
         future_data_storage_t<Result> storage_;
     };
 
