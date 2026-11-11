@@ -4,7 +4,7 @@
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-name: Build and Test
+name: Linux (Debug, all tests)
 
 on:
   pull_request:
@@ -19,124 +19,64 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  configure-core-core_local-components:
-    runs-on: ubuntu-latest
-    container: stellargroup/build_env:19
-    outputs:
-      test_matrix: ${{ steps.gen_matrix.outputs.matrix }}
+  build-and-test:
+    name: Clang
+    uses: ./.github/workflows/sharded-build-and-test.yml
+    with:
+      container: stellargroup/build_env:19
+      base-targets: hpx_core core components
+      shards: 25
+      configure: |
+        mkdir -p "$GITHUB_WORKSPACE/build"
+        cd "$GITHUB_WORKSPACE/build"
 
-    steps:
-      - uses: actions/checkout@v7
+        cmake --version
+        if [ "${{ github.event_name }}" != "pull_request" ] && \
+          { [ "${{ github.ref_name }}" == "master" ] || \
+            [[ "${{ github.ref_name }}" =~ ^release.* ]] || \
+            [ "${{ github.ref_type }}" == "tag" ]; }; then
+          DOCUMENTATION_OUTPUT_FORMATS="html;singlehtml;latexpdf"
+        else
+          DOCUMENTATION_OUTPUT_FORMATS="html"
+        fi
 
-      - name: Configure (Running CMake)
-        shell: bash
-        timeout-minutes: 30
-        run: |
-          mkdir -p "$GITHUB_WORKSPACE/build"
-          cd "$GITHUB_WORKSPACE/build"
+        cmake \
+          "$GITHUB_WORKSPACE" \
+          -G "Ninja" \
+          -DCMAKE_BUILD_TYPE=Debug \
+          -DHPX_WITH_MALLOC=system \
+          -DHPX_WITH_FETCH_ASIO=Off \
+          -DHPX_WITH_GIT_COMMIT=${{ github.sha }} \
+          -DHPX_WITH_GIT_BRANCH="${{ github.ref_name }}" \
+          -DHPX_WITH_GIT_TAG="${{ github.ref_type == 'tag' && github.ref_name || '' }}" \
+          -DHPX_WITH_TOOLS=On \
+          -DCMAKE_CXX_FLAGS="-fcolor-diagnostics" \
+          -DHPX_WITH_TESTS_HEADERS=On \
+          -DHPX_WITH_TESTS_BENCHMARKS=ON \
+          -DHPX_WITH_TESTS_RUN_BENCHMARKS=ON \
+          -DHPX_WITH_COMPILER_WARNINGS=On \
+          -DHPX_WITH_COMPILER_WARNINGS_AS_ERRORS=On \
+          -DHPX_WITH_DEPRECATION_WARNINGS=On \
+          -DCMAKE_CXX_CLANG_TIDY=clang-tidy-21 \
+          -DHPX_WITH_THREAD_LOCAL_STORAGE=On \
+          -DHPX_WITH_STACKTRACES_STATIC_SYMBOLS=On \
+          -DHPX_WITH_STACKTRACES_DEMANGLE_SYMBOLS=Off \
+          -DHPX_WITH_SPINLOCK_DEADLOCK_DETECTION=On \
+          -DHPX_WITH_CHECK_MODULE_DEPENDENCIES=On \
+          -DHPX_LOGGING_WITH_SEPARATE_DESTINATIONS=Off \
+          -DHPX_WITH_THREAD_DEBUG_INFO=On \
+          -DHPX_COMMAND_LINE_HANDLING_WITH_JSON_CONFIGURATION_FILES=On \
+          -DHPX_WITH_FETCH_JSON=On \
+          -DCMAKE_EXPORT_COMPILE_COMMANDS=On \
+          -DHPX_WITH_DOCUMENTATION=On \
+          -DHPX_WITH_DOCUMENTATION_OUTPUT_FORMATS="${DOCUMENTATION_OUTPUT_FORMATS}" \
+          -DHPX_WITH_TESTS_COMMAND_LINE=--hpx:queuing=local-workrequesting-fifo \
+          -DHPX_WITH_TESTS_MAX_THREADS_PER_LOCALITY=2 \
+          -DHPX_WITH_SUPERVISION=On \
+          -DHPX_WITH_DATAPAR=On \
+          -DHPX_WITH_DATAPAR_BACKEND=EMULATE
 
-          cmake --version
-          if [ "${{ github.event_name }}" != "pull_request" ] && \
-            { [ "${{ github.ref_name }}" == "master" ] || \
-              [[ "${{ github.ref_name }}" =~ ^release.* ]] || \
-              [ "${{ github.ref_type }}" == "tag" ]; }; then
-            DOCUMENTATION_OUTPUT_FORMATS="html;singlehtml;latexpdf"
-          else
-            DOCUMENTATION_OUTPUT_FORMATS="html"
-          fi
-
-          cmake \
-            "$GITHUB_WORKSPACE" \
-            -G "Ninja" \
-            -DCMAKE_BUILD_TYPE=Debug \
-            -DHPX_WITH_MALLOC=system \
-            -DHPX_WITH_FETCH_ASIO=Off \
-            -DHPX_WITH_GIT_COMMIT=${{ github.sha }} \
-            -DHPX_WITH_GIT_BRANCH="${{ github.ref_name }}" \
-            -DHPX_WITH_GIT_TAG="${{ github.ref_type == 'tag' && github.ref_name || '' }}" \
-            -DHPX_WITH_TOOLS=On \
-            -DCMAKE_CXX_FLAGS="-fcolor-diagnostics" \
-            -DHPX_WITH_TESTS_HEADERS=On \
-            -DHPX_WITH_TESTS_BENCHMARKS=ON \
-            -DHPX_WITH_TESTS_RUN_BENCHMARKS=ON \
-            -DHPX_WITH_COMPILER_WARNINGS=On \
-            -DHPX_WITH_COMPILER_WARNINGS_AS_ERRORS=On \
-            -DHPX_WITH_DEPRECATION_WARNINGS=On \
-            -DCMAKE_CXX_CLANG_TIDY=clang-tidy-21 \
-            -DHPX_WITH_THREAD_LOCAL_STORAGE=On \
-            -DHPX_WITH_STACKTRACES_STATIC_SYMBOLS=On \
-            -DHPX_WITH_STACKTRACES_DEMANGLE_SYMBOLS=Off \
-            -DHPX_WITH_SPINLOCK_DEADLOCK_DETECTION=On \
-            -DHPX_WITH_CHECK_MODULE_DEPENDENCIES=On \
-            -DHPX_LOGGING_WITH_SEPARATE_DESTINATIONS=Off \
-            -DHPX_WITH_THREAD_DEBUG_INFO=On \
-            -DHPX_COMMAND_LINE_HANDLING_WITH_JSON_CONFIGURATION_FILES=On \
-            -DHPX_WITH_FETCH_JSON=On \
-            -DCMAKE_EXPORT_COMPILE_COMMANDS=On \
-            -DHPX_WITH_DOCUMENTATION=On \
-            -DHPX_WITH_DOCUMENTATION_OUTPUT_FORMATS="${DOCUMENTATION_OUTPUT_FORMATS}" \
-            -DHPX_WITH_TESTS_COMMAND_LINE=--hpx:queuing=local-workrequesting-fifo \
-            -DHPX_WITH_TESTS_MAX_THREADS_PER_LOCALITY=2 \
-            -DHPX_WITH_SUPERVISION=On \
-            -DHPX_WITH_DATAPAR=On \
-            -DHPX_WITH_DATAPAR_BACKEND=EMULATE
-
-            # Disable logging for now as otherwise we run out of diskspace on the
-            # github runner instance
-            # -DHPX_WITH_TESTS_DEBUG_LOG=On 
-            # -DHPX_WITH_TESTS_DEBUG_LOG_DESTINATION="$GITHUB_WORKSPACE/build/debug-log.txt"
-
-      - name: core_local (Building Core Local)
-        shell: bash
-        working-directory: build
-        run: ninja -k 0 hpx_core
-
-      - name: core (Building Core)
-        shell: bash
-        working-directory: build
-        run: ninja -k 0 core
-
-      - name: Components (Building Components)
-        shell: bash
-        working-directory: build
-        run: ninja -k 0 components
-
-      - name: Generate Test Matrix
-        id: gen_matrix
-        shell: bash
-        working-directory: build
-        run: |
-          ctest -N | python3 ../.github/ci-scripts/generate_test_matrix.py 25 > test_matrix.json
-          printf 'matrix=%s\n' "$(cat test_matrix.json)" >> "$GITHUB_OUTPUT"
-
-      - name: Package Build Artifacts
-        run: tar -czf build.tar.gz build/
-
-      - name: Upload Build Artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: hpx-build-${{ github.sha }}
-          path: build.tar.gz
-          retention-days: 3
-
-  tests-dynamic:
-    needs: configure-core-core_local-components
-    runs-on: ubuntu-latest
-    container: stellargroup/build_env:19
-    name: ${{ matrix.name }} (${{ matrix.count }} tests)
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(needs.configure-core-core_local-components.outputs.test_matrix) }}
-
-    steps:
-      # The shards compile their tests, so they need the sources, not only
-      # .github (a sparse checkout worked only because the git of the image is
-      # too old for it, and the checkout fell back to the full archive)
-      - uses: actions/checkout@v7
-
-      - uses: ./.github/actions/hpx-build-and-test
-        with:
-          build-artifact-name: hpx-build-${{ github.sha }}
-          build-targets: ${{ matrix.targets }}
-          ctest-regex: ${{ matrix.tests }}
-          artifact-job-name: ${{ matrix.name }}
+          # Disable logging for now as otherwise we run out of diskspace on the
+          # github runner instance
+          # -DHPX_WITH_TESTS_DEBUG_LOG=On 
+          # -DHPX_WITH_TESTS_DEBUG_LOG_DESTINATION="$GITHUB_WORKSPACE/build/debug-log.txt"
