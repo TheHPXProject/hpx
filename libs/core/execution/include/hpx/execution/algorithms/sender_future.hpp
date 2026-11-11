@@ -168,7 +168,7 @@ namespace hpx::execution::experimental {
     //
     // STANDARD 4: This header does NOT include executor_scheduler.hpp,
     // parallel_executor.hpp, or any execution algorithm detail headers.
-    template <typename T>
+    HPX_CXX_CORE_EXPORT template <typename T>
     struct as_future_t final
     {
         template <typename Sender,
@@ -196,7 +196,7 @@ namespace hpx::execution::experimental {
         }
     };
 
-    template <typename T>
+    HPX_CXX_CORE_EXPORT template <typename T>
     inline constexpr as_future_t<T> as_future{};
 
 }    // namespace hpx::execution::experimental

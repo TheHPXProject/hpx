@@ -530,6 +530,23 @@ namespace hpx::collectives {
 
     HPX_CXX_EXPORT template <typename T>
     inline constexpr bool is_communicator_v = is_communicator<T>::value;
+
+    namespace detail {
+
+        // The continuation of an unresolved client runs in the thread that
+        // resolves it, which can be another site inside AGAS' symbol namespace
+        // bind. The request may suspend that thread before the site issued its
+        // own part of the collective, so run it on a new thread instead.
+        HPX_CXX_EXPORT template <typename F>
+        auto then_on_communicator(communicator const& fid, F&& f)
+        {
+            if (!fid.is_ready())
+            {
+                return fid.then(hpx::launch::async, HPX_FORWARD(F, f));
+            }
+            return fid.then(hpx::launch::sync, HPX_FORWARD(F, f));
+        }
+    }    // namespace detail
 }    // namespace hpx::collectives
 
 #endif    // DOXYGEN

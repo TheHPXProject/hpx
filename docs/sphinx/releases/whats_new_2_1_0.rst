@@ -33,3 +33,14 @@ Breaking changes
   copyable search values in their asynchronous operation state. Noncopyable
   lvalues, including arrays, are borrowed and must remain valid until the
   returned future becomes ready, even if the future is discarded.
+
+Supervision Module
+==================
+
+- A peer fenced by failure detection is now removed from the registry, so
+  ``snapshot_peers()`` no longer lists it; its fence is kept
+  (:hpx-pr:`7922`). That removal no longer drops a peer that came back with a
+  new epoch while it was being removed, which left the peer unmonitored, and
+  the eviction a terminal lifecycle notification schedules no longer removes
+  a peer that started a newer epoch meanwhile (:hpx-issue:`7924`,
+  :hpx-pr:`8027`).
