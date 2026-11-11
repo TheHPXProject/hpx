@@ -16,7 +16,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: stellargroup/build_env:22
+    container: stellargroup/build_env:23
 
     steps:
     - uses: actions/checkout@v7
