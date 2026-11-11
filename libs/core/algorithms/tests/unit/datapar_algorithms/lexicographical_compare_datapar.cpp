@@ -239,11 +239,13 @@ void test_lexicographical_compare_contiguous(ExPolicy policy)
 
             // Case A: common prefix is identical, lengths may differ
             std::vector<int> d(sz2);
-            std::copy(c.begin(), c.begin() + common_sz, d.begin());
+            std::copy(c.begin(),
+                c.begin() + static_cast<std::ptrdiff_t>(common_sz), d.begin());
             if (sz2 > sz1)
             {
                 std::generate(
-                    d.begin() + common_sz, d.end(), [&]() { return dis(gen); });
+                    d.begin() + static_cast<std::ptrdiff_t>(common_sz), d.end(),
+                    [&]() { return dis(gen); });
             }
 
             bool actual_common =
@@ -327,6 +329,74 @@ void test_lexicographical_compare_boundaries(ExPolicy policy)
                 HPX_TEST(!compare_test(
                     policy, d.begin(), d.end(), c.begin(), c.end()));
             }
+        }
+
+        // Opposing mismatches within a single SIMD pack:
+        // Position pos_early has c < d (c is smaller).
+        // Position pos_late within same pack has c > d (c is larger).
+        // The earlier position must determine the result (c < d is true).
+        {
+            std::size_t sz = pack_size * 4 + 7;
+            std::vector<int> c(sz, 10);
+            std::vector<int> d(sz, 10);
+
+            std::size_t pack_start = pack_size;
+            std::size_t pos_early = pack_start;
+            std::size_t pos_late = pack_start + 1;
+
+            c[pos_early] = 5;
+            d[pos_early] = 10;
+            c[pos_late] = 15;
+            d[pos_late] = 10;
+
+            HPX_TEST(
+                compare_test(policy, c.begin(), c.end(), d.begin(), d.end()));
+            HPX_TEST(
+                !compare_test(policy, d.begin(), d.end(), c.begin(), c.end()));
+
+            // Reverse opposing mismatches in the same pack
+            c[pos_early] = 15;
+            d[pos_early] = 10;
+            c[pos_late] = 5;
+            d[pos_late] = 10;
+
+            HPX_TEST(
+                !compare_test(policy, c.begin(), c.end(), d.begin(), d.end()));
+            HPX_TEST(
+                compare_test(policy, d.begin(), d.end(), c.begin(), c.end()));
+        }
+
+        // Opposing mismatches across SIMD packs and partitions:
+        {
+            std::size_t sz =
+                (std::max) (std::size_t(2000), pack_size * 200 + 7);
+            std::vector<int> c(sz, 10);
+            std::vector<int> d(sz, 10);
+
+            std::size_t pos_part1 = pack_size * 2 + 1;
+            std::size_t pos_part2 = pack_size * 100 + 3;
+
+            // Earlier partition has c < d, later partition has c > d
+            c[pos_part1] = 5;
+            d[pos_part1] = 10;
+            c[pos_part2] = 15;
+            d[pos_part2] = 10;
+
+            HPX_TEST(
+                compare_test(policy, c.begin(), c.end(), d.begin(), d.end()));
+            HPX_TEST(
+                !compare_test(policy, d.begin(), d.end(), c.begin(), c.end()));
+
+            // Reverse: earlier partition has c > d, later partition has c < d
+            c[pos_part1] = 15;
+            d[pos_part1] = 10;
+            c[pos_part2] = 5;
+            d[pos_part2] = 10;
+
+            HPX_TEST(
+                !compare_test(policy, c.begin(), c.end(), d.begin(), d.end()));
+            HPX_TEST(
+                compare_test(policy, d.begin(), d.end(), c.begin(), c.end()));
         }
     }
 }
@@ -525,46 +595,70 @@ void test_lexicographical_compare_generic_projections(ExPolicy policy)
 
     if constexpr (pack_size > 1)
     {
-        std::atomic<int> pack_calls(0);
-        auto proj = [&pack_calls](auto const& x) {
+        std::atomic<int> pack_calls1(0);
+        std::atomic<int> pack_calls2(0);
+        auto proj1 = [&pack_calls1](auto const& x) {
             if constexpr (!std::is_arithmetic_v<std::decay_t<decltype(x)>>)
             {
-                ++pack_calls;
+                ++pack_calls1;
             }
             return -x;
+        };
+        auto proj2 = [&pack_calls2](auto const& x) {
+            if constexpr (!std::is_arithmetic_v<std::decay_t<decltype(x)>>)
+            {
+                ++pack_calls2;
+            }
+            return x;
         };
 
         std::size_t sz = (std::max) (std::size_t(1000), pack_size * 100 + 3);
-        std::vector<int> c(sz, 5);
+        // c initialized to -5 (proj1(-5) = 5)
+        // d initialized to 5 (proj2(5) = 5)
+        // Common prefix matches: proj1(c[i]) == proj2(d[i]) == 5
+        std::vector<int> c(sz, -5);
         std::vector<int> d(sz, 5);
-        // At the last element: c has 6, d has 5.
-        // With negation projection, proj(c) has -6, proj(d) has -5.
-        // -6 < -5, so c is lexicographically less than d.
-        c[sz - 1] = 6;
+
+        // At the last element: c[sz-1] is -4 -> proj1(-4) = 4
+        // d[sz-1] is 5 -> proj2(5) = 5
+        // 4 < 5, so c < d is true.
+        // If proj1 and proj2 were swapped or mixed up, proj2(c) < proj1(d)
+        // would evaluate -4 < -5 which is false.
+        c[sz - 1] = -4;
 
         bool actual = compare_ranges_test(policy, c.begin(), c.end(), d.begin(),
-            d.end(), std::less<>{}, proj, proj);
+            d.end(), std::less<>{}, proj1, proj2);
         bool expected = std::lexicographical_compare(c.begin(), c.end(),
-            d.begin(), d.end(), [](int a, int b) { return -a < -b; });
+            d.begin(), d.end(), [](int a, int b) { return -a < b; });
 
         HPX_TEST_EQ(actual, expected);
         HPX_TEST(actual);
-        HPX_TEST(pack_calls > 0);
+        HPX_TEST(pack_calls1 > 0);
+        HPX_TEST(pack_calls2 > 0);
 
-        std::atomic<int> ranges_pack_calls(0);
-        auto ranges_proj = [&ranges_pack_calls](auto const& x) {
+        std::atomic<int> ranges_pack_calls1(0);
+        std::atomic<int> ranges_pack_calls2(0);
+        auto ranges_proj1 = [&ranges_pack_calls1](auto const& x) {
             if constexpr (!std::is_arithmetic_v<std::decay_t<decltype(x)>>)
             {
-                ++ranges_pack_calls;
+                ++ranges_pack_calls1;
             }
             return -x;
         };
+        auto ranges_proj2 = [&ranges_pack_calls2](auto const& x) {
+            if constexpr (!std::is_arithmetic_v<std::decay_t<decltype(x)>>)
+            {
+                ++ranges_pack_calls2;
+            }
+            return x;
+        };
 
         bool actual_ranges = compare_ranges_test(
-            policy, c, d, std::less<>{}, ranges_proj, ranges_proj);
+            policy, c, d, std::less<>{}, ranges_proj1, ranges_proj2);
         HPX_TEST_EQ(actual_ranges, expected);
         HPX_TEST(actual_ranges);
-        HPX_TEST(ranges_pack_calls > 0);
+        HPX_TEST(ranges_pack_calls1 > 0);
+        HPX_TEST(ranges_pack_calls2 > 0);
     }
 }
 

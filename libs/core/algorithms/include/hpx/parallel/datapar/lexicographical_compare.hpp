@@ -47,7 +47,7 @@ namespace hpx::parallel::detail {
                 HPX_INVOKE(pred, HPX_INVOKE(proj2, v2), HPX_INVOKE(proj1, v1)));
         };
 
-    template <typename T>
+    HPX_CXX_CORE_EXPORT template <typename T>
     inline constexpr bool is_vectorizable_value_type_v =
         std::is_arithmetic_v<T> && !std::is_same_v<std::remove_cv_t<T>, bool>;
 
