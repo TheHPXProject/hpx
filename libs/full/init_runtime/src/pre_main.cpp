@@ -90,8 +90,11 @@ namespace hpx::detail {
     // once pre-shutdown starts: shutdown functions run in registration order,
     // so this places it after every pre-shutdown and shutdown function that
     // was registered before shutdown started. The global barrier can be used
-    // from those functions, but not from shutdown functions that are
-    // themselves registered during pre-shutdown or shutdown.
+    // from those functions on the locality that registered them, but not from
+    // shutdown functions that are themselves registered during pre-shutdown
+    // or shutdown. Shutdown functions run concurrently on all localities, so
+    // an action sent from a shutdown function to another locality may find
+    // the global barrier already detached there.
     static void register_global_barrier_detach()
     {
         register_shutdown_function(&detach_global_barrier);
