@@ -111,6 +111,10 @@ void global_barrier_synchronize()
 }
 HPX_PLAIN_ACTION(global_barrier_synchronize, global_barrier_synchronize_action)
 
+// This test runs hpx_main on all localities, so it races with the workers
+// returning from their own hpx_main and can pass with a detach in post_main()
+// when the actions arrive first. test_global_barrier_in_shutdown_function()
+// is the check that reliably catches #6430.
 void test_global_barrier_after_worker_main()
 {
     if (hpx::get_locality_id() != 0)
@@ -129,6 +133,9 @@ void test_global_barrier_after_worker_main()
     }
 }
 
+// Every locality uses the global barrier from a shutdown function registered
+// before shutdown starts, which requires the barrier to stay attached until
+// all such functions have run.
 void test_global_barrier_in_shutdown_function()
 {
     hpx::register_shutdown_function(&global_barrier_synchronize);
