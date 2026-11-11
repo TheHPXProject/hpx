@@ -12,6 +12,7 @@
 #include <memory>
 #include <new>
 #include <stdexcept>
+#include <system_error>
 #include <type_traits>
 #include <utility>
 
@@ -92,6 +93,66 @@ struct empty_sender_void_algorithm
             ex::just(), [calls = HPX_MOVE(calls)]() mutable { ++*calls; });
     }
 };
+
+struct error_code_scheduler
+{
+    using execution_category = hpx::execution::parallel_execution_tag;
+
+    struct sender;
+
+    sender schedule() const noexcept;
+
+    friend constexpr bool operator==(
+        error_code_scheduler, error_code_scheduler) noexcept
+    {
+        return true;
+    }
+};
+
+struct error_code_scheduler::sender
+{
+    using sender_concept = sender_test::ex::sender_t;
+    using completion_signatures =
+        sender_test::ex::completion_signatures<sender_test::ex::set_value_t(),
+            sender_test::ex::set_error_t(std::error_code)>;
+
+    template <typename Receiver>
+    struct operation_state
+    {
+        std::decay_t<Receiver> receiver;
+
+        void start() & noexcept
+        {
+            sender_test::ex::set_value(HPX_MOVE(receiver));
+        }
+    };
+
+    template <typename Receiver>
+    operation_state<Receiver> connect(Receiver&& receiver) const
+    {
+        return {HPX_FORWARD(Receiver, receiver)};
+    }
+
+    struct env
+    {
+        error_code_scheduler query(sender_test::ex::get_completion_scheduler_t<
+            sender_test::ex::set_value_t>) const noexcept
+        {
+            return {};
+        }
+    };
+
+    env get_env() const noexcept
+    {
+        return {};
+    }
+};
+
+inline error_code_scheduler::sender error_code_scheduler::schedule()
+    const noexcept
+{
+    return {};
+}
 
 template <typename ExPolicy>
 void test_legacy_future_value(ExPolicy policy)
@@ -217,6 +278,21 @@ void test_empty_void_sender_result(ExPolicy policy)
     HPX_TEST_EQ(calls->load(), 1);
 }
 
+void test_scheduler_error_forwarding()
+{
+    namespace ex = sender_test::ex;
+    using namespace hpx::execution;
+
+    auto calls = std::make_shared<std::atomic<int>>(0);
+    auto executor = ex::explicit_scheduler_executor(error_code_scheduler{});
+    auto sender = legacy_future_algorithm{}.call(
+        par(task).on(executor), calls, failure_mode::none);
+
+    auto result = sender_test::wait(HPX_MOVE(sender));
+    HPX_TEST_EQ(hpx::get<0>(*result), 42);
+    HPX_TEST_EQ(calls->load(), 1);
+}
+
 int hpx_main()
 {
     namespace ex = sender_test::ex;
@@ -248,6 +324,7 @@ int hpx_main()
         sync_policy, failure_mode::future_exception, false);
     test_legacy_future_error_sync(
         sync_policy, failure_mode::future_bad_alloc, true);
+    test_scheduler_error_forwarding();
 
     return hpx::local::finalize();
 }

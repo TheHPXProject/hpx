@@ -126,6 +126,15 @@ namespace hpx::parallel::detail {
                         return ex::just_error(HPX_MOVE(transformed_error));
                     });
             }
+
+            template <typename Error>
+                requires(
+                    !std::is_same_v<std::decay_t<Error>, std::exception_ptr>)
+            auto operator()(Error&& error) const
+            {
+                namespace ex = hpx::execution::experimental;
+                return ex::just_error(HPX_FORWARD(Error, error));
+            }
         };
 
         template <typename Policy>
