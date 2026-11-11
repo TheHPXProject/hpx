@@ -128,6 +128,7 @@ namespace hpx {
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <iterator>
 #include <type_traits>
 #include <utility>
@@ -184,11 +185,11 @@ namespace hpx::parallel {
                 ExPolicy, InIter first, InSent last, Pred&& pred, Proj&& proj)
             {
                 first = detail::sequential_find_if_not<ExPolicy>(
-                    first, last, pred, proj);
+                    first, last, std::ref(pred), std::ref(proj));
                 if (first != last)
                 {
-                    return detail::sequential_find_if<ExPolicy>(
-                               ++first, last, pred, proj) == last;
+                    return detail::sequential_find_if<ExPolicy>(++first, last,
+                               std::ref(pred), std::ref(proj)) == last;
                 }
                 return true;
             }
