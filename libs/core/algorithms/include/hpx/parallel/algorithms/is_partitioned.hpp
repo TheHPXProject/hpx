@@ -116,6 +116,7 @@ namespace hpx {
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
+#include <hpx/parallel/algorithms/detail/find.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/util/cancellation_token.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
@@ -127,6 +128,7 @@ namespace hpx {
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <iterator>
 #include <type_traits>
 #include <utility>
@@ -182,9 +184,14 @@ namespace hpx::parallel {
             static constexpr bool sequential(
                 ExPolicy, InIter first, InSent last, Pred&& pred, Proj&& proj)
             {
-                return std::is_partitioned(first, last,
-                    util::invoke_projected<Pred, Proj>(
-                        HPX_FORWARD(Pred, pred), HPX_FORWARD(Proj, proj)));
+                first = detail::sequential_find_if_not<ExPolicy>(
+                    first, last, std::ref(pred), std::ref(proj));
+                if (first != last)
+                {
+                    return detail::sequential_find_if<ExPolicy>(++first, last,
+                               std::ref(pred), std::ref(proj)) == last;
+                }
+                return true;
             }
 
             template <typename ExPolicy, typename Iter_, typename Sent_,
