@@ -252,7 +252,10 @@ namespace hpx::threads::policies {
             std::uint16_t num_thread_;
             // preserve queue precedence when stored priority differs
             bool from_high_priority_queue_;
-            hpx::detail::small_vector<thread_id_ref_type, 32> tasks_;
+
+            static constexpr std::size_t max_inline_tasks = 32;
+            hpx::detail::small_vector<thread_id_ref_type, max_inline_tasks>
+                tasks_;
         };
 
         using workrequesting_task_channel =
@@ -1022,12 +1025,10 @@ namespace hpx::threads::policies {
                                               thread_queue_type* queue) {
                 std::int64_t const pending_count =
                     queue->get_pending_queue_length(std::memory_order_relaxed);
-                // Cap steal batches at 32 to avoid heap allocation in tasks_
-                return (std::min) (std::size_t(32),
-                    detail::get_workrequesting_pending_steal_count(
-                        pending_count,
-                        thread_queue_init_.min_tasks_to_steal_pending_,
-                        req.stealhalf_));
+                return detail::get_workrequesting_pending_steal_count(
+                    pending_count,
+                    thread_queue_init_.min_tasks_to_steal_pending_,
+                    req.stealhalf_);
             };
 
             thread_queue_type* high_priority_queue = req.steal_high_priority_ &&
