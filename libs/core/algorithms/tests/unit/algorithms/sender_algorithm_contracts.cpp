@@ -98,16 +98,26 @@ struct error_code_scheduler
 {
     using execution_category = hpx::execution::parallel_execution_tag;
 
-    bool fail = false;
+    explicit error_code_scheduler(bool fail = false)
+      : fail_next(std::make_shared<std::atomic<bool>>(fail))
+    {
+    }
+
+    explicit error_code_scheduler(std::shared_ptr<std::atomic<bool>> fail_next)
+      : fail_next(HPX_MOVE(fail_next))
+    {
+    }
+
+    std::shared_ptr<std::atomic<bool>> fail_next;
 
     struct sender;
 
     sender schedule() const noexcept;
 
-    friend constexpr bool operator==(
+    friend bool operator==(
         error_code_scheduler lhs, error_code_scheduler rhs) noexcept
     {
-        return lhs.fail == rhs.fail;
+        return lhs.fail_next == rhs.fail_next;
     }
 };
 
@@ -118,17 +128,17 @@ struct error_code_scheduler::sender
         sender_test::ex::completion_signatures<sender_test::ex::set_value_t(),
             sender_test::ex::set_error_t(std::error_code)>;
 
-    bool fail = false;
+    std::shared_ptr<std::atomic<bool>> fail_next;
 
     template <typename Receiver>
     struct operation_state
     {
         std::decay_t<Receiver> receiver;
-        bool fail;
+        std::shared_ptr<std::atomic<bool>> fail_next;
 
         void start() & noexcept
         {
-            if (fail)
+            if (fail_next->exchange(false, std::memory_order_relaxed))
             {
                 sender_test::ex::set_error(HPX_MOVE(receiver),
                     std::make_error_code(std::errc::operation_canceled));
@@ -143,30 +153,30 @@ struct error_code_scheduler::sender
     template <typename Receiver>
     operation_state<Receiver> connect(Receiver&& receiver) const
     {
-        return {HPX_FORWARD(Receiver, receiver), fail};
+        return {HPX_FORWARD(Receiver, receiver), fail_next};
     }
 
     struct env
     {
-        bool fail;
+        std::shared_ptr<std::atomic<bool>> fail_next;
 
         error_code_scheduler query(sender_test::ex::get_completion_scheduler_t<
             sender_test::ex::set_value_t>) const noexcept
         {
-            return {fail};
+            return error_code_scheduler{fail_next};
         }
     };
 
     env get_env() const noexcept
     {
-        return {fail};
+        return {fail_next};
     }
 };
 
 inline error_code_scheduler::sender error_code_scheduler::schedule()
     const noexcept
 {
-    return {fail};
+    return {fail_next};
 }
 
 template <typename ExPolicy>
