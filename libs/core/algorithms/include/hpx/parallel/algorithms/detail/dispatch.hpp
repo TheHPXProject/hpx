@@ -96,7 +96,8 @@ namespace hpx::parallel::detail {
         // scheduler policy. The adapter instead runs their existing task-policy
         // path and converts its future into a single sender type. Algorithms
         // with native sender paths leave this false and receive the scheduler
-        // policy directly.
+        // policy directly. Only parallel dispatch uses this adapter; sequenced
+        // scheduler policies retain their executor-based sequential dispatch.
         static constexpr bool uses_legacy_futures = false;
 
         using result_type = Result;
@@ -136,24 +137,10 @@ namespace hpx::parallel::detail {
             auto operator()(Ts&&... values)
             {
                 namespace ex = hpx::execution::experimental;
-                auto sender = ex::as_sender(Derived{}.call(
+                return ex::as_sender(Derived{}.call(
                     HPX_MOVE(policy), HPX_FORWARD(Ts, values)...));
-                return ex::let_error(
-                    HPX_MOVE(sender), future_algorithm_error_handler<Policy>{});
             }
         };
-
-        template <typename Policy, typename Sender>
-        [[noreturn]] static Sender handle_future_algorithm_error(
-            std::exception_ptr error)
-        {
-            namespace ex = hpx::execution::experimental;
-            using policy_type =
-                decltype(ex::to_non_task(std::declval<Policy>()));
-            hpx::parallel::detail::handle_exception<policy_type,
-                local_result_type>::call(error);
-            HPX_UNREACHABLE;
-        }
 
         template <typename Policy, typename Tuple>
         struct future_algorithm_sender_factory
@@ -163,17 +150,9 @@ namespace hpx::parallel::detail {
 
             auto operator()()
             {
-                using sender_type = decltype(hpx::invoke_fused(
+                return hpx::invoke_fused(
                     future_algorithm_invoker<Policy>{HPX_MOVE(policy)},
-                    HPX_MOVE(args)));
-
-                return hpx::detail::try_catch_exception_ptr(
-                    [&]() -> sender_type {
-                        return hpx::invoke_fused(
-                            future_algorithm_invoker<Policy>{HPX_MOVE(policy)},
-                            HPX_MOVE(args));
-                    },
-                    &handle_future_algorithm_error<Policy, sender_type>);
+                    HPX_MOVE(args));
             }
         };
 
@@ -287,8 +266,10 @@ namespace hpx::parallel::detail {
                     future_algorithm_sender_factory<future_policy_type,
                         args_tuple_type>{
                         HPX_MOVE(future_policy), HPX_MOVE(args_tuple)});
-                return result_handler::get(
-                    ex::continues_on(HPX_MOVE(sender), HPX_MOVE(sched)));
+                auto adapted_sender = ex::let_error(HPX_MOVE(sender),
+                    future_algorithm_error_handler<future_policy_type>{});
+                return result_handler::get(ex::continues_on(
+                    HPX_MOVE(adapted_sender), HPX_MOVE(sched)));
             }
             else
             {

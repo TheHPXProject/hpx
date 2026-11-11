@@ -1,4 +1,4 @@
-//  Copyright (c) 2026 Pratyksh Gupta
+//  Copyright (c) 2026 the-ivii
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -12,11 +12,6 @@
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/testing.hpp>
 
-#include <algorithm>
-#include <cstddef>
-#include <functional>
-#include <iterator>
-#include <numeric>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -33,29 +28,6 @@ namespace sender_test {
         static_assert(!hpx::traits::is_future_v<std::decay_t<Sender>>);
         auto result = tt::sync_wait(std::forward<Sender>(sender));
         HPX_TEST(result.has_value());
-        return result;
-    }
-
-    template <typename F>
-    void policies(F test)
-    {
-        using namespace hpx::execution;
-        auto sync = ex::explicit_scheduler_executor(
-            ex::thread_pool_policy_scheduler(hpx::launch::sync));
-        auto async = ex::explicit_scheduler_executor(
-            ex::thread_pool_policy_scheduler(hpx::launch::async));
-        test(seq(task).on(sync));
-        test(unseq(task).on(sync));
-        test(par(task).on(async));
-        test(par_unseq(task).on(async));
-    }
-
-    inline std::vector<int> values(std::size_t size)
-    {
-        std::vector<int> result(size);
-        int i = 0;
-        std::generate(
-            result.begin(), result.end(), [&i] { return (i++ * 37) % 1009; });
         return result;
     }
 

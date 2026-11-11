@@ -1,4 +1,4 @@
-//  Copyright (c) 2026 Pratyksh Gupta
+//  Copyright (c) 2026 the-ivii
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -36,8 +36,8 @@ struct legacy_future_algorithm
 
     template <typename ExPolicy>
     static hpx::parallel::util::detail::algorithm_result_t<ExPolicy, int>
-    parallel(ExPolicy&&, std::shared_ptr<std::atomic<int>> calls,
-        failure_mode mode)
+    parallel(
+        ExPolicy&&, std::shared_ptr<std::atomic<int>> calls, failure_mode mode)
     {
         ++*calls;
 
@@ -66,8 +66,7 @@ struct value_sender_void_algorithm
     }
 
     template <typename ExPolicy>
-    static auto parallel(
-        ExPolicy&&, std::shared_ptr<std::atomic<int>> calls)
+    static auto parallel(ExPolicy&&, std::shared_ptr<std::atomic<int>> calls)
     {
         namespace ex = hpx::execution::experimental;
         return ex::then(ex::just(), [calls = HPX_MOVE(calls)]() mutable {
@@ -77,12 +76,29 @@ struct value_sender_void_algorithm
     }
 };
 
+struct empty_sender_void_algorithm
+  : hpx::parallel::detail::algorithm<empty_sender_void_algorithm>
+{
+    empty_sender_void_algorithm()
+      : algorithm("empty_sender_void_algorithm")
+    {
+    }
+
+    template <typename ExPolicy>
+    static auto parallel(ExPolicy&&, std::shared_ptr<std::atomic<int>> calls)
+    {
+        namespace ex = hpx::execution::experimental;
+        return ex::then(
+            ex::just(), [calls = HPX_MOVE(calls)]() mutable { ++*calls; });
+    }
+};
+
 template <typename ExPolicy>
 void test_legacy_future_value(ExPolicy policy)
 {
     auto calls = std::make_shared<std::atomic<int>>(0);
-    auto sender = legacy_future_algorithm{}.call(
-        policy, calls, failure_mode::none);
+    auto sender =
+        legacy_future_algorithm{}.call(policy, calls, failure_mode::none);
 
     static_assert(sender_test::ex::is_sender_v<decltype(sender)>);
     HPX_TEST_EQ(calls->load(), 0);
@@ -93,8 +109,20 @@ void test_legacy_future_value(ExPolicy policy)
 }
 
 template <typename ExPolicy>
-void test_legacy_future_error(ExPolicy policy, failure_mode mode,
-    bool allocation_failure)
+void test_legacy_future_value_sync(ExPolicy policy)
+{
+    auto calls = std::make_shared<std::atomic<int>>(0);
+    auto result =
+        legacy_future_algorithm{}.call(policy, calls, failure_mode::none);
+
+    static_assert(!sender_test::ex::is_sender_v<decltype(result)>);
+    HPX_TEST_EQ(calls->load(), 1);
+    HPX_TEST_EQ(result, 42);
+}
+
+template <typename ExPolicy>
+void test_legacy_future_error(
+    ExPolicy policy, failure_mode mode, bool allocation_failure)
 {
     auto calls = std::make_shared<std::atomic<int>>(0);
     auto sender = legacy_future_algorithm{}.call(policy, calls, mode);
@@ -105,6 +133,37 @@ void test_legacy_future_error(ExPolicy policy, failure_mode mode,
     try
     {
         sender_test::wait(HPX_MOVE(sender));
+    }
+    catch (std::bad_alloc const&)
+    {
+        HPX_TEST(allocation_failure);
+        caught = true;
+    }
+    catch (hpx::exception_list const& errors)
+    {
+        HPX_TEST(!allocation_failure);
+        HPX_TEST_EQ(errors.size(), std::size_t{1});
+        caught = true;
+    }
+    catch (...)
+    {
+        HPX_TEST(false);
+    }
+
+    HPX_TEST(caught);
+    HPX_TEST_EQ(calls->load(), 1);
+}
+
+template <typename ExPolicy>
+void test_legacy_future_error_sync(
+    ExPolicy policy, failure_mode mode, bool allocation_failure)
+{
+    auto calls = std::make_shared<std::atomic<int>>(0);
+
+    bool caught = false;
+    try
+    {
+        legacy_future_algorithm{}.call(policy, calls, mode);
     }
     catch (std::bad_alloc const&)
     {
@@ -140,6 +199,24 @@ void test_void_sender_result(ExPolicy policy)
     HPX_TEST_EQ(calls->load(), 1);
 }
 
+template <typename ExPolicy>
+void test_empty_void_sender_result(ExPolicy policy)
+{
+    auto calls = std::make_shared<std::atomic<int>>(0);
+    using direct_sender_type =
+        decltype(empty_sender_void_algorithm::parallel(policy, calls));
+    auto sender = empty_sender_void_algorithm{}.call(policy, calls);
+
+    static_assert(sender_test::ex::is_sender_v<decltype(sender)>);
+    static_assert(std::is_same_v<std::decay_t<decltype(sender)>,
+        std::decay_t<direct_sender_type>>);
+    HPX_TEST_EQ(calls->load(), 0);
+
+    auto result = sender_test::wait(HPX_MOVE(sender));
+    static_assert(hpx::tuple_size_v<std::decay_t<decltype(*result)>> == 0);
+    HPX_TEST_EQ(calls->load(), 1);
+}
+
 int hpx_main()
 {
     namespace ex = sender_test::ex;
@@ -147,16 +224,30 @@ int hpx_main()
 
     auto executor = ex::explicit_scheduler_executor(
         ex::thread_pool_policy_scheduler(hpx::launch::async));
-    auto policy = par(task).on(executor);
+    auto task_policy = par(task).on(executor);
 
-    test_legacy_future_value(policy);
+    test_legacy_future_value(task_policy);
     test_legacy_future_error(
-        policy, failure_mode::immediate_exception, false);
+        task_policy, failure_mode::immediate_exception, false);
     test_legacy_future_error(
-        policy, failure_mode::immediate_bad_alloc, true);
-    test_legacy_future_error(policy, failure_mode::future_exception, false);
-    test_legacy_future_error(policy, failure_mode::future_bad_alloc, true);
-    test_void_sender_result(policy);
+        task_policy, failure_mode::immediate_bad_alloc, true);
+    test_legacy_future_error(
+        task_policy, failure_mode::future_exception, false);
+    test_legacy_future_error(task_policy, failure_mode::future_bad_alloc, true);
+    test_void_sender_result(task_policy);
+    test_empty_void_sender_result(task_policy);
+
+    test_legacy_future_value(par_unseq(task).on(executor));
+    auto sync_policy = par.on(executor);
+    test_legacy_future_value_sync(sync_policy);
+    test_legacy_future_error_sync(
+        sync_policy, failure_mode::immediate_exception, false);
+    test_legacy_future_error_sync(
+        sync_policy, failure_mode::immediate_bad_alloc, true);
+    test_legacy_future_error_sync(
+        sync_policy, failure_mode::future_exception, false);
+    test_legacy_future_error_sync(
+        sync_policy, failure_mode::future_bad_alloc, true);
 
     return hpx::local::finalize();
 }

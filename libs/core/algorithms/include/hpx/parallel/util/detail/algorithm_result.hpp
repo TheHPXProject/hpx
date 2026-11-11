@@ -232,8 +232,16 @@ namespace hpx::parallel::util::detail {
             namespace ex = hpx::execution::experimental;
             if constexpr (ex::is_sender_v<T_>)
             {
-                // Public void algorithms must not expose internal results.
-                return ex::then(HPX_FORWARD(T_, t), [](auto&&...) noexcept {});
+                if constexpr (ex::sender_of<T_, ex::set_value_t()>)
+                {
+                    return HPX_FORWARD(T_, t);
+                }
+                else
+                {
+                    // Public void algorithms must not expose internal results.
+                    return ex::then(
+                        HPX_FORWARD(T_, t), [](auto&&...) noexcept {});
+                }
             }
             else
             {
