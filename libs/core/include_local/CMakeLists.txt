@@ -33,7 +33,6 @@ set(include_local_headers
     hpx/experimental/run_on_all.hpp
     hpx/experimental/sandbox.hpp
     hpx/experimental/scope.hpp
-    hpx/experimental/task.hpp
     hpx/experimental/task_group.hpp
 )
 

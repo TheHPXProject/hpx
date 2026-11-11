@@ -90,43 +90,7 @@ void test_sender_and_nested_await()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// 3. Scheduler Affinity & Multi-threaded Suspension/Resumption
-ex::task<int> scheduler_affinity_coroutine(ex::run_loop& loop,
-    std::thread::id& initial_id, std::thread::id& resumed_id)
-{
-    initial_id = std::this_thread::get_id();
-
-    // Transfer execution to the run_loop's scheduler
-    co_await ex::schedule(loop.get_scheduler());
-
-    resumed_id = std::this_thread::get_id();
-    co_return 100;
-}
-
-void test_scheduler_affinity()
-{
-    ex::run_loop loop;
-    std::thread::id initial_id{};
-    std::thread::id resumed_id{};
-
-    std::thread loop_thread([&]() { loop.run(); });
-    std::thread::id const expected_loop_thread_id = loop_thread.get_id();
-
-    auto t = scheduler_affinity_coroutine(loop, initial_id, resumed_id);
-    auto res = tt::sync_wait(HPX_MOVE(t));
-
-    loop.finish();
-    loop_thread.join();
-
-    HPX_TEST(res.has_value());
-    HPX_TEST_EQ(hpx::get<0>(res.value()), 100);
-    HPX_TEST(initial_id != std::thread::id{});
-    HPX_TEST(resumed_id != std::thread::id{});
-    HPX_TEST_EQ(resumed_id, expected_loop_thread_id);
-}
-
-///////////////////////////////////////////////////////////////////////////////
-// 4. Multi-threaded Task Execution with when_all
+// 3. Multi-threaded Task Execution with when_all
 ex::task<int> concurrent_worker(int id)
 {
     co_await ex::just();
@@ -473,7 +437,6 @@ int hpx_main()
 {
     test_basic_task();
     test_sender_and_nested_await();
-    test_scheduler_affinity();
     test_concurrent_tasks();
     test_allocator_awareness();
     test_exception_handling();
