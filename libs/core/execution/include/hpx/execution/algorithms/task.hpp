@@ -150,12 +150,23 @@ namespace hpx::execution::experimental {
         template <typename T>
         struct task_promise_base
         {
+            using storage_type = std::conditional_t<std::is_reference_v<T>,
+                std::add_pointer_t<T>, T>;
+
             void return_value(T val)
             {
-                data_.template emplace<1>(HPX_MOVE(val));
+                if constexpr (std::is_reference_v<T>)
+                {
+                    data_.template emplace<1>(std::addressof(val));
+                }
+                else
+                {
+                    data_.template emplace<1>(HPX_MOVE(val));
+                }
             }
 
-            std::variant<std::monostate, T, std::exception_ptr> data_{};
+            std::variant<std::monostate, storage_type, std::exception_ptr>
+                data_{};
         };
 
         template <>
@@ -477,6 +488,13 @@ namespace hpx::execution::experimental {
                         hpx::execution::experimental::set_value(
                             HPX_MOVE(rcvr_));
                     }
+                    else if constexpr (std::is_reference_v<T>)
+                    {
+                        auto* ptr = std::get<1>(HPX_MOVE(coro.promise().data_));
+                        coro.destroy();
+                        hpx::execution::experimental::set_value(
+                            HPX_MOVE(rcvr_), static_cast<T>(*ptr));
+                    }
                     else
                     {
                         auto val = std::get<1>(HPX_MOVE(coro.promise().data_));
@@ -715,7 +733,15 @@ namespace hpx::execution::experimental {
 
                 if constexpr (!std::is_void_v<T>)
                 {
-                    return std::get<1>(HPX_MOVE(coro.promise().data_));
+                    if constexpr (std::is_reference_v<T>)
+                    {
+                        return static_cast<T>(
+                            *std::get<1>(coro.promise().data_));
+                    }
+                    else
+                    {
+                        return std::get<1>(HPX_MOVE(coro.promise().data_));
+                    }
                 }
             }
         };

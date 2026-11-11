@@ -433,6 +433,36 @@ void test_cancellation()
     }
 }
 
+ex::task<int&> reference_coroutine(int& val)
+{
+    co_return val;
+}
+
+ex::task<void> consumer_coroutine(int& val)
+{
+    int& r = co_await reference_coroutine(val);
+    HPX_TEST_EQ(&r, &val);
+    r = 456;
+}
+
+void test_reference_task()
+{
+    int val = 123;
+    int* received_ptr = nullptr;
+    auto t1 = reference_coroutine(val) | ex::then([&](int& r) {
+        received_ptr = &r;
+        HPX_TEST_EQ(r, 123);
+    });
+    auto res1 = tt::sync_wait(HPX_MOVE(t1));
+    HPX_TEST(res1.has_value());
+    HPX_TEST_EQ(received_ptr, &val);
+
+    auto t2 = consumer_coroutine(val);
+    auto res2 = tt::sync_wait(HPX_MOVE(t2));
+    HPX_TEST(res2.has_value());
+    HPX_TEST_EQ(val, 456);
+}
+
 int hpx_main()
 {
     test_basic_task();
@@ -441,6 +471,7 @@ int hpx_main()
     test_allocator_awareness();
     test_exception_handling();
     test_cancellation();
+    test_reference_task();
 
     return hpx::local::finalize();
 }
