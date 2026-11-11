@@ -319,11 +319,9 @@ namespace hpx::execution::experimental {
                 }
 
                 template <typename Tag>
-                    requires requires(Tag tag, TaskEnv const& env) {
-                        tag(env);
-                    }
-                decltype(auto) query(Tag tag) const noexcept(
-                    noexcept(tag(promise_->env_)))
+                    requires requires(Tag tag, TaskEnv const& env) { tag(env); }
+                decltype(auto) query(Tag tag) const
+                    noexcept(noexcept(tag(promise_->env_)))
                 {
                     return tag(promise_->env_);
                 }
