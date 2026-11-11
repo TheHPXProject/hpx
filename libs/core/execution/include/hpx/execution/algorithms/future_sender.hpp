@@ -215,7 +215,7 @@ namespace hpx::execution::experimental::detail {
         }
     };
 
-    template <typename Future>
+    HPX_CXX_CORE_EXPORT template <typename Future>
     struct future_sender
     {
         using sender_concept = hpx::execution::experimental::sender_t;
