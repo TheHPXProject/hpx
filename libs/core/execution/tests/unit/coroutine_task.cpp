@@ -229,9 +229,56 @@ ex::task<int> throwing_coroutine()
 ex::task<int> yielding_error_coroutine()
 {
     co_await ex::just();
-    co_yield ex::with_error(std::runtime_error("yielded error"));
+    co_yield ex::with_error(
+        std::make_exception_ptr(std::runtime_error("yielded error")));
     co_return 0;
 }
+
+struct custom_error_type
+{
+    int code;
+};
+
+struct custom_error_task_env
+{
+    using error_types = ex::completion_signatures<
+        ex::set_error_t(custom_error_type),
+        ex::set_error_t(std::exception_ptr)>;
+};
+
+ex::task<int, custom_error_task_env> yielding_custom_error_coroutine()
+{
+    co_await ex::just();
+    co_yield ex::with_error(custom_error_type{123});
+    co_return 0;
+}
+
+struct test_custom_error_receiver
+{
+    using receiver_concept = ex::receiver_t;
+    bool* error_called_;
+    int* error_code_;
+
+    void set_value(int) noexcept {}
+    void set_stopped() noexcept {}
+
+    void set_error(custom_error_type err) noexcept
+    {
+        *error_called_ = true;
+        *error_code_ = err.code;
+    }
+
+    void set_error(std::exception_ptr) noexcept {}
+
+    struct env
+    {
+    };
+
+    env get_env() const noexcept
+    {
+        return {};
+    }
+};
 
 void test_exception_handling()
 {
@@ -252,7 +299,7 @@ void test_exception_handling()
     }
     HPX_TEST(caught_exception);
 
-    // Test co_yield with_error
+    // Test co_yield with_error with std::exception_ptr
     bool caught_yield_error = false;
     try
     {
@@ -269,6 +316,18 @@ void test_exception_handling()
         HPX_TEST(false);
     }
     HPX_TEST(caught_yield_error);
+
+    // Test co_yield with_error with custom typed error via connect/start
+    {
+        bool error_called = false;
+        int error_code = 0;
+        auto t = yielding_custom_error_coroutine();
+        auto op = ex::connect(
+            HPX_MOVE(t), test_custom_error_receiver{&error_called, &error_code});
+        ex::start(op);
+        HPX_TEST(error_called);
+        HPX_TEST_EQ(error_code, 123);
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////

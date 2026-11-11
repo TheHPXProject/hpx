@@ -20,6 +20,7 @@
 #include <memory>
 #include <new>
 #include <optional>
+#include <system_error>
 #include <type_traits>
 #include <utility>
 #include <variant>
@@ -54,7 +55,7 @@ namespace hpx::execution::experimental {
 
     ///////////////////////////////////////////////////////////////////////////
     // with_error: P3552 error yield value wrapper
-    template <typename Error>
+    HPX_CXX_CORE_EXPORT template <typename Error>
     struct with_error
     {
         using type = std::decay_t<Error>;
@@ -62,7 +63,7 @@ namespace hpx::execution::experimental {
     };
 
     template <typename Error>
-    with_error(Error) -> with_error<Error>;
+    HPX_CXX_CORE_EXPORT with_error(Error) -> with_error<Error>;
 
     HPX_CXX_CORE_EXPORT template <typename T = void,
         typename TaskEnv = default_task_environment>
@@ -135,6 +136,65 @@ namespace hpx::execution::experimental {
                 hpx::execution::experimental::completion_signatures<
                     hpx::execution::experimental::set_error_t(
                         std::exception_ptr)>>::type;
+        };
+
+        ///////////////////////////////////////////////////////////////////////
+        // Error extraction and matching helpers for P3552R3 task
+        template <typename Sig>
+        using error_variant_t = stdexec::__error_types_t<Sig,
+            stdexec::__q<std::variant>, stdexec::__q1<std::decay_t>>;
+
+        template <typename Error, typename ErrorVariant>
+        struct find_matching_error;
+
+        template <typename Error, typename First, typename... Rest>
+        struct find_matching_error<Error, std::variant<First, Rest...>>
+        {
+            using type = std::conditional_t<std::is_convertible_v<Error, First>,
+                First,
+                typename find_matching_error<Error,
+                    std::variant<Rest...>>::type>;
+        };
+
+        template <typename Error>
+        struct find_matching_error<Error, std::variant<>>
+        {
+            using type = void;
+        };
+
+        template <typename Error, typename Sig>
+        using matching_error_t =
+            typename find_matching_error<Error, error_variant_t<Sig>>::type;
+
+        template <typename Error, typename Sig>
+        inline constexpr bool is_valid_task_error_v =
+            !std::is_same_v<matching_error_t<Error, Sig>, void>;
+
+        template <typename Error, typename Sig>
+        concept valid_task_error = is_valid_task_error_v<Error, Sig>;
+
+        template <typename Sig>
+        inline constexpr bool error_types_contain_exception_ptr_v =
+            stdexec::__mapply<stdexec::__mcontains<std::exception_ptr>,
+                error_variant_t<Sig>>::value;
+
+        struct throw_task_error_fn
+        {
+            template <typename Error>
+            [[noreturn]] void operator()(Error&& e) const
+            {
+                throw static_cast<Error&&>(e);
+            }
+
+            [[noreturn]] void operator()(std::error_code const& ec) const
+            {
+                throw std::system_error(ec);
+            }
+
+            [[noreturn]] void operator()(std::exception_ptr const& ep) const
+            {
+                std::rethrow_exception(ep);
+            }
         };
 
         ///////////////////////////////////////////////////////////////////////
@@ -255,12 +315,13 @@ namespace hpx::execution::experimental {
         };
 
         ///////////////////////////////////////////////////////////////////////
-        // promise_base: return value storage specialization
-        template <typename T>
+        // promise_base: return value and error storage specialization
+        template <typename T, typename ErrorTypes>
         struct task_promise_base
         {
             using storage_type = std::conditional_t<std::is_reference_v<T>,
                 std::add_pointer_t<T>, T>;
+            using error_variant_type = error_variant_t<ErrorTypes>;
 
             void return_value(T val)
             {
@@ -274,23 +335,24 @@ namespace hpx::execution::experimental {
                 }
             }
 
-            std::variant<std::monostate, storage_type, std::exception_ptr>
+            std::variant<std::monostate, storage_type, error_variant_type>
                 data_{};
         };
 
-        template <>
-        struct task_promise_base<void>
+        template <typename ErrorTypes>
+        struct task_promise_base<void, ErrorTypes>
         {
             struct void_type
             {
             };
+            using error_variant_type = error_variant_t<ErrorTypes>;
 
             void return_void() noexcept
             {
                 data_.template emplace<1>(void_type{});
             }
 
-            std::variant<std::monostate, void_type, std::exception_ptr> data_{};
+            std::variant<std::monostate, void_type, error_variant_type> data_{};
         };
 
         ///////////////////////////////////////////////////////////////////////
@@ -321,7 +383,7 @@ namespace hpx::execution::experimental {
         HPX_CXX_CORE_EXPORT template <typename T,
             typename TaskEnv = default_task_environment>
         struct task_promise
-          : task_promise_base<T>
+          : task_promise_base<T, typename task_env_traits<TaskEnv>::error_types>
           , hpx::execution::experimental::with_awaitable_senders<
                 task_promise<T, TaskEnv>>
         {
@@ -330,6 +392,7 @@ namespace hpx::execution::experimental {
             using scheduler_type = typename traits_type::scheduler_type;
             using stop_source_type = typename traits_type::stop_source_type;
             using error_types = typename traits_type::error_types;
+            using error_variant_type = error_variant_t<error_types>;
 
             task_operation_base* state_{nullptr};
             bool stopped_{false};
@@ -374,7 +437,16 @@ namespace hpx::execution::experimental {
 
             void unhandled_exception() noexcept
             {
-                this->data_.template emplace<2>(std::current_exception());
+                if constexpr (!error_types_contain_exception_ptr_v<error_types>)
+                {
+                    std::terminate();
+                }
+                else
+                {
+                    this->data_.template emplace<2>(error_variant_type(
+                        std::in_place_type<std::exception_ptr>,
+                        std::current_exception()));
+                }
             }
 
             hpx::coroutine_handle<> unhandled_stopped() noexcept
@@ -388,18 +460,13 @@ namespace hpx::execution::experimental {
             }
 
             template <typename Error>
+                requires valid_task_error<Error, error_types>
             auto yield_value(with_error<Error> e) noexcept
             {
-                if constexpr (std::is_same_v<std::decay_t<Error>,
-                                  std::exception_ptr>)
-                {
-                    this->data_.template emplace<2>(HPX_MOVE(e.error));
-                }
-                else
-                {
-                    this->data_.template emplace<2>(
-                        std::make_exception_ptr(HPX_MOVE(e.error)));
-                }
+                using target_error_t = matching_error_t<Error, error_types>;
+                this->data_.template emplace<2>(
+                    error_variant_type(std::in_place_type<target_error_t>,
+                        HPX_FORWARD(decltype(e.error), e.error)));
                 return final_awaiter{};
             }
 
@@ -659,10 +726,16 @@ namespace hpx::execution::experimental {
                 }
                 else if (coro.promise().data_.index() == 2)
                 {
-                    auto ep = std::get<2>(HPX_MOVE(coro.promise().data_));
+                    auto err_variant =
+                        std::get<2>(HPX_MOVE(coro.promise().data_));
                     coro.destroy();
-                    hpx::execution::experimental::set_error(
-                        HPX_MOVE(rcvr_), HPX_MOVE(ep));
+                    std::visit(
+                        [this](auto&& err) {
+                            hpx::execution::experimental::set_error(
+                                HPX_MOVE(rcvr_),
+                                HPX_FORWARD(decltype(err), err));
+                        },
+                        HPX_MOVE(err_variant));
                 }
                 else
                 {
@@ -760,21 +833,22 @@ namespace hpx::execution::experimental {
         static consteval auto get_completion_signatures(
             Self&&, Env&&...) noexcept
         {
+            using error_types = typename promise_type::error_types;
             if constexpr (std::is_void_v<T>)
             {
-                return hpx::execution::experimental::completion_signatures<
-                    hpx::execution::experimental::set_value_t(),
-                    hpx::execution::experimental::set_error_t(
-                        std::exception_ptr),
-                    hpx::execution::experimental::set_stopped_t()>{};
+                return stdexec::__concat_completion_signatures_t<
+                    hpx::execution::experimental::completion_signatures<
+                        hpx::execution::experimental::set_value_t(),
+                        hpx::execution::experimental::set_stopped_t()>,
+                    error_types>{};
             }
             else
             {
-                return hpx::execution::experimental::completion_signatures<
-                    hpx::execution::experimental::set_value_t(T),
-                    hpx::execution::experimental::set_error_t(
-                        std::exception_ptr),
-                    hpx::execution::experimental::set_stopped_t()>{};
+                return stdexec::__concat_completion_signatures_t<
+                    hpx::execution::experimental::completion_signatures<
+                        hpx::execution::experimental::set_value_t(T),
+                        hpx::execution::experimental::set_stopped_t()>,
+                    error_types>{};
             }
         }
 
@@ -944,7 +1018,8 @@ namespace hpx::execution::experimental {
 
                 if (coro.promise().data_.index() == 2)
                 {
-                    std::rethrow_exception(
+                    std::visit(
+                        detail::throw_task_error_fn{},
                         std::get<2>(HPX_MOVE(coro.promise().data_)));
                 }
 
