@@ -79,6 +79,11 @@ namespace hpx::detail {
     {
         hpx::distributed::barrier::get_global_barrier().detach();
     }
+
+    static void register_global_barrier_detach()
+    {
+        register_shutdown_function(&detach_global_barrier);
+    }
 #endif
 
     ///////////////////////////////////////////////////////////////////////////
@@ -150,7 +155,7 @@ namespace hpx::detail {
 #endif
 
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
-        register_pre_shutdown_function(&detach_global_barrier);
+        register_pre_shutdown_function(&register_global_barrier_detach);
 #endif
 
         using components::stubs::runtime_support;
