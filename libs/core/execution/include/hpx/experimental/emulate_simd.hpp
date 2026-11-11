@@ -326,11 +326,10 @@ namespace hpx::datapar::experimental {
             return *this;
         }
 
-        auto operator++(int)
+        simd operator++(int)
         {
             auto vec_copy = *this;
-            std::transform(vec.begin(), vec.end(), vec_copy.begin(),
-                [](T x) { return x + T(1); });
+            ++(*this);
             return vec_copy;
         }
 
@@ -341,11 +340,10 @@ namespace hpx::datapar::experimental {
             return *this;
         }
 
-        auto operator--(int)
+        simd operator--(int)
         {
             auto vec_copy = *this;
-            std::transform(vec.begin(), vec.end(), vec_copy.begin(),
-                [](T x) { return x - T(1); });
+            --(*this);
             return vec_copy;
         }
 
@@ -357,7 +355,7 @@ namespace hpx::datapar::experimental {
         simd operator-() const
         {
             auto vec_copy = *this;
-            std::transform(vec.begin(), vec.end(), vec_copy.begin(),
+            std::transform(vec.begin(), vec.end(), vec_copy.vec.begin(),
                 [](T x) { return -x; });
             return vec_copy;
         }
