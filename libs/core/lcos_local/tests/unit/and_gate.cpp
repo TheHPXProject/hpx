@@ -14,6 +14,7 @@
 
 #include <atomic>
 #include <cstddef>
+#include <memory>
 #include <mutex>
 #include <utility>
 #include <vector>
@@ -25,6 +26,22 @@
 // to wake up synchronize() waiters only accepts
 // std::unique_lock<hpx::spinlock>, so that is the lock type used throughout.
 using lock_type = std::unique_lock<hpx::spinlock>;
+
+///////////////////////////////////////////////////////////////////////////////
+void test_conditional_cv_releases_predicate()
+{
+    hpx::lcos::local::conditional_cv cv;
+    hpx::spinlock mtx;
+    auto capture = std::make_shared<int>(0);
+    std::weak_ptr<int> weak_capture = capture;
+
+    {
+        lock_type l(mtx);
+        cv.wait([capture = std::move(capture)] { return true; }, l);
+    }
+
+    HPX_TEST(weak_capture.expired());
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 void test_get_future_and_set()
@@ -409,6 +426,7 @@ void test_repeated_generations()
 ///////////////////////////////////////////////////////////////////////////////
 int hpx_main()
 {
+    test_conditional_cv_releases_predicate();
     test_get_future_and_set();
     test_get_shared_future_and_set();
     test_set_error_paths();
