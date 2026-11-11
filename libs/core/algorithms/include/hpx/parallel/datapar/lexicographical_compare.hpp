@@ -33,14 +33,14 @@ namespace hpx::parallel::detail {
     inline constexpr bool is_lexicographical_compare_datapar_compatible_v =
         requires(std::decay_t<Pred>& pred, std::decay_t<Proj1>& proj1,
             std::decay_t<Proj2>& proj2, Vector1& v1, Vector2& v2) {
-            requires !std::is_convertible_v<
+            requires(!std::is_convertible_v<
                 std::decay_t<decltype(HPX_INVOKE(
                     pred, HPX_INVOKE(proj1, v1), HPX_INVOKE(proj2, v2)))>,
-                bool>;
-            requires !std::is_convertible_v<
+                bool>);
+            requires(!std::is_convertible_v<
                 std::decay_t<decltype(HPX_INVOKE(
                     pred, HPX_INVOKE(proj2, v2), HPX_INVOKE(proj1, v1)))>,
-                bool>;
+                bool>);
             hpx::parallel::traits::find_first_of(
                 HPX_INVOKE(pred, HPX_INVOKE(proj1, v1), HPX_INVOKE(proj2, v2)));
             hpx::parallel::traits::find_first_of(
