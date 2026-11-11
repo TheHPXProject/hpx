@@ -26,6 +26,32 @@
 
 namespace hpx::execution::experimental {
 
+    HPX_CXX_CORE_EXPORT struct task_scheduler : stdexec::task_scheduler
+    {
+        using stdexec::task_scheduler::task_scheduler;
+        task_scheduler()
+          : stdexec::task_scheduler(stdexec::inline_scheduler{})
+        {
+        }
+    };
+
+    HPX_CXX_CORE_EXPORT struct default_task_environment
+    {
+        using allocator_type = std::allocator<std::byte>;
+        using scheduler_type = hpx::execution::experimental::task_scheduler;
+        using stop_source_type = hpx::experimental::in_place_stop_source;
+        using error_types =
+            hpx::execution::experimental::completion_signatures<
+                hpx::execution::experimental::set_error_t(std::exception_ptr)>;
+
+        default_task_environment() = default;
+
+        template <typename Env>
+        constexpr explicit default_task_environment(Env const&) noexcept
+        {
+        }
+    };
+
     ///////////////////////////////////////////////////////////////////////////
     // with_error: P3552 error yield value wrapper
     template <typename Error>
@@ -39,10 +65,77 @@ namespace hpx::execution::experimental {
     with_error(Error) -> with_error<Error>;
 
     HPX_CXX_CORE_EXPORT template <typename T = void,
-        typename TaskEnv = hpx::execution::experimental::empty_env>
+        typename TaskEnv = default_task_environment>
     class [[nodiscard]] task;
 
     namespace detail {
+
+        template <typename Env, typename Default, typename = void>
+        struct env_allocator
+        {
+            using type = Default;
+        };
+
+        template <typename Env, typename Default>
+        struct env_allocator<Env, Default,
+            std::void_t<typename Env::allocator_type>>
+        {
+            using type = typename Env::allocator_type;
+        };
+
+        template <typename Env, typename Default, typename = void>
+        struct env_scheduler
+        {
+            using type = Default;
+        };
+
+        template <typename Env, typename Default>
+        struct env_scheduler<Env, Default,
+            std::void_t<typename Env::scheduler_type>>
+        {
+            using type = typename Env::scheduler_type;
+        };
+
+        template <typename Env, typename Default, typename = void>
+        struct env_stop_source
+        {
+            using type = Default;
+        };
+
+        template <typename Env, typename Default>
+        struct env_stop_source<Env, Default,
+            std::void_t<typename Env::stop_source_type>>
+        {
+            using type = typename Env::stop_source_type;
+        };
+
+        template <typename Env, typename Default, typename = void>
+        struct env_error_types
+        {
+            using type = Default;
+        };
+
+        template <typename Env, typename Default>
+        struct env_error_types<Env, Default,
+            std::void_t<typename Env::error_types>>
+        {
+            using type = typename Env::error_types;
+        };
+
+        template <typename TaskEnv>
+        struct task_env_traits
+        {
+            using allocator_type =
+                typename env_allocator<TaskEnv, std::allocator<std::byte>>::type;
+            using scheduler_type = typename env_scheduler<TaskEnv,
+                hpx::execution::experimental::task_scheduler>::type;
+            using stop_source_type = typename env_stop_source<TaskEnv,
+                hpx::experimental::in_place_stop_source>::type;
+            using error_types = typename env_error_types<TaskEnv,
+                hpx::execution::experimental::completion_signatures<
+                    hpx::execution::experimental::set_error_t(
+                        std::exception_ptr)>>::type;
+        };
 
         ///////////////////////////////////////////////////////////////////////
         // Memory block for P3552 coroutine frame allocator alignment
@@ -210,18 +303,25 @@ namespace hpx::execution::experimental {
         ///////////////////////////////////////////////////////////////////////
         // task_promise: C++26 P3552 coroutine promise type
         HPX_CXX_CORE_EXPORT template <typename T,
-            typename TaskEnv = hpx::execution::experimental::empty_env>
+            typename TaskEnv = default_task_environment>
         struct task_promise
           : task_promise_base<T>
           , hpx::execution::experimental::with_awaitable_senders<
                 task_promise<T, TaskEnv>>
         {
+            using traits_type = task_env_traits<TaskEnv>;
+            using allocator_type = typename traits_type::allocator_type;
+            using scheduler_type = typename traits_type::scheduler_type;
+            using stop_source_type = typename traits_type::stop_source_type;
+            using error_types = typename traits_type::error_types;
+
             task_operation_base* state_{nullptr};
             bool stopped_{false};
-            hpx::experimental::in_place_stop_source stop_source_{};
-            hpx::experimental::in_place_stop_token stop_token_{
+            stop_source_type stop_source_{};
+            decltype(stop_source_.get_token()) stop_token_{
                 stop_source_.get_token()};
             [[no_unique_address]] TaskEnv env_{};
+            scheduler_type scheduler_{};
 
             task<T, TaskEnv> get_return_object() noexcept;
 
@@ -289,48 +389,26 @@ namespace hpx::execution::experimental {
                     }
                     else
                     {
-                        return std::allocator<std::byte>{};
+                        return typename task_promise::allocator_type{};
                     }
                 }
 
                 auto query(hpx::execution::experimental::get_scheduler_t)
                     const noexcept
                 {
-                    if constexpr (requires {
-                                      hpx::execution::experimental::
-                                          get_scheduler(promise_->env_);
-                                  })
-                    {
-                        return hpx::execution::experimental::get_scheduler(
-                            promise_->env_);
-                    }
-                    else
-                    {
-                        return stdexec::task_scheduler(
-                            stdexec::inline_scheduler{});
-                    }
+                    return promise_->scheduler_;
                 }
 
                 auto query(hpx::execution::experimental::get_start_scheduler_t)
                     const noexcept
                 {
-                    if constexpr (requires {
-                                      hpx::execution::experimental::
-                                          get_start_scheduler(promise_->env_);
-                                  })
-                    {
-                        return hpx::execution::experimental::
-                            get_start_scheduler(promise_->env_);
-                    }
-                    else
-                    {
-                        return stdexec::task_scheduler(
-                            stdexec::inline_scheduler{});
-                    }
+                    return promise_->scheduler_;
                 }
 
                 template <typename Tag>
-                    requires requires(Tag tag, TaskEnv const& env) { tag(env); }
+                    requires(bool(hpx::execution::experimental::
+                                 forwarding_query(Tag{})) &&
+                        requires(Tag tag, TaskEnv const& env) { tag(env); })
                 decltype(auto) query(Tag tag) const
                     noexcept(noexcept(tag(promise_->env_)))
                 {
@@ -424,6 +502,41 @@ namespace hpx::execution::experimental {
               : coro_(coro)
               , rcvr_(HPX_FORWARD(Receiver, rcvr))
             {
+                coro_.promise().state_ = this;
+
+                if constexpr (std::is_constructible_v<TaskEnv,
+                                  decltype(hpx::execution::experimental::get_env(
+                                      rcvr_))>)
+                {
+                    coro_.promise().env_ =
+                        TaskEnv(hpx::execution::experimental::get_env(rcvr_));
+                }
+                else
+                {
+                    coro_.promise().env_ = TaskEnv{};
+                }
+
+                if constexpr (requires {
+                                  hpx::execution::experimental::get_scheduler(
+                                      hpx::execution::experimental::get_env(
+                                          rcvr_));
+                              })
+                {
+                    if constexpr (std::is_constructible_v<
+                                      typename promise_type::scheduler_type,
+                                      decltype(hpx::execution::experimental::
+                                              get_scheduler(
+                                                  hpx::execution::
+                                                      experimental::get_env(
+                                                          rcvr_)))>)
+                    {
+                        coro_.promise().scheduler_ =
+                            typename promise_type::scheduler_type(
+                                hpx::execution::experimental::get_scheduler(
+                                    hpx::execution::experimental::get_env(
+                                        rcvr_)));
+                    }
+                }
             }
 
             task_operation_state(task_operation_state&&) = delete;
@@ -684,6 +797,39 @@ namespace hpx::execution::experimental {
                             stop_callback_.emplace(token,
                                 detail::forward_task_stop_request{
                                     coro_.promise().stop_source_});
+                        }
+                    }
+                }
+
+                // 3. Forward parent promise's environment and scheduler
+                if constexpr (requires { parent.promise().get_env(); })
+                {
+                    if constexpr (std::is_constructible_v<TaskEnv,
+                                      decltype(parent.promise().get_env())>)
+                    {
+                        coro_.promise().env_ =
+                            TaskEnv(parent.promise().get_env());
+                    }
+
+                    if constexpr (requires {
+                                      hpx::execution::experimental::
+                                          get_scheduler(
+                                              parent.promise().get_env());
+                                  })
+                    {
+                        if constexpr (std::is_constructible_v<
+                                          typename promise_type::
+                                              scheduler_type,
+                                          decltype(hpx::execution::
+                                                  experimental::get_scheduler(
+                                                      parent.promise()
+                                                          .get_env()))>)
+                        {
+                            coro_.promise().scheduler_ =
+                                typename promise_type::scheduler_type(
+                                    hpx::execution::experimental::
+                                        get_scheduler(
+                                            parent.promise().get_env()));
                         }
                     }
                 }

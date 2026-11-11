@@ -493,6 +493,69 @@ void test_reference_task()
     HPX_TEST_EQ(val, 456);
 }
 
+///////////////////////////////////////////////////////////////////////////////
+// 9. Environment Traits and Query Forwarding (P3552R3)
+struct custom_task_env
+{
+    using allocator_type = std::allocator<int>;
+    using scheduler_type = ex::task_scheduler;
+    using stop_source_type = hpx::experimental::in_place_stop_source;
+};
+
+struct query_env
+{
+};
+
+inline constexpr struct my_forwarding_query_t : ex::forwarding_query_t
+{
+    constexpr int operator()(query_env const&) const noexcept
+    {
+        return 42;
+    }
+} my_forwarding_query{};
+
+inline constexpr struct my_non_forwarding_query_t
+{
+    constexpr int operator()(query_env const&) const noexcept
+    {
+        return 99;
+    }
+} my_non_forwarding_query{};
+
+ex::task<int, query_env> query_env_coroutine()
+{
+    co_return 10;
+}
+
+void test_environment_traits()
+{
+    using default_traits = ex::task<int>::promise_type::traits_type;
+    static_assert(std::is_same_v<default_traits::allocator_type,
+        std::allocator<std::byte>>);
+    static_assert(
+        std::is_same_v<default_traits::scheduler_type, ex::task_scheduler>);
+    static_assert(std::is_same_v<default_traits::stop_source_type,
+        hpx::experimental::in_place_stop_source>);
+
+    using custom_traits =
+        ex::task<int, custom_task_env>::promise_type::traits_type;
+    static_assert(
+        std::is_same_v<custom_traits::allocator_type, std::allocator<int>>);
+    static_assert(
+        std::is_same_v<custom_traits::scheduler_type, ex::task_scheduler>);
+
+    // Verify forwarding_query participation
+    using promise_t = ex::task<int, query_env>::promise_type;
+    static_assert(requires(promise_t::env_type const& e) {
+        e.query(my_forwarding_query);
+    });
+
+    auto t = query_env_coroutine();
+    auto res = tt::sync_wait(HPX_MOVE(t));
+    HPX_TEST(res.has_value());
+    HPX_TEST_EQ(hpx::get<0>(res.value()), 10);
+}
+
 int hpx_main()
 {
     test_basic_task();
@@ -502,6 +565,7 @@ int hpx_main()
     test_exception_handling();
     test_cancellation();
     test_reference_task();
+    test_environment_traits();
 
     return hpx::local::finalize();
 }
