@@ -347,6 +347,15 @@ Other data
 
 * **Frames**: calls to ``hpx::tracing::frame_mark`` in your code split the
   timeline into frames (see :ref:`tracy_own_code`).
+* **Plots**: performance counters printed with ``--hpx:print-counter`` (or
+  ``--hpx:print-counter-reset``) are sent to Tracy as plots, one plot per
+  counter, named with the full counter name (for example
+  ``/runtime{locality#0/total}/uptime``). One name can match several counters,
+  for example one for each worker thread, and each gets its own plot. A value
+  is added each time |hpx| queries the counter, by default once at shutdown.
+  Use ``--hpx:print-counter-interval`` to get more than one value. This also
+  works with ``--hpx:print-counter-destination=none``, which prints nothing.
+  Histogram counters and other counters with several values are not sent.
 * **Locks**: if |hpx| was built with :option:`HPX_WITH_TRACING_LOCK_EVENTS`
   set to ``ON`` (the default is ``OFF``), ``hpx::mutex``, ``hpx::spinlock``
   and ``hpx::util::spinlock`` are reported to Tracy as locks, which the

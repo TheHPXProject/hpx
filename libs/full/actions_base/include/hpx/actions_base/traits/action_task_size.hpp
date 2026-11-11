@@ -12,10 +12,10 @@
 namespace hpx::traits {
 
     ///////////////////////////////////////////////////////////////////////////
-    // Customization point for action task size. An action that binds a
-    // function given a size with hpx::threads::with_task_size has that size,
-    // other actions have none unless they are given one with
-    // HPX_ACTION_HAS_TASK_SIZE.
+    // Customization point for action task size. An action has the size given
+    // to it with HPX_ACTION_HAS_TASK_SIZE, else the size of the function it
+    // binds (from hpx::threads::with_task_size, or from a C++26 annotation if
+    // the action reads one), else none.
     HPX_CXX_EXPORT template <typename Action, typename Enable = void>
     struct action_task_size
     {

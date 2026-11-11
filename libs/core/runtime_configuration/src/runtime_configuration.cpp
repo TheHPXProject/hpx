@@ -176,6 +176,12 @@ namespace hpx::util {
             "max_idle_backoff_time = "
             "${HPX_MAX_IDLE_BACKOFF_TIME:" HPX_PP_STRINGIZE(
                 HPX_PP_EXPAND(HPX_IDLE_BACKOFF_TIME_MAX)) "}",
+            "min_idle_backoff_time = "
+            "${HPX_MIN_IDLE_BACKOFF_TIME:" HPX_PP_STRINGIZE(
+                HPX_PP_EXPAND(HPX_IDLE_BACKOFF_TIME_MIN)) "}",
+            "idle_backoff_steal_check_interval = "
+            "${HPX_IDLE_BACKOFF_STEAL_CHECK_INTERVAL:" HPX_PP_STRINGIZE(
+                HPX_PP_EXPAND(HPX_IDLE_BACKOFF_STEAL_CHECK_INTERVAL)) "}",
 #endif
             "default_scheduler_mode = ${HPX_DEFAULT_SCHEDULER_MODE}",
 

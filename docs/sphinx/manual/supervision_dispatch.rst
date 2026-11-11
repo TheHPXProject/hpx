@@ -452,6 +452,25 @@ kept, so dispatch to the evicted peer stays fenced until it is joined again.
 The failure-detection loop does not wait for the eviction to unregister the
 observers on the peer's locality, since that locality may be gone.
 
+A fenced peer can come back with a new epoch while the failure-detection loop
+evicts it. The eviction checks whether a lifecycle event of the peer was
+mirrored between its check of the shadow and the removal of the peer, and if
+one was, or is being mirrored right then, it does not remove the peer; the
+next sweep evicts it if its shadow is still terminal. A lifecycle event that
+arrives after the peer was removed is not mirrored at all, so the tombstone
+stays in place and the peer has to be joined again, as after any other
+eviction.
+
+This assumes that the shadow is changed only through this registry's
+mirroring, which holds for a remote peer joined by a single registry;
+discovery never joins the own locality. It does not hold for a registry that
+joined its own locality, whose lifecycle events update the shadow directly,
+before the observer that mirrors them runs, nor for several registries on one
+locality joining the same peer, which share its shadow. There, a new epoch
+that starts after the eviction checked the shadow can go unnoticed, and the
+peer is removed although its shadow is active again, staying unmonitored
+until it is joined again (:hpx-issue:`8030`).
+
 What this does and does not cover
 ---------------------------------
 

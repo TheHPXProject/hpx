@@ -22,6 +22,7 @@ set(tests
     minimal_findend
     mismatch_differently_sized_ranges
     num_cores
+    partial_sort_early_return
     prefetching_iterator
     reduce_3641
     reduce_with_auto_chunk_size

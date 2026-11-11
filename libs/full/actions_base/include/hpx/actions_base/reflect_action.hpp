@@ -18,6 +18,7 @@
 #include <hpx/actions_base/detail/invocation_count_registry.hpp>
 #include <hpx/actions_base/plain_action.hpp>
 #include <hpx/modules/format.hpp>
+#include <hpx/modules/functional.hpp>
 #include <hpx/modules/serialization.hpp>
 
 #include <cstddef>
@@ -139,6 +140,16 @@ namespace hpx::actions {
     public:
         static constexpr std::size_t arity = std::meta::parameters_of(F).size();
 
+#if defined(HPX_HAVE_CXX26_REFLECTION_ANNOTATIONS)
+        // The member function can give the action a size with an annotation,
+        // for instance [[=hpx::task_size::small_]]. HPX_ACTION_HAS_TASK_SIZE
+        // is not seen yet for the component action macros, see #8019.
+        static constexpr threads::task_size function_task_size() noexcept
+        {
+            return hpx::traits::detail::annotated_function_task_size<F>();
+        }
+#endif
+
         static std::string get_action_name(naming::address_type lva)
         {
             return hpx::util::format("component action({}) lva({})",
@@ -250,6 +261,16 @@ namespace hpx::actions {
 
         /// The actual function pointer
         static constexpr func_ptr_type func_ptr = [:F:];
+
+#if defined(HPX_HAVE_CXX26_REFLECTION_ANNOTATIONS)
+        // The function can give the action a size with an annotation, for
+        // instance [[=hpx::task_size::small_]]. HPX_ACTION_HAS_TASK_SIZE on
+        // reflect_action<F> itself, the type HPX_PLAIN_ACTION names, wins.
+        static constexpr threads::task_size function_task_size() noexcept
+        {
+            return hpx::traits::detail::annotated_function_task_size<F>();
+        }
+#endif
 
         /// Compile-time storage for the fully qualified action name
         static constexpr auto name_storage =

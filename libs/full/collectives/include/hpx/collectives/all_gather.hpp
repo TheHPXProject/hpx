@@ -342,7 +342,7 @@ namespace hpx::collectives {
                 return result;
             };
 
-            return fid.then(hpx::launch::sync, HPX_MOVE(all_gather_data));
+            return detail::then_on_communicator(fid, HPX_MOVE(all_gather_data));
         }
     }    // namespace detail
 
