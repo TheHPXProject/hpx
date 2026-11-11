@@ -226,12 +226,16 @@ def run_mpi(cmd, localities, verbose):
 # This is executing oshrun with the "-n" option set to the number of localities.
 # The UCX OSC component is requested (--mca osc ucx) and the symmetric heap
 # override (SMA_SYMMETRIC_SIZE) is forwarded, matching the configuration used
-# for the openshmem parcelport.
+# for the openshmem parcelport. UCX is restricted to its shared-memory
+# transports (UCX_TLS, default sm,self) so the tests need no network fabric;
+# set UCX_TLS in the environment to use another transport.
 def run_oshrun(cmd, localities, verbose):
     oshrun = os.environ.get('HPXRUN_OSHRUN', 'oshrun')
     sma_symmetric_size = os.environ.get('SMA_SYMMETRIC_SIZE', '1G')
+    ucx_tls = os.environ.get('UCX_TLS', 'sm,self')
     exec_cmd = [oshrun, '-n', str(localities), '--mca', 'osc', 'ucx',
-                '-x', 'SMA_SYMMETRIC_SIZE=' + sma_symmetric_size] + cmd
+                '-x', 'SMA_SYMMETRIC_SIZE=' + sma_symmetric_size,
+                '-x', 'UCX_TLS=' + ucx_tls] + cmd
     if verbose:
         print('Executing command: ' + ' '.join(exec_cmd))
     subproc(exec_cmd)
