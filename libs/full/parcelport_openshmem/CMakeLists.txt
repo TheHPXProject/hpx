@@ -13,6 +13,7 @@ hpx_setup_openshmem()
 
 set(parcelport_openshmem_headers
     hpx/parcelport_openshmem/locality.hpp
+    hpx/parcelport_openshmem/mailbox_array.hpp
     hpx/parcelport_openshmem/receiver.hpp
     hpx/parcelport_openshmem/receiver_connection.hpp
     hpx/parcelport_openshmem/sender.hpp
