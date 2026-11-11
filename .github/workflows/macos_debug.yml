@@ -35,11 +35,11 @@ jobs:
             -DHPX_WITH_TESTS=ON \
             -DHPX_WITH_SUPERVISION=ON \
             -DHPX_WITH_TESTS_MAX_THREADS_PER_LOCALITY=3 \
-            -DHPX_WITH_VERIFY_LOCKS=OFF \
+            -DHPX_WITH_VERIFY_LOCKS=ON \
             -DHPX_WITH_VERIFY_LOCKS_BACKTRACE=OFF \
             -DHPX_WITH_CHECK_MODULE_DEPENDENCIES=ON \
             -DHPX_WITH_CONTRACTS=ON \
-            -DHPX_WITH_CONTRACTS_MODE=OBSERVE \
+            -DHPX_WITH_CONTRACTS_MODE=ENFORCE \
             -DHPX_WITH_TASK_SIZE_DEFAULT_PARAMETERS=ON \
             -DHPX_WITH_TESTS_COMMAND_LINE=--hpx:queuing=local-priority-fifo-double
       base-targets: hpx_core core components
