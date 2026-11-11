@@ -217,6 +217,22 @@ namespace hpx::execution::experimental {
             }
         };
 
+        template <typename... Args>
+        struct has_allocator_arg : std::false_type
+        {
+        };
+
+        template <typename Alloc, typename... Rest>
+        struct has_allocator_arg<std::allocator_arg_t, Alloc, Rest...>
+          : std::true_type
+        {
+        };
+
+        template <typename First, typename... Rest>
+        struct has_allocator_arg<First, Rest...> : has_allocator_arg<Rest...>
+        {
+        };
+
         ///////////////////////////////////////////////////////////////////////
         // Forward stop request callback functor
         struct forward_task_stop_request
@@ -322,6 +338,27 @@ namespace hpx::execution::experimental {
                 stop_source_.get_token()};
             [[no_unique_address]] TaskEnv env_{};
             scheduler_type scheduler_{};
+            std::optional<allocator_type> alloc_{};
+            bool has_custom_alloc_{false};
+
+            task_promise() = default;
+
+            template <typename... Args>
+                requires (sizeof...(Args) > 0)
+            explicit task_promise(Args const&... args)
+            {
+                if constexpr (has_allocator_arg<Args...>::value)
+                {
+                    has_custom_alloc_ = true;
+                    if constexpr (std::is_constructible_v<allocator_type,
+                                      decltype(find_allocator<
+                                          Args...>::get(args...))>)
+                    {
+                        alloc_.emplace(
+                            find_allocator<Args...>::get(args...));
+                    }
+                }
+            }
 
             task<T, TaskEnv> get_return_object() noexcept;
 
@@ -379,17 +416,27 @@ namespace hpx::execution::experimental {
                 auto query(hpx::execution::experimental::get_allocator_t)
                     const noexcept
                 {
+                    if (promise_->alloc_.has_value())
+                    {
+                        return *promise_->alloc_;
+                    }
                     if constexpr (requires {
                                       hpx::execution::experimental::
                                           get_allocator(promise_->env_);
                                   })
                     {
-                        return hpx::execution::experimental::get_allocator(
-                            promise_->env_);
+                        return typename task_promise::allocator_type(
+                            hpx::execution::experimental::get_allocator(
+                                promise_->env_));
+                    }
+                    else if constexpr (std::is_default_constructible_v<
+                                           allocator_type>)
+                    {
+                        return typename task_promise::allocator_type{};
                     }
                     else
                     {
-                        return typename task_promise::allocator_type{};
+                        std::terminate();
                     }
                 }
 
@@ -535,6 +582,31 @@ namespace hpx::execution::experimental {
                                 hpx::execution::experimental::get_scheduler(
                                     hpx::execution::experimental::get_env(
                                         rcvr_)));
+                    }
+                }
+
+                if (!coro_.promise().has_custom_alloc_)
+                {
+                    if constexpr (requires {
+                                      hpx::execution::experimental::
+                                          get_allocator(
+                                              hpx::execution::experimental::
+                                                  get_env(rcvr_));
+                                  })
+                    {
+                        if constexpr (std::is_constructible_v<
+                                          typename promise_type::allocator_type,
+                                          decltype(hpx::execution::
+                                                  experimental::get_allocator(
+                                                      hpx::execution::
+                                                          experimental::get_env(
+                                                              rcvr_)))>)
+                        {
+                            coro_.promise().alloc_.emplace(
+                                hpx::execution::experimental::get_allocator(
+                                    hpx::execution::experimental::get_env(
+                                        rcvr_)));
+                        }
                     }
                 }
             }

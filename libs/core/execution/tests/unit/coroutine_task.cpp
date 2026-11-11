@@ -170,6 +170,19 @@ struct member_coro_class
     }
 };
 
+struct custom_alloc_env
+{
+    using allocator_type = test_counting_allocator<std::byte>;
+};
+
+ex::task<int, custom_alloc_env> coroutine_checking_allocator(
+    std::allocator_arg_t, test_counting_allocator<std::byte> alloc, int val)
+{
+    auto queried_alloc = co_await ex::get_allocator();
+    HPX_TEST(queried_alloc == alloc);
+    co_return val * 5;
+}
+
 void test_allocator_awareness()
 {
     test_alloc_state state{};
@@ -190,6 +203,14 @@ void test_allocator_awareness()
         auto res = tt::sync_wait(HPX_MOVE(t));
         HPX_TEST(res.has_value());
         HPX_TEST_EQ(hpx::get<0>(res.value()), 20);
+    }
+
+    // Test get_allocator query retrieves the exact allocator passed
+    {
+        auto t = coroutine_checking_allocator(std::allocator_arg, alloc, 3);
+        auto res = tt::sync_wait(HPX_MOVE(t));
+        HPX_TEST(res.has_value());
+        HPX_TEST_EQ(hpx::get<0>(res.value()), 15);
     }
 
     HPX_TEST(state.deallocated > 0);
