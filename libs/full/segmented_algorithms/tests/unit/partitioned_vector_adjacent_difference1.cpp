@@ -88,7 +88,7 @@ void adjacent_difference_tests(std::vector<hpx::id_type>& localities)
 
         std::vector<T> const expected{
             T(10), T(1), T(1), T(1), T(1), T(1), T(1), T(1)};
-        auto verify = [&]() {
+        auto verify_in_place_result = [&]() {
             auto result = in_place.begin();
             for (T value : expected)
             {
@@ -97,7 +97,7 @@ void adjacent_difference_tests(std::vector<hpx::id_type>& localities)
             }
         };
 
-        verify();
+        verify_in_place_result();
 
         auto reset = [&]() {
             auto current = in_place.begin();
@@ -110,13 +110,13 @@ void adjacent_difference_tests(std::vector<hpx::id_type>& localities)
         reset();
         hpx::adjacent_difference(hpx::execution::par, in_place.begin(),
             in_place.end(), in_place.begin(), std::minus<T>{});
-        verify();
+        verify_in_place_result();
 
         reset();
         hpx::adjacent_difference(hpx::execution::par(hpx::execution::task),
             in_place.begin(), in_place.end(), in_place.begin(), std::minus<T>{})
             .get();
-        verify();
+        verify_in_place_result();
     }
 
     {
@@ -163,7 +163,7 @@ void adjacent_difference_tests(std::vector<hpx::id_type>& localities)
             *it = value;
         }
 
-        auto verify = [&]() {
+        auto verify_partition_result = [&]() {
             auto result = out.begin();
             HPX_TEST_EQ(*result, T(0));
             ++result;
@@ -175,24 +175,24 @@ void adjacent_difference_tests(std::vector<hpx::id_type>& localities)
 
         hpx::adjacent_difference(
             hpx::execution::seq, src.begin(), src.end(), out.begin());
-        verify();
+        verify_partition_result();
 
         hpx::fill(hpx::execution::seq, out.begin(), out.end(), T(-1));
         hpx::adjacent_difference(hpx::execution::seq(hpx::execution::task),
             src.begin(), src.end(), out.begin())
             .get();
-        verify();
+        verify_partition_result();
 
         hpx::fill(hpx::execution::seq, out.begin(), out.end(), T(-1));
         hpx::adjacent_difference(
             hpx::execution::par, src.begin(), src.end(), out.begin());
-        verify();
+        verify_partition_result();
 
         hpx::fill(hpx::execution::seq, out.begin(), out.end(), T(-1));
         hpx::adjacent_difference(hpx::execution::par(hpx::execution::task),
             src.begin(), src.end(), out.begin())
             .get();
-        verify();
+        verify_partition_result();
     }
 
     std::size_t const length = 12;
