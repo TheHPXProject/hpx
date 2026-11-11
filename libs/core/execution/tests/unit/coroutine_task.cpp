@@ -342,10 +342,37 @@ struct test_stopped_receiver
 {
     using receiver_concept = ex::receiver_t;
     bool* stopped_called_;
+    bool* value_called_{nullptr};
+    int* value_{nullptr};
+    hpx::experimental::in_place_stop_token token_;
+
+    test_stopped_receiver(
+        bool* stopped_called, hpx::experimental::in_place_stop_token token)
+      : stopped_called_(stopped_called)
+      , token_(token)
+    {
+    }
+
+    test_stopped_receiver(bool* stopped_called, bool* value_called, int* value,
+        hpx::experimental::in_place_stop_token token)
+      : stopped_called_(stopped_called)
+      , value_called_(value_called)
+      , value_(value)
+      , token_(token)
+    {
+    }
 
     template <typename... Args>
-    void set_value(Args&&...) noexcept
+    void set_value(Args&&... args) noexcept
     {
+        if (value_called_)
+        {
+            *value_called_ = true;
+        }
+        if (value_ && sizeof...(args) == 1)
+        {
+            *value_ = (args, ...);
+        }
     }
 
     void set_error(std::exception_ptr) noexcept {}
@@ -365,8 +392,6 @@ struct test_stopped_receiver
         }
     };
 
-    hpx::experimental::in_place_stop_token token_;
-
     env get_env() const noexcept
     {
         return env{token_};
@@ -375,19 +400,24 @@ struct test_stopped_receiver
 
 void test_cancellation()
 {
-    // Initial pre-cancelled stop source
+    // Initial pre-cancelled stop source: task runs to completion and delivers value
     {
         hpx::experimental::in_place_stop_source stop_source;
         stop_source.request_stop();
 
         bool stopped_called = false;
-        test_stopped_receiver rcvr{&stopped_called, stop_source.get_token()};
+        bool value_called = false;
+        int value = 0;
+        test_stopped_receiver rcvr{
+            &stopped_called, &value_called, &value, stop_source.get_token()};
 
         auto t = cancellable_coroutine();
         auto op = ex::connect(HPX_MOVE(t), rcvr);
         ex::start(op);
 
-        HPX_TEST(stopped_called);
+        HPX_TEST(!stopped_called);
+        HPX_TEST(value_called);
+        HPX_TEST_EQ(value, 42);
     }
 
     // 1. A task that directly awaits just_stopped()

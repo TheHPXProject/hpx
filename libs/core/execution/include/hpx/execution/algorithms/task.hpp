@@ -467,8 +467,7 @@ namespace hpx::execution::experimental {
                 stop_callback_.reset();
                 auto coro = std::exchange(coro_, {});
 
-                if (coro.promise().stopped_ ||
-                    coro.promise().stop_token_.stop_requested())
+                if (coro.promise().stopped_)
                 {
                     coro.destroy();
                     hpx::execution::experimental::set_stopped(HPX_MOVE(rcvr_));
