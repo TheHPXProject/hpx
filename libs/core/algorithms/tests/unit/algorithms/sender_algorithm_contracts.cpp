@@ -98,14 +98,16 @@ struct error_code_scheduler
 {
     using execution_category = hpx::execution::parallel_execution_tag;
 
+    bool fail = false;
+
     struct sender;
 
     sender schedule() const noexcept;
 
     friend constexpr bool operator==(
-        error_code_scheduler, error_code_scheduler) noexcept
+        error_code_scheduler lhs, error_code_scheduler rhs) noexcept
     {
-        return true;
+        return lhs.fail == rhs.fail;
     }
 };
 
@@ -116,42 +118,55 @@ struct error_code_scheduler::sender
         sender_test::ex::completion_signatures<sender_test::ex::set_value_t(),
             sender_test::ex::set_error_t(std::error_code)>;
 
+    bool fail = false;
+
     template <typename Receiver>
     struct operation_state
     {
         std::decay_t<Receiver> receiver;
+        bool fail;
 
         void start() & noexcept
         {
-            sender_test::ex::set_value(HPX_MOVE(receiver));
+            if (fail)
+            {
+                sender_test::ex::set_error(HPX_MOVE(receiver),
+                    std::make_error_code(std::errc::operation_canceled));
+            }
+            else
+            {
+                sender_test::ex::set_value(HPX_MOVE(receiver));
+            }
         }
     };
 
     template <typename Receiver>
     operation_state<Receiver> connect(Receiver&& receiver) const
     {
-        return {HPX_FORWARD(Receiver, receiver)};
+        return {HPX_FORWARD(Receiver, receiver), fail};
     }
 
     struct env
     {
+        bool fail;
+
         error_code_scheduler query(sender_test::ex::get_completion_scheduler_t<
             sender_test::ex::set_value_t>) const noexcept
         {
-            return {};
+            return {fail};
         }
     };
 
     env get_env() const noexcept
     {
-        return {};
+        return {fail};
     }
 };
 
 inline error_code_scheduler::sender error_code_scheduler::schedule()
     const noexcept
 {
-    return {};
+    return {fail};
 }
 
 template <typename ExPolicy>
@@ -283,14 +298,47 @@ void test_scheduler_error_forwarding()
     namespace ex = sender_test::ex;
     using namespace hpx::execution;
 
-    auto calls = std::make_shared<std::atomic<int>>(0);
-    auto executor = ex::explicit_scheduler_executor(error_code_scheduler{});
-    auto sender = legacy_future_algorithm{}.call(
-        par(task).on(executor), calls, failure_mode::none);
+    {
+        auto calls = std::make_shared<std::atomic<int>>(0);
+        auto executor =
+            ex::explicit_scheduler_executor(error_code_scheduler{false});
+        auto sender = legacy_future_algorithm{}.call(
+            par(task).on(executor), calls, failure_mode::none);
 
-    auto result = sender_test::wait(HPX_MOVE(sender));
-    HPX_TEST_EQ(hpx::get<0>(*result), 42);
-    HPX_TEST_EQ(calls->load(), 1);
+        auto result = sender_test::wait(HPX_MOVE(sender));
+        HPX_TEST_EQ(hpx::get<0>(*result), 42);
+        HPX_TEST_EQ(calls->load(), 1);
+    }
+
+    {
+        auto calls = std::make_shared<std::atomic<int>>(0);
+        auto executor =
+            ex::explicit_scheduler_executor(error_code_scheduler{true});
+        auto sender = legacy_future_algorithm{}.call(
+            par(task).on(executor), calls, failure_mode::none);
+
+        bool error_received = false;
+        auto handled =
+            ex::upon_error(HPX_MOVE(sender), [&error_received](auto&& error) {
+                using error_type = std::decay_t<decltype(error)>;
+                if constexpr (std::is_same_v<error_type, std::error_code>)
+                {
+                    HPX_TEST_EQ(error,
+                        std::make_error_code(std::errc::operation_canceled));
+                    error_received = true;
+                }
+                else
+                {
+                    HPX_TEST(false);
+                }
+                return 0;
+            });
+
+        auto result = sender_test::wait(HPX_MOVE(handled));
+        HPX_TEST_EQ(hpx::get<0>(*result), 0);
+        HPX_TEST(error_received);
+        HPX_TEST_EQ(calls->load(), 0);
+    }
 }
 
 int hpx_main()
