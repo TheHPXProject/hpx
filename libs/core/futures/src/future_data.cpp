@@ -382,7 +382,7 @@ namespace hpx::lcos::detail {
 
             std::unique_lock l(mtx_);
             s = state_.load(std::memory_order_relaxed);
-            if (s == empty)
+            while (s == empty)
             {
                 cond_.wait(l, "future_data_base::wait", ec);
                 if (ec)

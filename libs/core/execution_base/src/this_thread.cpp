@@ -93,17 +93,22 @@ namespace hpx::execution_base {
         private:
             bool running_;
             bool aborted_;
+            // Set by resume() to record a wakeup. resume() never blocks:
+            // a wakeup that arrives before the agent has parked is
+            // remembered here and consumed by the next suspend() or
+            // sleep_until() chunk, so it is neither lost nor able to
+            // deadlock a caller that holds a user-level lock.
+            bool wakeup_pending_;
             std::thread::id id_;
             std::mutex mtx_;
             std::condition_variable suspend_cv_;
-            std::condition_variable resume_cv_;
-
             default_context context_;
         };
 
         default_agent::default_agent()
           : running_(true)
           , aborted_(false)
+          , wakeup_pending_(false)
           , id_(std::this_thread::get_id())
         {
         }
@@ -128,15 +133,16 @@ namespace hpx::execution_base {
             HPX_ASSERT(running_);
 
             running_ = false;
-            resume_cv_.notify_all();
-
-            while (!running_)
+            while (!wakeup_pending_ && !aborted_)
             {
                 suspend_cv_.wait(l);    //-V1089
             }
+            wakeup_pending_ = false;    // consume exactly one wakeup
+            running_ = true;
 
             if (aborted_)
             {
+                aborted_ = false;    // report each abort exactly once
                 HPX_THROW_EXCEPTION(hpx::error::yield_aborted, "suspend",
                     "std::thread({}) aborted (yield returned wait_abort)", id_);
             }
@@ -145,28 +151,22 @@ namespace hpx::execution_base {
         void default_agent::resume(hpx::threads::thread_priority, char const*)
         {
             {
-                std::unique_lock<std::mutex> l(mtx_);
-                while (running_)
-                {
-                    resume_cv_.wait(l);    //-V1089
-                }
-                running_ = true;
+                std::lock_guard<std::mutex> l(mtx_);
+                // Record the wakeup and return. The agent consumes it in
+                // suspend() or at the next sleep_until() chunk, whether it
+                // is already parked or still on its way into the wait.
+                wakeup_pending_ = true;
+                suspend_cv_.notify_one();
             }
-            suspend_cv_.notify_one();
         }
 
         void default_agent::abort(char const* /* desc */)
         {
             {
-                std::unique_lock<std::mutex> l(mtx_);
-                while (running_)
-                {
-                    resume_cv_.wait(l);    //-V1089
-                }
-                running_ = true;
+                std::lock_guard<std::mutex> l(mtx_);
                 aborted_ = true;
+                suspend_cv_.notify_one();
             }
-            suspend_cv_.notify_one();
         }
 
         threads::thread_restart_state default_agent::sleep_for(
@@ -181,14 +181,41 @@ namespace hpx::execution_base {
 
         threads::thread_restart_state default_agent::sleep_until(
             hpx::chrono::steady_time_point const& sleep_time,
-            hpx::move_only_function<bool()>&& wait_cond, char const* /* desc */)
+            hpx::move_only_function<bool()>&& wait_cond, char const* desc)
         {
             auto const cond = HPX_MOVE(wait_cond);
             auto const deadline = sleep_time.value();
-            while (true)
+            auto check_abort = [this, desc]() {
+                std::lock_guard<std::mutex> l(mtx_);
+                if (aborted_)
+                {
+                    aborted_ = false;    // report each abort exactly once
+                    HPX_THROW_EXCEPTION(hpx::error::yield_aborted, desc,
+                        "std::thread({}) aborted (sleep_until returned "
+                        "wait_abort)",
+                        id_);
+                }
+            };
+
+            // A previous abort is latched; report it before waiting again
+            // (suspend() does the same after waking).
+            {
+                std::lock_guard<std::mutex> l(mtx_);
+                if (aborted_)
+                {
+                    aborted_ = false;    // report each abort exactly once
+                    HPX_THROW_EXCEPTION(hpx::error::yield_aborted, desc,
+                        "std::thread({}) aborted (sleep_until returned "
+                        "wait_abort)",
+                        id_);
+                }
+            }
+
+            for (;;)
             {
                 if (cond && cond())
                 {
+                    check_abort();
                     return threads::thread_restart_state::signaled;
                 }
 
@@ -199,18 +226,52 @@ namespace hpx::execution_base {
                 }
 
                 auto const remaining = deadline - now;
-                std::this_thread::sleep_for((std::min) (remaining,
+                auto const chunk = (std::min) (remaining,
                     std::chrono::duration_cast<
                         std::remove_const_t<decltype(remaining)>>(
-                        default_agent_poll_interval)));
+                        default_agent_poll_interval));
+
+                // Sleep one chunk while staying resumable. A wakeup
+                // recorded by resume() before this chunk (or during it)
+                // ends the chunk early so cond() is re-evaluated; it is
+                // consumed here, exactly once.
+                bool aborted = false;
+                {
+                    std::unique_lock<std::mutex> l(mtx_);
+                    HPX_ASSERT(running_);
+                    if (!wakeup_pending_ && !aborted_)
+                    {
+                        running_ = false;
+                        suspend_cv_.wait_for(l, chunk,
+                            [&] { return wakeup_pending_ || aborted_; });
+                        running_ = true;
+                    }
+                    wakeup_pending_ = false;
+                    aborted = aborted_;
+                    aborted_ = false;    // reported via the snapshot below
+                }
+
+                if (aborted)
+                {
+                    HPX_THROW_EXCEPTION(hpx::error::yield_aborted, desc,
+                        "std::thread({}) aborted (sleep_until returned "
+                        "wait_abort)",
+                        id_);
+                }
             }
 
-            // final check right at/after the deadline, in case wait_cond became
-            // true during the last sleep increment
+            // final check right at/after the deadline, in case wait_cond
+            // became true during the last sleep increment
             if (cond && cond())
             {
+                check_abort();
                 return threads::thread_restart_state::signaled;
             }
+
+            // A latched abort must not be masked by the deadline: cond() can
+            // block across the deadline while abort() sets aborted_, in which
+            // case the loop above breaks without reaching its in-loop check.
+            check_abort();
 
             return threads::thread_restart_state::timeout;
         }
