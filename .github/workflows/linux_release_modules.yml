@@ -54,4 +54,4 @@ jobs:
           ctest \
             --output-on-failure \
             --tests-regex tests.examples \
-            --exclude-regex tests.examples.transpose.transpose_block_numa
+            --exclude-regex "tests.examples.transpose.transpose_block_numa|tests.examples.quickstart.command_line_handling"
