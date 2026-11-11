@@ -47,9 +47,10 @@ void test_basic_fifo()
 
 void test_capacity_and_saturation()
 {
-    // A requested size of 7 rounds up to capacity 8
-    channel_type c(7);
+    // A power-of-two requested size matches internal ring-buffer capacity
+    channel_type c(8);
     HPX_TEST(c.is_empty());
+    HPX_TEST_EQ(c.capacity(), std::size_t(8));
 
     std::size_t count = 0;
     while (c.set(int(count)))
@@ -70,6 +71,18 @@ void test_capacity_and_saturation()
 
     HPX_TEST(c.set(999));
     HPX_TEST(!c.set(1000));
+
+    // For a non-power-of-two requested size, capacity() returns the requested
+    // size while the internal ring buffer rounds up to the next power of two
+    channel_type c_non_pow2(7);
+    HPX_TEST_EQ(c_non_pow2.capacity(), std::size_t(7));
+
+    std::size_t non_pow2_count = 0;
+    while (c_non_pow2.set(int(non_pow2_count)))
+    {
+        ++non_pow2_count;
+    }
+    HPX_TEST_EQ(non_pow2_count, std::size_t(8));
 }
 
 void test_move_only()
