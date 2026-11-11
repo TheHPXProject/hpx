@@ -663,7 +663,7 @@ namespace hpx::parcelset::policies::openshmem {
                 std::uint32_t const produced = load_produced(w);
                 std::uint32_t const consumed =
                     consumed_locals_[src].load(std::memory_order_relaxed);
-                if (produced > consumed)
+                if (page_published(produced, consumed))
                 {
                     return static_cast<int>(src);
                 }
@@ -671,20 +671,28 @@ namespace hpx::parcelset::policies::openshmem {
             return -1;
         }
 
+        // The counters are free-running 32-bit values that wrap, so "produced
+        // is ahead of consumed" is the signed difference, not '>'.
+        static constexpr bool page_published(
+            std::uint32_t const produced, std::uint32_t const consumed) noexcept
+        {
+            return static_cast<std::int32_t>(produced - consumed) > 0;
+        }
+
         // The counters are stored by remote PEs (or the transport) into our
         // symmetric memory behind the compiler's back; read them with an
-        // atomic load so a polling loop cannot keep a stale copy in a
-        // register.
+        // acquire load so a polling loop cannot keep a stale copy in a
+        // register and the page behind a published counter is read after it.
         std::uint32_t load_produced(std::size_t const w) const noexcept
         {
             return std::atomic_ref<std::uint32_t>(produced_beg_[w])
-                .load(std::memory_order_relaxed);
+                .load(std::memory_order_acquire);
         }
 
         std::uint32_t load_consumed(std::size_t const w) const noexcept
         {
             return std::atomic_ref<std::uint32_t>(consumed_beg_[w])
-                .load(std::memory_order_relaxed);
+                .load(std::memory_order_acquire);
         }
 
         // True while src has published a page that we have not drained yet.
@@ -694,8 +702,8 @@ namespace hpx::parcelset::policies::openshmem {
         {
             progress_to(src);
             std::size_t const w = src * num_pes_ + my_pe_;
-            return load_produced(w) >
-                consumed_locals_[src].load(std::memory_order_relaxed);
+            return page_published(load_produced(w),
+                consumed_locals_[src].load(std::memory_order_relaxed));
         }
 
         // Legacy delivery push: a remote atomic_fetch to the peer "pushes" the
@@ -871,11 +879,11 @@ namespace hpx::parcelset::policies::openshmem {
 
             // Poll for src to publish page 'consumed' (data ready).  Deliver
             // src's produced exactly once; if still not ready, requeue.
-            if (produced <= consumed)
+            if (!page_published(produced, consumed))
             {
                 progress_to(src_pe);    // deliver src's produced
                 produced = load_produced(w);
-                if (produced <= consumed)
+                if (!page_published(produced, consumed))
                 {
                     return nullptr;    // not ready: requeue and retry later
                 }
