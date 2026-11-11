@@ -50,7 +50,11 @@ on:
         type: number
         default: 25
       exclude-files:
-        description: "Whitespace-separated files (relative to the repository) listing tests to leave out (empty: .github/workflows/exclude.targets)"
+        description: "Whitespace-separated files (relative to the repository) listing tests to leave out (if this and exclude-regex-files are empty: .github/workflows/exclude.targets)"
+        type: string
+        default: ""
+      exclude-regex-files:
+        description: "Whitespace-separated files (relative to the repository) listing regular expressions; tests whose names contain a match are left out (as with ctest --exclude-regex)"
         type: string
         default: ""
       ctest-timeout:
@@ -101,6 +105,9 @@ jobs:
           declare -a exclude_args=()
           for file in ${{ inputs.exclude-files }}; do
             exclude_args+=(--exclude "$GITHUB_WORKSPACE/${file}")
+          done
+          for file in ${{ inputs.exclude-regex-files }}; do
+            exclude_args+=(--exclude-regex "$GITHUB_WORKSPACE/${file}")
           done
           ctest -N | python3 ../.github/ci-scripts/generate_test_matrix.py \
             ${{ inputs.shards }} ${exclude_args[@]+"${exclude_args[@]}"} \
