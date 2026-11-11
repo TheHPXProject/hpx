@@ -16,13 +16,18 @@ namespace hpx::util {
 
     bool parse_sed_expression(
         std::string const& input, std::string& search, std::string& replace)
-    {
-        if (input.size() <= 2)
+    {   
+        //Checks for minimum possible length of the expression.
+        if (input.size() <= 4)
             return false;
 
         // s/search/replace/
         // ^^
         if ('s' != input.at(0) || '/' != input.at(1))
+            return false;
+
+        //Checks for empty search expression like [s//replace/].
+        if ('/' == input.at(2))
             return false;
 
         constexpr std::string::size_type search_begin = 2;
@@ -68,6 +73,10 @@ namespace hpx::util {
         if ('/' == input.at(replace_end))
             --replace_end;
 
+        //Checks for empty replace expression like [s/search//].
+        if (replace_end < replace_begin)
+            return false;
+        
         search = input.substr(search_begin, (search_end - search_begin) + 1);
         replace =
             input.substr(replace_begin, (replace_end - replace_begin) + 1);
