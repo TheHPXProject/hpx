@@ -8,9 +8,8 @@
 
 #if defined(HPX_HAVE_CXX20_COROUTINES)
 
-#include <hpx/execution.hpp>
-#include <hpx/execution/algorithms/task.hpp>
 #include <hpx/init.hpp>
+#include <hpx/modules/execution.hpp>
 #include <hpx/modules/testing.hpp>
 
 #include <atomic>
@@ -31,12 +30,12 @@ namespace tt = hpx::this_thread::experimental;
 
 ///////////////////////////////////////////////////////////////////////////////
 // 1. Basic Value & Void Coroutines
-hpx::experimental::task<int> basic_value_coroutine(int val)
+ex::task<int> basic_value_coroutine(int val)
 {
     co_return val + 1;
 }
 
-hpx::experimental::task<void> basic_void_coroutine(bool& executed)
+ex::task<void> basic_void_coroutine(bool& executed)
 {
     executed = true;
     co_return;
@@ -64,12 +63,12 @@ void test_basic_task()
 
 ///////////////////////////////////////////////////////////////////////////////
 // 2. Awaiting Senders and Nested Tasks
-hpx::experimental::task<int> nested_child(int x)
+ex::task<int> nested_child(int x)
 {
     co_return x * 2;
 }
 
-hpx::experimental::task<int> sender_awaiting_coroutine(int input)
+ex::task<int> sender_awaiting_coroutine(int input)
 {
     // Await standard P2300 senders
     int v1 = co_await ex::just(input + 10);
@@ -92,7 +91,7 @@ void test_sender_and_nested_await()
 
 ///////////////////////////////////////////////////////////////////////////////
 // 3. Scheduler Affinity & Multi-threaded Suspension/Resumption
-hpx::experimental::task<int> scheduler_affinity_coroutine(ex::run_loop& loop,
+ex::task<int> scheduler_affinity_coroutine(ex::run_loop& loop,
     std::thread::id& initial_id, std::thread::id& resumed_id)
 {
     initial_id = std::this_thread::get_id();
@@ -128,7 +127,7 @@ void test_scheduler_affinity()
 
 ///////////////////////////////////////////////////////////////////////////////
 // 4. Multi-threaded Task Execution with when_all
-hpx::experimental::task<int> concurrent_worker(int id)
+ex::task<int> concurrent_worker(int id)
 {
     co_await ex::just();
     co_return id * 10;
@@ -192,7 +191,7 @@ struct test_counting_allocator
     }
 };
 
-hpx::experimental::task<int> coroutine_with_custom_alloc(
+ex::task<int> coroutine_with_custom_alloc(
     std::allocator_arg_t, test_counting_allocator<std::byte>, int val)
 {
     co_return val * 3;
@@ -217,7 +216,7 @@ void test_allocator_awareness()
 
 ///////////////////////////////////////////////////////////////////////////////
 // 6. Exception Propagation and Error Channel
-hpx::experimental::task<int> throwing_coroutine()
+ex::task<int> throwing_coroutine()
 {
     co_await ex::just();
     throw std::runtime_error("coroutine error");
@@ -246,25 +245,25 @@ void test_exception_handling()
 
 ///////////////////////////////////////////////////////////////////////////////
 // 7. Cancellation Protocol via in_place_stop_source & just_stopped
-hpx::experimental::task<int> cancellable_coroutine()
+ex::task<int> cancellable_coroutine()
 {
     co_await ex::just();
     co_return 42;
 }
 
-hpx::experimental::task<int> task_awaiting_just_stopped()
+ex::task<int> task_awaiting_just_stopped()
 {
     co_await ex::just_stopped();
     co_return 42;
 }
 
-hpx::experimental::task<int> nested_inner_just_stopped()
+ex::task<int> nested_inner_just_stopped()
 {
     co_await ex::just_stopped();
     co_return 100;
 }
 
-hpx::experimental::task<int> nested_outer_just_stopped()
+ex::task<int> nested_outer_just_stopped()
 {
     int val = co_await nested_inner_just_stopped();
     co_return val + 1;
@@ -300,9 +299,8 @@ struct wait_for_stop_sender
             typename stop_token_type::template callback_type<stop_cb>;
         std::optional<callback_type> cb_{};
 
-        template <typename R>
-        operation_state(R&& r)
-          : rcvr_(HPX_FORWARD(R, r))
+        explicit operation_state(Receiver rcvr)
+          : rcvr_(HPX_MOVE(rcvr))
         {
         }
 
@@ -327,7 +325,7 @@ struct wait_for_stop_sender
     }
 };
 
-hpx::experimental::task<int> inflight_cancellable_coroutine()
+ex::task<int> inflight_cancellable_coroutine()
 {
     co_await wait_for_stop_sender{};
     co_return 99;

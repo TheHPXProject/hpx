@@ -10,9 +10,9 @@
 
 #if defined(HPX_HAVE_CXX20_COROUTINES)
 
-#include <hpx/execution_base/stdexec_forward.hpp>
-#include <hpx/synchronization/stop_token.hpp>
-#include <hpx/type_support/coroutines_support.hpp>
+#include <hpx/modules/execution_base.hpp>
+#include <hpx/modules/synchronization.hpp>
+#include <hpx/modules/type_support.hpp>
 
 #include <cstddef>
 #include <cstdint>
@@ -26,7 +26,7 @@
 
 namespace hpx::execution::experimental {
 
-    template <typename T = void>
+    HPX_CXX_CORE_EXPORT template <typename T = void>
     class [[nodiscard]] task;
 
     namespace detail {
@@ -155,7 +155,7 @@ namespace hpx::execution::experimental {
 
         ///////////////////////////////////////////////////////////////////////
         // task_promise: C++26 P3552 coroutine promise type
-        template <typename T>
+        HPX_CXX_CORE_EXPORT template <typename T>
         struct task_promise
           : task_promise_base<T>
           , hpx::execution::experimental::with_awaitable_senders<
@@ -404,7 +404,7 @@ namespace hpx::execution::experimental {
 
     ///////////////////////////////////////////////////////////////////////////
     // Production C++26 task<T> conforming to P3552
-    template <typename T>
+    HPX_CXX_CORE_EXPORT template <typename T>
     class [[nodiscard]] task
     {
     public:
@@ -633,9 +633,5 @@ namespace hpx::execution::experimental {
     }    // namespace detail
 
 }    // namespace hpx::execution::experimental
-
-namespace hpx::experimental {
-    using hpx::execution::experimental::task;
-}
 
 #endif    // HPX_HAVE_CXX20_COROUTINES

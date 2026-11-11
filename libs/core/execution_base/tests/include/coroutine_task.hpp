@@ -14,9 +14,9 @@
 #include <hpx/modules/execution.hpp>
 
 template <typename T, typename Context = void>
-using basic_task = hpx::experimental::task<T>;
+using basic_task = hpx::execution::experimental::task<T>;
 
 template <typename T, typename Context = void>
-using task = hpx::experimental::task<T>;
+using task = hpx::execution::experimental::task<T>;
 
 #endif
