@@ -17,6 +17,7 @@
 #include <cstdint>
 #include <set>
 #include <string>
+#include <string_view>
 #include <vector>
 
 void test_numa_worker_selection()
@@ -61,6 +62,15 @@ int hpx_main()
     auto const& topo = hpx::threads::create_topology();
     std::size_t const num_workers = hpx::get_num_worker_threads();
 
+    // A thread hint of -1 means that no specific worker was requested and
+    // must retain the scheduler's round-robin fallback.
+    hpx::execution::parallel_executor fallback_exec(
+        hpx::threads::thread_priority::bound,
+        hpx::threads::thread_stacksize::default_,
+        hpx::threads::thread_schedule_hint(
+            hpx::threads::thread_schedule_hint_mode::thread, std::int16_t(-1)));
+    HPX_TEST(hpx::async(fallback_exec, [] { return true; }).get());
+
     std::set<std::size_t> domains;
     for (std::size_t worker = 0; worker != num_workers; ++worker)
     {
@@ -89,7 +99,30 @@ int hpx_main()
 void test_scheduler(int argc, char* argv[], char const* scheduler)
 {
     std::string queuing = std::string("--hpx:queuing=") + scheduler;
-    std::vector<char*> av(argv, argv + argc);
+    std::vector<char*> av;
+    av.reserve(static_cast<std::size_t>(argc) + 1);
+    av.push_back(argv[0]);
+
+    for (int i = 1; i != argc; ++i)
+    {
+        std::string_view const arg(argv[i]);
+        if (arg == "--hpx:queuing")
+        {
+            if (i + 1 != argc)
+            {
+                ++i;
+            }
+            continue;
+        }
+
+        if (arg.starts_with("--hpx:queuing="))
+        {
+            continue;
+        }
+
+        av.push_back(argv[i]);
+    }
+
     av.push_back(queuing.data());
 
     HPX_TEST_EQ(

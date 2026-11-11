@@ -2311,7 +2311,6 @@ namespace hpx::threads::policies {
         {
             if (schedulehint.mode() == thread_schedule_hint_mode::thread)
             {
-                HPX_ASSERT(schedulehint.hint >= 0);
                 return static_cast<std::size_t>(schedulehint.hint);
             }
 
