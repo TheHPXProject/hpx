@@ -5,7 +5,6 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 #include <hpx/execution.hpp>
-#include <hpx/execution/algorithms/sender_future.hpp>
 #include <hpx/future.hpp>
 #include <hpx/init.hpp>
 #include <hpx/modules/testing.hpp>
@@ -116,12 +115,112 @@ void test_error_code_void()
     HPX_TEST(caught_error);
 }
 
+void test_make_future_typed_error()
+{
+    auto snd = ex::just_error(42);
+    auto f = ex::make_future(std::move(snd));
+
+    bool caught_error = false;
+    try
+    {
+        f.get();
+    }
+    catch (int e)
+    {
+        HPX_TEST_EQ(e, 42);
+        caught_error = true;
+    }
+    catch (...)
+    {
+        HPX_TEST_MSG(false, "Caught unexpected exception type");
+    }
+
+    HPX_TEST(caught_error);
+}
+
+void test_make_future_error_code()
+{
+    auto ec = std::make_error_code(std::errc::invalid_argument);
+    auto snd = ex::just_error(ec);
+    auto f = ex::make_future(std::move(snd));
+
+    bool caught_error = false;
+    try
+    {
+        f.get();
+    }
+    catch (std::system_error const& e)
+    {
+        HPX_TEST_EQ(e.code(), ec);
+        caught_error = true;
+    }
+    catch (...)
+    {
+        HPX_TEST_MSG(false, "Caught unexpected exception type");
+    }
+
+    HPX_TEST(caught_error);
+}
+
+void test_make_future_exception_ptr()
+{
+    auto ep = std::make_exception_ptr(std::runtime_error("test error"));
+    auto snd = ex::just_error(ep);
+    auto f = ex::make_future(std::move(snd));
+
+    bool caught_error = false;
+    try
+    {
+        f.get();
+    }
+    catch (std::runtime_error const& e)
+    {
+        HPX_TEST_EQ(std::string(e.what()), std::string("test error"));
+        caught_error = true;
+    }
+    catch (...)
+    {
+        HPX_TEST_MSG(false, "Caught unexpected exception type");
+    }
+
+    HPX_TEST(caught_error);
+}
+
+void test_make_future_error_code_void()
+{
+    auto ec = std::make_error_code(std::errc::permission_denied);
+    auto snd = ex::just_error(ec);
+    auto f = ex::make_future(std::move(snd));
+
+    bool caught_error = false;
+    try
+    {
+        f.get();
+    }
+    catch (std::system_error const& e)
+    {
+        HPX_TEST_EQ(e.code(), ec);
+        caught_error = true;
+    }
+    catch (...)
+    {
+        HPX_TEST_MSG(false, "Caught unexpected exception type");
+    }
+
+    HPX_TEST(caught_error);
+}
+
 int hpx_main()
 {
     test_typed_error();
     test_error_code();
     test_exception_ptr();
     test_error_code_void();
+
+    test_make_future_typed_error();
+    test_make_future_error_code();
+    test_make_future_exception_ptr();
+    test_make_future_error_code_void();
 
     return hpx::local::finalize();
 }
