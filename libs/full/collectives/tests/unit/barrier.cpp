@@ -129,6 +129,11 @@ void test_global_barrier_after_worker_main()
     }
 }
 
+void test_global_barrier_in_shutdown_function()
+{
+    hpx::register_shutdown_function(&global_barrier_synchronize);
+}
+
 void test_release_from_non_hpx_thread(hpx::program_options::variables_map& vm)
 {
     std::size_t iterations = 0;
@@ -371,6 +376,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
     remote_test_single(vm);
     remote_test_multiple(vm);
     test_global_barrier_after_worker_main();
+    test_global_barrier_in_shutdown_function();
 
     return hpx::finalize();
 }
