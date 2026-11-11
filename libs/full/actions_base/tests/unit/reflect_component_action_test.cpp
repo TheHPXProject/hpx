@@ -38,6 +38,19 @@ namespace app {
         }
     };
 
+    // actions made by the macros that are used inside a class
+    struct macro_server
+    {
+        int compute(int x)
+        {
+            return x;
+        }
+
+        HPX_DEFINE_COMPONENT_ACTION(macro_server, compute, compute_action)
+        HPX_DEFINE_COMPONENT_DIRECT_ACTION(
+            macro_server, compute, compute_direct_action)
+    };
+
 }    // namespace app
 
 namespace app::nested {
@@ -112,6 +125,24 @@ int main()
             decltype(compute_action::invocation_count_registrar_);
         static_assert(!std::is_void_v<registrar_type>,
             "invocation_count_registrar_ must exist for component actions");
+
+        // Invocation counters are looked up by the name of the action, so the
+        // counter has to be registered under the action and not its base.
+        // Without Derived, the template itself is the action.
+        using hpx::actions::detail::register_action_invocation_count;
+        HPX_COMPONENT_DIRECT_ACTION(
+            app::compute_server, compute, compute_direct_action);
+        using template_type = hpx::actions::reflect_component_action<
+            ^^app::compute_server::compute>;
+
+        static_assert(std::is_same_v<registrar_type,
+            register_action_invocation_count<compute_action>>);
+        static_assert(std::is_same_v<
+            decltype(compute_direct_action::invocation_count_registrar_),
+            register_action_invocation_count<compute_direct_action>>);
+        static_assert(
+            std::is_same_v<decltype(template_type::invocation_count_registrar_),
+                register_action_invocation_count<template_type>>);
     }
 
     // Test: HPX_COMPONENT_ACTION produces a type derived from
@@ -120,10 +151,32 @@ int main()
     // this verifies the inheritance relationship instead).
     {
         HPX_COMPONENT_ACTION(app::compute_server, compute, compute_action);
-        static_assert(std::is_base_of_v<hpx::actions::reflect_component_action<
-                                            ^^app::compute_server::compute>,
-                          compute_action>,
+        static_assert(
+            std::is_base_of_v<hpx::actions::reflect_component_action<
+                                  ^^app::compute_server::compute,
+                                  app::compute_server, compute_action>,
+                compute_action>,
             "compute_action must derive from reflect_component_action");
+    }
+
+    // Test: the action the macros make is its own derived_type, so the
+    // traits that HPX_ACTION_HAS_PRIORITY and similar macros specialize for
+    // it are used (see #8019)
+    {
+        HPX_COMPONENT_ACTION(app::compute_server, compute, compute_action);
+        HPX_COMPONENT_DIRECT_ACTION(
+            app::compute_server, compute, compute_direct_action);
+
+        static_assert(
+            std::is_same_v<compute_action::derived_type, compute_action>);
+        static_assert(std::is_same_v<compute_direct_action::derived_type,
+            compute_direct_action>);
+        static_assert(
+            std::is_same_v<app::macro_server::compute_action::derived_type,
+                app::macro_server::compute_action>);
+        static_assert(std::is_same_v<
+            app::macro_server::compute_direct_action::derived_type,
+            app::macro_server::compute_direct_action>);
     }
 
     // Test: actual runtime invocation through invoke() on a real component
