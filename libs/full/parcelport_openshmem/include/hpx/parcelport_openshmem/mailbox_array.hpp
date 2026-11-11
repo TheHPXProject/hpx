@@ -18,7 +18,6 @@
 #if defined(__x86_64__)
 #include <immintrin.h>
 #endif
-#include <chrono>
 #include <bit>
 #include <cstddef>
 #include <cstdint>
@@ -59,22 +58,6 @@ namespace hpx::parcelset::policies::openshmem {
         // resizes stay sane during validation.
         constexpr std::size_t max_message_chunks = 1u << 20;
 
-        // checksum over the payload bytes only.
-        constexpr std::array<std::uint32_t, 256> make_crc32_table()
-        {
-            std::array<std::uint32_t, 256> table{};
-            for (std::size_t i = 0; i < table.size(); ++i)
-            {
-                std::uint32_t c = static_cast<std::uint32_t>(i);
-                for (int k = 0; k < 8; ++k)
-                {
-                    c = (c & 1u) ? (0xEDB88320u ^ (c >> 1)) : (c >> 1);
-                }
-                table[i] = c;
-            }
-            return table;
-        }
-
         // CRC-32C (Castagnoli, reflected polynomial 0x82F63B78) page checksum.
         // The checksum covers every transferred byte on both sender and
         // receiver, so on a hub rank it was the dominant per-byte cost.  The
@@ -103,35 +86,6 @@ namespace hpx::parcelset::policies::openshmem {
                 }
             }
             return t;
-        }
-
-        inline std::uint32_t crc32c_sw(std::uint32_t crc,
-            unsigned char const* data, std::size_t size) noexcept
-        {
-            static constexpr auto t = make_crc32c_tables();
-            if constexpr (std::endian::native == std::endian::little)
-            {
-                while (size >= 8)
-                {
-                    std::uint32_t lo;
-                    std::uint32_t hi;
-                    std::memcpy(&lo, data, 4);
-                    std::memcpy(&hi, data + 4, 4);
-                    lo ^= crc;
-                    crc = t[7][lo & 0xFFu] ^ t[6][(lo >> 8) & 0xFFu] ^
-                        t[5][(lo >> 16) & 0xFFu] ^ t[4][lo >> 24] ^
-                        t[3][hi & 0xFFu] ^ t[2][(hi >> 8) & 0xFFu] ^
-                        t[1][(hi >> 16) & 0xFFu] ^ t[0][hi >> 24];
-                    data += 8;
-                    size -= 8;
-                }
-            }
-
-            for (std::size_t i = 0; i < size; ++i)
-            {
-               crc = t[0][(crc ^ data[i]) & 0xFFu] ^ (crc >> 8);
-            }
-            return crc;
         }
 
         // One 8-byte step of CRC-32C (the same update the x86 CRC32
@@ -346,32 +300,12 @@ namespace hpx::parcelset::policies::openshmem {
     }    // namespace detail
 
     namespace detail {
-        // Optional io-thread accounting (hpx.parcel.openshmem.stats=1), printed
-        // when the parcelport stops.  Diagnostics only.
-        struct io_stats
-        {
-            std::atomic<std::uint64_t> send_ns{0}, recv_ns{0}, decode_ns{0},
-                stage_ns{0}, put_ns{0}, pages_sent{0}, pages_recv{0},
-                nocredit{0}, send_calls{0}, send_work{0}, recv_calls{0},
-                recv_work{0}, bytes_sent{0}, prog_ns{0}, crc_ns{0}, copy_ns{0},
-                rel_ns{0}, resize_ns{0}, peek_ns{0};
-        };
-        inline io_stats g_io_stats;
-        inline std::atomic<bool> g_io_stats_on{false};
-
         // Set by parcelport::do_stop(): by then the HPX scheduler and AGAS
         // are gone, so a parcel that is still completing on an io driver can
         // no longer be decoded or dispatched (doing so dereferences the
         // destroyed AGAS).  The receiver keeps draining pages (so credits
         // keep flowing and peers can finish) but discards the messages.
         inline std::atomic<bool> g_discard_received{false};
-        inline std::uint64_t ns_now() noexcept
-        {
-            return static_cast<std::uint64_t>(
-                std::chrono::duration_cast<std::chrono::nanoseconds>(
-                    std::chrono::steady_clock::now().time_since_epoch())
-                    .count());
-        }
     }    // namespace detail
 
     class HPX_EXPORT mailbox_array
@@ -421,6 +355,9 @@ namespace hpx::parcelset::policies::openshmem {
           , probe_window_(probe_window)
         {
             HPX_ASSERT(slots_per_dst_ > 0);
+            // The 32-bit counters wrap; 'counter % slots_per_dst_' stays
+            // consecutive across the wrap only for a power of two.
+            HPX_ASSERT(std::has_single_bit(slots_per_dst_));
 
             std::size_t const pages = num_pes_ * slots_per_dst_ * mtu_;
 
@@ -723,7 +660,7 @@ namespace hpx::parcelset::policies::openshmem {
                 {
                     remote_progress_to(src);
                 }
-                std::uint32_t const produced = produced_beg_[w];
+                std::uint32_t const produced = load_produced(w);
                 std::uint32_t const consumed =
                     consumed_locals_[src].load(std::memory_order_relaxed);
                 if (produced > consumed)
@@ -734,6 +671,22 @@ namespace hpx::parcelset::policies::openshmem {
             return -1;
         }
 
+        // The counters are stored by remote PEs (or the transport) into our
+        // symmetric memory behind the compiler's back; read them with an
+        // atomic load so a polling loop cannot keep a stale copy in a
+        // register.
+        std::uint32_t load_produced(std::size_t const w) const noexcept
+        {
+            return std::atomic_ref<std::uint32_t>(produced_beg_[w])
+                .load(std::memory_order_relaxed);
+        }
+
+        std::uint32_t load_consumed(std::size_t const w) const noexcept
+        {
+            return std::atomic_ref<std::uint32_t>(consumed_beg_[w])
+                .load(std::memory_order_relaxed);
+        }
+
         // True while src has published a page that we have not drained yet.
         // Only stable for a caller holding the per-source receive
         // reservation, since draining is what advances 'consumed'.
@@ -741,7 +694,7 @@ namespace hpx::parcelset::policies::openshmem {
         {
             progress_to(src);
             std::size_t const w = src * num_pes_ + my_pe_;
-            return produced_beg_[w] >
+            return load_produced(w) >
                 consumed_locals_[src].load(std::memory_order_relaxed);
         }
 
@@ -765,15 +718,9 @@ namespace hpx::parcelset::policies::openshmem {
         // the peers, so reading local memory after this is enough.
         void local_progress() const noexcept
         {
-            std::uint64_t const t0 =
-                detail::g_io_stats_on.load(std::memory_order_relaxed) ?
-                detail::ns_now() : 0;
             shmem_uint32_atomic_fetch(
                 &produced_beg_[my_pe_ * num_pes_ + my_pe_],
                 static_cast<int>(my_pe_));
-            if (t0 != 0)
-                detail::g_io_stats.prog_ns.fetch_add(
-                    detail::ns_now() - t0, std::memory_order_relaxed);
         }
 
         // Local progress, throttled: every progress_interval_-th call only
@@ -833,14 +780,14 @@ namespace hpx::parcelset::policies::openshmem {
                 produced_locals_[dst_pe].load(std::memory_order_relaxed);
             std::uint32_t consumed = (dst_pe == my_pe_) ?
                 consumed_locals_[dst_pe].load(std::memory_order_relaxed) :
-                consumed_beg_[w];
+                load_consumed(w);
             if (static_cast<int>(produced - consumed) >=
                 static_cast<int>(slots_per_dst_))
             {
                 if (dst_pe != my_pe_)
                 {
                     progress_to(dst_pe);    // deliver dst's consumed
-                    consumed = consumed_beg_[w];
+                    consumed = load_consumed(w);
                 }
                 else
                 {
@@ -850,9 +797,6 @@ namespace hpx::parcelset::policies::openshmem {
                 if (static_cast<int>(produced - consumed) >=
                     static_cast<int>(slots_per_dst_))
                 {
-                    if (detail::g_io_stats_on.load(std::memory_order_relaxed))
-                        detail::g_io_stats.nocredit.fetch_add(
-                            1, std::memory_order_relaxed);
                     return 0;
                 }
             }
@@ -889,8 +833,8 @@ namespace hpx::parcelset::policies::openshmem {
             }
         }
 
-        void publish_pages(std::size_t const dst_pe, std::size_t const n,
-            std::size_t const bytes) noexcept
+        void publish_pages(
+            std::size_t const dst_pe, std::size_t const n) noexcept
         {
             std::size_t const w = my_pe_ * num_pes_ + dst_pe;
             std::uint32_t const produced =
@@ -908,111 +852,6 @@ namespace hpx::parcelset::policies::openshmem {
             {
                 progress_to(dst_pe);
             }
-            if (detail::g_io_stats_on.load(std::memory_order_relaxed))
-            {
-                detail::g_io_stats.pages_sent.fetch_add(
-                    n, std::memory_order_relaxed);
-                detail::g_io_stats.bytes_sent.fetch_add(
-                    bytes, std::memory_order_relaxed);
-            }
-        }
-
-        // Non-blocking send of one mtu-sized page (chunk) to dst_pe.
-        // Copies 'count' bytes from our staging page (get_buffer())
-        bool try_send(std::size_t const dst_pe,
-            std::size_t const count) noexcept
-        {
-            HPX_ASSERT(count <= mtu_);
-
-            // Works for both remote (dst != me) and local (dst == me, a
-            // self-putmem into our own rx pool) destinations.
-            std::size_t const w = my_pe_ * num_pes_ + dst_pe;
-
-            // mirrors of the two halves
-            std::uint32_t produced =
-                produced_locals_[dst_pe].load(std::memory_order_relaxed);
-
-            // dst's consumed counter: for a local send it is our own drain
-            // mirror (same thread); otherwise the delivered remote copy.
-            std::uint32_t consumed = (dst_pe == my_pe_) ?
-                consumed_locals_[dst_pe].load(std::memory_order_relaxed) :
-                consumed_beg_[w];
-
-            // Poll the credit (max slots_per_dst_ pages in flight).  Deliver
-            // dst's consumed counter exactly once; if still no credit, return
-            // false to retry
-            if (static_cast<int>(produced - consumed) >=
-                static_cast<int>(slots_per_dst_))
-            {
-                if (dst_pe != my_pe_)
-                {
-                    progress_to(dst_pe);            // deliver dst's consumed
-                    consumed = consumed_beg_[w];    // read local (delivered)
-                }
-                else
-                {
-                    consumed =
-                        consumed_locals_[dst_pe].load(std::memory_order_relaxed);
-                }
-
-                if (static_cast<int>(produced - consumed) >=
-                    static_cast<int>(slots_per_dst_))
-                {
-                    if (detail::g_io_stats_on.load(std::memory_order_relaxed))
-                        detail::g_io_stats.nocredit.fetch_add(1, std::memory_order_relaxed);
-                    return false;    // no credit: requeue and retry later
-                }
-            }
-
-            std::size_t const slot = produced % slots_per_dst_;
-
-            // Staging source: my per-dst staging page (tx mirror of the rx
-            // slot), keyed by dst_pe
-            std::size_t const stage_slot =
-                (dst_pe * slots_per_dst_ + slot) * mtu_;
-
-            // Landing target: dst's shared rx pool, keyed by self PE (the
-            // sender), so each sender has its own disjoint per-src ring
-            std::size_t const rx_slot = (my_pe_ * slots_per_dst_ + slot) * mtu_;
-
-            // data: blocking putmem staging -> dst's rx page.
-            std::uint64_t const st_t0 =
-                detail::g_io_stats_on.load(std::memory_order_relaxed) ?
-                detail::ns_now() : 0;
-
-            shmem_putmem(rx_beg_ + rx_slot, tx_beg_ + stage_slot, count,
-                static_cast<int>(dst_pe));
-
-            // shmem_putmem() returns once the source is reusable, not once
-            // the bytes have landed at dst.  Order the page before the
-            // produced counter, otherwise the receiver can observe the new
-            // counter and read a stale/partial page.
-            shmem_fence();
-
-            // publish produced (low-32; self owns it)
-            produced = produced + 1;
-            shmem_uint32_atomic_set(
-                &produced_beg_[w], produced, static_cast<int>(dst_pe));
-            produced_locals_[dst_pe].store(
-                produced, std::memory_order_relaxed);    // update our mirror
-            shmem_fence();
-
-            // delivery (push): issue a remote atomic_fetch to the peer right
-            // after publishing produced, so our inbound stores.
-            if (dst_pe != my_pe_)
-            {
-                progress_to(dst_pe);
-            }
-
-            if (st_t0 != 0)
-            {
-                detail::g_io_stats.put_ns.fetch_add(
-                    detail::ns_now() - st_t0, std::memory_order_relaxed);
-                detail::g_io_stats.pages_sent.fetch_add(1, std::memory_order_relaxed);
-                detail::g_io_stats.bytes_sent.fetch_add(count, std::memory_order_relaxed);
-            }
-
-            return true;
         }
 
         // Zero-copy receive, step 1: if src has published its next page,
@@ -1028,14 +867,14 @@ namespace hpx::parcelset::policies::openshmem {
             std::uint32_t const consumed =
                 consumed_locals_[src_pe].load(std::memory_order_relaxed);
 
-            std::uint32_t produced = produced_beg_[w];
+            std::uint32_t produced = load_produced(w);
 
             // Poll for src to publish page 'consumed' (data ready).  Deliver
             // src's produced exactly once; if still not ready, requeue.
             if (produced <= consumed)
             {
                 progress_to(src_pe);    // deliver src's produced
-                produced = produced_beg_[w];
+                produced = load_produced(w);
                 if (produced <= consumed)
                 {
                     return nullptr;    // not ready: requeue and retry later
@@ -1061,9 +900,6 @@ namespace hpx::parcelset::policies::openshmem {
                 consumed_locals_[src_pe].load(std::memory_order_relaxed) + 1;
             consumed_locals_[src_pe].store(
                 consumed, std::memory_order_relaxed);    // update mirror
-            if (detail::g_io_stats_on.load(std::memory_order_relaxed))
-                detail::g_io_stats.pages_recv.fetch_add(
-                    1, std::memory_order_relaxed);
             std::uint32_t const unpublished =
                 consumed - published_locals_[src_pe];
             std::size_t const batch =
@@ -1083,17 +919,11 @@ namespace hpx::parcelset::policies::openshmem {
             {
                 return;
             }
-            std::uint64_t const rt0 =
-                detail::g_io_stats_on.load(std::memory_order_relaxed) ?
-                detail::ns_now() : 0;
             std::size_t const w = src_pe * num_pes_ + my_pe_;
             shmem_uint32_atomic_set(
                 &consumed_beg_[w], consumed, static_cast<int>(src_pe));
             published_locals_[src_pe] = consumed;
             shmem_fence();
-            if (rt0 != 0)
-                detail::g_io_stats.rel_ns.fetch_add(
-                    detail::ns_now() - rt0, std::memory_order_relaxed);
         }
 
         // Non-blocking receive of one page (chunk) from src_pe.  Copies

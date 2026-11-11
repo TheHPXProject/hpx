@@ -62,11 +62,6 @@ namespace hpx::parcelset::policies::openshmem {
             return src_;
         }
 
-        bool is_multi_chunk() const noexcept
-        {
-            return expected_chunks_ > 1;
-        }
-
         bool receive() noexcept
         {
             // Credits for pages consumed in this call are published lazily
@@ -130,10 +125,8 @@ namespace hpx::parcelset::policies::openshmem {
             // that would read the next page and silently lose the transfer.
             // Handle it as a terminal/loud failure instead.
             std::size_t chunk_size = 0;
-            std::uint64_t const vt0 = stats_now();
             bool const page_ok = detail::validate_message_page(page,
                 mailboxes_.mtu(), chunk_size, mailboxes_.checksum_enabled());
-            stats_add(detail::g_io_stats.crc_ns, vt0);
             if (!page_ok)
             {
                 mailboxes_.release_page(src_pe);
@@ -161,9 +154,7 @@ namespace hpx::parcelset::policies::openshmem {
 
             std::size_t const header_size = detail::header_size;
 
-            std::uint64_t const ct0 = stats_now();
             bool const ok = consume(page + header_size, chunk_size);
-            stats_add(detail::g_io_stats.copy_ns, ct0);
             if (!ok)
             {
                 mailboxes_.release_page(src_pe);
@@ -183,20 +174,6 @@ namespace hpx::parcelset::policies::openshmem {
 
             state_ = connection_state::collecting;
             return collect_chunks();
-        }
-
-        static std::uint64_t stats_now() noexcept
-        {
-            return detail::g_io_stats_on.load(std::memory_order_relaxed) ?
-                detail::ns_now() : 0;
-        }
-
-        static void stats_add(
-            std::atomic<std::uint64_t>& counter, std::uint64_t t0) noexcept
-        {
-            if (t0 != 0)
-                counter.fetch_add(
-                    detail::ns_now() - t0, std::memory_order_relaxed);
         }
 
         bool decode_or_collect() noexcept
@@ -222,10 +199,9 @@ namespace hpx::parcelset::policies::openshmem {
                 std::memcpy(&header, page, sizeof(header));
 
                 std::size_t chunk_size = 0;
-                std::uint64_t const vt0 = stats_now();
-                bool const page_ok = detail::validate_message_page(page,
-                    mailboxes_.mtu(), chunk_size, mailboxes_.checksum_enabled());
-                stats_add(detail::g_io_stats.crc_ns, vt0);
+                bool const page_ok =
+                    detail::validate_message_page(page, mailboxes_.mtu(),
+                        chunk_size, mailboxes_.checksum_enabled());
                 if (!page_ok)
                 {
                     mailboxes_.release_page(src_pe);
@@ -245,9 +221,7 @@ namespace hpx::parcelset::policies::openshmem {
 
                 std::size_t const header_size = detail::header_size;
 
-                std::uint64_t const ct1 = stats_now();
                 bool const ok = consume(page + header_size, chunk_size);
-                stats_add(detail::g_io_stats.copy_ns, ct1);
                 if (!ok)
                 {
                     mailboxes_.release_page(src_pe);
@@ -574,9 +548,6 @@ namespace hpx::parcelset::policies::openshmem {
                 return true;
             }
 
-            std::uint64_t const dt0 =
-                detail::g_io_stats_on.load(std::memory_order_relaxed) ?
-                detail::ns_now() : 0;
             // A parcel can complete while the runtime is already shutting
             // down (e.g. a late AGAS credit decrement): scheduling its action
             // then throws "runtime is being shut down".  Letting that escape
@@ -613,9 +584,6 @@ namespace hpx::parcelset::policies::openshmem {
                         mailboxes_.my_pe(), src_);
                 }
             }
-            if (dt0 != 0)
-                detail::g_io_stats.decode_ns.fetch_add(
-                    detail::ns_now() - dt0, std::memory_order_relaxed);
 
             state_ = connection_state::decoded;
             return true;
