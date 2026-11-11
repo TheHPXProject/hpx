@@ -271,7 +271,22 @@ foreach(test ${tests})
 endforeach()
 
 if(HPX_WITH_CXX_MODULES AND (CMAKE_CXX_COMPILER_ID STREQUAL "Clang"))
-  foreach(test ${sender_tests})
+  # Clang (last tested version is v22.1.8) crashes compiling the following tests
+  # when C++ module support is enabled.
+  set(failing_clang_tests
+      foreach_sender
+      lexicographical_compare_sender
+      max_element_sender
+      min_element_sender
+      move_sender
+      partial_sort_sender
+      replace_if_sender
+      search_sender
+      set_difference_sender
+      set_intersection_sender
+      shift_right_sender
+  )
+  foreach(test ${failing_clang_tests})
     target_compile_definitions(
       ${test}_test PRIVATE HPX_HAVE_FORCE_NO_CXX_MODULES
     )
