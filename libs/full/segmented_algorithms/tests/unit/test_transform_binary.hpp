@@ -38,19 +38,20 @@ struct add
     }
 };
 
+template <typename T, typename U>
 struct constness_add
 {
-    double operator()(int const& v1, int& v2) const
+    double operator()(T const& v1, U& v2) const
     {
         return v1 + v2 + 100;
     }
 
-    double operator()(int& v1, int const& v2) const
+    double operator()(T& v1, U const& v2) const
     {
         return v1 + v2 + 200;
     }
 
-    double operator()(int& v1, int& v2) const
+    double operator()(T& v1, U& v2) const
     {
         return v1 + v2;
     }
@@ -362,22 +363,23 @@ void transform_binary_tests(std::vector<hpx::id_type>& localities)
 
         reset_output();
         hpx::transform(hpx::execution::seq, std::as_const(v).begin(),
-            std::as_const(v).end(), w.begin(), x.begin(), constness_add{});
+            std::as_const(v).end(), w.begin(), x.begin(),
+            constness_add<T, U>{});
         verify_constness(V(100));
         reset_output();
         hpx::transform(hpx::execution::par, v.begin(), v.end(),
             std::as_const(w).begin(), std::as_const(w).end(), x.begin(),
-            constness_add{});
+            constness_add<T, U>{});
         verify_constness(V(200));
         reset_output();
         hpx::transform(hpx::execution::seq(hpx::execution::task),
             std::as_const(v).begin(), std::as_const(v).end(), w.begin(),
-            w.end(), x.begin(), constness_add{})
+            w.end(), x.begin(), constness_add<T, U>{})
             .get();
         verify_constness(V(100));
         reset_output();
         hpx::transform(hpx::execution::par(hpx::execution::task), v.begin(),
-            v.end(), std::as_const(w).begin(), x.begin(), constness_add{})
+            v.end(), std::as_const(w).begin(), x.begin(), constness_add<T, U>{})
             .get();
         verify_constness(V(200));
     }
