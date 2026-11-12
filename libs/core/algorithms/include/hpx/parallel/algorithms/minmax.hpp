@@ -367,6 +367,7 @@ namespace hpx {
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/iterator_support.hpp>
+#include <hpx/modules/threading_base.hpp>
 #include <hpx/modules/type_support.hpp>
 
 #include <hpx/algorithms/traits/is_value_proxy.hpp>
@@ -374,6 +375,7 @@ namespace hpx {
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
+#include <hpx/parallel/algorithms/detail/task_size_argument.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
 #include <hpx/parallel/util/loop.hpp>
@@ -596,6 +598,10 @@ namespace hpx::parallel {
                     }
                 }
 
+                // an iteration has the size of the comparison of two elements
+                auto const size =
+                    task_size_of_call<task_size_argument_t<FwdIter, Proj>,
+                        task_size_argument_t<FwdIter, Proj>>(f);
                 auto f1 = [f, proj, policy](
                               FwdIter it, std::size_t part_count) -> FwdIter {
                     return sequential_min_element(
@@ -623,7 +629,8 @@ namespace hpx::parallel {
 
                 return util::partitioner<ExPolicy, FwdIter, FwdIter>::call(
                     HPX_FORWARD(ExPolicy, policy), first,
-                    detail::distance(first, last), HPX_MOVE(f1),
+                    detail::distance(first, last),
+                    hpx::threads::detail::with_task_size(HPX_MOVE(f1), size),
                     hpx::unwrapping(HPX_MOVE(f2)));
             }
         };
@@ -835,6 +842,10 @@ namespace hpx::parallel {
                     }
                 }
 
+                // an iteration has the size of the comparison of two elements
+                auto const size =
+                    task_size_of_call<task_size_argument_t<FwdIter, Proj>,
+                        task_size_argument_t<FwdIter, Proj>>(f);
                 auto f1 = [f, proj, policy](
                               FwdIter it, std::size_t part_count) -> FwdIter {
                     return sequential_max_element(
@@ -862,7 +873,8 @@ namespace hpx::parallel {
 
                 return util::partitioner<ExPolicy, FwdIter, FwdIter>::call(
                     HPX_FORWARD(ExPolicy, policy), first,
-                    detail::distance(first, last), HPX_MOVE(f1),
+                    detail::distance(first, last),
+                    hpx::threads::detail::with_task_size(HPX_MOVE(f1), size),
                     hpx::unwrapping(HPX_MOVE(f2)));
             }
         };
@@ -1327,6 +1339,13 @@ namespace hpx::parallel {
                     }
                 }
 
+                // an iteration has the size of the comparison of two elements
+                // (minmax_element makes 1.5 per element: it compares two
+                // elements with each other, then the smaller one with the
+                // minimum and the larger one with the maximum)
+                auto const size =
+                    task_size_of_call<task_size_argument_t<FwdIter, Proj>,
+                        task_size_argument_t<FwdIter, Proj>>(f);
                 auto f1 = [f, proj, policy](FwdIter it, std::size_t part_count)
                     -> minmax_element_result<FwdIter> {
                     return sequential_minmax_element(
@@ -1355,7 +1374,8 @@ namespace hpx::parallel {
                 return util::partitioner<ExPolicy, result_type,
                     result_type>::call(HPX_FORWARD(ExPolicy, policy),
                     result.min, detail::distance(result.min, last),
-                    HPX_MOVE(f1), hpx::unwrapping(HPX_MOVE(f2)));
+                    hpx::threads::detail::with_task_size(HPX_MOVE(f1), size),
+                    hpx::unwrapping(HPX_MOVE(f2)));
             }
         };
         /// \endcond
