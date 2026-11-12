@@ -178,6 +178,11 @@ with ``HPX_WITH_AUTOMATIC_SERIALIZATION_REGISTRATION=OFF``, use
 :c:macro:`HPX_PLAIN_ACTION` instead. The target can be an ``hpx::id_type`` or a
 distribution policy, but not a client.
 
+The action is registered by the executable that instantiates
+``hpx::async<&app::square>``. A locality can only run the action if it was
+registered there too, so this works only if all localities run the same
+executable.
+
 For member functions of objects which have been registered with AGAS
 (e.g., 'components'), a different registration macro
 :c:macro:`HPX_DEFINE_COMPONENT_ACTION` has to be utilized. Any component needs

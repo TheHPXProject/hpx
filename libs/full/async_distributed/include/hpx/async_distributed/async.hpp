@@ -273,12 +273,29 @@ namespace hpx {
             true;
 #endif
 
+        // component actions exist only for member functions which are
+        // optionally const and/or noexcept, but not ref-qualified or volatile
         template <typename F>
         inline constexpr bool is_component_member_function_v = false;
 
-        template <typename F, typename Component>
-        inline constexpr bool is_component_member_function_v<F Component::*> =
-            std::is_function_v<F> && hpx::traits::is_component_v<Component>;
+        template <typename R, typename Component, typename... Ps>
+        inline constexpr bool
+            is_component_member_function_v<R (Component::*)(Ps...)> =
+                hpx::traits::is_component_v<Component>;
+
+        template <typename R, typename Component, typename... Ps>
+        inline constexpr bool
+            is_component_member_function_v<R (Component::*)(Ps...) const> =
+                hpx::traits::is_component_v<Component>;
+
+        template <typename R, typename Component, typename... Ps>
+        inline constexpr bool
+            is_component_member_function_v<R (Component::*)(Ps...) noexcept> =
+                hpx::traits::is_component_v<Component>;
+
+        template <typename R, typename Component, typename... Ps>
+        inline constexpr bool is_component_member_function_v<R (Component::*)(
+            Ps...) const noexcept> = hpx::traits::is_component_v<Component>;
 
         // free functions become plain actions, member functions of components
         // become component actions
@@ -307,7 +324,9 @@ namespace hpx {
     /// components directly. Internally creates the plain or component action
     /// for \a F and delegates to the existing async machinery. The action
     /// does not need to be registered using HPX_REGISTER_ACTION. This
-    /// requires HPX_WITH_AUTOMATIC_SERIALIZATION_REGISTRATION=ON.
+    /// requires HPX_WITH_AUTOMATIC_SERIALIZATION_REGISTRATION=ON. The action
+    /// is registered by the executable that instantiates this function, so
+    /// all localities have to run the same executable.
     ///
     /// \tparam F      A pointer to a free function or to a member function of
     ///                a component.

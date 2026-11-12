@@ -50,6 +50,11 @@ void nothing()
     ++called_nothing;
 }
 
+int get_called_nothing()
+{
+    return called_nothing.load();
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // the component still has to be registered, its actions don't
 struct counter_server : hpx::components::managed_component_base<counter_server>
@@ -79,6 +84,12 @@ struct counter_server : hpx::components::managed_component_base<counter_server>
     hpx::id_type where() const noexcept
     {
         return hpx::find_here();
+    }
+
+    // ref-qualified, there is no action for this
+    std::int32_t get_ref() const&
+    {
+        return value_;
     }
 
 private:
@@ -117,6 +128,12 @@ static_assert(!can_async_function_pointer<&not_a_component::get, hpx::id_type>);
 static_assert(!can_async_function_pointer<&not_a_component::get, hpx::launch,
     hpx::id_type>);
 
+// ref-qualified member functions can't be turned into actions
+static_assert(
+    !can_async_function_pointer<&counter_server::get_ref, hpx::id_type>);
+static_assert(!can_async_function_pointer<&counter_server::get_ref, hpx::launch,
+    hpx::id_type>);
+
 ///////////////////////////////////////////////////////////////////////////////
 void test_async_function_pointer(hpx::id_type const& target)
 {
@@ -141,6 +158,9 @@ void test_async_function_pointer(hpx::id_type const& target)
     {
         hpx::future<void> f = hpx::async<&nothing>(target);
         f.get();
+
+        // nothing() has to have run once on the target
+        HPX_TEST_EQ(hpx::async<&get_called_nothing>(target).get(), 1);
     }
 }
 
