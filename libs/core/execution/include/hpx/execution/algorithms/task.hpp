@@ -27,10 +27,11 @@
 
 namespace hpx::execution::experimental {
 
-    HPX_CXX_CORE_EXPORT struct task_scheduler : stdexec::task_scheduler
+    HPX_CXX_CORE_EXPORT struct default_task_scheduler
+      : stdexec::task_scheduler
     {
         using stdexec::task_scheduler::task_scheduler;
-        task_scheduler()
+        default_task_scheduler()
           : stdexec::task_scheduler(stdexec::inline_scheduler{})
         {
         }
@@ -39,7 +40,8 @@ namespace hpx::execution::experimental {
     HPX_CXX_CORE_EXPORT struct default_task_environment
     {
         using allocator_type = std::allocator<std::byte>;
-        using scheduler_type = hpx::execution::experimental::task_scheduler;
+        using scheduler_type =
+            hpx::execution::experimental::default_task_scheduler;
         using stop_source_type = hpx::experimental::in_place_stop_source;
         using error_types =
             hpx::execution::experimental::completion_signatures<
@@ -129,7 +131,7 @@ namespace hpx::execution::experimental {
             using allocator_type =
                 typename env_allocator<TaskEnv, std::allocator<std::byte>>::type;
             using scheduler_type = typename env_scheduler<TaskEnv,
-                hpx::execution::experimental::task_scheduler>::type;
+                hpx::execution::experimental::default_task_scheduler>::type;
             using stop_source_type = typename env_stop_source<TaskEnv,
                 hpx::experimental::in_place_stop_source>::type;
             using error_types = typename env_error_types<TaskEnv,
