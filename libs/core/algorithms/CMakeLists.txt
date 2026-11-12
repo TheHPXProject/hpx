@@ -237,6 +237,7 @@ if(HPX_WITH_DATAPAR)
       hpx/parallel/datapar.hpp
       hpx/parallel/datapar/adjacent_difference.hpp
       hpx/parallel/datapar/adjacent_find.hpp
+      hpx/parallel/datapar/copy_if.hpp
       hpx/parallel/datapar/equal.hpp
       hpx/parallel/datapar/fill.hpp
       hpx/parallel/datapar/find.hpp

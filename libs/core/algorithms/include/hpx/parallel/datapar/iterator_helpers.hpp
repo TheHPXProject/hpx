@@ -847,4 +847,12 @@ namespace hpx::parallel::util::detail {
     };
 }    // namespace hpx::parallel::util::detail
 
+namespace hpx::parallel::detail {
+
+    HPX_CXX_CORE_EXPORT template <typename T>
+    inline constexpr bool is_vectorizable_value_type_v =
+        std::is_arithmetic_v<T> && !std::is_same_v<std::remove_cv_t<T>, bool>;
+
+}    // namespace hpx::parallel::detail
+
 #endif
