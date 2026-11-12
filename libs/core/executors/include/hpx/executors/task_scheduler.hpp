@@ -586,11 +586,10 @@ namespace hpx::execution::experimental {
                         result_type == typeid(token_type))
                     {
                         auto* target = static_cast<token_type*>(result);
-                        ::new (target)
-                            token_type(hpx::execution::experimental::
-                                    get_stop_token(
-                                        hpx::execution::experimental::get_env(
-                                            receiver_)));
+                        ::new (target) token_type(
+                            hpx::execution::experimental::get_stop_token(
+                                hpx::execution::experimental::get_env(
+                                    receiver_)));
                         return true;
                     }
                     return false;
