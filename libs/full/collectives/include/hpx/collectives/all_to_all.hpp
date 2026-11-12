@@ -608,7 +608,7 @@ namespace hpx::collectives {
                 return result;
             };
 
-            return fid.then(hpx::launch::sync, HPX_MOVE(all_to_all_data));
+            return detail::then_on_communicator(fid, HPX_MOVE(all_to_all_data));
         }
     }    // namespace detail
 

@@ -74,6 +74,33 @@ namespace hpx::detail {
     }
 #endif
 
+#if !defined(HPX_COMPUTE_DEVICE_CODE)
+    // Detaching the global barrier releases its communicator, which queues a
+    // decref for the communicator id. The final garbage_collect() shutdown
+    // function has already run at this point, so flush that decref here.
+    static void detach_global_barrier()
+    {
+        hpx::distributed::barrier::get_global_barrier().detach();
+        garbage_collect();
+    }
+
+    // post_main() runs on worker localities as soon as their (empty) hpx_main
+    // returns, so detaching there breaks later remote uses of the global
+    // barrier (see #6430). Register the detach as a shutdown function only
+    // once pre-shutdown starts: shutdown functions run in registration order,
+    // so this places it after every pre-shutdown and shutdown function that
+    // was registered before shutdown started. The global barrier can be used
+    // from those functions on the locality that registered them, but not from
+    // shutdown functions that are themselves registered during pre-shutdown
+    // or shutdown. Shutdown functions run concurrently on all localities, so
+    // an action sent from a shutdown function to another locality may find
+    // the global barrier already detached there.
+    static void register_global_barrier_detach()
+    {
+        register_shutdown_function(&detach_global_barrier);
+    }
+#endif
+
     ///////////////////////////////////////////////////////////////////////////
     // Install performance counter startup functions for core subsystems.
     static void register_counter_types()
@@ -140,6 +167,10 @@ namespace hpx::detail {
         // Tidy supervision state on every locality at actual shutdown; see
         // tidy_supervision() for why post_main() is not the right place.
         register_pre_shutdown_function(&tidy_supervision);
+#endif
+
+#if !defined(HPX_COMPUTE_DEVICE_CODE)
+        register_pre_shutdown_function(&register_global_barrier_detach);
 #endif
 
         using components::stubs::runtime_support;
@@ -301,9 +332,6 @@ namespace hpx::detail {
         hpx::collectives::detail::reset_local_communicator();
         hpx::collectives::detail::reset_world_channel_communicator();
         hpx::collectives::detail::reset_cached_channel_communicators();
-
-        // simply destroy global barrier
-        hpx::distributed::barrier::get_global_barrier().detach();
 #endif
     }
 }    // namespace hpx::detail

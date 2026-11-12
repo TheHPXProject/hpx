@@ -27,6 +27,7 @@
 
 #include <exception>
 #include <memory>
+#include <system_error>
 #include <type_traits>
 #include <utility>
 
@@ -88,9 +89,25 @@ namespace hpx::execution::experimental {
             }
 
             // set_error: store the exception in the promise
-            void set_error(std::exception_ptr ep) && noexcept
+            template <typename E>
+            void set_error(E&& err) && noexcept
             {
-                promise_.set_exception(HPX_MOVE(ep));
+                if constexpr (std::is_same_v<std::decay_t<E>,
+                                  std::exception_ptr>)
+                {
+                    promise_.set_exception(HPX_FORWARD(E, err));
+                }
+                else if constexpr (std::is_same_v<std::decay_t<E>,
+                                       std::error_code>)
+                {
+                    promise_.set_exception(std::make_exception_ptr(
+                        std::system_error(HPX_FORWARD(E, err))));
+                }
+                else
+                {
+                    promise_.set_exception(
+                        std::make_exception_ptr(HPX_FORWARD(E, err)));
+                }
             }
 
             // set_stopped: convert stopped signal to hpx::thread_interrupted
@@ -115,7 +132,7 @@ namespace hpx::execution::experimental {
         // sender signals completion.  Constructs the op_state in-place via
         // guaranteed copy elision (C++17) since P2300 operation states are
         // immovable.
-        template <typename Sender, typename Receiver>
+        HPX_CXX_CORE_EXPORT template <typename Sender, typename Receiver>
         struct op_state_holder
         {
             template <typename Sender_>
@@ -168,7 +185,7 @@ namespace hpx::execution::experimental {
     //
     // STANDARD 4: This header does NOT include executor_scheduler.hpp,
     // parallel_executor.hpp, or any execution algorithm detail headers.
-    template <typename T>
+    HPX_CXX_CORE_EXPORT template <typename T>
     struct as_future_t final
     {
         template <typename Sender,
@@ -196,7 +213,7 @@ namespace hpx::execution::experimental {
         }
     };
 
-    template <typename T>
+    HPX_CXX_CORE_EXPORT template <typename T>
     inline constexpr as_future_t<T> as_future{};
 
 }    // namespace hpx::execution::experimental

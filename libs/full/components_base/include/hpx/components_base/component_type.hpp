@@ -285,6 +285,14 @@ namespace hpx::components {
     HPX_CXX_EXPORT template <typename Component, typename Enable = void>
     HPX_ALWAYS_EXPORT char const* get_component_base_name() noexcept;
 
+    // Returns the name of the module (HPX_COMPONENT_STRING) that registers the
+    // given component. It is defined by the component registry macros (see
+    // HPX_REGISTER_MINIMAL_COMPONENT_REGISTRY), which expand in the module's
+    // own sources: HPX_COMPONENT_STRING used in a template exported from a
+    // C++ module would have the value it had when the module was compiled.
+    HPX_CXX_EXPORT template <typename Component, typename Enable = void>
+    HPX_ALWAYS_EXPORT char const* get_component_module_name() noexcept;
+
     HPX_CXX_EXPORT template <typename Component>
     component_type get_component_type() noexcept
     {

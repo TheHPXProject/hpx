@@ -45,6 +45,7 @@ set(tests
     query_get_allocator
     rebind_executor_parameters
     rebind_policy
+    sender_future_error
     task_size_chunk_size_configuration
 )
 
@@ -82,29 +83,3 @@ foreach(test ${tests})
   add_hpx_unit_test("modules.execution" ${test} ${${test}_PARAMETERS})
 
 endforeach()
-
-if(HPX_WITH_CXX_MODULES AND ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang"))
-  # Clang (last tested version is v22) fails compiling the following tests when
-  # C++ module support is enabled.
-  set(failing_clang_tests
-      algorithm_continues_on
-      algorithm_bulk
-      algorithm_ensure_started
-      algorithm_just
-      algorithm_just_error
-      algorithm_just_stopped
-      algorithm_let_error
-      algorithm_let_stopped
-      algorithm_let_value
-      algorithm_run_loop
-      algorithm_split
-      algorithm_when_all
-      algorithm_transfer_when_all
-      future_sender_test
-  )
-  foreach(test ${failing_clang_tests})
-    target_compile_definitions(
-      ${test}_test PRIVATE HPX_HAVE_FORCE_NO_CXX_MODULES
-    )
-  endforeach()
-endif()
