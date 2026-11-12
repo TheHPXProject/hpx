@@ -81,6 +81,8 @@ set(benchmark_is_heap_until_perftest_PARAMETERS THREADS_PER_LOCALITY 4
 set(benchmark_merge_perftest_PARAMETERS THREADS_PER_LOCALITY 4
                                         --vector_size=16777216 --test_count=10
 )
+# the same for the test, which otherwise runs 100 times with 2^28 elements
+set(benchmark_merge_PARAMETERS ARGS --vector_size=16777216 --test_count=10)
 
 set(benchmark_inplace_merge_perftest_PARAMETERS THREADS_PER_LOCALITY 4
                                                 --test_count=100
