@@ -50,10 +50,10 @@ add_hpx_pseudo_dependencies(
   components.component_storage component_storage_component
 )
 
-# MSVC V1951 and V1952 exposes ICE compiling this in C++20 module mode
+# MSVC before V1944 was not tested compiling this in C++20 module mode
 if(HPX_WITH_CXX_MODULES
    AND (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-   AND (MSVC_VERSION LESS_EQUAL 1952)
+   AND (MSVC_VERSION LESS 1944)
 )
   target_compile_definitions(
     component_storage_component PRIVATE HPX_HAVE_FORCE_NO_CXX_MODULES
