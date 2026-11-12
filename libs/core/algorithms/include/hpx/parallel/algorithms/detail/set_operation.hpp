@@ -280,8 +280,13 @@ namespace hpx::parallel::detail {
                 parallel::util::
                     foreach_partitioner<hpx::execution::parallel_policy>::call(
                         hpx::execution::par, chunks.get(), cores,
-                        [copy_chunk](set_chunk_data* ch, std::size_t,
-                            std::size_t) { copy_chunk(ch); },
+                        [copy_chunk](set_chunk_data* ch,
+                            std::size_t const part_size, std::size_t) {
+                            for (std::size_t i = 0; i != part_size; ++i, ++ch)
+                            {
+                                copy_chunk(ch);
+                            }
+                        },
                         [](set_chunk_data* last) -> set_chunk_data* {
                             return last;
                         });
