@@ -50,10 +50,12 @@ namespace hpx::parcelset {
 
         bool locality_was_disconnected(std::uint32_t const id)
         {
-            HPX_ASSERT(get_runtime_ptr());
-            return get_runtime_distributed()
-                .get_parcel_handler()
-                .locality_was_disconnected(id);
+            // Without a runtime (the parcelports report sends that complete
+            // while the runtime is being stopped), every other locality is out
+            // of reach.
+            runtime_distributed const* rt = get_runtime_distributed_ptr();
+            return rt == nullptr ||
+                rt->get_parcel_handler().locality_was_disconnected(id);
         }
 
         parcel_write_handler_type set_parcel_write_handler(
@@ -130,11 +132,15 @@ namespace hpx::parcelset {
         void parcel_route_handler(
             std::error_code const& ec, parcelset::parcel const& p)
         {
-            parcelhandler& ph =
-                hpx::get_runtime_distributed().get_parcel_handler();
+            // a routed parcel may complete after the runtime has been stopped
+            runtime_distributed* rt = get_runtime_distributed_ptr();
+            if (rt == nullptr)
+            {
+                return;
+            }
 
             // invoke the original handler
-            ph.invoke_write_handler(ec, p);
+            rt->get_parcel_handler().invoke_write_handler(ec, p);
 
             // inform termination detection of a sent message
             if (!p.does_termination_detection())
