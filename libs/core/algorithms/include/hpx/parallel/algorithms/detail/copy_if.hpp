@@ -47,7 +47,8 @@ namespace hpx::parallel::detail {
             // Note: replacing invoke() with HPX_INVOKE() below makes gcc generate errors
             util::const_loop_n<ExPolicy>(part_begin, part_size,
                 [&pred, &proj, &curr](ZipIter it) mutable -> void {
-                    bool f = hpx::invoke(pred, hpx::invoke(proj, get<0>(*it)));
+                    bool f = static_cast<bool>(
+                        hpx::invoke(pred, hpx::invoke(proj, get<0>(*it))));
 
                     // NOLINTNEXTLINE(bugprone-assignment-in-if-condition)
                     if ((get<1>(*it) = f))
