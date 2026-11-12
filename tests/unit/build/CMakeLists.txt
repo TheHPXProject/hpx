@@ -135,7 +135,15 @@ else()
   endif()
 endif()
 
-if(NOT MSVC)
+# the Visual Studio generators have no single build type (CMAKE_BUILD_TYPE) to
+# use for the cmake tests
+if(CMAKE_GENERATOR MATCHES "^Visual Studio")
+  set(with_cmake_tests OFF)
+else()
+  set(with_cmake_tests ON)
+endif()
+
+if(with_cmake_tests)
   foreach(build_type ${build_types})
     string(TOLOWER "${build_type}" build_type_lc)
 
@@ -187,26 +195,28 @@ if(HPX_WITH_DYNAMIC_HPX_MAIN)
   list(APPEND cmake_tests build_dir_gtest_emulation install_dir_gtest_emulation)
 endif()
 
-add_hpx_pseudo_target(tests.unit.build.cmake)
-foreach(build_type ${build_types})
-  string(TOLOWER "${build_type}" build_type_lc)
-  add_hpx_pseudo_target(tests.unit.build.cmake.${build_type_lc})
-  foreach(test ${cmake_tests})
-    add_hpx_pseudo_target(tests.unit.build.cmake.${build_type_lc}.${test})
+if(with_cmake_tests)
+  add_hpx_pseudo_target(tests.unit.build.cmake)
+  foreach(build_type ${build_types})
+    string(TOLOWER "${build_type}" build_type_lc)
+    add_hpx_pseudo_target(tests.unit.build.cmake.${build_type_lc})
+    foreach(test ${cmake_tests})
+      add_hpx_pseudo_target(tests.unit.build.cmake.${build_type_lc}.${test})
+      add_hpx_pseudo_dependencies(
+        tests.unit.build.cmake.${build_type_lc}.${test}
+        cmake_${build_type_lc}_${test}_test
+      )
+      add_hpx_pseudo_dependencies(
+        tests.unit.build.cmake.${build_type_lc}
+        tests.unit.build.cmake.${build_type_lc}.${test}
+      )
+    endforeach()
     add_hpx_pseudo_dependencies(
-      tests.unit.build.cmake.${build_type_lc}.${test}
-      cmake_${build_type_lc}_${test}_test
-    )
-    add_hpx_pseudo_dependencies(
-      tests.unit.build.cmake.${build_type_lc}
-      tests.unit.build.cmake.${build_type_lc}.${test}
+      tests.unit.build.cmake tests.unit.build.cmake.${build_type_lc}
     )
   endforeach()
-  add_hpx_pseudo_dependencies(
-    tests.unit.build.cmake tests.unit.build.cmake.${build_type_lc}
-  )
-endforeach()
-add_hpx_pseudo_dependencies(tests.unit.build tests.unit.build.cmake)
+  add_hpx_pseudo_dependencies(tests.unit.build tests.unit.build.cmake)
+endif()
 
 if(HPX_WITH_PKGCONFIG
    AND HPX_WITH_DISTRIBUTED_RUNTIME

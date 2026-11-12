@@ -8,7 +8,10 @@ set(HPX_SHORTENPSEUDOTARGET_LOADED TRUE)
 
 function(shorten_hpx_pseudo_target target shortened_target)
   hpx_debug("shorten_hpx_pseudo_target" "shortening pseudo target: ${target}")
-  if(WIN32)
+  # keep the project files of the Visual Studio generators short, other
+  # generators (Ninja) can use the full names, which don't collide with the
+  # names of executables
+  if(WIN32 AND CMAKE_GENERATOR MATCHES "^Visual Studio")
     set(args)
     foreach(arg ${target})
       # convert to a list
