@@ -11,5 +11,7 @@
 
 namespace hpx::threads::detail {
 
-    HPX_CORE_EXPORT bool execute_thread(thread_id_ref_type thrd);
+    // The caller keeps its reference to the thread, so the thread data stays
+    // valid after this returns (also when the thread has terminated).
+    HPX_CORE_EXPORT bool execute_thread(thread_id_ref_type const& thrd);
 }    // namespace hpx::threads::detail
