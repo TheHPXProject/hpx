@@ -358,290 +358,6 @@ namespace hpx::parallel::detail {
                 });
     }
 
-    // Binary transform
-
-    // sequential remote implementation
-    template <typename Algo, typename ExPolicy, typename InIter1,
-        typename InIter2, typename OutIter, typename F, typename Proj1,
-        typename Proj2>
-    util::detail::algorithm_result_t<ExPolicy,
-        util::in_in_out_result<InIter1, InIter2, OutIter>>
-    segmented_transform(Algo&& algo, ExPolicy&& policy, InIter1 first1,
-        InIter1 last1, InIter2 first2, OutIter dest, F&& f, Proj1&& proj1,
-        Proj2&& proj2, std::true_type)
-    {
-        typedef hpx::traits::segmented_iterator_traits<InIter1> traits1;
-        typedef hpx::traits::segmented_iterator_traits<InIter2> traits2;
-        typedef hpx::traits::segmented_iterator_traits<OutIter> traits3;
-        typedef typename traits1::segment_iterator segment_iterator1;
-        typedef typename traits1::local_iterator local_iterator_type1;
-        typedef typename traits2::segment_iterator segment_iterator2;
-        typedef typename traits2::local_iterator local_iterator_type2;
-        typedef typename traits3::segment_iterator segment_iterator3;
-        typedef typename traits3::local_iterator local_iterator_type3;
-
-        typedef util::detail::algorithm_result<ExPolicy,
-            util::in_in_out_result<InIter1, InIter2, OutIter>>
-            result;
-
-        using difference_type =
-            typename std::iterator_traits<InIter1>::difference_type;
-        difference_type remaining = std::distance(first1, last1);
-        auto last2 = first2;
-        detail::advance(last2, remaining);
-        segment_iterator1 sit1 = traits1::segment(first1);
-        segment_iterator1 send1 = traits1::segment(last1);
-        segment_iterator2 sit2 = traits2::segment(first2);
-        segment_iterator2 send2 = traits2::segment(last2);
-        segment_iterator3 sdest = traits3::segment(dest);
-        local_iterator_type1 beg1 = traits1::local(first1);
-        local_iterator_type2 beg2 = traits2::local(first2);
-        local_iterator_type3 ldest = traits3::local(dest);
-
-        while (remaining != 0)
-        {
-            local_iterator_type1 end1 =
-                sit1 == send1 ? traits1::local(last1) : traits1::end(sit1);
-            local_iterator_type2 end2 =
-                sit2 == send2 ? traits2::local(last2) : traits2::end(sit2);
-            local_iterator_type3 end_dest = traits3::end(sdest);
-
-            while (beg1 == end1 && sit1 != send1)
-            {
-                ++sit1;
-                beg1 = traits1::begin(sit1);
-                end1 =
-                    sit1 == send1 ? traits1::local(last1) : traits1::end(sit1);
-            }
-            while (beg2 == end2 && sit2 != send2)
-            {
-                ++sit2;
-                beg2 = traits2::begin(sit2);
-                end2 =
-                    sit2 == send2 ? traits2::local(last2) : traits2::end(sit2);
-            }
-            while (ldest == end_dest)
-            {
-                ++sdest;
-                ldest = traits3::begin(sdest);
-                end_dest = traits3::end(sdest);
-            }
-
-            difference_type const count1 =
-                static_cast<difference_type>(std::distance(beg1, end1));
-            difference_type const count2 =
-                static_cast<difference_type>(std::distance(beg2, end2));
-            difference_type const count3 =
-                static_cast<difference_type>(std::distance(ldest, end_dest));
-            difference_type count =
-                (std::min) ((std::min) (count1, count2), count3);
-            HPX_ASSERT(count > 0);
-            if (count == 0)
-            {
-                break;
-            }
-
-            hpx::id_type const input1_id = traits1::get_id(sit1);
-            hpx::id_type const input2_id = traits2::get_id(sit2);
-            hpx::id_type const output_id = traits3::get_id(sdest);
-            auto const output_locality = get_partition_locality(output_id);
-            bool const same_locality =
-                get_partition_locality(input1_id) == output_locality &&
-                get_partition_locality(input2_id) == output_locality;
-            if (!same_locality)
-            {
-                count = (std::min) (count,
-                    max_transform_capture_count<difference_type,
-                        local_iterator_type1, local_iterator_type2>());
-            }
-
-            local_iterator_type1 chunk_end1 = beg1;
-            local_iterator_type2 chunk_end2 = beg2;
-            std::advance(chunk_end1, count);
-            std::advance(chunk_end2, count);
-            if (same_locality)
-            {
-                auto out = dispatch(output_id, algo, policy, std::true_type(),
-                    beg1, chunk_end1, beg2, ldest, f, proj1, proj2);
-                ldest = out.out;
-            }
-#if defined(HPX_HAVE_NETWORKING)
-            else
-            {
-                auto captured = capture_transform_async(input1_id, input2_id,
-                    output_id, policy, std::true_type{}, beg1, chunk_end1, beg2,
-                    chunk_end2, ldest, f, proj1, proj2);
-                captured.wait();
-                ldest = get_capture_result<ExPolicy>(HPX_MOVE(captured));
-            }
-#endif
-            beg1 = chunk_end1;
-            beg2 = chunk_end2;
-            std::advance(first1, count);
-            std::advance(first2, count);
-            std::advance(dest, count);
-            remaining -= count;
-        }
-        return result::get(util::in_in_out_result<InIter1, InIter2, OutIter>{
-            HPX_MOVE(first1), HPX_MOVE(first2), HPX_MOVE(dest)});
-    }
-
-    // parallel remote implementation
-    template <typename Algo, typename ExPolicy, typename InIter1,
-        typename InIter2, typename OutIter, typename F, typename Proj1,
-        typename Proj2>
-    util::detail::algorithm_result_t<ExPolicy,
-        util::in_in_out_result<InIter1, InIter2, OutIter>>
-    segmented_transform(Algo&& algo, ExPolicy&& policy, InIter1 first1,
-        InIter1 last1, InIter2 first2, OutIter dest, F&& f, Proj1&& proj1,
-        Proj2&& proj2, std::false_type)
-    {
-        typedef hpx::traits::segmented_iterator_traits<InIter1> traits1;
-        typedef hpx::traits::segmented_iterator_traits<InIter2> traits2;
-        typedef hpx::traits::segmented_iterator_traits<OutIter> traits3;
-        typedef typename traits1::segment_iterator segment_iterator1;
-        typedef typename traits1::local_iterator local_iterator_type1;
-        typedef typename traits2::segment_iterator segment_iterator2;
-        typedef typename traits2::local_iterator local_iterator_type2;
-        typedef typename traits3::segment_iterator segment_iterator3;
-        typedef typename traits3::local_iterator local_iterator_type3;
-
-        typedef util::detail::algorithm_result<ExPolicy,
-            util::in_in_out_result<InIter1, InIter2, OutIter>>
-            result;
-
-        typedef std::integral_constant<bool,
-            !std::forward_iterator<InIter1> || !std::forward_iterator<InIter2>>
-            forced_seq;
-
-        using difference_type =
-            typename std::iterator_traits<InIter1>::difference_type;
-        difference_type remaining = std::distance(first1, last1);
-        auto last2 = first2;
-        detail::advance(last2, remaining);
-
-        segment_iterator1 sit1 = traits1::segment(first1);
-        segment_iterator1 send1 = traits1::segment(last1);
-        segment_iterator2 sit2 = traits2::segment(first2);
-        segment_iterator2 send2 = traits2::segment(last2);
-        segment_iterator3 sdest = traits3::segment(dest);
-
-        using segment_type = std::vector<hpx::future<void>>;
-        segment_type segments;
-        segments.reserve(std::distance(sit1, send1));
-        hpx::future<void> captures = hpx::make_ready_future();
-
-        local_iterator_type1 beg1 = traits1::local(first1);
-        local_iterator_type2 beg2 = traits2::local(first2);
-        local_iterator_type3 ldest = traits3::local(dest);
-
-        while (remaining != 0)
-        {
-            local_iterator_type1 end1 =
-                sit1 == send1 ? traits1::local(last1) : traits1::end(sit1);
-            local_iterator_type2 end2 =
-                sit2 == send2 ? traits2::local(last2) : traits2::end(sit2);
-            local_iterator_type3 end_dest = traits3::end(sdest);
-
-            while (beg1 == end1 && sit1 != send1)
-            {
-                ++sit1;
-                beg1 = traits1::begin(sit1);
-                end1 =
-                    sit1 == send1 ? traits1::local(last1) : traits1::end(sit1);
-            }
-            while (beg2 == end2 && sit2 != send2)
-            {
-                ++sit2;
-                beg2 = traits2::begin(sit2);
-                end2 =
-                    sit2 == send2 ? traits2::local(last2) : traits2::end(sit2);
-            }
-            while (ldest == end_dest)
-            {
-                ++sdest;
-                ldest = traits3::begin(sdest);
-                end_dest = traits3::end(sdest);
-            }
-
-            difference_type const count1 =
-                static_cast<difference_type>(std::distance(beg1, end1));
-            difference_type const count2 =
-                static_cast<difference_type>(std::distance(beg2, end2));
-            difference_type const count3 =
-                static_cast<difference_type>(std::distance(ldest, end_dest));
-            difference_type count =
-                (std::min) ((std::min) (count1, count2), count3);
-            HPX_ASSERT(count > 0);
-            if (count == 0)
-            {
-                break;
-            }
-
-            hpx::id_type const input1_id = traits1::get_id(sit1);
-            hpx::id_type const input2_id = traits2::get_id(sit2);
-            hpx::id_type const output_id = traits3::get_id(sdest);
-            auto const output_locality = get_partition_locality(output_id);
-            bool const same_locality =
-                get_partition_locality(input1_id) == output_locality &&
-                get_partition_locality(input2_id) == output_locality;
-            if (!same_locality)
-            {
-                count = (std::min) (count,
-                    max_transform_capture_count<difference_type,
-                        local_iterator_type1, local_iterator_type2>());
-            }
-
-            local_iterator_type1 chunk_end1 = beg1;
-            local_iterator_type2 chunk_end2 = beg2;
-            std::advance(chunk_end1, count);
-            std::advance(chunk_end2, count);
-            if (same_locality)
-            {
-                segments.push_back(
-                    dispatch_async(output_id, algo, policy, forced_seq(), beg1,
-                        chunk_end1, beg2, ldest, f, proj1, proj2)
-                        .then([](auto ready) { ready.get(); }));
-            }
-#if defined(HPX_HAVE_NETWORKING)
-            else
-            {
-                captures = HPX_MOVE(captures).then(
-                    [=](hpx::future<void> previous) mutable
-                        -> hpx::future<void> {
-                        previous.get();
-                        return capture_transform_async(input1_id, input2_id,
-                            output_id, policy, forced_seq(), beg1, chunk_end1,
-                            beg2, chunk_end2, ldest, f, proj1, proj2)
-                            .then([](auto ready) { ready.get(); });
-                    });
-            }
-#endif
-
-            std::advance(first1, count);
-            std::advance(first2, count);
-            std::advance(dest, count);
-            std::advance(beg1, count);
-            std::advance(beg2, count);
-            std::advance(ldest, count);
-            remaining -= count;
-        }
-
-        segments.push_back(HPX_MOVE(captures));
-        return result::get(dataflow(
-            [=](segment_type&& r)
-                -> util::in_in_out_result<InIter1, InIter2, OutIter> {
-                (void) hpx::wait_all_nothrow(r);
-                // handle any remote exceptions, will throw on error
-                std::list<std::exception_ptr> errors;
-                parallel::util::detail::handle_remote_exceptions<
-                    ExPolicy>::call(r, errors);
-                return util::in_in_out_result<InIter1, InIter2, OutIter>{
-                    HPX_MOVE(first1), HPX_MOVE(first2), HPX_MOVE(dest)};
-            },
-            HPX_MOVE(segments)));
-    }
-
     // Binary transform1
 
     // sequential remote implementation
@@ -724,10 +440,6 @@ namespace hpx::parallel::detail {
             difference_type count =
                 (std::min) ((std::min) (count1, count2), count3);
             HPX_ASSERT(count > 0);
-            if (count == 0)
-            {
-                break;
-            }
 
             hpx::id_type const input1_id = traits1::get_id(sit1);
             hpx::id_type const input2_id = traits2::get_id(sit2);
@@ -863,10 +575,6 @@ namespace hpx::parallel::detail {
             difference_type count =
                 (std::min) ((std::min) (count1, count2), count3);
             HPX_ASSERT(count > 0);
-            if (count == 0)
-            {
-                break;
-            }
 
             hpx::id_type const input1_id = traits1::get_id(sit1);
             hpx::id_type const input2_id = traits2::get_id(sit2);
@@ -1041,12 +749,12 @@ namespace hpx::segmented {
         using proj_id = hpx::identity;
 
         return hpx::parallel::detail::segmented_transform(
-            hpx::parallel::detail::transform_binary<hpx::parallel::util::
+            hpx::parallel::detail::transform_binary2<hpx::parallel::util::
                     in_in_out_result<typename iterator1_traits::local_iterator,
                         typename iterator2_traits::local_iterator,
                         typename iterator3_traits::local_iterator>>(),
-            hpx::execution::seq, first1, last1, first2, dest, HPX_FORWARD(F, f),
-            proj_id{}, proj_id{}, std::true_type{});
+            hpx::execution::seq, first1, last1, first2, last2, dest,
+            HPX_FORWARD(F, f), proj_id{}, proj_id{}, std::true_type{});
     }
 
     HPX_CXX_EXPORT template <typename ExPolicy, typename InIter1,
@@ -1091,11 +799,11 @@ namespace hpx::segmented {
         using proj_id = hpx::identity;
 
         return hpx::parallel::detail::segmented_transform(
-            hpx::parallel::detail::transform_binary<hpx::parallel::util::
+            hpx::parallel::detail::transform_binary2<hpx::parallel::util::
                     in_in_out_result<typename iterator1_traits::local_iterator,
                         typename iterator2_traits::local_iterator,
                         typename iterator3_traits::local_iterator>>(),
-            HPX_FORWARD(ExPolicy, policy), first1, last1, first2, dest,
+            HPX_FORWARD(ExPolicy, policy), first1, last1, first2, last2, dest,
             HPX_FORWARD(F, f), proj_id{}, proj_id{}, is_seq());
     }
 
