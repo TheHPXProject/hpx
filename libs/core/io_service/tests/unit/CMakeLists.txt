@@ -14,7 +14,6 @@ foreach(test ${tests})
   add_hpx_executable(
     ${test}_test INTERNAL_FLAGS
     SOURCES ${sources}
-    DEPENDENCIES hpx_io_service
     EXCLUDE_FROM_ALL
     FOLDER "Tests/Unit/Modules/Core/IOService"
   )
