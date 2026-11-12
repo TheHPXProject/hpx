@@ -87,6 +87,13 @@ namespace hpx::chrono {
             return steady_clock::now() + _rel_time;
         }
 
+        // A duration is true if it is not zero, in particular, null_duration
+        // is false.
+        [[nodiscard]] explicit constexpr operator bool() const noexcept
+        {
+            return _rel_time != value_type::zero();
+        }
+
     private:
         value_type _rel_time;
     };

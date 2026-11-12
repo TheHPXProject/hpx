@@ -19,6 +19,7 @@
 #include <hpx/modules/threading_base.hpp>
 #include <hpx/modules/timing.hpp>
 #include <hpx/parallel/util/detail/chunk_size_iterator.hpp>
+#include <hpx/parallel/util/detail/elements_per_task_size.hpp>
 
 #include <algorithm>
 #include <concepts>
@@ -235,6 +236,25 @@ namespace hpx::parallel::util::detail {
         }
     }
 
+    // The number of elements the loop body f handles in the time its task
+    // size stands for (see elements_per_task_size), if the run time of an
+    // iteration was taken from that size (see get_iteration_duration), one
+    // otherwise. The parameters object is then given the number of groups of
+    // that many elements instead of the number of iterations, as the run time
+    // of an iteration can't be less than that of the smallest task size, and
+    // the chunk size it returns is a number of groups.
+    HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename IterOrR,
+        typename F>
+    std::size_t get_iteration_elements(F const& f,
+        hpx::chrono::steady_duration const& iteration_duration) noexcept
+    {
+        if (!iteration_duration)
+        {
+            return 1;
+        }
+        return elements_per_task_size<ExPolicy, IterOrR>(f);
+    }
+
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename F,
         typename IterOrR, typename Stride = std::size_t>
     hpx::util::iterator_range<chunk_size_iterator<IterOrR>>
@@ -250,20 +270,24 @@ namespace hpx::parallel::util::detail {
 
         auto const iteration_duration =
             get_iteration_duration(policy, f, count);
+        std::size_t const elements =
+            get_iteration_elements<ExPolicy, IterOrR>(f, iteration_duration);
+        std::size_t const groups = (count + elements - 1) / elements;
 
         cores = hpx::execution::experimental::processing_units_count(
-            policy.parameters(), policy.executor(), iteration_duration, count);
+            policy.parameters(), policy.executor(), iteration_duration, groups);
 
         std::size_t max_chunks =
             hpx::execution::experimental::maximal_number_of_chunks(
-                policy.parameters(), policy.executor(), cores, count);
+                policy.parameters(), policy.executor(), cores, groups);
 
         std::size_t chunk_size =
             hpx::execution::experimental::get_chunk_size(policy.parameters(),
-                policy.executor(), iteration_duration, cores, count);
+                policy.executor(), iteration_duration, cores, groups);
 
         // make sure, chunk size and max_chunks are consistent
-        adjust_chunk_size_and_max_chunks(cores, count, max_chunks, chunk_size);
+        adjust_chunk_size_and_max_chunks(cores, groups, max_chunks, chunk_size);
+        chunk_size = (std::min) (chunk_size * elements, count);
 
         auto last = next_or_subrange(it_or_r, count, 0);
         Stride stride = s;
@@ -508,23 +532,27 @@ namespace hpx::parallel::util::detail {
 
         auto const iteration_duration =
             get_iteration_duration(policy, f, count);
+        std::size_t const elements =
+            get_iteration_elements<ExPolicy, FwdIter>(f, iteration_duration);
+        std::size_t const groups = (count + elements - 1) / elements;
 
         cores = hpx::execution::experimental::processing_units_count(
-            policy.parameters(), policy.executor(), iteration_duration, count);
+            policy.parameters(), policy.executor(), iteration_duration, groups);
 
         std::size_t max_chunks =
             hpx::execution::experimental::maximal_number_of_chunks(
-                policy.parameters(), policy.executor(), cores, count);
+                policy.parameters(), policy.executor(), cores, groups);
 
         FwdIter last = parallel::detail::next(begin, count);
         Stride stride = s;
 
         std::size_t chunk_size =
             hpx::execution::experimental::get_chunk_size(policy.parameters(),
-                policy.executor(), iteration_duration, cores, count);
+                policy.executor(), iteration_duration, cores, groups);
 
         // make sure, chunk size and max_chunks are consistent
-        adjust_chunk_size_and_max_chunks(cores, count, max_chunks, chunk_size);
+        adjust_chunk_size_and_max_chunks(cores, groups, max_chunks, chunk_size);
+        chunk_size = (std::min) (chunk_size * elements, count);
 
         if (stride != 1)
         {

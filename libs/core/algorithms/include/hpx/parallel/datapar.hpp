@@ -14,6 +14,7 @@
 #include <hpx/modules/executors.hpp>
 #include <hpx/parallel/datapar/adjacent_difference.hpp>
 #include <hpx/parallel/datapar/adjacent_find.hpp>
+#include <hpx/parallel/datapar/elements_per_call.hpp>
 #include <hpx/parallel/datapar/equal.hpp>
 #include <hpx/parallel/datapar/fill.hpp>
 #include <hpx/parallel/datapar/find.hpp>
