@@ -573,7 +573,7 @@ namespace hpx::execution::experimental {
                 }
 
             protected:
-                void query_env(std::type_info const& query_type,
+                bool query_env_impl(std::type_info const& query_type,
                     std::type_info const& result_type,
                     void* result) const noexcept override
                 {
@@ -585,12 +585,15 @@ namespace hpx::execution::experimental {
                                     get_stop_token_t) &&
                         result_type == typeid(token_type))
                     {
-                        static_cast<std::optional<token_type>*>(result)
-                            ->emplace(
-                                hpx::execution::experimental::get_stop_token(
-                                    hpx::execution::experimental::get_env(
-                                        receiver_)));
+                        auto* target = static_cast<token_type*>(result);
+                        ::new (target)
+                            token_type(hpx::execution::experimental::
+                                    get_stop_token(
+                                        hpx::execution::experimental::get_env(
+                                            receiver_)));
+                        return true;
                     }
+                    return false;
                 }
             };
 
