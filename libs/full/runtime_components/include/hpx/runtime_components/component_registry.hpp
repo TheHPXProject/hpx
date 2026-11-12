@@ -62,7 +62,7 @@ namespace hpx::components {
             char const* name = get_component_name<type_holder>();
             char const* more = traits::component_config_data<Component>::call();
             detail::get_component_info(fillini, filepath, is_static, name,
-                HPX_COMPONENT_STRING, state, more);
+                get_component_module_name<Component>(), state, more);
             return true;
         }
 
