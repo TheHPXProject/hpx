@@ -318,6 +318,7 @@ namespace hpx {
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/type_support.hpp>
+#include <hpx/parallel/algorithms/detail/copy_if.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
@@ -516,22 +517,6 @@ namespace hpx::parallel {
     // copy_if
     namespace detail {
 
-        // sequential copy_if with projection function
-        HPX_CXX_CORE_EXPORT template <typename InIter1, typename InIter2,
-            typename OutIter, typename Pred, typename Proj>
-        constexpr util::in_out_result<InIter1, OutIter> sequential_copy_if(
-            InIter1 first, InIter2 last, OutIter dest, Pred&& pred, Proj&& proj)
-        {
-            while (first != last)
-            {
-                if (HPX_INVOKE(pred, HPX_INVOKE(proj, *first)))
-                    *dest++ = *first;
-                ++first;
-            }
-            return util::in_out_result<InIter1, OutIter>{
-                HPX_MOVE(first), HPX_MOVE(dest)};
-        }
-
         HPX_CXX_CORE_EXPORT template <typename IterPair>
         struct copy_if : public algorithm<copy_if<IterPair>, IterPair>
         {
@@ -546,7 +531,7 @@ namespace hpx::parallel {
                 ExPolicy, InIter1 first, InIter2 last, OutIter dest,
                 Pred&& pred, Proj&& proj /* = Proj()*/)
             {
-                return sequential_copy_if(first, last, dest,
+                return sequential_copy_if<ExPolicy>(first, last, dest,
                     HPX_FORWARD(Pred, pred), HPX_FORWARD(Proj, proj));
             }
 
@@ -585,31 +570,23 @@ namespace hpx::parallel {
                               proj = HPX_FORWARD(decltype(proj), proj)](
                               zip_iterator part_begin,
                               std::size_t part_size) -> std::size_t {
-                    std::size_t curr = 0;
-
-                    // Note: replacing the invoke() with HPX_INVOKE()
-                    // below makes gcc generate errors
-
-                    // MSVC complains if proj is captured by ref below
-                    util::const_loop_n<std::decay_t<ExPolicy>>(part_begin,
-                        part_size,
-                        [&pred, proj, &curr](zip_iterator it) mutable -> void {
-                            bool f = hpx::invoke(
-                                pred, hpx::invoke(proj, get<0>(*it)));
-
-                            // NOLINTNEXTLINE(bugprone-assignment-in-if-condition)
-                            if ((get<1>(*it) = f))
-                                ++curr;
-                        });
-
-                    return curr;
+                    return sequential_copy_if<ExPolicy>(
+                        part_begin, part_size, pred, proj);
                 };
+
+#if defined(HPX_HAVE_DATAPAR)
+                using loop_policy_type =
+                    decltype(hpx::execution::experimental::to_non_simd(
+                        std::declval<ExPolicy>()));
+#else
+                using loop_policy_type = std::decay_t<ExPolicy>;
+#endif
                 auto f3 = [dest, flags](zip_iterator part_begin,
                               std::size_t part_size, std::size_t val) mutable {
                     HPX_UNUSED(flags);
                     std::advance(dest, val);
-                    util::const_loop_n<std::decay_t<ExPolicy>>(part_begin,
-                        part_size, [&dest](zip_iterator it) mutable {
+                    util::const_loop_n<loop_policy_type>(part_begin, part_size,
+                        [&dest](zip_iterator it) mutable {
                             if (get<1>(*it))
                                 *dest++ = get<0>(*it);
                         });
