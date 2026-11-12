@@ -19,6 +19,7 @@ set(tests
     includes_chunk_boundary
     includes_empty_ranges
     is_sorted_until_chunk_boundary
+    make_heap_pow2
     minimal_findend
     mismatch_differently_sized_ranges
     num_cores
