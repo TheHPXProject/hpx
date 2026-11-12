@@ -33,6 +33,14 @@ Breaking changes
   copyable search values in their asynchronous operation state. Noncopyable
   lvalues, including arrays, are borrowed and must remain valid until the
   returned future becomes ready, even if the future is discarded.
+- The task size facilities (``hpx::threads::task_size``,
+  ``hpx::task_size_duration``, ``hpx::bulk_task_size``,
+  ``hpx::traits::get_task_size`` and ``hpx::traits::get_task_size_for``) moved
+  from the ``functional`` module to the ``thread_support`` module. Their names
+  are unchanged. Code that included
+  ``hpx/functional/traits/get_task_size.hpp`` directly has to include
+  ``hpx/modules/thread_support.hpp`` instead; ``hpx/functional.hpp`` and
+  ``hpx/modules/functional.hpp`` still provide them.
 
 Supervision Module
 ==================
