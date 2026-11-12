@@ -1,4 +1,5 @@
 //  Copyright (c) 2026 Hartmut Kaiser
+//  Copyright (c) 2026 Pratyksh Gupta
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -17,6 +18,7 @@
 #include <hpx/thread.hpp>
 
 #include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -26,6 +28,10 @@ constexpr std::size_t num_tasks = 2000;
 constexpr std::uint64_t task_duration_ns = 20000;
 
 std::atomic<std::size_t> num_stolen(0);
+hpx::threads::thread_priority task_priority =
+    hpx::threads::thread_priority::normal;
+hpx::threads::thread_priority expected_task_priority =
+    hpx::threads::thread_priority::normal;
 
 // the worker hpx_main runs on, which isn't necessarily worker 0, as another
 // worker may have stolen hpx_main before it started
@@ -33,6 +39,8 @@ std::size_t home_worker = 0;
 
 void busy_task()
 {
+    HPX_TEST_EQ(hpx::this_thread::get_priority(), expected_task_priority);
+
     auto const start = hpx::chrono::high_resolution_clock::now();
     while (hpx::chrono::high_resolution_clock::now() - start < task_duration_ns)
     {
@@ -47,8 +55,10 @@ void busy_task()
 int hpx_main()
 {
     home_worker = hpx::get_worker_thread_num();
-    hpx::execution::parallel_executor exec(hpx::threads::thread_schedule_hint(
-        static_cast<std::int16_t>(home_worker)));
+    auto const exec = hpx::execution::experimental::with_priority(
+        hpx::execution::parallel_executor(hpx::threads::thread_schedule_hint(
+            static_cast<std::int16_t>(home_worker))),
+        task_priority);
 
     std::vector<hpx::future<void>> futures;
     futures.reserve(num_tasks);
@@ -66,20 +76,33 @@ int hpx_main()
 
 int main(int, char* argv[])
 {
-    for (char const* scheduler :
-        {"local-workrequesting-fifo", "local-workrequesting-mc"})
+    for (hpx::threads::thread_priority const priority :
+        {hpx::threads::thread_priority::normal,
+            hpx::threads::thread_priority::high,
+            hpx::threads::thread_priority::boost})
     {
-        num_stolen = 0;
+        task_priority = priority;
+        expected_task_priority =
+            priority == hpx::threads::thread_priority::boost ?
+            hpx::threads::thread_priority::normal :
+            priority;
+        for (char const* scheduler :
+            {"local-workrequesting-fifo", "local-workrequesting-mc"})
+        {
+            num_stolen = 0;
 
-        std::string const queuing = std::string("--hpx:queuing=") + scheduler;
-        std::vector<char*> av = {argv[0], const_cast<char*>(queuing.c_str())};
+            std::string const queuing =
+                std::string("--hpx:queuing=") + scheduler;
+            std::vector<char*> av = {
+                argv[0], const_cast<char*>(queuing.c_str())};
 
-        hpx::local::init_params init_args;
-        init_args.cfg = {"hpx.os_threads=4"};
+            hpx::local::init_params init_args;
+            init_args.cfg = {"hpx.os_threads=4"};
 
-        HPX_TEST_EQ(hpx::local::init(hpx_main, static_cast<int>(av.size()),
-                        av.data(), init_args),
-            0);
+            HPX_TEST_EQ(hpx::local::init(hpx_main, static_cast<int>(av.size()),
+                            av.data(), init_args),
+                0);
+        }
     }
 
     return hpx::util::report_errors();

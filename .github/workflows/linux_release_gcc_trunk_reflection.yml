@@ -49,6 +49,7 @@ jobs:
           cmake --build build --target tests.unit.modules.contracts
           cmake --build build --target tests.unit.modules.actions_base
           cmake --build build --target tests.unit.modules.threading_base
+          cmake --build build --target tests.unit.modules.actions.action_task_size
     - name: Test
       shell: bash
       run: |
@@ -57,3 +58,4 @@ jobs:
           ctest --output-on-failure --tests-regex "tests.unit.modules.contracts"
           ctest --output-on-failure --tests-regex "tests.unit.modules.actions_base"
           ctest --output-on-failure --tests-regex "tests.unit.modules.threading_base"
+          ctest --output-on-failure --tests-regex "tests.unit.modules.actions.action_task_size|tests.unit.modules.actions.fail_action_task_size_annotations"

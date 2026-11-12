@@ -1146,8 +1146,6 @@ rst_prolog += '''
 .. _cilk_pp: https://software.intel.com/en-us/articles/intel-cilk-plus/
 .. |swarm| replace:: ETI SWift Adaptive Runtime Machine (SWARM)
 .. _swarm: https://www.etinternational.com/index.php/products/swarmbeta/
-.. |qthreads| replace:: Sandia National Labs Qthreads
-.. _qthreads: https://www.cs.sandia.gov/qthreads/
 .. |mpi| replace:: MPI
 .. _mpi: https://en.wikipedia.org/wiki/Message_Passing_Interface
 .. |openmp| replace:: OpenMP

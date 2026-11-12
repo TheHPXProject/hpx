@@ -43,12 +43,12 @@ them when you configure |hpx| with |cmake|_. If more than one of
    * * |tracy|_
      * :option:`HPX_WITH_TRACY`
      * Task zones and fibers, task lifecycle, futures and continuations, work
-       stealing, parcels, locks
+       stealing, parcels, locks (optional)
      * The Tracy profiler (Linux, Windows, macOS)
    * * |ittnotify|_
      * :option:`HPX_WITH_ITTNOTIFY`
-     * Tasks, task lifecycle, work stealing, markers, locks, performance
-       counters
+     * Tasks, task lifecycle, work stealing, markers, locks (optional),
+       performance counters
      * |vtune|
    * * |apex|_
      * :option:`HPX_WITH_APEX`
@@ -190,7 +190,8 @@ Capturing a trace
 Because the client runs in on-demand mode, it records events only while a
 profiler is connected. Events from before the connection are not part of the
 trace. Task zones that started before the connection are not recorded, and
-locks that were created before it record no lock events.
+locks that were created before it record no lock events (lock events also need
+:option:`HPX_WITH_TRACING_LOCK_EVENTS`).
 
 To record a short program from its start, type the address and click
 *Connect* before you start the program. The profiler keeps trying to connect
@@ -346,9 +347,20 @@ Other data
 
 * **Frames**: calls to ``hpx::tracing::frame_mark`` in your code split the
   timeline into frames (see :ref:`tracy_own_code`).
-* **Locks**: ``hpx::mutex`` and ``hpx::spinlock`` are reported to Tracy as
-  locks, which the profiler draws on the timeline. Only locks that were created
-  while a profiler was connected record lock events.
+* **Plots**: performance counters printed with ``--hpx:print-counter`` (or
+  ``--hpx:print-counter-reset``) are sent to Tracy as plots, one plot per
+  counter, named with the full counter name (for example
+  ``/runtime{locality#0/total}/uptime``). One name can match several counters,
+  for example one for each worker thread, and each gets its own plot. A value
+  is added each time |hpx| queries the counter, by default once at shutdown.
+  Use ``--hpx:print-counter-interval`` to get more than one value. This also
+  works with ``--hpx:print-counter-destination=none``, which prints nothing.
+  Histogram counters and other counters with several values are not sent.
+* **Locks**: if |hpx| was built with :option:`HPX_WITH_TRACING_LOCK_EVENTS`
+  set to ``ON`` (the default is ``OFF``), ``hpx::mutex``, ``hpx::spinlock``
+  and ``hpx::util::spinlock`` are reported to Tracy as locks, which the
+  profiler draws on the timeline. Only locks that were created while a
+  profiler was connected record lock events.
 * **Application information**: the |hpx| version and build configuration are
   sent to Tracy as application information, which the profiler keeps with the
   trace.
@@ -410,20 +422,27 @@ Reducing the overhead
 ---------------------
 
 When no profiler is connected, most tracing hooks only check whether a
-profiler is connected and return. Creating or destroying an ``hpx::mutex`` or
-``hpx::spinlock`` still registers it with Tracy. While a profiler is connected,
+profiler is connected and return. While a profiler is connected,
 |hpx| sends a few messages for every task, and each message records a call
 stack. For programs with many small tasks this can slow down the run. There are
 two ways to reduce it.
 
 Event classes can be compiled out one by one:
 :option:`HPX_WITH_TRACING_LIFECYCLE_EVENTS`,
-:option:`HPX_WITH_TRACING_CAUSAL_EVENTS` and
-:option:`HPX_WITH_TRACING_WORK_STEALING_EVENTS`. All three are ``ON`` by
-default. Turning one ``OFF`` makes its hooks empty, so neither the connection
-check nor the event itself runs. The arguments at each call site are still
-evaluated. The lifecycle and work stealing options apply to the Tracy and ITT
-backends, the causal option to the Tracy backend only.
+:option:`HPX_WITH_TRACING_CAUSAL_EVENTS`,
+:option:`HPX_WITH_TRACING_WORK_STEALING_EVENTS` and
+:option:`HPX_WITH_TRACING_LOCK_EVENTS`. The first three are ``ON`` by default,
+lock events are ``OFF``. Turning one ``OFF`` makes its hooks empty, so neither
+the connection check nor the event itself runs. The arguments at each call
+site are still evaluated. The lifecycle, work stealing and lock options apply
+to the Tracy and ITT backends, the causal option to the Tracy backend only.
+
+Lock events are ``OFF`` by default because they cost time even when no
+profiler is connected. With :option:`HPX_WITH_TRACING_LOCK_EVENTS` set to
+``ON``, creating or destroying an ``hpx::mutex``, ``hpx::spinlock`` or
+``hpx::util::spinlock`` registers it with Tracy. Every future holds a lock, so
+this costs time for every future, and the memory used grows with the number of
+locks created.
 
 Instead of turning lifecycle events off, you can sample them.
 :option:`HPX_WITH_TRACING_SAMPLE_RATE` sets the default rate: with a rate of N,
@@ -573,8 +592,9 @@ Tasks and markers use the ITT domain ``hpx``.
   for each call to ``hpx::tracing::frame_mark``.
 * **Events**: ``HPX_TRACING_MARK_EVENT`` records an ITT event that lasts until
   the end of the scope.
-* **Locks**: ``hpx::mutex`` and ``hpx::spinlock`` are reported through the ITT
-  synchronization API.
+* **Locks**: ``hpx::mutex``, ``hpx::spinlock`` and ``hpx::util::spinlock`` are
+  reported through the ITT synchronization API. Controlled by
+  :option:`HPX_WITH_TRACING_LOCK_EVENTS`, which is ``OFF`` by default.
 * **Counters**: performance counters printed with ``--hpx:print-counter`` are
   reported as ITT counters.
 * **Thread names**: the names of the OS threads that |hpx| starts.

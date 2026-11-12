@@ -11,6 +11,7 @@
 /// \page hpx::collectives::create_communicator
 /// \page hpx::collectives::create_local_communicator
 /// \page hpx::collectives::create_hierarchical_communicator
+/// \page hpx::collectives::hierarchical_communicator
 /// \page hpx::collectives::communicator::set_info
 /// \page hpx::collectives::communicator::get_info
 /// \page hpx::collectives::communicator::is_root
@@ -136,6 +137,26 @@ namespace hpx { namespace collectives {
         generation_arg generation = generation_arg(),
         root_site_arg root_site = root_site_arg());
 
+    /// A hierarchical communicator instance represents a tree of
+    /// communicators that together connect all sites participating in a
+    /// collective operation. Create it with
+    /// \a create_hierarchical_communicator and pass it to the collective
+    /// operations in place of a \a communicator.
+    struct hierarchical_communicator
+    {
+        /// Retrieve the number of participating sites and the index of the
+        /// current site for this communicator instance.
+        [[nodiscard]] hpx::tuple<num_sites_arg, this_site_arg>
+        get_info() const noexcept;
+
+        /// Return the number of children of each node in the tree of
+        /// communicators.
+        [[nodiscard]] constexpr arity_arg get_arity() const noexcept;
+
+        /// Return the site at the root of the tree of communicators.
+        [[nodiscard]] constexpr root_site_arg get_root_site() const noexcept;
+    };
+
     /// Create a new hierarchical communicator object usable with collective
     /// operations
     ///
@@ -172,8 +193,10 @@ namespace hpx { namespace collectives {
     ///                     communicator collapses to a single flat
     ///                     communicator spanning all sites (strict
     ///                     comparison: num_sites < threshold). The default
-    ///                     is 16; pass 0 to disable the fallback and always
-    ///                     build a tree.
+    ///                     is 16; pass 0 to disable the fallback. The
+    ///                     communicator is still a single flat communicator
+    ///                     if \a arity is not smaller than the number of
+    ///                     sites.
     ///
     /// \note   The sub-communicators of a hierarchical_communicator share one
     ///         generation sequence per registered name. Every hierarchical
@@ -507,6 +530,23 @@ namespace hpx::collectives {
 
     HPX_CXX_EXPORT template <typename T>
     inline constexpr bool is_communicator_v = is_communicator<T>::value;
+
+    namespace detail {
+
+        // The continuation of an unresolved client runs in the thread that
+        // resolves it, which can be another site inside AGAS' symbol namespace
+        // bind. The request may suspend that thread before the site issued its
+        // own part of the collective, so run it on a new thread instead.
+        HPX_CXX_EXPORT template <typename F>
+        auto then_on_communicator(communicator const& fid, F&& f)
+        {
+            if (!fid.is_ready())
+            {
+                return fid.then(hpx::launch::async, HPX_FORWARD(F, f));
+            }
+            return fid.then(hpx::launch::sync, HPX_FORWARD(F, f));
+        }
+    }    // namespace detail
 }    // namespace hpx::collectives
 
 #endif    // DOXYGEN

@@ -86,6 +86,13 @@ namespace hpx {
                     "this packaged_task has no valid shared state");
             }
 
+            if (promise_.is_ready())
+            {
+                HPX_THROW_EXCEPTION(hpx::error::promise_already_satisfied,
+                    "packaged_task<Signature>::operator()",
+                    "result has already been stored for this packaged_task");
+            }
+
             // synchronous execution of the embedded function (object)
             hpx::detail::try_catch_exception_ptr(
                 [&]() {

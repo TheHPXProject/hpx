@@ -153,12 +153,26 @@
 /**/
 #define HPX_REGISTER_MINIMAL_COMPONENT_REGISTRY_3(                             \
     ComponentType, componentname, state)                                       \
+    HPX_DEFINE_COMPONENT_MODULE_NAME(ComponentType)                            \
     using componentname##_component_registry_type =                            \
         hpx::components::component_registry<ComponentType, state>;             \
     HPX_REGISTER_COMPONENT_REGISTRY(                                           \
         componentname##_component_registry_type, componentname)                \
     template struct hpx::components::component_registry<ComponentType, state>; \
 /**/
+
+///////////////////////////////////////////////////////////////////////////////
+// Define the name of the module that registers the given component (see
+// hpx::components::get_component_module_name). This has to expand in the
+// sources of the module, for HPX_COMPONENT_STRING to have its value there.
+#define HPX_DEFINE_COMPONENT_MODULE_NAME(ComponentType)                        \
+    template <>                                                                \
+    HPX_ALWAYS_EXPORT char const*                                              \
+    hpx::components::get_component_module_name<ComponentType>() noexcept       \
+    {                                                                          \
+        return HPX_COMPONENT_STRING;                                           \
+    }                                                                          \
+    /**/
 
 ///////////////////////////////////////////////////////////////////////////////
 #define HPX_REGISTER_MINIMAL_COMPONENT_REGISTRY_DYNAMIC(...)                   \
@@ -177,6 +191,7 @@
 /**/
 #define HPX_REGISTER_MINIMAL_COMPONENT_REGISTRY_DYNAMIC_3(                     \
     ComponentType, componentname, state)                                       \
+    HPX_DEFINE_COMPONENT_MODULE_NAME(ComponentType)                            \
     using componentname##_component_registry_type =                            \
         hpx::components::component_registry<ComponentType, state>;             \
     HPX_REGISTER_COMPONENT_REGISTRY_DYNAMIC(                                   \

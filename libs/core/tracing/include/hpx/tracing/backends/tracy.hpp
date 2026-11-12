@@ -18,6 +18,10 @@
 
 #include <hpx/modules/tracy.hpp>
 
+#if !defined(HPX_HAVE_TRACING_LOCK_EVENTS)
+#include <hpx/tracing/backends/empty_lock_context.hpp>
+#endif
+
 #include <hpx/config/warnings_prefix.hpp>
 
 namespace hpx::tracing {
@@ -143,6 +147,9 @@ namespace hpx::tracing {
         hpx::tracy::background_work_region impl;
     };
 
+    // Off by default: Tracy keeps every announced lock in its on-demand queue
+    // for the life of the process, even when no profiler ever connects.
+#if defined(HPX_HAVE_TRACING_LOCK_EVENTS)
     ////////////////////////////////////////////////////////////////////////////
     // lock_context: TracyCLockAnnounce / TracyCLockTerminate in ctor/dtor
     // are safe whether Tracy is connected or not, so we gate only the four
@@ -174,6 +181,7 @@ namespace hpx::tracing {
         hpx::tracy::lock_data impl;
     };
     /// \endcond
+#endif    // HPX_HAVE_TRACING_LOCK_EVENTS
 
     ////////////////////////////////////////////////////////////////////////////
     namespace detail {

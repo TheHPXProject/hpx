@@ -195,7 +195,7 @@ namespace hpx::collectives {
             return result;
         };
 
-        return fid.then(hpx::launch::sync, HPX_MOVE(barrier_data));
+        return detail::then_on_communicator(fid, HPX_MOVE(barrier_data));
     }
 
     HPX_CXX_EXPORT inline hpx::future<void> barrier(communicator fid,

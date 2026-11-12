@@ -13,6 +13,7 @@ if(HPX_WITH_NETWORKING)
       broadcast_wait_for_2822
       channel_communicator_6881
       collectives_bool_5940
+      collectives_unresolved_communicator
       exclusive_scan_6636
       multiple_gather_ops_2001
       reduce_vector_bool
@@ -26,6 +27,9 @@ if(HPX_WITH_NETWORKING)
   set(broadcast_wait_for_2822_PARAMETERS LOCALITIES 2 THREADS_PER_LOCALITY 4)
   set(barrier_3792_PARAMETERS LOCALITIES 3 THREADS_PER_LOCALITY 1)
   set(collectives_bool_5940_PARAMETERS LOCALITIES 2)
+  set(collectives_unresolved_communicator_PARAMETERS THREADS_PER_LOCALITY 4
+                                                     TIMEOUT 120
+  )
   set(exclusive_scan_6636_PARAMETERS LOCALITIES 2)
   set(multiple_gather_ops_2001_PARAMETERS LOCALITIES 2)
   set(reduce_vector_bool_2001_PARAMETERS LOCALITIES 2)

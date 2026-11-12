@@ -8,6 +8,9 @@
 
 #include <hpx/algorithm.hpp>
 #include <hpx/chrono.hpp>
+#if defined(HPX_HAVE_DATAPAR)
+#include <hpx/datapar.hpp>
+#endif
 #include <hpx/format.hpp>
 #include <hpx/init.hpp>
 #include <hpx/modules/testing.hpp>
@@ -121,6 +124,16 @@ void run_benchmark(std::size_t vector_size, int test_count,
     double time_par_unseq =
         run_unique_copy_benchmark_hpx(test_count, par_unseq, first, last, dest);
 
+#if defined(HPX_HAVE_DATAPAR)
+    std::cout << "--- run_unique_copy_benchmark_simd ---" << std::endl;
+    double time_simd =
+        run_unique_copy_benchmark_hpx(test_count, simd, first, last, dest);
+
+    std::cout << "--- run_unique_copy_benchmark_par_simd ---" << std::endl;
+    double time_par_simd =
+        run_unique_copy_benchmark_hpx(test_count, par_simd, first, last, dest);
+#endif
+
     std::cout << "\n-------------- Benchmark Result --------------"
               << std::endl;
     auto fmt = "unique_copy ({1}) : {2}(sec)";
@@ -129,6 +142,11 @@ void run_benchmark(std::size_t vector_size, int test_count,
     hpx::util::format_to(std::cout, fmt, "par", time_par) << std::endl;
     hpx::util::format_to(std::cout, fmt, "par_unseq", time_par_unseq)
         << std::endl;
+#if defined(HPX_HAVE_DATAPAR)
+    hpx::util::format_to(std::cout, fmt, "simd", time_simd) << std::endl;
+    hpx::util::format_to(std::cout, fmt, "par_simd", time_par_simd)
+        << std::endl;
+#endif
     std::cout << "----------------------------------------------" << std::endl;
 }
 

@@ -26,6 +26,9 @@
 
 namespace hpx {
 
+    HPX_CXX_CORE_EXPORT template <typename Sig>
+    class packaged_task;
+
     namespace detail {
 
         HPX_CXX_CORE_EXPORT template <typename R,
@@ -207,6 +210,18 @@ namespace hpx {
             }
 
         protected:
+            // packaged_task has to know whether the result has already been
+            // stored before it invokes the stored callable
+            template <typename Sig>
+            friend class hpx::packaged_task;
+
+            // Returns: true only if *this refers to a shared state that
+            //          already holds a value or an exception.
+            bool is_ready() const noexcept
+            {
+                return shared_state_ != nullptr && shared_state_->is_ready();
+            }
+
             void check_abandon_shared_state(char const* fun)
             {
                 if (shared_state_ != nullptr &&

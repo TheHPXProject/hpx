@@ -67,10 +67,10 @@ if(HPX_WITH_SUPERVISION
    AND HPX_WITH_NETWORKING
    AND HPX_WITH_PARCELPORT_TCP
 )
-  # MSVC V1951 and V1952 expose ICE compiling this in C++20 module mode
+  # MSVC before V1944 was not tested compiling this in C++20 module mode
   if(HPX_WITH_CXX_MODULES
      AND (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-     AND (MSVC_VERSION LESS_EQUAL 1952)
+     AND (MSVC_VERSION LESS 1944)
   )
     target_compile_definitions(
       force_disconnect_worker PRIVATE HPX_HAVE_FORCE_NO_CXX_MODULES
