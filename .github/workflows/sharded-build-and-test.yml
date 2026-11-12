@@ -29,6 +29,18 @@ on:
         description: "Container image of all jobs (empty: run on the runner)"
         type: string
         default: ""
+      get-cmake:
+        description: "Install the latest CMake and Ninja (lukka/get-cmake) in every job"
+        type: boolean
+        default: false
+      vcpkg:
+        description: "Install the Windows dependencies with vcpkg (.github/actions/setup-vcpkg) in every job"
+        type: boolean
+        default: false
+      msvc-dev-env:
+        description: "Set up the MSVC developer environment (.github/actions/msvc-dev-env) in every job, needed for building with Ninja on Windows"
+        type: boolean
+        default: false
       setup:
         description: "Shell commands run after the checkout in every job, for instance to install dependencies"
         type: string
@@ -77,6 +89,15 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - uses: lukka/get-cmake@v4.4.5
+        if: inputs.get-cmake
+
+      - uses: ./.github/actions/setup-vcpkg
+        if: inputs.vcpkg
+
+      - uses: ./.github/actions/msvc-dev-env
+        if: inputs.msvc-dev-env
+
       - name: Set up
         if: inputs.setup != ''
         shell: bash
@@ -109,7 +130,9 @@ jobs:
           for file in ${{ inputs.exclude-regex-files }}; do
             exclude_args+=(--exclude-regex "$GITHUB_WORKSPACE/${file}")
           done
-          ctest -N | python3 ../.github/ci-scripts/generate_test_matrix.py \
+          # the Windows runners have no python3
+          python=$(command -v python3 || command -v python)
+          ctest -N | "$python" ../.github/ci-scripts/generate_test_matrix.py \
             ${{ inputs.shards }} ${exclude_args[@]+"${exclude_args[@]}"} \
             > test_matrix.json
           printf 'matrix=%s\n' "$(cat test_matrix.json)" >> "$GITHUB_OUTPUT"
@@ -138,6 +161,15 @@ jobs:
       # The shards compile their tests, so they need the sources, not only
       # .github
       - uses: actions/checkout@v7
+
+      - uses: lukka/get-cmake@v4.4.5
+        if: inputs.get-cmake
+
+      - uses: ./.github/actions/setup-vcpkg
+        if: inputs.vcpkg
+
+      - uses: ./.github/actions/msvc-dev-env
+        if: inputs.msvc-dev-env
 
       - name: Set up
         if: inputs.setup != ''
