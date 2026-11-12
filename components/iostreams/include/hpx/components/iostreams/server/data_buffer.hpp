@@ -16,6 +16,7 @@
 #include <ios>
 #include <memory>
 #include <mutex>
+#include <ostream>
 #include <utility>
 #include <vector>
 
@@ -63,6 +64,19 @@ namespace hpx::iostreams::detail {
             data_buffer b;
             std::swap(b.data_, data_);
             return b;
+        }
+
+        // Write the buffered data to the given local stream and empty the
+        // buffer (used once the stream can no longer send to the console).
+        void write_locked_to(std::ostream& os)
+        {
+            if (data_.get() && !data_->empty())
+            {
+                os.write(
+                    data_->data(), static_cast<std::streamsize>(data_->size()));
+                os.flush();
+                data_->clear();
+            }
         }
 
         template <typename Char>

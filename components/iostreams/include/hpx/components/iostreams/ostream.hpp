@@ -189,6 +189,10 @@ namespace hpx::iostreams {
         std::atomic<std::uint64_t> generational_count_;
         Sink sink;
 
+        // the local stream that receives what is written to this stream once
+        // it has been shut down (see uninitialize and flush)
+        std::ostream* local_stream_ = nullptr;
+
         // Performs a lazy streaming operation.
         template <typename T>
         ostream& streaming_operator_lazy(T const& subject)
@@ -275,6 +279,20 @@ namespace hpx::iostreams {
             std::unique_lock<mutex_type> l(*mtx_);
             if (!this->detail::data_buffer::empty_locked())
             {
+                // Once the stream has been shut down (uninitialize), or before
+                // it was set up, there is no console to send to. Write to the
+                // local stream instead: sending would throw, possibly during
+                // the destruction of the global streams.
+                if (!this->base_type::valid())
+                {
+                    if (local_stream_ != nullptr)
+                    {
+                        this->detail::data_buffer::write_locked_to(
+                            *local_stream_);
+                    }
+                    return true;
+                }
+
                 // Create the next buffer, returns the previous buffer
                 data_buffer next = this->detail::data_buffer::init_locked();
 
@@ -315,9 +333,15 @@ namespace hpx::iostreams {
         template <typename Tag>
         void uninitialize(Tag tag)
         {
-            std::unique_lock<mutex_type> l(*mtx_, std::try_to_lock);
-            if (l)
             {
+                // Wait for the lock: the output written so far has to be
+                // flushed before the stream is released, otherwise it is left
+                // for the destruction of the global stream objects.
+                std::unique_lock<mutex_type> l(*mtx_);
+
+                // what is written from now on goes to the local stream
+                local_stream_ = &detail::get_outstream(tag);
+
                 streaming_operator_sync(
                     hpx::iostreams::flush_type(), l);    // unlocks
             }
