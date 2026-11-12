@@ -1,4 +1,4 @@
-//  Copyright (c) 2026 Divyanshi
+//  Copyright (c) 2026 Divyanshi Talreja
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
