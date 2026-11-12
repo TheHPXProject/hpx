@@ -23,6 +23,7 @@
 #include <hpx/modules/schedulers.hpp>
 #include <hpx/modules/testing.hpp>
 #include <hpx/modules/thread_pools.hpp>
+#include <hpx/modules/threading_base.hpp>
 
 #include <array>
 #include <atomic>
@@ -125,7 +126,23 @@ struct server : hpx::components::component_base<server>
         return 42;
     }
 
+    // The priority and stack size of the thread the action runs on, to check
+    // that HPX_ACTION_HAS_PRIORITY and HPX_ACTION_USES_LARGE_STACK apply to
+    // component actions as well (#8019).
+    int get_priority() const
+    {
+        return static_cast<int>(
+            hpx::threads::get_thread_priority(hpx::threads::get_self_id()));
+    }
+
+    std::ptrdiff_t get_stacksize() const
+    {
+        return hpx::threads::get_stack_size(hpx::threads::get_self_id());
+    }
+
     HPX_DEFINE_COMPONENT_ACTION(server, get, get_action)
+    HPX_DEFINE_COMPONENT_ACTION(server, get_priority, get_priority_action)
+    HPX_DEFINE_COMPONENT_ACTION(server, get_stacksize, get_stacksize_action)
 };
 
 using server_type = hpx::components::component<server>;
@@ -134,6 +151,26 @@ HPX_REGISTER_COMPONENT(server_type, server)
 HPX_REGISTER_ACTION_DECLARATION(server::get_action, server_get_action)
 HPX_REGISTER_ACTION(server::get_action, server_get_action)
 HPX_ACTION_HAS_TASK_SIZE(server::get_action, task_size::large)
+
+HPX_REGISTER_ACTION_DECLARATION(
+    server::get_priority_action, server_get_priority_action)
+HPX_REGISTER_ACTION(server::get_priority_action, server_get_priority_action)
+HPX_ACTION_HAS_PRIORITY(
+    server::get_priority_action, hpx::threads::thread_priority::high)
+
+HPX_REGISTER_ACTION_DECLARATION(
+    server::get_stacksize_action, server_get_stacksize_action)
+HPX_REGISTER_ACTION(server::get_stacksize_action, server_get_stacksize_action)
+HPX_ACTION_USES_LARGE_STACK(server::get_stacksize_action)
+
+#if defined(HPX_HAVE_CXX26_REFLECTION)
+HPX_COMPONENT_ACTION(server, get_priority, high_priority_action);
+HPX_ACTION_HAS_PRIORITY(
+    high_priority_action, hpx::threads::thread_priority::high)
+
+HPX_COMPONENT_ACTION(server, get_stacksize, large_stack_action);
+HPX_ACTION_USES_LARGE_STACK(large_stack_action)
+#endif
 
 ///////////////////////////////////////////////////////////////////////////////
 #if defined(HPX_HAVE_CXX26_REFLECTION)
@@ -254,11 +291,21 @@ struct annotated_server : hpx::components::component_base<annotated_server>
         return 42;
     }
 
+    [[= hpx::task_size::small_]] int get_overridden() const
+    {
+        return 42;
+    }
+
     HPX_DEFINE_COMPONENT_ACTION(annotated_server, get, get_action)
 };
 
 // HPX_COMPONENT_ACTION makes a reflect_component_action as well
 HPX_COMPONENT_ACTION(annotated_server, get_large, annotated_get_large_action);
+
+// HPX_ACTION_HAS_TASK_SIZE overrides the annotation
+HPX_COMPONENT_ACTION(
+    annotated_server, get_overridden, annotated_get_overridden_action);
+HPX_ACTION_HAS_TASK_SIZE(annotated_get_overridden_action, task_size::large)
 
 using annotated_server_type = hpx::components::component<annotated_server>;
 HPX_REGISTER_COMPONENT(annotated_server_type, annotated_server)
@@ -301,16 +348,23 @@ void test_plain_actions()
 
 void test_component_actions()
 {
-    // With reflection, HPX_DEFINE_COMPONENT_ACTION derives get_action from a
-    // reflect_component_action that is its own derived_type, so the thread is
-    // sized from that base and HPX_ACTION_HAS_TASK_SIZE is not seen yet. See
-    // #8019.
-#if !defined(HPX_HAVE_CXX26_REFLECTION)
     hpx::id_type const id = hpx::new_<server>(hpx::find_here()).get();
 
     check_sizes(
         [&] { HPX_TEST_EQ(hpx::async<server::get_action>(id).get(), 42); }, 0,
         0, 1);
+
+    // hpx::async with an action object takes the priority and stack size from
+    // the action
+    int const high = static_cast<int>(hpx::threads::thread_priority::high);
+    std::ptrdiff_t const large =
+        hpx::threads::get_stack_size(hpx::threads::thread_stacksize::large);
+
+    HPX_TEST_EQ(hpx::async(server::get_priority_action(), id).get(), high);
+    HPX_TEST_EQ(hpx::async(server::get_stacksize_action(), id).get(), large);
+#if defined(HPX_HAVE_CXX26_REFLECTION)
+    HPX_TEST_EQ(hpx::async(high_priority_action(), id).get(), high);
+    HPX_TEST_EQ(hpx::async(large_stack_action(), id).get(), large);
 #endif
 }
 
@@ -370,6 +424,12 @@ void test_annotated_actions()
     check_sizes(
         [&] {
             HPX_TEST_EQ(hpx::async<annotated_get_large_action>(id).get(), 42);
+        },
+        0, 0, 1);
+    check_sizes(
+        [&] {
+            HPX_TEST_EQ(
+                hpx::async<annotated_get_overridden_action>(id).get(), 42);
         },
         0, 0, 1);
 
