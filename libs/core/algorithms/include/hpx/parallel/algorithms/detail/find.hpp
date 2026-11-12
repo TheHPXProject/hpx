@@ -280,10 +280,16 @@ namespace hpx::parallel::detail {
                 return detail::advance_to_sentinel(first1, last1);
             }
 
-            bool found = false;
-            Iter1 result = first1;
-            while (true)
+            // without a match this is already an iterator to the end of the
+            // range (last1 may be a sentinel of a different type)
+            Iter1 result = sequential_search(
+                first1, last1, first2, last2, op, proj1, proj2);
+
+            while (result != last1)
             {
+                first1 = result;
+                ++first1;
+
                 Iter1 new_result = sequential_search(
                     first1, last1, first2, last2, op, proj1, proj2);
 
@@ -291,20 +297,7 @@ namespace hpx::parallel::detail {
                 {
                     break;
                 }
-                else
-                {
-                    found = true;
-                    result = new_result;
-                    first1 = result;
-                    ++first1;
-                }
-            }
-
-            // without a match, return an iterator to the end of the range
-            // (last1 may be a sentinel of a different type)
-            if (!found)
-            {
-                return detail::advance_to_sentinel(result, last1);
+                result = new_result;
             }
             return result;
         }
