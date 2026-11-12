@@ -65,7 +65,7 @@ namespace hpx::execution::experimental {
     };
 
     template <typename Error>
-    HPX_CXX_CORE_EXPORT with_error(Error) -> with_error<Error>;
+    with_error(Error) -> with_error<Error>;
 
     HPX_CXX_CORE_EXPORT template <typename T = void,
         typename TaskEnv = default_task_environment>
