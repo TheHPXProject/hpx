@@ -226,6 +226,8 @@ namespace hpx::parallel::detail {
             util::in_in_out_result<hpx::util::unused_type,
                 hpx::util::unused_type, OutIterator>>
     {
+        static constexpr bool copy_empty_chunks = false;
+
         using result_type = util::in_in_out_result<hpx::util::unused_type,
             hpx::util::unused_type, OutIterator>;
 
