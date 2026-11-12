@@ -23,7 +23,6 @@
 #include <hpx/modules/synchronization.hpp>
 #include <hpx/modules/type_support.hpp>
 
-#include <algorithm>
 #include <cstddef>
 #include <exception>
 #include <mutex>
@@ -196,10 +195,11 @@ namespace hpx::collectives::detail {
         };
 
     private:
-        // A request for a generation the gate has not reached yet is kept
-        // until the earlier generations have finished. Waiting for them here
-        // would suspend the thread that runs the request, which may be the
-        // thread that still has to send the request for the earlier generation.
+        // A request for a generation the gate has not reached yet runs as a
+        // continuation once the gate reaches that generation. Waiting for it
+        // here would suspend the thread that runs the request, which may be
+        // the thread that still has to send the request for the earlier
+        // generation.
         template <typename Result, typename F>
         Result run_or_defer(char const* operation, std::size_t which,
             std::size_t generation, F&& f)
@@ -218,93 +218,33 @@ namespace hpx::collectives::detail {
                 // telling the caller by how much, leaving no reliable way to
                 // choose the next explicit number: too small throws, too large
                 // waits forever. Reject the transition when the request
-                // arrives, so a kept request is not checked again when it
-                // runs. The reverse order stays valid because an auto
-                // generation always synchronizes on the gate's current
+                // arrives, so a kept request does not wait for a generation
+                // that will not come. The reverse order stays valid because an
+                // auto generation always synchronizes on the gate's current
                 // position.
                 if (auto_generation_used_)
                 {
                     throw_explicit_after_auto(l, operation, which, generation);
                 }
 
-                if (generation > gate_.generation(l))
+                hpx::future<void> reached =
+                    gate_.synchronize_async(generation, l);
+                if (!reached.is_ready())
                 {
-                    hpx::promise<Result> p;
-                    Result result(p.get_future());
+                    l.unlock();
 
-                    // Keep the requests sorted by generation, so that they
-                    // run in generation order.
-                    auto const pos =
-                        std::upper_bound(pending_.begin(), pending_.end(),
-                            generation, [](std::size_t g, auto const& e) {
-                                return g < e.first;
-                            });
-                    pending_.emplace(pos, generation,
-                        [p = HPX_MOVE(p), f = HPX_FORWARD(F, f)]() mutable {
-                            try
-                            {
-                                p.set_value(f());
-                            }
-                            catch (...)
-                            {
-                                p.set_exception(std::current_exception());
-                            }
-                        });
-                    return result;
+                    // Run the request on a new thread: running it inline
+                    // could complete its generation and run the requests
+                    // kept for the next one inline as well, so the stack
+                    // would grow with the number of kept generations.
+                    return Result(reached.then(hpx::launch::async,
+                        [f = HPX_FORWARD(F, f)](hpx::future<void>&& r) mutable {
+                            r.get();
+                            return f();
+                        }));
                 }
             }
             return HPX_FORWARD(F, f)();
-        }
-
-        // Remove the kept requests whose generation the gate has reached.
-        template <typename Lock>
-        std::vector<hpx::move_only_function<void()>> take_ready_requests(
-            Lock& l)
-        {
-            HPX_ASSERT_OWNS_LOCK(l);
-
-            std::size_t const current = gate_.generation(l);
-            auto const end = std::find_if(pending_.begin(), pending_.end(),
-                [current](auto const& e) { return e.first > current; });
-
-            std::vector<hpx::move_only_function<void()>> ready;
-            ready.reserve(static_cast<std::size_t>(end - pending_.begin()));
-            for (auto it = pending_.begin(); it != end; ++it)
-            {
-                ready.push_back(HPX_MOVE(it->second));
-            }
-            pending_.erase(pending_.begin(), end);
-            return ready;
-        }
-
-        // Run the kept requests whose generation the gate has reached. They
-        // enter handle_data again, so the lock is released while they run. A
-        // nested call leaves the requests it makes ready to the outer loop,
-        // so the stack does not grow with the number of kept generations.
-        template <typename Lock>
-        void run_ready_requests(Lock& l)
-        {
-            HPX_ASSERT_OWNS_LOCK(l);
-
-            if (running_ready_requests_)
-            {
-                return;
-            }
-
-            running_ready_requests_ = true;
-            auto on_exit = hpx::experimental::scope_exit(
-                [this] { running_ready_requests_ = false; });
-
-            for (auto ready = take_ready_requests(l); !ready.empty();
-                ready = take_ready_requests(l))
-            {
-                l.unlock();
-                for (auto& request : ready)
-                {
-                    request();
-                }
-                l.lock();
-            }
         }
 
         void check_site(std::size_t which) const
@@ -666,8 +606,14 @@ namespace hpx::collectives::detail {
                     gate.next_generation(l, next_gen, ec);
                 });
 
-            // Run the kept requests whose generation has been reached now.
-            run_ready_requests(l);
+            // Release the requests kept for the generation reached now, after
+            // the lock was released.
+            auto released = gate_.take_released_waiters(l);
+            if (!released.empty())
+            {
+                l.unlock();
+                released.set();
+            }
 
             return f;
         }
@@ -696,10 +642,5 @@ namespace hpx::collectives::detail {
         bool needs_initialization_ = true;
         bool data_available_ = false;
         bool auto_generation_used_ = false;
-        bool running_ready_requests_ = false;
-        // Requests that arrived before the gate reached their generation,
-        // sorted by generation.
-        std::vector<std::pair<std::size_t, hpx::move_only_function<void()>>>
-            pending_;
     };
 }    // namespace hpx::collectives::detail
