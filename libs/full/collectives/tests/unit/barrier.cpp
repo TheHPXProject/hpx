@@ -105,6 +105,42 @@ void remote_test_single(hpx::program_options::variables_map& vm)
     }
 }
 
+void global_barrier_synchronize()
+{
+    hpx::distributed::barrier::synchronize();
+}
+HPX_PLAIN_ACTION(global_barrier_synchronize, global_barrier_synchronize_action)
+
+// This test runs hpx_main on all localities, so it races with the workers
+// returning from their own hpx_main and can pass with a detach in post_main()
+// when the actions arrive first. test_global_barrier_in_shutdown_function()
+// is the check that reliably catches #6430.
+void test_global_barrier_after_worker_main()
+{
+    if (hpx::get_locality_id() != 0)
+        return;
+
+    std::vector<hpx::future<void>> futures;
+    for (hpx::id_type const& id : hpx::find_all_localities())
+    {
+        futures.push_back(hpx::async<global_barrier_synchronize_action>(id));
+    }
+    hpx::wait_all(futures);
+
+    for (hpx::future<void>& f : futures)
+    {
+        HPX_TEST(!f.has_exception());
+    }
+}
+
+// Every locality uses the global barrier from a shutdown function registered
+// before shutdown starts, which requires the barrier to stay attached until
+// all such functions have run.
+void test_global_barrier_in_shutdown_function()
+{
+    hpx::register_shutdown_function(&global_barrier_synchronize);
+}
+
 void test_release_from_non_hpx_thread(hpx::program_options::variables_map& vm)
 {
     std::size_t iterations = 0;
@@ -346,6 +382,8 @@ int hpx_main(hpx::program_options::variables_map& vm)
 
     remote_test_single(vm);
     remote_test_multiple(vm);
+    test_global_barrier_after_worker_main();
+    test_global_barrier_in_shutdown_function();
 
     return hpx::finalize();
 }

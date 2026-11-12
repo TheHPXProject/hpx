@@ -5,37 +5,58 @@
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
+import argparse
 import sys
 import json
 import re
 import math
 import os
 
-def get_excluded_tests():
-    exclude_file = os.path.abspath(os.path.join(
-        os.path.dirname(__file__), "..", "workflows", "exclude.targets"
-    ))
+DEFAULT_EXCLUDE_FILE = os.path.abspath(os.path.join(
+    os.path.dirname(__file__), "..", "workflows", "exclude.targets"
+))
+
+def read_list(file_name):
+    if not os.path.exists(file_name):
+        raise FileNotFoundError(f"exclude file not found: {file_name}")
+    entries = []
+    with open(file_name, "r") as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#"):
+                entries.append(line)
+    return entries
+
+def get_excluded_tests(exclude_files):
     excluded = set()
-    if os.path.exists(exclude_file):
-        with open(exclude_file, "r") as f:
-            for line in f:
-                line = line.strip()
-                if line and not line.startswith("#"):
-                    excluded.add(line)
+    for exclude_file in exclude_files:
+        excluded.update(read_list(exclude_file))
     return excluded
 
-def generate_matrix(ctest_output, num_buckets):
+def get_excluded_patterns(exclude_regex_files):
+    patterns = []
+    for exclude_regex_file in exclude_regex_files:
+        patterns.extend(re.compile(p) for p in read_list(exclude_regex_file))
+    return patterns
+
+def generate_matrix(ctest_output, num_buckets, exclude_files,
+        exclude_regex_files=()):
     tests = []
     pattern = re.compile(r"^\s*Test\s*#\d+:\s*(.+)$")
 
-    excluded = get_excluded_tests()
+    excluded = get_excluded_tests(exclude_files)
+    # matched anywhere in the name, as by ctest --exclude-regex
+    excluded_patterns = get_excluded_patterns(exclude_regex_files)
 
     for line in ctest_output.splitlines():
         match = pattern.match(line)
         if match:
             test_name = match.group(1).strip()
-            if test_name not in excluded and not test_name.endswith('_perftest'):
-                tests.append(test_name)
+            if test_name in excluded or test_name.endswith('_perftest'):
+                continue
+            if any(p.search(test_name) for p in excluded_patterns):
+                continue
+            tests.append(test_name)
 
     tests.sort()
 
@@ -88,13 +109,35 @@ def generate_matrix(ctest_output, num_buckets):
     return matrix
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Split the tests listed by 'ctest -N' (read from stdin) "
+        "into a GitHub Actions job matrix")
+    parser.add_argument("num_jobs", nargs="?", type=int, default=10,
+        help="number of matrix entries (default: 10)")
+    parser.add_argument("--exclude", action="append", default=None,
+        metavar="FILE",
+        help="file listing tests to leave out, one per line ('#' starts a "
+        "comment); may be given more than once (default, if neither "
+        "--exclude nor --exclude-regex is given: "
+        ".github/workflows/exclude.targets)")
+    parser.add_argument("--exclude-regex", action="append", default=[],
+        metavar="FILE",
+        help="file listing regular expressions, one per line ('#' starts a "
+        "comment); tests whose names contain a match are left out, as with "
+        "ctest --exclude-regex; may be given more than once")
+    args = parser.parse_args()
+
     try:
         input_data = sys.stdin.read()
-        num_jobs = 10
-        if len(sys.argv) > 1:
-            num_jobs = int(sys.argv[1])
+        if args.exclude:
+            exclude_files = args.exclude
+        elif args.exclude_regex:
+            exclude_files = []
+        else:
+            exclude_files = [DEFAULT_EXCLUDE_FILE]
 
-        matrix = generate_matrix(input_data, num_jobs)
+        matrix = generate_matrix(input_data, args.num_jobs, exclude_files,
+            args.exclude_regex)
         print(json.dumps(matrix))
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)

@@ -16,14 +16,11 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # the image provides Boost and ninja, no packages need to be installed
+    container: stellargroup/build_env:17
 
     steps:
     - uses: actions/checkout@v7
-
-    - name: Install Boost
-      run: |
-          sudo apt update
-          sudo apt install libboost-all-dev ninja-build
 
     - name: Configure
       shell: bash
