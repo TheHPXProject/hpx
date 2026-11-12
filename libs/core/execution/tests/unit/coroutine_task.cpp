@@ -322,8 +322,8 @@ void test_exception_handling()
         bool error_called = false;
         int error_code = 0;
         auto t = yielding_custom_error_coroutine();
-        auto op = ex::connect(
-            HPX_MOVE(t), test_custom_error_receiver{&error_called, &error_code});
+        auto op = ex::connect(HPX_MOVE(t),
+            test_custom_error_receiver{&error_called, &error_code});
         ex::start(op);
         HPX_TEST(error_called);
         HPX_TEST_EQ(error_code, 123);
@@ -480,7 +480,8 @@ struct test_stopped_receiver
 
 void test_cancellation()
 {
-    // Initial pre-cancelled stop source: task runs to completion and delivers value
+    // Initial pre-cancelled stop source: task runs to completion and delivers
+    // value
     {
         hpx::experimental::in_place_stop_source stop_source;
         stop_source.request_stop();

@@ -128,8 +128,8 @@ namespace hpx::execution::experimental {
         template <typename TaskEnv>
         struct task_env_traits
         {
-            using allocator_type =
-                typename env_allocator<TaskEnv, std::allocator<std::byte>>::type;
+            using allocator_type = typename env_allocator<TaskEnv,
+                std::allocator<std::byte>>::type;
             using scheduler_type = typename env_scheduler<TaskEnv,
                 hpx::execution::experimental::default_task_scheduler>::type;
             using stop_source_type = typename env_stop_source<TaskEnv,
@@ -523,7 +523,7 @@ namespace hpx::execution::experimental {
 
                 template <typename Tag>
                     requires(bool(hpx::execution::experimental::
-                                 forwarding_query(Tag{})) &&
+                        forwarding_query(Tag{})) &&
                         requires(Tag tag, TaskEnv const& env) { tag(env); })
                 decltype(auto) query(Tag tag) const
                     noexcept(noexcept(tag(promise_->env_)))
@@ -594,7 +594,8 @@ namespace hpx::execution::experimental {
         };
 
         ///////////////////////////////////////////////////////////////////////
-        // task_operation_state: operation state when connecting task to receiver
+        // task_operation_state: operation state when connecting task to
+        // receiver
         template <typename T, typename TaskEnv, typename Receiver>
         struct task_operation_state : task_operation_base
         {
@@ -621,8 +622,8 @@ namespace hpx::execution::experimental {
                 coro_.promise().state_ = this;
 
                 if constexpr (std::is_constructible_v<TaskEnv,
-                                  decltype(hpx::execution::experimental::get_env(
-                                      rcvr_))>)
+                                  decltype(hpx::execution::experimental::
+                                      get_env(rcvr_))>)
                 {
                     coro_.promise().env_ =
                         TaskEnv(hpx::execution::experimental::get_env(rcvr_));
@@ -641,10 +642,9 @@ namespace hpx::execution::experimental {
                     if constexpr (std::is_constructible_v<
                                       typename promise_type::scheduler_type,
                                       decltype(hpx::execution::experimental::
-                                              get_scheduler(
-                                                  hpx::execution::
-                                                      experimental::get_env(
-                                                          rcvr_)))>)
+                                          get_scheduler(hpx::execution::
+                                                  experimental::get_env(
+                                                      rcvr_)))>)
                     {
                         coro_.promise().scheduler_ =
                             typename promise_type::scheduler_type(
@@ -966,8 +966,7 @@ namespace hpx::execution::experimental {
                                   })
                     {
                         if constexpr (std::is_constructible_v<
-                                          typename promise_type::
-                                              scheduler_type,
+                                          typename promise_type::scheduler_type,
                                           decltype(hpx::execution::
                                                   experimental::get_scheduler(
                                                       parent.promise()
