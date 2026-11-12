@@ -5,7 +5,7 @@
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-name: Windows CI (Debug, VS2026 toolset, C++20 Modules)
+name: Windows (Release, VS2026, C++20 Modules)
 
 on: [pull_request]
 
@@ -14,51 +14,39 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
-    runs-on: windows-2025-vs2026
-
-    steps:
-    - uses: actions/checkout@v7
-    - uses: lukka/get-cmake@v4.4.5
-
-    - name: Install dependencies
-      uses: ./.github/actions/setup-vcpkg
-    - name: Configure
-      shell: bash
-      run: |
-          cmake . -Bbuild -G'Visual Studio 18 2026' \
-              -DCMAKE_BUILD_TYPE=Debug \
-              -DCMAKE_TOOLCHAIN_FILE='C:/projects/vcpkg/scripts/buildsystems/vcpkg.cmake' \
-              -DHPX_WITH_FETCH_ASIO=ON \
-              -DHPX_WITH_ASIO_TAG=asio-1-38-0 \
-              -DHPX_WITH_EXAMPLES=OFF \
-              -DHPX_WITH_TESTS=OFF \
-              -DHPX_WITH_TESTS_EXAMPLES=OFF \
-              -DHPX_WITH_DEPRECATION_WARNINGS=OFF \
-              -DHPX_WITH_TESTS_MAX_THREADS_PER_LOCALITY=2 \
-              -DHPX_COROUTINES_WITH_SWAP_CONTEXT_EMULATION=ON \
-              -DHPX_WITH_VERIFY_LOCKS=ON \
-              -DHPX_WITH_VERIFY_LOCKS_BACKTRACE=ON \
-              -DHPX_WITH_CHECK_MODULE_DEPENDENCIES=ON \
-              -DHPX_WITH_CXX_MODULES=ON \
-              -DHPX_WITH_DATAPAR=ON \
-              -DHPX_WITH_DATAPAR_BACKEND=EMULATE
-    - name: Build
-      shell: bash
-      run: |
-          cmake --build build --config Debug --target ALL_BUILD \
-            -- -maxcpucount:2 -verbosity:minimal -nologo
-    - name: Install
-      shell: bash
-      run: |
-          cmake --install build --config Debug
-#    - name: Test
-#      run: |
-#          $exclude_regex = & "$env:GITHUB_WORKSPACE/.github/ci-scripts/generate_ctest_exclude_regex.ps1" `
-#            "$env:GITHUB_WORKSPACE/.github/workflows/tests.examples.targets"
-#          cd build
-#          ctest `
-#          --output-on-failure `
-#            --build-config Debug `
-#            --tests-regex tests.examples `
-#            --exclude-regex $exclude_regex
+  build-and-test:
+    name: MSVC
+    uses: ./.github/workflows/sharded-build-and-test.yml
+    with:
+      runs-on: windows-2025-vs2026
+      get-cmake: true
+      vcpkg: true
+      msvc-dev-env: true
+      configure: |
+        cmake . -Bbuild -GNinja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DHPX_WITH_PSEUDO_DEPENDENCIES=ON \
+            -DCMAKE_TOOLCHAIN_FILE='C:/projects/vcpkg/scripts/buildsystems/vcpkg.cmake' \
+            -DHPX_WITH_FETCH_ASIO=ON \
+            -DHPX_WITH_ASIO_TAG=asio-1-38-0 \
+            -DHPX_WITH_EXAMPLES=ON \
+            -DHPX_WITH_TESTS=ON \
+            -DHPX_WITH_TESTS_EXAMPLES=ON \
+            -DHPX_WITH_TESTS_UNIT=ON \
+            -DHPX_WITH_SUPERVISION=ON \
+            -DHPX_WITH_DEPRECATION_WARNINGS=OFF \
+            -DHPX_WITH_TESTS_MAX_THREADS_PER_LOCALITY=2 \
+            -DHPX_COROUTINES_WITH_SWAP_CONTEXT_EMULATION=ON \
+            -DHPX_WITH_VERIFY_LOCKS=ON \
+            -DHPX_WITH_VERIFY_LOCKS_BACKTRACE=ON \
+            -DHPX_WITH_CHECK_MODULE_DEPENDENCIES=ON \
+            -DHPX_WITH_CXX_MODULES=ON \
+            -DHPX_WITH_DATAPAR=ON \
+            -DHPX_WITH_DATAPAR_BACKEND=EMULATE
+      base-targets: hpx_core core components
+      shards: 20
+      exclude-files: >-
+        .github/workflows/exclude.targets
+        .github/workflows/tests.examples.targets
+      # the default timeout of ctest, as in the other Windows workflows
+      ctest-timeout: "1500"
