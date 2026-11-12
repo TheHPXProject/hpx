@@ -168,6 +168,16 @@ jobs:
       - uses: ./.github/actions/setup-vcpkg
         if: inputs.vcpkg
 
+      # vcpkg installs the packages anew in every job, which makes their
+      # headers newer than the objects in the build archive, so ninja would
+      # rebuild everything that includes them
+      - name: Make the vcpkg packages older than the build
+        if: inputs.vcpkg
+        shell: bash
+        run: |
+          find /c/projects/vcpkg/installed -type f \
+            -exec touch -t 200001010000 {} +
+
       - uses: ./.github/actions/msvc-dev-env
         if: inputs.msvc-dev-env
 
