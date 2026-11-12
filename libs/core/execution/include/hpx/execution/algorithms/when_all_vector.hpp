@@ -306,6 +306,11 @@ namespace hpx::when_all_vector_detail {
               , receiver(HPX_FORWARD(Receiver_, receiver))
               , op_states(nullptr, op_states_deleter{alloc_type{}, 0})
             {
+                // Without predecessors there is nothing to allocate. Some
+                // allocators (e.g. MSVC's std::allocator) return nullptr
+                // for zero elements, which the deleter would never pass
+                // back to deallocate.
+                if (num_predecessors != 0)
                 {
                     alloc_type alloc(env_allocator<env_type>::get(
                         hpx::execution::experimental::get_env(this->receiver)));

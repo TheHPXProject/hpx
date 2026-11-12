@@ -9,8 +9,8 @@
 
 #include <hpx/config.hpp>
 
-#include <hpx/functional/invoke.hpp>
 #include <hpx/modules/execution.hpp>
+#include <hpx/modules/tag_invoke.hpp>
 #include <hpx/modules/testing.hpp>
 
 #include <atomic>
@@ -155,7 +155,7 @@ int main()
     }
 
     // Test 2: when_all_vector with 0 senders (empty vector).
-    // An allocation of size 0 happens for op states.
+    // Nothing is allocated for the op states.
     {
         tracking_allocator_counts::reset();
 
@@ -174,9 +174,9 @@ int main()
 
         HPX_TEST(set_value_called);
         HPX_TEST_EQ(
-            tracking_allocator_counts::allocate_count.load(), std::size_t(1));
+            tracking_allocator_counts::allocate_count.load(), std::size_t(0));
         HPX_TEST_EQ(
-            tracking_allocator_counts::deallocate_count.load(), std::size_t(1));
+            tracking_allocator_counts::deallocate_count.load(), std::size_t(0));
     }
 
     // Test 3: when_all_vector with void senders and custom allocator.
