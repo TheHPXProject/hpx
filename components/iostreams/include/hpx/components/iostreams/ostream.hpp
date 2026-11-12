@@ -242,6 +242,18 @@ namespace hpx::iostreams {
             // apply the subject to the local stream
             *static_cast<stream_base_type*>(this) << subject;
 
+            // Once the stream has been shut down (uninitialize), or before it
+            // was set up, there is no console to send to. Write to the local
+            // stream instead, as flush() does.
+            if (!this->base_type::valid())
+            {
+                if (local_stream_ != nullptr)
+                {
+                    this->detail::data_buffer::write_locked_to(*local_stream_);
+                }
+                return *this;
+            }
+
             // Send even empty buffer to flush the data buffered server-side.
 
             // Create the next buffer, returns the previous buffer
