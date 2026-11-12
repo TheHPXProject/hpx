@@ -281,7 +281,7 @@ void transform_binary_tests(std::vector<hpx::id_type>& localities)
             *itw = U(i + 10);
         }
 
-        auto verify = [&](auto const& result) {
+        auto verify_result = [&](auto const& result) {
             std::size_t i = 0;
             for (auto it = x.begin(); it != x.end(); ++it, ++i)
             {
@@ -298,32 +298,32 @@ void transform_binary_tests(std::vector<hpx::id_type>& localities)
         };
 
         reset_output();
-        verify(hpx::transform(hpx::execution::seq, v.begin(), v.end(),
+        verify_result(hpx::transform(hpx::execution::seq, v.begin(), v.end(),
             w.begin(), x.begin(), add<V>()));
         reset_output();
-        verify(hpx::transform(hpx::execution::par, v.begin(), v.end(),
+        verify_result(hpx::transform(hpx::execution::par, v.begin(), v.end(),
             w.begin(), x.begin(), add<V>()));
         reset_output();
-        verify(hpx::transform(hpx::execution::seq(hpx::execution::task),
+        verify_result(hpx::transform(hpx::execution::seq(hpx::execution::task),
             v.begin(), v.end(), w.begin(), x.begin(), add<V>())
                 .get());
         reset_output();
-        verify(hpx::transform(hpx::execution::par(hpx::execution::task),
+        verify_result(hpx::transform(hpx::execution::par(hpx::execution::task),
             v.begin(), v.end(), w.begin(), x.begin(), add<V>())
                 .get());
 
         reset_output();
-        verify(hpx::transform(hpx::execution::seq, v.begin(), v.end(),
+        verify_result(hpx::transform(hpx::execution::seq, v.begin(), v.end(),
             w.begin(), w.end(), x.begin(), add<V>()));
         reset_output();
-        verify(hpx::transform(hpx::execution::par, v.begin(), v.end(),
+        verify_result(hpx::transform(hpx::execution::par, v.begin(), v.end(),
             w.begin(), w.end(), x.begin(), add<V>()));
         reset_output();
-        verify(hpx::transform(hpx::execution::seq(hpx::execution::task),
+        verify_result(hpx::transform(hpx::execution::seq(hpx::execution::task),
             v.begin(), v.end(), w.begin(), w.end(), x.begin(), add<V>())
                 .get());
         reset_output();
-        verify(hpx::transform(hpx::execution::par(hpx::execution::task),
+        verify_result(hpx::transform(hpx::execution::par(hpx::execution::task),
             v.begin(), v.end(), w.begin(), w.end(), x.begin(), add<V>())
                 .get());
 
