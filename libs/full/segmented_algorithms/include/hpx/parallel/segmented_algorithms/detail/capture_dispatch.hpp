@@ -1102,14 +1102,12 @@ namespace hpx::parallel::detail {
             {
                 if (first1 == last1)
                 {
-                    return copy_chunk(
-                        policy, first2, last2, HPX_MOVE(dest));
+                    return copy_chunk(policy, first2, last2, HPX_MOVE(dest));
                 }
 
                 if (first2 == last2)
                 {
-                    return copy_chunk(
-                        policy, first1, last1, HPX_MOVE(dest));
+                    return copy_chunk(policy, first1, last1, HPX_MOVE(dest));
                 }
             }
 
