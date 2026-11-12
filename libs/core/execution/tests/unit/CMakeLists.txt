@@ -45,6 +45,7 @@ set(tests
     query_get_allocator
     rebind_executor_parameters
     rebind_policy
+    sender_future_error
     task_size_chunk_size_configuration
 )
 
