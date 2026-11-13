@@ -29,6 +29,10 @@ namespace hpx::execution_base {
         virtual void yield(char const* desc) = 0;
         virtual bool yield_k(std::size_t k, char const* desc) = 0;
         virtual void suspend(char const* desc) = 0;
+        // Records a wakeup and returns without blocking. A wakeup that
+        // arrives before the agent has parked must be remembered by the
+        // agent and consumed by its next wait; one arriving after that
+        // wait ended may surface as a single spurious wakeup later.
         virtual void resume(
             hpx::threads::thread_priority priority, char const* desc) = 0;
         virtual void abort(char const* desc) = 0;
