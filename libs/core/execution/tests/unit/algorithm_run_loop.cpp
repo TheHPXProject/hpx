@@ -2244,10 +2244,15 @@ void test_run_loop_shared_futures_7891()
 
 void test_run_loop_thread_pool_completion()
 {
-    hpx::execution::experimental::thread_pool_scheduler sched{};
-    auto snd = ex::schedule(sched) | ex::then([] { return 42; });
-    auto f = ex::make_future(std::move(snd));
-    HPX_TEST_EQ(f.get(), 42);
+    for (int i = 0; i < 500; ++i)
+    {
+        ex::run_loop loop;
+        auto f = ex::make_future(loop.get_scheduler(),
+            ex::schedule(
+                hpx::execution::experimental::thread_pool_scheduler{}) |
+                ex::then([] { return 42; }));
+        HPX_TEST_EQ(f.get(), 42);
+    }
 }
 
 void do_run_test(void (*func)(), char const* func_name)
