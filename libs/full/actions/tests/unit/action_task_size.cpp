@@ -110,8 +110,8 @@ struct overriding_action
 {
 };
 HPX_REGISTER_ACTION_DECLARATION(overriding_action, overriding_action)
-HPX_REGISTER_ACTION(overriding_action, overriding_action)
 HPX_ACTION_HAS_TASK_SIZE(overriding_action, task_size::large)
+HPX_REGISTER_ACTION(overriding_action, overriding_action)
 
 // a direct action doesn't create a thread
 HPX_PLAIN_DIRECT_ACTION(medium_function, medium_direct_action)
@@ -148,20 +148,22 @@ struct server : hpx::components::component_base<server>
 using server_type = hpx::components::component<server>;
 HPX_REGISTER_COMPONENT(server_type, server)
 
+// The task size, the priority and the stack size of an action are given
+// between its declaration and its registration: the registration uses them
 HPX_REGISTER_ACTION_DECLARATION(server::get_action, server_get_action)
-HPX_REGISTER_ACTION(server::get_action, server_get_action)
 HPX_ACTION_HAS_TASK_SIZE(server::get_action, task_size::large)
+HPX_REGISTER_ACTION(server::get_action, server_get_action)
 
 HPX_REGISTER_ACTION_DECLARATION(
     server::get_priority_action, server_get_priority_action)
-HPX_REGISTER_ACTION(server::get_priority_action, server_get_priority_action)
 HPX_ACTION_HAS_PRIORITY(
     server::get_priority_action, hpx::threads::thread_priority::high)
+HPX_REGISTER_ACTION(server::get_priority_action, server_get_priority_action)
 
 HPX_REGISTER_ACTION_DECLARATION(
     server::get_stacksize_action, server_get_stacksize_action)
-HPX_REGISTER_ACTION(server::get_stacksize_action, server_get_stacksize_action)
 HPX_ACTION_USES_LARGE_STACK(server::get_stacksize_action)
+HPX_REGISTER_ACTION(server::get_stacksize_action, server_get_stacksize_action)
 
 #if defined(HPX_HAVE_CXX26_REFLECTION)
 HPX_COMPONENT_ACTION(server, get_priority, high_priority_action);
