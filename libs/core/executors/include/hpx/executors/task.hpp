@@ -435,7 +435,7 @@ namespace hpx::execution::experimental {
             task_promise() = default;
 
             template <typename... Args>
-                requires (sizeof...(Args) > 0)
+                requires(sizeof...(Args) > 0)
             explicit task_promise(Args const&... args)
             {
                 if constexpr (has_allocator_arg<Args...>::value)
@@ -542,7 +542,7 @@ namespace hpx::execution::experimental {
                 }
 
                 template <typename Tag>
-                    requires (bool(hpx::execution::experimental::
+                    requires(bool(hpx::execution::experimental::
                         forwarding_query(Tag{})) &&
                         std::is_invocable_v<Tag, inner_env_type const&>)
                 decltype(auto) query(Tag tag) const
