@@ -244,9 +244,9 @@ struct custom_error_type
 
 struct custom_error_task_env
 {
-    using error_types = ex::completion_signatures<
-        ex::set_error_t(custom_error_type),
-        ex::set_error_t(std::exception_ptr)>;
+    using error_types =
+        ex::completion_signatures<ex::set_error_t(custom_error_type),
+            ex::set_error_t(std::exception_ptr)>;
 };
 
 ex::task<int, custom_error_task_env> yielding_custom_error_coroutine()
@@ -612,15 +612,14 @@ ex::task<int, query_env> query_env_coroutine()
 }
 
 template <typename Env, typename Tag>
-concept can_query = requires(Env const& e, Tag const& t) {
-    e.query(t);
-};
+concept can_query = requires(Env const& e, Tag const& t) { e.query(t); };
 
 void test_environment_traits()
 {
     using default_traits = ex::task<int>::promise_type::traits_type;
-    static_assert(std::is_same_v<default_traits::allocator_type,
-        std::allocator<std::byte>>);
+    static_assert(
+        std::is_same_v<default_traits::allocator_type,
+            std::allocator<std::byte>>);
     static_assert(std::is_same_v<default_traits::scheduler_type,
         ex::task_scheduler>);
     static_assert(std::is_same_v<default_traits::stop_source_type,
@@ -629,7 +628,8 @@ void test_environment_traits()
     using custom_traits =
         ex::task<int, custom_task_env>::promise_type::traits_type;
     static_assert(
-        std::is_same_v<custom_traits::allocator_type, std::allocator<int>>);
+        std::is_same_v<custom_traits::allocator_type,
+            std::allocator<int>>);
     static_assert(std::is_same_v<custom_traits::scheduler_type,
         ex::task_scheduler>);
 

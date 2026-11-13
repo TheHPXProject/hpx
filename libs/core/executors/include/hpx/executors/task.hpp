@@ -33,9 +33,8 @@ namespace hpx::execution::experimental {
         using allocator_type = std::allocator<std::byte>;
         using scheduler_type = hpx::execution::experimental::task_scheduler;
         using stop_source_type = hpx::experimental::in_place_stop_source;
-        using error_types =
-            hpx::execution::experimental::completion_signatures<
-                hpx::execution::experimental::set_error_t(std::exception_ptr)>;
+        using error_types = hpx::execution::experimental::completion_signatures<
+            hpx::execution::experimental::set_error_t(std::exception_ptr)>;
         using env_type = hpx::execution::experimental::empty_env;
 
         default_task_environment() = default;
@@ -123,8 +122,7 @@ namespace hpx::execution::experimental {
         };
 
         template <typename Env, typename Default>
-        struct env_inner_env<Env, Default,
-            std::void_t<typename Env::env_type>>
+        struct env_inner_env<Env, Default, std::void_t<typename Env::env_type>>
         {
             using type = typename Env::env_type;
         };
@@ -172,10 +170,10 @@ namespace hpx::execution::experimental {
         template <typename Error, typename First, typename... Rest>
         struct find_matching_error<Error, std::variant<First, Rest...>>
         {
-            using type = std::conditional_t<std::is_convertible_v<Error, First>,
-                First,
-                typename find_matching_error<Error,
-                    std::variant<Rest...>>::type>;
+            using type =
+                std::conditional_t<std::is_convertible_v<Error, First>, First,
+                    typename find_matching_error<Error,
+                        std::variant<Rest...>>::type>;
         };
 
         template <typename Error>
@@ -442,8 +440,8 @@ namespace hpx::execution::experimental {
                 {
                     has_custom_alloc_ = true;
                     if constexpr (std::is_constructible_v<allocator_type,
-                                      decltype(find_allocator<
-                                          Args...>::get(args...))>)
+                                      decltype(find_allocator<Args...>::get(
+                                          args...))>)
                     {
                         alloc_.emplace(
                             find_allocator<Args...>::get(args...));
@@ -542,12 +540,12 @@ namespace hpx::execution::experimental {
                 }
 
                 template <typename Tag>
-                    requires(bool(hpx::execution::experimental::
-                        forwarding_query(Tag{})) &&
+                    requires(
+                        bool(hpx::execution::experimental::forwarding_query(
+                            Tag{})) &&
                         std::is_invocable_v<Tag, inner_env_type const&>)
-                decltype(auto) query(Tag tag) const
-                    noexcept(
-                        std::is_nothrow_invocable_v<Tag, inner_env_type const&>)
+                decltype(auto) query(Tag tag) const noexcept(
+                    std::is_nothrow_invocable_v<Tag, inner_env_type const&>)
                 {
                     return tag(promise_->env_);
                 }
@@ -669,8 +667,7 @@ namespace hpx::execution::experimental {
                                       typename promise_type::scheduler_type,
                                       decltype(hpx::execution::experimental::
                                           get_scheduler(hpx::execution::
-                                                  experimental::get_env(
-                                                      rcvr_)))>)
+                                              experimental::get_env(rcvr_)))>)
                     {
                         coro_.promise().scheduler_ =
                             typename promise_type::scheduler_type(
@@ -679,8 +676,6 @@ namespace hpx::execution::experimental {
                                         rcvr_)));
                     }
                 }
-
-
             }
 
             task_operation_state(task_operation_state&&) = delete;
@@ -981,9 +976,8 @@ namespace hpx::execution::experimental {
                         {
                             coro_.promise().scheduler_ =
                                 typename promise_type::scheduler_type(
-                                    hpx::execution::experimental::
-                                        get_scheduler(
-                                            parent.promise().get_env()));
+                                    hpx::execution::experimental::get_scheduler(
+                                        parent.promise().get_env()));
                         }
                     }
                 }
@@ -1026,8 +1020,7 @@ namespace hpx::execution::experimental {
 
                 if (coro.promise().data_.index() == 2)
                 {
-                    std::visit(
-                        detail::throw_task_error_fn{},
+                    std::visit(detail::throw_task_error_fn{},
                         std::get<2>(HPX_MOVE(coro.promise().data_)));
                 }
 
