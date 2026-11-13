@@ -57,6 +57,10 @@ on:
         description: "Whitespace-separated ninja targets built, in this order, before the tests are split up (the libraries)"
         type: string
         required: true
+      extra-targets:
+        description: "Whitespace-separated ninja targets that aren't CTest tests (for instance install and the external CMake build tests, tests.unit.build), built in this order by the first job after the build directory has been handed to the test shards"
+        type: string
+        default: ""
       shards:
         description: "Number of test shards"
         type: number
@@ -147,6 +151,19 @@ jobs:
           name: ${{ inputs.artifact-prefix }}-${{ github.sha }}
           path: build.tar.gz
           retention-days: 3
+
+      # after the upload: the shards don't wait for these targets, and the
+      # build archive doesn't contain what they produce
+      - name: Build ${{ inputs.extra-targets }}
+        if: inputs.extra-targets != ''
+        shell: bash
+        working-directory: build
+        run: |
+          for target in ${{ inputs.extra-targets }}; do
+            echo "::group::ninja -k 0 ${target}"
+            ninja -k 0 "${target}"
+            echo "::endgroup::"
+          done
 
   tests:
     needs: build-libraries
