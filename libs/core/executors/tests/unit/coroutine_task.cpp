@@ -8,6 +8,8 @@
 
 #if defined(HPX_HAVE_CXX20_COROUTINES)
 
+#include <hpx/executors/task.hpp>
+#include <hpx/executors/task_scheduler.hpp>
 #include <hpx/init.hpp>
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/testing.hpp>
@@ -579,7 +581,7 @@ void test_reference_task()
 struct custom_task_env
 {
     using allocator_type = std::allocator<int>;
-    using scheduler_type = ex::default_task_scheduler;
+    using scheduler_type = ex::task_scheduler;
     using stop_source_type = hpx::experimental::in_place_stop_source;
 };
 
@@ -614,7 +616,7 @@ void test_environment_traits()
     static_assert(std::is_same_v<default_traits::allocator_type,
         std::allocator<std::byte>>);
     static_assert(std::is_same_v<default_traits::scheduler_type,
-        ex::default_task_scheduler>);
+        ex::task_scheduler>);
     static_assert(std::is_same_v<default_traits::stop_source_type,
         hpx::experimental::in_place_stop_source>);
 
@@ -623,7 +625,7 @@ void test_environment_traits()
     static_assert(
         std::is_same_v<custom_traits::allocator_type, std::allocator<int>>);
     static_assert(std::is_same_v<custom_traits::scheduler_type,
-        ex::default_task_scheduler>);
+        ex::task_scheduler>);
 
     // Verify forwarding_query participation
     using promise_t = ex::task<int, query_env>::promise_type;
