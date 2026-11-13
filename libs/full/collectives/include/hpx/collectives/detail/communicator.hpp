@@ -16,6 +16,7 @@
 #include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/functional.hpp>
+#include <hpx/modules/futures.hpp>
 #include <hpx/modules/lcos_local.hpp>
 #include <hpx/modules/lock_registration.hpp>
 #include <hpx/modules/logging.hpp>
@@ -129,8 +130,13 @@ namespace hpx::collectives::detail {
             [[maybe_unused]] logging_helper<Operation> log(
                 which, generation, "get");
 
-            return collective_operation::template get<Result>(
-                *this, which, generation, HPX_MOVE(args)...);
+            return run_or_defer<Result>(
+                traits::communication::communicator_data<Operation>::name(),
+                which, generation,
+                [this, which, generation, ... args = HPX_MOVE(args)]() mutable {
+                    return collective_operation::template get<Result>(
+                        *this, which, generation, HPX_MOVE(args)...);
+                });
         }
 
         template <typename Operation, typename Result, typename... Args>
@@ -161,8 +167,13 @@ namespace hpx::collectives::detail {
             [[maybe_unused]] logging_helper<Operation> log(
                 which, generation, "set");
 
-            return collective_operation::template set<Result>(
-                *this, which, generation, HPX_MOVE(args)...);
+            return run_or_defer<Result>(
+                traits::communication::communicator_data<Operation>::name(),
+                which, generation,
+                [this, which, generation, ... args = HPX_MOVE(args)]() mutable {
+                    return collective_operation::template set<Result>(
+                        *this, which, generation, HPX_MOVE(args)...);
+                });
         }
 
         template <typename Operation, typename Result, typename... Args>
@@ -184,6 +195,82 @@ namespace hpx::collectives::detail {
         };
 
     private:
+        // A request for a generation the gate has not reached yet runs as a
+        // continuation once the gate reaches that generation. Waiting for it
+        // here would suspend the thread that runs the request, which may be
+        // the thread that still has to send the request for the earlier
+        // generation.
+        template <typename Result, typename F>
+        Result run_or_defer(char const* operation, std::size_t which,
+            std::size_t generation, F&& f)
+        {
+            if (generation != generation_arg{})
+            {
+                // Report now what handle_data would report on arrival, a kept
+                // request could otherwise wait forever.
+                check_site(which);
+
+                std::unique_lock l(mtx_);
+
+                // An explicit generation number is usable only while the gate
+                // position remains a pure function of the numbers supplied so
+                // far. An auto (default) generation advances the gate without
+                // telling the caller by how much, leaving no reliable way to
+                // choose the next explicit number: too small throws, too large
+                // waits forever. Reject the transition when the request
+                // arrives, so a kept request does not wait for a generation
+                // that will not come. The reverse order stays valid because an
+                // auto generation always synchronizes on the gate's current
+                // position.
+                if (auto_generation_used_)
+                {
+                    throw_explicit_after_auto(l, operation, which, generation);
+                }
+
+                hpx::future<void> reached =
+                    gate_.synchronize_async(generation, l);
+                if (!reached.is_ready())
+                {
+                    l.unlock();
+
+                    // Run the request on a new thread: running it inline
+                    // could complete its generation and run the requests
+                    // kept for the next one inline as well, so the stack
+                    // would grow with the number of kept generations.
+                    return Result(reached.then(hpx::launch::async,
+                        [f = HPX_FORWARD(F, f)](hpx::future<void>&& r) mutable {
+                            r.get();
+                            return f();
+                        }));
+                }
+            }
+            return HPX_FORWARD(F, f)();
+        }
+
+        void check_site(std::size_t which) const
+        {
+            if (which >= num_sites_)
+            {
+                HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
+                    "communicator::handle_data",
+                    "site index must be smaller than the number of "
+                    "participating sites");
+            }
+        }
+
+        template <typename Lock>
+        [[noreturn]] void throw_explicit_after_auto(Lock& l,
+            char const* operation, std::size_t which, std::size_t generation)
+        {
+            l.unlock();
+            HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
+                "communicator::handle_data",
+                "communicator {}: an explicit generation number cannot "
+                "follow auto-generation operations on the same "
+                "communicator: operation {}, which {}, generation {}.",
+                basename_, operation, which, generation);
+        }
+
         [[nodiscard]] constexpr std::size_t get_num_sites(
             std::size_t num_values) const noexcept
         {
@@ -305,13 +392,7 @@ namespace hpx::collectives::detail {
             generation_mode num_generations = generation_mode::single_step,
             std::size_t num_values = static_cast<std::size_t>(-1))
         {
-            if (which >= num_sites_)
-            {
-                HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
-                    "communicator::handle_data",
-                    "site index must be smaller than the number of "
-                    "participating sites");
-            }
+            check_site(which);
 
             auto on_ready = [this, operation, which, generation, num_values,
                                 finalizer = HPX_FORWARD(Finalizer, finalizer)](
@@ -411,27 +492,11 @@ namespace hpx::collectives::detail {
             std::unique_lock l(mtx_);
             [[maybe_unused]] util::ignore_all_while_checking il;
 
-            // An explicit generation number is usable only while the gate
-            // position remains a pure function of the numbers supplied so far.
-            // An auto (default) generation advances the gate without telling
-            // the caller by how much, leaving no reliable way to choose the
-            // next explicit number: too small throws, too large waits forever.
-            // Latch the first auto use and reject the transition up front; the
-            // reverse order stays valid because an auto generation always
-            // synchronizes on the gate's current position.
+            // Latch the first auto use. run_or_defer rejects an explicit
+            // generation that arrives after it.
             if (generation == generation_arg{})
             {
                 auto_generation_used_ = true;
-            }
-            else if (auto_generation_used_)
-            {
-                l.unlock();
-                HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
-                    "communicator::handle_data",
-                    "communicator {}: an explicit generation number cannot "
-                    "follow auto-generation operations on the same "
-                    "communicator: operation {}, which {}, generation {}.",
-                    basename_, operation, which, generation);
             }
 
             // Verify that there is no overlap between different types of
@@ -540,6 +605,15 @@ namespace hpx::collectives::detail {
                             static_cast<std::size_t>(num_generations) - 1;
                     gate.next_generation(l, next_gen, ec);
                 });
+
+            // Release the requests kept for the generation reached now, after
+            // the lock was released.
+            auto released = gate_.take_released_waiters(l);
+            if (!released.empty())
+            {
+                l.unlock();
+                released.set();
+            }
 
             return f;
         }

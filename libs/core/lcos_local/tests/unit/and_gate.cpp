@@ -407,6 +407,127 @@ void test_repeated_generations()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// synchronize_async() returns a ready future for a generation the gate has
+// reached. For a later generation, the future becomes ready only after
+// next_generation() has reached it and the released waiters were set.
+void test_synchronize_async()
+{
+    hpx::lcos::local::and_gate gate;
+    hpx::spinlock mtx;
+
+    lock_type l(mtx);
+    HPX_TEST(gate.synchronize_async(1, l).is_ready());
+
+    hpx::future<void> f2 = gate.synchronize_async(2, l);
+    hpx::future<void> f3 = gate.synchronize_async(3, l);
+    HPX_TEST(!f2.is_ready());
+    HPX_TEST(!f3.is_ready());
+
+    gate.next_generation(l);     // generation: 1 -> 2
+    HPX_TEST(!f2.is_ready());    // released, but not set yet
+
+    auto released = gate.take_released_waiters(l);
+    HPX_TEST(!released.empty());
+    released.set();
+    HPX_TEST(f2.is_ready());
+    HPX_TEST(!f3.is_ready());
+    f2.get();
+
+    gate.next_generation(l);    // generation: 2 -> 3
+    gate.take_released_waiters(l).set();
+    f3.get();
+}
+
+// A generation that next_generation() skips counts as reached.
+void test_synchronize_async_skipped_generation()
+{
+    hpx::lcos::local::and_gate gate;
+    hpx::spinlock mtx;
+
+    lock_type l(mtx);
+    hpx::future<void> f2 = gate.synchronize_async(2, l);
+    hpx::future<void> f3 = gate.synchronize_async(3, l);
+    hpx::future<void> f5 = gate.synchronize_async(5, l);
+
+    gate.next_generation(l, 2);    // generation: 1 -> 3, skips 2
+    gate.take_released_waiters(l).set();
+
+    f2.get();
+    f3.get();
+    HPX_TEST(!f5.is_ready());
+}
+
+// The released waiters run their continuations after the caller released its
+// lock, so an inline continuation can take that lock.
+void test_synchronize_async_continuation_without_lock()
+{
+    hpx::lcos::local::and_gate gate;
+    hpx::spinlock mtx;
+    bool took_lock = false;
+
+    lock_type l(mtx);
+    hpx::future<void> f = gate.synchronize_async(2, l).then(
+        hpx::launch::sync, [&](hpx::future<void>&& r) {
+            r.get();
+            lock_type inner(mtx, std::try_to_lock);
+            took_lock = inner.owns_lock();
+        });
+
+    gate.next_generation(l);
+    auto released = gate.take_released_waiters(l);
+    l.unlock();
+    released.set();
+
+    f.get();
+    HPX_TEST(took_lock);
+}
+
+void test_synchronize_async_error_paths()
+{
+    hpx::lcos::local::and_gate gate;
+    hpx::spinlock mtx;
+
+    {
+        lock_type l(mtx);
+        gate.next_generation(l);    // generation: 1 -> 2
+    }
+
+    // requesting a generation smaller than the current one is a sequencing
+    // error
+    {
+        lock_type l(mtx);
+        hpx::error_code ec(hpx::throwmode::lightweight);
+        hpx::future<void> f = gate.synchronize_async(
+            1, l, "test_synchronize_async_error_paths", ec);
+        HPX_TEST(ec);
+        HPX_TEST_EQ(ec.value(), static_cast<int>(hpx::error::invalid_status));
+        HPX_TEST(!f.valid());
+
+        // synchronize_async() unlocks l before reporting the error
+        HPX_TEST(!l.owns_lock());
+    }
+    {
+        lock_type l(mtx);
+        HPX_TEST_THROW(gate.synchronize_async(1, l), hpx::exception);
+    }
+}
+
+// A waiter that the gate still holds when it is destroyed reports a broken
+// promise.
+void test_synchronize_async_gate_destroyed()
+{
+    hpx::spinlock mtx;
+    hpx::future<void> f;
+    {
+        hpx::lcos::local::and_gate gate;
+        lock_type l(mtx);
+        f = gate.synchronize_async(2, l);
+    }
+    HPX_TEST(f.is_ready());
+    HPX_TEST(f.has_exception());
+}
+
+///////////////////////////////////////////////////////////////////////////////
 int hpx_main()
 {
     test_get_future_and_set();
@@ -424,6 +545,11 @@ int hpx_main()
     test_move_assignment();
     test_concurrent_set();
     test_repeated_generations();
+    test_synchronize_async();
+    test_synchronize_async_skipped_generation();
+    test_synchronize_async_continuation_without_lock();
+    test_synchronize_async_error_paths();
+    test_synchronize_async_gate_destroyed();
 
     return hpx::local::finalize();
 }
