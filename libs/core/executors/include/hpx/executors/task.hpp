@@ -392,7 +392,7 @@ namespace hpx::execution::experimental {
             decltype(stop_source_.get_token()) stop_token_{
                 stop_source_.get_token()};
             [[no_unique_address]] TaskEnv env_{};
-            scheduler_type scheduler_{};
+            std::optional<scheduler_type> scheduler_{};
             std::optional<allocator_type> alloc_{};
             bool has_custom_alloc_{false};
 
@@ -475,40 +475,24 @@ namespace hpx::execution::experimental {
                 auto query(hpx::execution::experimental::get_allocator_t)
                     const noexcept
                 {
-                    if (promise_->alloc_.has_value())
+                    if (promise_->has_custom_alloc_ &&
+                        promise_->alloc_.has_value())
                     {
                         return *promise_->alloc_;
                     }
-                    if constexpr (requires {
-                                      hpx::execution::experimental::
-                                          get_allocator(promise_->env_);
-                                  })
-                    {
-                        return typename task_promise::allocator_type(
-                            hpx::execution::experimental::get_allocator(
-                                promise_->env_));
-                    }
-                    else if constexpr (std::is_default_constructible_v<
-                                           allocator_type>)
-                    {
-                        return typename task_promise::allocator_type{};
-                    }
-                    else
-                    {
-                        std::terminate();
-                    }
+                    return typename task_promise::allocator_type{};
                 }
 
                 auto query(hpx::execution::experimental::get_scheduler_t)
                     const noexcept
                 {
-                    return promise_->scheduler_;
+                    return *promise_->scheduler_;
                 }
 
                 auto query(hpx::execution::experimental::get_start_scheduler_t)
                     const noexcept
                 {
-                    return promise_->scheduler_;
+                    return *promise_->scheduler_;
                 }
 
                 template <typename Tag>
@@ -644,30 +628,7 @@ namespace hpx::execution::experimental {
                     }
                 }
 
-                if (!coro_.promise().has_custom_alloc_)
-                {
-                    if constexpr (requires {
-                                      hpx::execution::experimental::
-                                          get_allocator(
-                                              hpx::execution::experimental::
-                                                  get_env(rcvr_));
-                                  })
-                    {
-                        if constexpr (std::is_constructible_v<
-                                          typename promise_type::allocator_type,
-                                          decltype(hpx::execution::
-                                                  experimental::get_allocator(
-                                                      hpx::execution::
-                                                          experimental::get_env(
-                                                              rcvr_)))>)
-                        {
-                            coro_.promise().alloc_.emplace(
-                                hpx::execution::experimental::get_allocator(
-                                    hpx::execution::experimental::get_env(
-                                        rcvr_)));
-                        }
-                    }
-                }
+
             }
 
             task_operation_state(task_operation_state&&) = delete;
@@ -793,7 +754,6 @@ namespace hpx::execution::experimental {
     class [[nodiscard]] task
     {
     public:
-        using is_sender = void;
         using sender_concept = hpx::execution::experimental::sender_t;
         using promise_type = detail::task_promise<T, TaskEnv>;
 
