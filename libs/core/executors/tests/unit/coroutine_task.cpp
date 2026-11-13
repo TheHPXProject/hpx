@@ -612,7 +612,7 @@ ex::task<int, query_env> query_env_coroutine()
 }
 
 template <typename Env, typename Tag>
-concept can_query = requires(Env const& e, Tag const& t) {
+concept can_query = requires (Env const& e, Tag const& t) {
     e.query(t);
 };
 

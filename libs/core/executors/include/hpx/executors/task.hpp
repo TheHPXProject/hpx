@@ -542,8 +542,8 @@ namespace hpx::execution::experimental {
                 }
 
                 template <typename Tag>
-                    requires(bool(hpx::execution::experimental::
-                                 forwarding_query(Tag{})) &&
+                    requires (bool(hpx::execution::experimental::
+                        forwarding_query(Tag{})) &&
                         std::is_invocable_v<Tag, inner_env_type const&>)
                 decltype(auto) query(Tag tag) const
                     noexcept(
