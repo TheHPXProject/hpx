@@ -152,6 +152,21 @@ namespace hpx::execution::experimental {
             stdexec::__q<std::variant>, stdexec::__q1<std::decay_t>>;
 
         template <typename Error, typename ErrorVariant>
+        struct count_matching_errors;
+
+        template <typename Error, typename... Types>
+        struct count_matching_errors<Error, std::variant<Types...>>
+        {
+            static constexpr std::size_t value =
+                ((std::is_convertible_v<Error, Types> ? 1ULL : 0ULL) + ... +
+                    0ULL);
+        };
+
+        template <typename Error, typename ErrorVariant>
+        inline constexpr std::size_t count_matching_errors_v =
+            count_matching_errors<Error, ErrorVariant>::value;
+
+        template <typename Error, typename ErrorVariant>
         struct find_matching_error;
 
         template <typename Error, typename First, typename... Rest>
@@ -175,7 +190,7 @@ namespace hpx::execution::experimental {
 
         template <typename Error, typename Sig>
         inline constexpr bool is_valid_task_error_v =
-            !std::is_same_v<matching_error_t<Error, Sig>, void>;
+            (count_matching_errors_v<Error, error_variant_t<Sig>> == 1);
 
         template <typename Error, typename Sig>
         concept valid_task_error = is_valid_task_error_v<Error, Sig>;
@@ -485,6 +500,8 @@ namespace hpx::execution::experimental {
 
             struct env_type
             {
+                using inner_env_type = typename traits_type::env_type;
+                using allocator_type = typename traits_type::allocator_type;
                 task_promise const* promise_;
 
                 auto query(hpx::execution::experimental::get_stop_token_t)
@@ -501,7 +518,15 @@ namespace hpx::execution::experimental {
                     {
                         return *promise_->alloc_;
                     }
-                    return typename task_promise::allocator_type{};
+                    if constexpr (std::is_default_constructible_v<
+                                      allocator_type>)
+                    {
+                        return allocator_type{};
+                    }
+                    else
+                    {
+                        std::terminate();
+                    }
                 }
 
                 auto query(hpx::execution::experimental::get_scheduler_t)
@@ -518,13 +543,11 @@ namespace hpx::execution::experimental {
 
                 template <typename Tag>
                     requires(bool(hpx::execution::experimental::
-                        forwarding_query(Tag{})) &&
-                        requires(Tag tag,
-                            typename task_promise::inner_env_type const& env) {
-                            tag(env);
-                        })
+                                 forwarding_query(Tag{})) &&
+                        std::is_invocable_v<Tag, inner_env_type const&>)
                 decltype(auto) query(Tag tag) const
-                    noexcept(noexcept(tag(promise_->env_)))
+                    noexcept(
+                        std::is_nothrow_invocable_v<Tag, inner_env_type const&>)
                 {
                     return tag(promise_->env_);
                 }

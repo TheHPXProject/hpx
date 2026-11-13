@@ -24,6 +24,7 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -610,6 +611,11 @@ ex::task<int, query_env> query_env_coroutine()
     co_return 10;
 }
 
+template <typename Env, typename Tag>
+concept can_query = requires(Env const& e, Tag const& t) {
+    e.query(t);
+};
+
 void test_environment_traits()
 {
     using default_traits = ex::task<int>::promise_type::traits_type;
@@ -629,9 +635,10 @@ void test_environment_traits()
 
     // Verify forwarding_query participation
     using promise_t = ex::task<int, query_env>::promise_type;
-    static_assert(requires(promise_t::env_type const& e) {
-        e.query(my_forwarding_query);
-    });
+    static_assert(
+        can_query<promise_t::env_type, decltype(my_forwarding_query)>);
+    static_assert(
+        !can_query<promise_t::env_type, decltype(my_non_forwarding_query)>);
 
     auto t = query_env_coroutine();
     auto res = tt::sync_wait(HPX_MOVE(t));
