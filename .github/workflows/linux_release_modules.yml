@@ -26,6 +26,7 @@ jobs:
             -GNinja \
             -DHPX_WITH_CXX_STANDARD=23 \
             -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX="$GITHUB_WORKSPACE/install" \
             -DHPX_WITH_MALLOC=system \
             -DHPX_WITH_FETCH_ASIO=ON \
             -DHPX_WITH_ASIO_TAG=asio-1-34-2 \
@@ -40,4 +41,7 @@ jobs:
             -DHPX_WITH_DATAPAR=ON \
             -DHPX_WITH_DATAPAR_BACKEND=EMULATE
       base-targets: hpx_core core components
+      # the external CMake build tests, against the build and the installed
+      # directory
+      extra-targets: install tests.unit.build
       shards: 25
