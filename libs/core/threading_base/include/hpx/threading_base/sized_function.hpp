@@ -162,6 +162,15 @@ namespace hpx::threads::detail {
         return {HPX_FORWARD(F, f), size};
     }
 
+    // Returns f with the given size, for instance a size read from a
+    // function before it is moved into f.
+    HPX_CXX_CORE_EXPORT template <typename F>
+    constexpr size_of_function<std::decay_t<F>> with_task_size(
+        F&& f, task_size const size)
+    {
+        return {HPX_FORWARD(F, f), size};
+    }
+
     // Store the size of f in the hint of the thread that runs it. Task sizes
     // come from functions only: a size the hint got from elsewhere, for
     // instance from an executor or a launch policy, is replaced, and the size

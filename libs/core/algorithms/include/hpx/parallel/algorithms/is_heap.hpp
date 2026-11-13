@@ -216,12 +216,14 @@ namespace hpx {
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/iterator_support.hpp>
+#include <hpx/modules/threading_base.hpp>
 #include <hpx/modules/type_support.hpp>
 
 #include <hpx/algorithms/traits/projected.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
+#include <hpx/parallel/algorithms/detail/task_size_argument.hpp>
 #include <hpx/parallel/util/adapt_placement_mode.hpp>
 #include <hpx/parallel/util/cancellation_token.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
@@ -363,6 +365,11 @@ namespace hpx::parallel {
 
                 hpx::parallel::util::cancellation_token<std::size_t> tok(count);
 
+                // an iteration has the size of the comparison of an element
+                // with its parent
+                auto const size =
+                    task_size_of_call<task_size_argument_t<Iter, Proj>,
+                        task_size_argument_t<Iter, Proj>>(comp);
                 // Note: replacing the invoke() with HPX_INVOKE()
                 // below makes gcc generate errors
                 auto f1 = [tok, first, comp = HPX_FORWARD(Comp, comp),
@@ -417,7 +424,8 @@ namespace hpx::parallel {
                     util::partitioner<policy_type, bool, void>;
                 return partitioner_type::call_with_index(
                     HPX_FORWARD(decltype(policy), policy), second, count, 1,
-                    HPX_MOVE(f1), HPX_MOVE(f2));
+                    hpx::threads::detail::with_task_size(HPX_MOVE(f1), size),
+                    HPX_MOVE(f2));
             }
         };
 
@@ -497,6 +505,11 @@ namespace hpx::parallel {
 
                 hpx::parallel::util::cancellation_token<std::size_t> tok(count);
 
+                // an iteration has the size of the comparison of an element
+                // with its parent
+                auto const size =
+                    task_size_of_call<task_size_argument_t<Iter, Proj>,
+                        task_size_argument_t<Iter, Proj>>(comp);
                 // Note: replacing the invoke() with HPX_INVOKE()
                 // below makes gcc generate errors
                 auto f1 = [tok, first, comp = HPX_FORWARD(Comp, comp),
@@ -557,7 +570,8 @@ namespace hpx::parallel {
                     util::partitioner<policy_type, Iter, void>;
                 return partitioner_type::call_with_index(
                     HPX_FORWARD(decltype(policy), policy), second, count, 1,
-                    HPX_MOVE(f1), HPX_MOVE(f2));
+                    hpx::threads::detail::with_task_size(HPX_MOVE(f1), size),
+                    HPX_MOVE(f2));
             }
         };
 

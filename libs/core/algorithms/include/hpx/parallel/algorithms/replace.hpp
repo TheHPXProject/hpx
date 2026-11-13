@@ -475,6 +475,7 @@ namespace hpx {
 
 #include <hpx/config.hpp>
 #include <hpx/modules/concepts.hpp>
+#include <hpx/modules/execution.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/type_support.hpp>
@@ -740,10 +741,10 @@ namespace hpx {
             static_assert(std::forward_iterator<FwdIter>,
                 "Required at least forward iterator.");
 
-            return hpx::replace_if(
-                HPX_FORWARD(ExPolicy, policy), first, last,
-                [old_value](auto const& a) { return old_value == a; },
-                new_value);
+            // compares the elements with the value as equal_to does, which
+            // gives the worker tasks a size
+            return hpx::replace_if(HPX_FORWARD(ExPolicy, policy), first, last,
+                hpx::parallel::detail::compare_to<T>(old_value), new_value);
         }
     } replace{};
 
@@ -862,9 +863,10 @@ namespace hpx {
             static_assert(std::forward_iterator<FwdIter2>,
                 "Required at least forward iterator.");
 
-            return hpx::replace_copy_if(
-                HPX_FORWARD(ExPolicy, policy), first, last, dest,
-                [old_value](auto const& a) { return old_value == a; },
+            // compares the elements with the value as equal_to does, which
+            // gives the worker tasks a size
+            return hpx::replace_copy_if(HPX_FORWARD(ExPolicy, policy), first,
+                last, dest, hpx::parallel::detail::compare_to<T>(old_value),
                 new_value);
         }
     } replace_copy{};

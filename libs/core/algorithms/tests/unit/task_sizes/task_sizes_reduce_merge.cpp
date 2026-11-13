@@ -20,8 +20,13 @@ using hpx::threads::task_size;
 using task_size_checks::check_only_size;
 
 // The worker tasks of reduce, transform_reduce and merge have the size of the
-// reduction, the transformation and the comparison. The task policy keeps the
-// partitioners from running the only chunk inline.
+// reduction, the transformation and the comparison.
+//
+// The sizes are counted when the scheduler creates a thread (see
+// task_size_checks.hpp). The task policy makes the algorithms asynchronous,
+// they return a future: with a synchronous policy, the executor would run the
+// queue of the calling thread inline instead of creating a thread for it, and
+// with a single worker that is the only queue, so no thread would be counted.
 void test_algorithm_sizes()
 {
     auto const policy = hpx::execution::par(hpx::execution::task);

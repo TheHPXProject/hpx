@@ -451,11 +451,13 @@ namespace hpx {
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/iterator_support.hpp>
+#include <hpx/modules/threading_base.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
 #include <hpx/parallel/algorithms/detail/equal.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
+#include <hpx/parallel/algorithms/detail/task_size_argument.hpp>
 #include <hpx/parallel/util/adapt_placement_mode.hpp>
 #include <hpx/parallel/util/cancellation_token.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
@@ -560,6 +562,11 @@ namespace hpx::parallel {
 
                 util::cancellation_token<> tok;
 
+                // an iteration has the size of the predicate called with an
+                // element of each range
+                auto const size =
+                    task_size_of_call<task_size_argument_t<Iter1, Proj1>,
+                        task_size_argument_t<Iter2, Proj2>>(f);
                 auto f1 = [tok, f = HPX_FORWARD(F, f),
                               proj1 = HPX_FORWARD(Proj1, proj1),
                               proj2 = HPX_FORWARD(Proj2, proj2)](
@@ -574,7 +581,8 @@ namespace hpx::parallel {
                 return util::partitioner<policy_type, bool,
                     intermediate_result_t>::call(HPX_FORWARD(decltype(policy),
                                                      policy),
-                    zip_iterator(first1, first2), count1, HPX_MOVE(f1),
+                    zip_iterator(first1, first2), count1,
+                    hpx::threads::detail::with_task_size(HPX_MOVE(f1), size),
                     [different_lengths](auto&& results) -> bool {
                         if constexpr (has_scheduler_executor)
                         {
@@ -649,6 +657,12 @@ namespace hpx::parallel {
                 using intermediate_result_t = std::uint8_t;
 
                 util::cancellation_token<> tok;
+
+                // an iteration has the size of the predicate called with an
+                // element of each range
+                auto const size =
+                    task_size_of_call<task_size_argument_t<FwdIter1>,
+                        task_size_argument_t<FwdIter2>>(f);
                 auto f1 = [f, tok](
                               zip_iterator it, std::size_t part_count) mutable
                     -> intermediate_result_t {
@@ -660,7 +674,8 @@ namespace hpx::parallel {
                 return util::partitioner<policy_type, bool,
                     intermediate_result_t>::call(HPX_FORWARD(decltype(policy),
                                                      policy),
-                    zip_iterator(first1, first2), count, HPX_MOVE(f1),
+                    zip_iterator(first1, first2), count,
+                    hpx::threads::detail::with_task_size(HPX_MOVE(f1), size),
                     [](auto&& results) {
                         return std::all_of(hpx::util::begin(results),
                             hpx::util::end(results), hpx::functional::unwrap{});
