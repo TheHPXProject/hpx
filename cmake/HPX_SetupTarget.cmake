@@ -165,7 +165,7 @@ function(hpx_setup_target target)
   endif()
 
   if("${_type}" STREQUAL "LIBRARY" AND target_PLUGIN)
-    set(plugin_name "HPX_PLUGIN_NAME=hpx_${name}")
+    target_compile_definitions(${target} PRIVATE "HPX_PLUGIN_NAME=hpx_${name}")
     target_link_libraries(${target} ${__tll_private} HPX::plugin)
   endif()
 
