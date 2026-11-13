@@ -58,7 +58,7 @@ on:
         type: string
         required: true
       extra-targets:
-        description: "Whitespace-separated ninja targets that aren't CTest tests (for instance install and the external CMake build tests, tests.unit.build), built in this order by the first job after the build directory has been handed to the test shards"
+        description: "Whitespace-separated ninja targets that aren't CTest tests (for instance install and the external CMake build tests, tests.unit.build), built in this order by a job of their own in the build directory of the first job, in parallel with the test shards"
         type: string
         default: ""
       shards:
@@ -152,10 +152,50 @@ jobs:
           path: build.tar.gz
           retention-days: 3
 
-      # after the upload: the shards don't wait for these targets, and the
-      # build archive doesn't contain what they produce
+  # A job of its own, so that the shards don't wait for these targets
+  extra-targets:
+    needs: build-libraries
+    if: inputs.extra-targets != ''
+    runs-on: ${{ inputs.runs-on }}
+    container: ${{ inputs.container }}
+    name: ${{ inputs.extra-targets }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: lukka/get-cmake@v4.4.5
+        if: inputs.get-cmake
+
+      - uses: ./.github/actions/setup-vcpkg
+        if: inputs.vcpkg
+
+      # see the tests job
+      - name: Make the vcpkg packages older than the build
+        if: inputs.vcpkg
+        shell: bash
+        run: |
+          find /c/projects/vcpkg/installed -type f \
+            -exec touch -t 200001010000 {} +
+
+      - uses: ./.github/actions/msvc-dev-env
+        if: inputs.msvc-dev-env
+
+      - name: Set up
+        if: inputs.setup != ''
+        shell: bash
+        run: ${{ inputs.setup }}
+
+      # only downloads and extracts the build directory
+      - uses: ./.github/actions/hpx-build-and-test
+        with:
+          build-artifact-name: ${{ inputs.artifact-prefix }}-${{ github.sha }}
+          run-tests: "false"
+          upload-artifacts: "false"
+          artifact-job-name: extra-targets
+
+      # one after the other: the tests of the installed directory need the
+      # installation to be complete
       - name: Build ${{ inputs.extra-targets }}
-        if: inputs.extra-targets != ''
         shell: bash
         working-directory: build
         run: |
