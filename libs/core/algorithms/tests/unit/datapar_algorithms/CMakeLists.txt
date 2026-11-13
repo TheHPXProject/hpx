@@ -15,6 +15,7 @@ if(HPX_WITH_DATAPAR)
       all_of_datapar
       any_of_datapar
       copy_datapar
+      copyif_datapar
       copyn_datapar
       count_datapar
       countif_datapar
