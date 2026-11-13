@@ -11,6 +11,7 @@
 #include <hpx/config.hpp>
 #include <hpx/modules/async_colocated.hpp>
 #include <hpx/modules/components_base.hpp>
+#include <hpx/modules/errors.hpp>
 #include <hpx/modules/runtime_configuration.hpp>
 
 #include <hpx/runtime_components/macros.hpp>
@@ -81,9 +82,34 @@ namespace hpx::components {
             if (to_int(hpx::components::component_enum_type::invalid) == type)
             {
                 // First call to get_component_type, ask AGAS for a unique id.
-                type = detail::get_agas_component_type(name,
-                    components::get_component_base_name<type_holder>(),
-                    base_type, enabled);
+                try
+                {
+                    type = detail::get_agas_component_type(name,
+                        components::get_component_base_name<type_holder>(),
+                        base_type, enabled);
+                }
+                catch (hpx::exception const& e)
+                {
+                    if (e.get_error() != hpx::error::duplicate_component_id)
+                    {
+                        throw;
+                    }
+
+                    // Each module that registers a component has its own
+                    // copy of the component's data (heap, type id), which is
+                    // shared between modules only on some platforms. Name the
+                    // module that registers the component a second time.
+                    HPX_THROW_EXCEPTION(hpx::error::duplicate_component_id,
+                        "component_registry::register_component_type",
+                        "the component '{}' could not be registered by module "
+                        "'{}': it is already registered on this locality, "
+                        "probably by another module (the executable or a "
+                        "library) that registers the same component type; a "
+                        "component type must be registered in exactly one "
+                        "module, other modules should only use its "
+                        "declaration",
+                        name, get_component_module_name<Component>());
+                }
                 components::set_component_type<type_holder>(type);
             }
             components::enabled(type) = enabled;
