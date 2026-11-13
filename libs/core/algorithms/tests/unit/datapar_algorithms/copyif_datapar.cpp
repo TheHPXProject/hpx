@@ -137,6 +137,24 @@ auto copy_if_ranges_test_invoke(
     }
 }
 
+template <typename ExPolicy, typename Rng, typename Out, typename Pred,
+    typename Proj>
+auto copy_if_ranges_test_invoke(
+    ExPolicy&& policy, Rng&& rng, Out dest, Pred&& pred, Proj&& proj)
+{
+    if constexpr (hpx::is_async_execution_policy_v<std::decay_t<ExPolicy>>)
+    {
+        return hpx::ranges::copy_if(policy, HPX_FORWARD(Rng, rng), dest,
+            HPX_FORWARD(Pred, pred), HPX_FORWARD(Proj, proj))
+            .get();
+    }
+    else
+    {
+        return hpx::ranges::copy_if(policy, HPX_FORWARD(Rng, rng), dest,
+            HPX_FORWARD(Pred, pred), HPX_FORWARD(Proj, proj));
+    }
+}
+
 template <typename ExPolicy>
 void test_copy_if_contiguous(ExPolicy policy)
 {
@@ -412,10 +430,10 @@ void test_copy_if_bool_contiguous()
     using namespace hpx::execution;
 
     std::array<bool, 6> c = {{true, false, true, true, false, true}};
-    std::vector<bool> expected = {true, true, true, true};
+    std::array<bool, 4> expected = {{true, true, true, true}};
 
     auto run_test = [&](auto&& pol) {
-        std::vector<bool> d(c.size());
+        std::array<bool, 6> d{};
         auto res = copy_if_test_invoke(
             pol, c.begin(), c.end(), d.begin(), [](bool x) { return x; });
         std::size_t count = std::distance(d.begin(), res);
@@ -476,6 +494,16 @@ void test_copy_if_projections(ExPolicy policy)
     for (std::size_t i = 0; i != sz; ++i)
         c[i] = (i % 2 == 0) ? -static_cast<int>(i) : static_cast<int>(i);
 
+    std::vector<int> expected;
+    expected.reserve(sz);
+    for (int x : c)
+    {
+        if (-x > 0)
+        {
+            expected.push_back(x);
+        }
+    }
+
     // Projection negates the value: proj(x) = -x.
     // pred checks -x > 0 (meaning original x < 0).
     std::atomic<int> pack_calls(0);
@@ -490,20 +518,129 @@ void test_copy_if_projections(ExPolicy policy)
 
     std::vector<int> d(sz, 0);
     auto res = hpx::ranges::copy_if(policy, c, d.begin(), pred, proj);
-    if constexpr (hpx::is_async_execution_policy_v<policy_t>)
-    {
-        auto actual = res.get();
-        HPX_TEST(actual.in == c.end());
-    }
-    else
-    {
-        HPX_TEST(res.in == c.end());
-    }
+    auto actual = [&]() {
+        if constexpr (hpx::is_async_execution_policy_v<policy_t>)
+        {
+            return res.get();
+        }
+        else
+        {
+            return res;
+        }
+    }();
+
+    HPX_TEST(actual.in == c.end());
+    HPX_TEST_EQ(
+        static_cast<std::size_t>(actual.out - d.begin()), expected.size());
+    HPX_TEST(std::equal(d.begin(), actual.out, expected.begin()));
 
     if constexpr (pack_size > 1)
     {
         HPX_TEST(pack_calls > 0);
     }
+}
+
+void test_copy_if_long_double_contiguous()
+{
+    using namespace hpx::execution;
+
+    std::vector<long double> c = {1.0L, -2.0L, 3.5L, -4.2L, 5.0L, 6.1L};
+    std::vector<long double> expected = {1.0L, 3.5L, 5.0L, 6.1L};
+
+    auto run_test = [&](auto&& pol) {
+        std::vector<long double> d(c.size(), 0.0L);
+        auto res = copy_if_test_invoke(pol, c.begin(), c.end(), d.begin(),
+            [](long double x) { return x > 0.0L; });
+        HPX_TEST_EQ(static_cast<std::size_t>(res - d.begin()), expected.size());
+        HPX_TEST(std::equal(d.begin(), res, expected.begin()));
+    };
+
+    run_test(simd);
+    run_test(par_simd);
+    run_test(simd(task));
+    run_test(par_simd(task));
+}
+
+void test_copy_if_scalar_generic_pred_proj()
+{
+    using namespace hpx::execution;
+
+    std::vector<int> c = {1, -2, 3, 4, -5, 6, -7, 8};
+    std::vector<int> expected = {1, 3, 4, 6, 8};
+
+    auto scalar_pred = [](auto const& x)
+        requires(std::is_arithmetic_v<std::decay_t<decltype(x)>> &&
+            !hpx::parallel::traits::is_vector_pack_v<std::decay_t<decltype(x)>>)
+    { return x > 0; };
+
+    auto scalar_proj = [](auto const& x)
+        requires(std::is_arithmetic_v<std::decay_t<decltype(x)>> &&
+            !hpx::parallel::traits::is_vector_pack_v<std::decay_t<decltype(x)>>)
+    { return x; };
+
+    auto run_test = [&](auto&& pol) {
+        std::vector<int> d1(c.size(), 0);
+        auto res1 = copy_if_test_invoke(
+            pol, c.begin(), c.end(), d1.begin(), scalar_pred);
+        HPX_TEST_EQ(
+            static_cast<std::size_t>(res1 - d1.begin()), expected.size());
+        HPX_TEST(std::equal(d1.begin(), res1, expected.begin()));
+
+        std::vector<int> d2(c.size(), 0);
+        auto res2 = copy_if_ranges_test_invoke(
+            pol, c, d2.begin(), scalar_pred, scalar_proj);
+        HPX_TEST_EQ(
+            static_cast<std::size_t>(res2.out - d2.begin()), expected.size());
+        HPX_TEST(std::equal(d2.begin(), res2.out, expected.begin()));
+    };
+
+    run_test(simd);
+    run_test(par_simd);
+    run_test(simd(task));
+    run_test(par_simd(task));
+}
+
+struct explicit_bool_wrapper
+{
+    bool val;
+    constexpr explicit operator bool() const noexcept
+    {
+        return val;
+    }
+};
+
+void test_copy_if_explicit_bool_wrapper()
+{
+    using namespace hpx::execution;
+
+    std::vector<int> c = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+    std::vector<int> expected = {2, 4, 6, 8, 10};
+
+    auto generic_pred = [](auto const& x) -> explicit_bool_wrapper {
+        if constexpr (hpx::parallel::traits::is_vector_pack_v<
+                          std::decay_t<decltype(x)>>)
+        {
+            return explicit_bool_wrapper{
+                static_cast<bool>(hpx::parallel::traits::any_of(x % 2 == 0))};
+        }
+        else
+        {
+            return explicit_bool_wrapper{x % 2 == 0};
+        }
+    };
+
+    auto run_test = [&](auto&& pol) {
+        std::vector<int> d(c.size(), 0);
+        auto res = copy_if_test_invoke(
+            pol, c.begin(), c.end(), d.begin(), generic_pred);
+        HPX_TEST_EQ(static_cast<std::size_t>(res - d.begin()), expected.size());
+        HPX_TEST(std::equal(d.begin(), res, expected.begin()));
+    };
+
+    run_test(simd);
+    run_test(par_simd);
+    run_test(simd(task));
+    run_test(par_simd(task));
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -538,6 +675,9 @@ int hpx_main(hpx::program_options::variables_map& vm)
     test_copy_if_bool_returning_predicate();
     test_copy_if_bool_convertible_predicate();
     test_copy_if_bool_contiguous();
+    test_copy_if_long_double_contiguous();
+    test_copy_if_scalar_generic_pred_proj();
+    test_copy_if_explicit_bool_wrapper();
     test_copy_if_user_type();
 
     test_copy_if_projections(simd);
