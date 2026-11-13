@@ -14,6 +14,7 @@
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/thread_support.hpp>
 #include <hpx/synchronization/channel_spsc.hpp>
+#include <hpx/synchronization/spinlock.hpp>
 
 #include <algorithm>
 #include <atomic>
@@ -238,14 +239,16 @@ namespace hpx::lcos::local {
 
     /// \brief A bounded, lock-free MPSC channel without close support.
     ///
-    /// This implementation is based on Dmitry Vyukov's bounded MPSC queue algorithm.
-    /// The internal ring buffer capacity is rounded up to the nearest power of
-    /// two (at least 8) using \c std::bit_ceil for sequence bitmasking.
-    /// \c capacity() returns the requested size, matching the behavior of the
-    /// normal \c base_channel_mpsc specialization.
+    /// This implementation is based on Dmitry Vyukov's bounded MPSC queue
+    /// algorithm. The internal ring buffer capacity is rounded up to the
+    /// nearest power of two (at least 8) using \c std::bit_ceil for sequence
+    /// bitmasking. \c capacity() returns the requested size, matching the
+    /// behavior of the normal \c base_channel_mpsc specialization; it
+    /// represents a lower bound for the number of items the channel can hold.
     ///
-    /// \note \a Mutex is an unused template parameter retained for compatibility
-    /// with the primary template \c base_channel_mpsc<T, Mutex, Mode>.
+    /// \note \a Mutex is an unused template parameter retained for
+    /// compatibility with the primary template \c base_channel_mpsc<T, Mutex,
+    /// Mode>.
     template <typename T, typename Mutex>
     class base_channel_mpsc<T, Mutex, channel_mode::dont_support_close>
     {
@@ -379,7 +382,9 @@ namespace hpx::lcos::local {
             }
         }
 
-        /// \brief Returns the requested capacity of the channel.
+        /// \brief Returns the requested capacity of the channel. This
+        ///        represents a lower bound for the number of items the channel
+        ///        can hold.
         [[nodiscard]] constexpr std::size_t capacity() const noexcept
         {
             return size_;
@@ -394,9 +399,9 @@ namespace hpx::lcos::local {
     };
 
     ////////////////////////////////////////////////////////////////////////////
-    // Using hpx::util::spinlock as the means of synchronization enables the use
-    // of this channel with non-HPX threads.
+    // Using hpx::spinlock as the means of synchronization enables the use
+    // of this channel with HPX threads.
     HPX_CXX_CORE_EXPORT template <typename T,
         channel_mode Mode = channel_mode::normal>
-    using channel_mpsc = base_channel_mpsc<T, hpx::util::spinlock, Mode>;
+    using channel_mpsc = base_channel_mpsc<T, hpx::spinlock, Mode>;
 }    // namespace hpx::lcos::local
