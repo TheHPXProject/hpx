@@ -219,45 +219,58 @@ namespace hpx::parcelset {
             return;
         }
 
-        for (std::size_t i = 1; i != deferred_parcels.size(); ++i)
+        try
         {
+            for (std::size_t i = 1; i != deferred_parcels.size(); ++i)
+            {
+                LPT_(debug).format("handle_received_parcels: received: {}",
+                    deferred_parcels[i].parcel_id());
+
+                auto f = [num_thread](parcelset::parcel&& p) {
+                    if (p.schedule_action(num_thread))
+                    {
+                        // route this parcel as the object was
+                        // migrated
+                        agas::route(HPX_MOVE(p),
+                            &parcelset::detail::parcel_route_handler,
+                            threads::thread_priority::normal);
+                    }
+                };
+
+                // schedule all but the first parcel on a new thread.
+                hpx::threads::thread_init_data init_data(
+                    hpx::threads::make_thread_function_nullary(
+                        HPX_MOVE(f), HPX_MOVE(deferred_parcels[i])),
+                    "schedule_parcel", threads::thread_priority::boost,
+                    threads::thread_schedule_hint(
+                        static_cast<std::int16_t>(num_thread)),
+                    threads::thread_stacksize::default_,
+                    threads::thread_schedule_state::pending, true);
+                hpx::threads::register_thread(init_data);
+            }
+
+            // If we are the first deferred parcel, we don't need to spin
+            // up a new thread...
             LPT_(debug).format("handle_received_parcels: received: {}",
-                deferred_parcels[i].parcel_id());
+                deferred_parcels[0].parcel_id());
 
-            auto f = [num_thread](parcelset::parcel&& p) {
-                if (p.schedule_action(num_thread))
-                {
-                    // route this parcel as the object was
-                    // migrated
-                    agas::route(HPX_MOVE(p),
-                        &parcelset::detail::parcel_route_handler,
-                        threads::thread_priority::normal);
-                }
-            };
-
-            // schedule all but the first parcel on a new thread.
-            hpx::threads::thread_init_data init_data(
-                hpx::threads::make_thread_function_nullary(
-                    HPX_MOVE(f), HPX_MOVE(deferred_parcels[i])),
-                "schedule_parcel", threads::thread_priority::boost,
-                threads::thread_schedule_hint(
-                    static_cast<std::int16_t>(num_thread)),
-                threads::thread_stacksize::default_,
-                threads::thread_schedule_state::pending, true);
-            hpx::threads::register_thread(init_data);
+            if (deferred_parcels[0].schedule_action(num_thread))
+            {
+                // route this parcel as the object was migrated
+                agas::route(HPX_MOVE(deferred_parcels[0]),
+                    &parcelset::detail::parcel_route_handler,
+                    threads::thread_priority::normal);
+            }
         }
-
-        // If we are the first deferred parcel, we don't need to spin
-        // up a new thread...
-        LPT_(debug).format("handle_received_parcels: received: {}",
-            deferred_parcels[0].parcel_id());
-
-        if (deferred_parcels[0].schedule_action(num_thread))
+        catch (hpx::exception const&)
         {
-            // route this parcel as the object was migrated
-            agas::route(HPX_MOVE(deferred_parcels[0]),
-                &parcelset::detail::parcel_route_handler,
-                threads::thread_priority::normal);
+            // Parcels are received on the threads of the parcelport, which
+            // may still run after the worker threads have stopped. No new
+            // threads are created then, so the remaining parcels can't be
+            // handled anymore. Only a shutdown is expected here, anything else
+            // is a real error.
+            if (threads::threadmanager_is(hpx::state::running))
+                throw;
         }
     }
 
