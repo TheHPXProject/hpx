@@ -11,6 +11,7 @@
 #include <hpx/components_base/agas_interface.hpp>
 #include <hpx/components_base/pinned_ptr.hpp>
 #include <hpx/components_base/traits/action_decorate_function.hpp>
+#include <hpx/modules/errors.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/memory.hpp>
@@ -54,6 +55,11 @@ namespace hpx::components {
 
             mutable Mutex mtx_;
             std::uint32_t pin_count_ = 0;
+
+            // Destroys the component once its last pin is released, if its
+            // global id was released while it was still pinned (see
+            // migration_support::defer_destroy).
+            hpx::move_only_function<void()> destroy_;
 
         private:
             friend void intrusive_ptr_add_ref(
@@ -165,6 +171,11 @@ namespace hpx::components {
             auto on_exit = hpx::experimental::scope_exit(
                 [data = data_] { intrusive_ptr_release(data.get()); });
 
+            // If the global id of this component was released while it was
+            // pinned, the last unpin destroys it (see defer_destroy). This
+            // has to be the last access to the component.
+            hpx::move_only_function<void()> destroy;
+
             {
                 // no need to go through AGAS if the object is currently pinned
                 // more than once
@@ -184,6 +195,16 @@ namespace hpx::components {
                     if (data_->pin_count_ != ~0x0u)
                     {
                         --data_->pin_count_;
+                        if (data_->pin_count_ == 0)
+                        {
+                            destroy = HPX_MOVE(data_->destroy_);
+                        }
+                    }
+
+                    l.unlock();
+                    if (destroy)
+                    {
+                        destroy();
                     }
                     return false;
                 }
@@ -194,7 +215,8 @@ namespace hpx::components {
             naming::gid_type const gid(this->gid_);
             agas::mark_as_migrated(
                 gid,
-                [this, &was_migrated]() -> std::pair<bool, hpx::future<void>> {
+                [this, &was_migrated,
+                    &destroy]() -> std::pair<bool, hpx::future<void>> {
                     std::unique_lock l(data_->mtx_);
 
                     was_migrated = data_->pin_count_ == ~0x0u;
@@ -204,6 +226,8 @@ namespace hpx::components {
                     {
                         if (--data_->pin_count_ == 0)
                         {
+                            destroy = HPX_MOVE(data_->destroy_);
+
                             // trigger pending migration if this was the last
                             // unpin and a migration operation is pending
                             HPX_ASSERT_LOCKED(l, trigger_migration_.valid());
@@ -213,6 +237,19 @@ namespace hpx::components {
                                 std::swap(p, trigger_migration_);
 
                                 l.unlock();
+
+                                if (destroy)
+                                {
+                                    // the component is about to be destroyed,
+                                    // it can't be migrated anymore
+                                    p.set_exception(HPX_GET_EXCEPTION(
+                                        hpx::error::invalid_status,
+                                        "migration_support::unpin",
+                                        "the component was destroyed while "
+                                        "its migration was pending"));
+                                    return std::make_pair(
+                                        false, make_ready_future());
+                                }
 
                                 p.set_value();
                                 return std::make_pair(
@@ -225,7 +262,31 @@ namespace hpx::components {
                 true)
                 .get();
 
+            if (destroy)
+            {
+                destroy();
+            }
             return was_migrated;
+        }
+
+        // Called when the global id of this component has been released.
+        // Defers the destruction (the given function) to the last unpin if
+        // the component is still pinned, for instance by an action that has
+        // already sent its result but has not finished yet. Returns whether
+        // the destruction was deferred.
+        bool defer_destroy(hpx::move_only_function<void()>&& f)
+        {
+            auto const data = data_;    // keep alive
+            std::unique_lock l(data->mtx_);
+
+            if (data->pin_count_ == ~0x0u || data->pin_count_ == 0)
+            {
+                return false;
+            }
+
+            HPX_ASSERT_LOCKED(l, !data->destroy_);
+            data->destroy_ = HPX_MOVE(f);
+            return true;
         }
 
         [[nodiscard]] std::uint32_t pin_count() const noexcept

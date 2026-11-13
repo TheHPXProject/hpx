@@ -51,6 +51,23 @@ namespace hpx::traits {
             }
         };
 
+        struct defer_destroy_helper
+        {
+            template <typename Component, typename F>
+            static constexpr bool call(wrap_int, Component*, F&&) noexcept
+            {
+                return false;
+            }
+
+            // forward the call if the component implements the function
+            template <typename Component, typename F>
+            static auto call(int, Component* p, F&& f)
+                -> decltype(p->defer_destroy(HPX_FORWARD(F, f)))
+            {
+                return p->defer_destroy(HPX_FORWARD(F, f));
+            }
+        };
+
         struct pin_count_helper
         {
             template <typename Component>
@@ -85,6 +102,16 @@ namespace hpx::traits {
         static constexpr std::uint32_t pin_count(Component* p) noexcept
         {
             return detail::pin_count_helper::call(0, p);
+        }
+
+        // Called when the component is about to be destroyed (its global id
+        // has been released). Returns true if the component took over the
+        // given function, which destroys it, to call it once it is no longer
+        // pinned. Returns false if the component can be destroyed right away.
+        template <typename F>
+        static bool defer_destroy(Component* p, F&& f)
+        {
+            return detail::defer_destroy_helper::call(0, p, HPX_FORWARD(F, f));
         }
     };
 }    // namespace hpx::traits
