@@ -10,10 +10,16 @@
 #include <hpx/components/iostreams/export_definitions.hpp>
 #include <hpx/components/iostreams/ostream.hpp>
 
+#include <ostream>
 #include <sstream>
 #include <string>
 
 namespace hpx {
+
+    // as in local-only builds, hpx::endl and hpx::flush are std::endl and
+    // std::flush
+    using std::endl;
+    using std::flush;
 
     HPX_IOSTREAMS_EXPORT extern iostreams::ostream<> cout;
     HPX_IOSTREAMS_EXPORT extern iostreams::ostream<> cerr;
