@@ -36,6 +36,7 @@ namespace hpx::execution::experimental {
         using error_types =
             hpx::execution::experimental::completion_signatures<
                 hpx::execution::experimental::set_error_t(std::exception_ptr)>;
+        using env_type = hpx::execution::experimental::empty_env;
 
         default_task_environment() = default;
 
@@ -115,6 +116,19 @@ namespace hpx::execution::experimental {
             using type = typename Env::error_types;
         };
 
+        template <typename Env, typename Default, typename = void>
+        struct env_inner_env
+        {
+            using type = Default;
+        };
+
+        template <typename Env, typename Default>
+        struct env_inner_env<Env, Default,
+            std::void_t<typename Env::env_type>>
+        {
+            using type = typename Env::env_type;
+        };
+
         template <typename TaskEnv>
         struct task_env_traits
         {
@@ -128,6 +142,7 @@ namespace hpx::execution::experimental {
                 hpx::execution::experimental::completion_signatures<
                     hpx::execution::experimental::set_error_t(
                         std::exception_ptr)>>::type;
+            using env_type = typename env_inner_env<TaskEnv, TaskEnv>::type;
         };
 
         ///////////////////////////////////////////////////////////////////////
@@ -287,15 +302,20 @@ namespace hpx::execution::experimental {
 
         ///////////////////////////////////////////////////////////////////////
         // Forward stop request callback functor
+        template <typename StopSource = hpx::experimental::in_place_stop_source>
         struct forward_task_stop_request
         {
-            hpx::experimental::in_place_stop_source& stop_source_;
+            StopSource& stop_source_;
 
             void operator()() const noexcept
             {
                 stop_source_.request_stop();
             }
         };
+
+        template <typename StopSource>
+        forward_task_stop_request(StopSource&)
+            -> forward_task_stop_request<StopSource>;
 
         ///////////////////////////////////////////////////////////////////////
         // Abstract base for operation state or awaiter driving the task
@@ -385,13 +405,14 @@ namespace hpx::execution::experimental {
             using stop_source_type = typename traits_type::stop_source_type;
             using error_types = typename traits_type::error_types;
             using error_variant_type = error_variant_t<error_types>;
+            using inner_env_type = typename traits_type::env_type;
 
             task_operation_base* state_{nullptr};
             bool stopped_{false};
             stop_source_type stop_source_{};
             decltype(stop_source_.get_token()) stop_token_{
                 stop_source_.get_token()};
-            [[no_unique_address]] TaskEnv env_{};
+            [[no_unique_address]] inner_env_type env_{};
             std::optional<scheduler_type> scheduler_{};
             std::optional<allocator_type> alloc_{};
             bool has_custom_alloc_{false};
@@ -498,7 +519,10 @@ namespace hpx::execution::experimental {
                 template <typename Tag>
                     requires(bool(hpx::execution::experimental::
                         forwarding_query(Tag{})) &&
-                        requires(Tag tag, TaskEnv const& env) { tag(env); })
+                        requires(Tag tag,
+                            typename task_promise::inner_env_type const& env) {
+                            tag(env);
+                        })
                 decltype(auto) query(Tag tag) const
                     noexcept(noexcept(tag(promise_->env_)))
                 {
@@ -575,13 +599,14 @@ namespace hpx::execution::experimental {
         {
             using promise_type = task_promise<T, TaskEnv>;
             using receiver_type = std::decay_t<Receiver>;
+            using stop_source_type = typename promise_type::stop_source_type;
 
             using stop_token_type =
                 hpx::execution::experimental::stop_token_of_t<
                     hpx::execution::experimental::env_of_t<receiver_type>>;
             using stop_callback_type =
                 typename stop_token_type::template callback_type<
-                    forward_task_stop_request>;
+                    forward_task_stop_request<stop_source_type>>;
 
             hpx::coroutine_handle<promise_type> coro_;
             receiver_type rcvr_;
@@ -595,16 +620,20 @@ namespace hpx::execution::experimental {
             {
                 coro_.promise().state_ = this;
 
-                if constexpr (std::is_constructible_v<TaskEnv,
+                if constexpr (std::is_constructible_v<
+                                  typename promise_type::inner_env_type,
                                   decltype(hpx::execution::experimental::
-                                      get_env(rcvr_))>)
+                                          get_env(rcvr_))>)
                 {
                     coro_.promise().env_ =
-                        TaskEnv(hpx::execution::experimental::get_env(rcvr_));
+                        typename promise_type::inner_env_type(
+                            hpx::execution::experimental::get_env(rcvr_));
                 }
-                else
+                else if constexpr (std::is_default_constructible_v<
+                                       typename promise_type::inner_env_type>)
                 {
-                    coro_.promise().env_ = TaskEnv{};
+                    coro_.promise().env_ =
+                        typename promise_type::inner_env_type{};
                 }
 
                 if constexpr (requires {
@@ -660,7 +689,7 @@ namespace hpx::execution::experimental {
                 if (token.stop_possible())
                 {
                     stop_callback_.emplace(token,
-                        forward_task_stop_request{
+                        forward_task_stop_request<stop_source_type>{
                             coro_.promise().stop_source_});
                 }
 
@@ -815,6 +844,7 @@ namespace hpx::execution::experimental {
         template <typename ParentPromise = void>
         struct awaiter : detail::task_operation_base
         {
+            using stop_source_type = typename promise_type::stop_source_type;
             using stop_token_type =
                 std::conditional_t<std::is_void_v<ParentPromise>,
                     hpx::experimental::in_place_stop_token,
@@ -822,7 +852,7 @@ namespace hpx::execution::experimental {
 
             using stop_callback_type =
                 typename stop_token_type::template callback_type<
-                    detail::forward_task_stop_request>;
+                    detail::forward_task_stop_request<stop_source_type>>;
 
             hpx::coroutine_handle<promise_type> coro_;
             hpx::coroutine_handle<> continuation_{};
@@ -888,12 +918,14 @@ namespace hpx::execution::experimental {
 
                     if constexpr (std::is_constructible_v<stop_callback_type,
                                       decltype(token),
-                                      detail::forward_task_stop_request>)
+                                      detail::forward_task_stop_request<
+                                          stop_source_type>>)
                     {
                         if (token.stop_possible())
                         {
                             stop_callback_.emplace(token,
-                                detail::forward_task_stop_request{
+                                detail::forward_task_stop_request<
+                                    stop_source_type>{
                                     coro_.promise().stop_source_});
                         }
                     }
@@ -902,11 +934,13 @@ namespace hpx::execution::experimental {
                 // 3. Forward parent promise's environment and scheduler
                 if constexpr (requires { parent.promise().get_env(); })
                 {
-                    if constexpr (std::is_constructible_v<TaskEnv,
+                    if constexpr (std::is_constructible_v<
+                                      typename promise_type::inner_env_type,
                                       decltype(parent.promise().get_env())>)
                     {
                         coro_.promise().env_ =
-                            TaskEnv(parent.promise().get_env());
+                            typename promise_type::inner_env_type(
+                                parent.promise().get_env());
                     }
 
                     if constexpr (requires {
