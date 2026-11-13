@@ -21,6 +21,7 @@
 #include <hpx/parallel/datapar/zip_iterator.hpp>
 #include <hpx/parallel/util/result_types.hpp>
 
+#include <concepts>
 #include <cstddef>
 #include <iterator>
 #include <type_traits>
@@ -28,14 +29,42 @@
 
 namespace hpx::parallel::detail {
 
+    template <typename Mask>
+    inline constexpr bool has_mask_lane_access_v =
+        requires(Mask const& m, std::size_t idx) {
+            { m.get(idx) } -> std::convertible_to<bool>;
+        } || requires(Mask const& m, std::size_t idx) {
+            { m[idx] } -> std::convertible_to<bool>;
+        };
+
+    template <typename Pred, typename Proj, typename Vector>
+    inline constexpr bool is_copy_if_invocable_v = false;
+
+    template <typename Pred, typename Proj, typename Vector>
+        requires(std::is_invocable_v<std::decay_t<Proj>&, Vector&>)
+    inline constexpr bool is_copy_if_invocable_v<Pred, Proj, Vector> =
+        std::is_invocable_v<std::decay_t<Pred>&,
+            std::invoke_result_t<std::decay_t<Proj>&, Vector&>>;
+
+    template <typename Pred, typename Proj, typename Vector>
+    inline constexpr bool is_copy_if_datapar_compatible_impl_v = false;
+
+    template <typename Pred, typename Proj, typename Vector>
+        requires(is_copy_if_invocable_v<Pred, Proj, Vector>)
+    inline constexpr bool
+        is_copy_if_datapar_compatible_impl_v<Pred, Proj, Vector> = requires(
+            std::decay_t<Pred>& pred, std::decay_t<Proj>& proj, Vector& v) {
+            requires(!std::is_convertible_v<
+                std::decay_t<decltype(HPX_INVOKE(pred, HPX_INVOKE(proj, v)))>,
+                bool>);
+            traits::any_of(HPX_INVOKE(pred, HPX_INVOKE(proj, v)));
+            requires(has_mask_lane_access_v<
+                std::decay_t<decltype(HPX_INVOKE(pred, HPX_INVOKE(proj, v)))>>);
+        };
+
     HPX_CXX_CORE_EXPORT template <typename Pred, typename Proj, typename Vector>
-    inline constexpr bool is_copy_if_datapar_compatible_v = requires(
-        std::decay_t<Pred>& pred, std::decay_t<Proj>& proj, Vector& v) {
-        requires(!std::is_convertible_v<
-            std::decay_t<decltype(HPX_INVOKE(pred, HPX_INVOKE(proj, v)))>,
-            bool>);
-        traits::any_of(HPX_INVOKE(pred, HPX_INVOKE(proj, v)));
-    };
+    inline constexpr bool is_copy_if_datapar_compatible_v =
+        is_copy_if_datapar_compatible_impl_v<Pred, Proj, Vector>;
 
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT template <typename ExPolicy>
