@@ -157,13 +157,14 @@ namespace hpx::execution::experimental {
                 l_loop.complete_operation(l_data->loop_operation_finished);
             }
 
-            void set_error(std::exception_ptr ep) && noexcept
+            template <typename E>
+            void set_error(E&& e) && noexcept
             {
                 auto data_keepalive = this->base_type::data;
                 auto* const l_data = data;
                 auto& l_loop = loop;
                 HPX_MOVE(*static_cast<base_type*>(this))
-                    .set_error(HPX_MOVE(ep));
+                    .set_error(HPX_FORWARD(E, e));
                 l_loop.complete_operation(l_data->loop_operation_finished);
             }
 
@@ -202,13 +203,14 @@ namespace hpx::execution::experimental {
                 l_loop.complete_operation(l_data->loop_operation_finished);
             }
 
-            void set_error(std::exception_ptr ep) && noexcept
+            template <typename E>
+            void set_error(E&& e) && noexcept
             {
                 auto data_keepalive = this->base_type::data;
                 auto* const l_data = data;
                 auto& l_loop = loop;
                 HPX_MOVE(*static_cast<base_type*>(this))
-                    .set_error(HPX_MOVE(ep));
+                    .set_error(HPX_FORWARD(E, e));
                 l_loop.complete_operation(l_data->loop_operation_finished);
             }
 
