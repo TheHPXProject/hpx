@@ -617,21 +617,19 @@ concept can_query = requires(Env const& e, Tag const& t) { e.query(t); };
 void test_environment_traits()
 {
     using default_traits = ex::task<int>::promise_type::traits_type;
+    static_assert(std::is_same_v<default_traits::allocator_type,
+        std::allocator<std::byte>>);
     static_assert(
-        std::is_same_v<default_traits::allocator_type,
-            std::allocator<std::byte>>);
-    static_assert(std::is_same_v<default_traits::scheduler_type,
-        ex::task_scheduler>);
+        std::is_same_v<default_traits::scheduler_type, ex::task_scheduler>);
     static_assert(std::is_same_v<default_traits::stop_source_type,
         hpx::experimental::in_place_stop_source>);
 
     using custom_traits =
         ex::task<int, custom_task_env>::promise_type::traits_type;
     static_assert(
-        std::is_same_v<custom_traits::allocator_type,
-            std::allocator<int>>);
-    static_assert(std::is_same_v<custom_traits::scheduler_type,
-        ex::task_scheduler>);
+        std::is_same_v<custom_traits::allocator_type, std::allocator<int>>);
+    static_assert(
+        std::is_same_v<custom_traits::scheduler_type, ex::task_scheduler>);
 
     // Verify forwarding_query participation
     using promise_t = ex::task<int, query_env>::promise_type;

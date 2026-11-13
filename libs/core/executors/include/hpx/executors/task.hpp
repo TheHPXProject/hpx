@@ -443,8 +443,7 @@ namespace hpx::execution::experimental {
                                       decltype(find_allocator<Args...>::get(
                                           args...))>)
                     {
-                        alloc_.emplace(
-                            find_allocator<Args...>::get(args...));
+                        alloc_.emplace(find_allocator<Args...>::get(args...));
                     }
                 }
             }
@@ -666,8 +665,9 @@ namespace hpx::execution::experimental {
                     if constexpr (std::is_constructible_v<
                                       typename promise_type::scheduler_type,
                                       decltype(hpx::execution::experimental::
-                                          get_scheduler(hpx::execution::
-                                              experimental::get_env(rcvr_)))>)
+                                          get_scheduler(
+                                              hpx::execution::experimental::
+                                                  get_env(rcvr_)))>)
                     {
                         coro_.promise().scheduler_ =
                             typename promise_type::scheduler_type(
