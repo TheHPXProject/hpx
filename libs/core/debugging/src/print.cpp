@@ -275,6 +275,17 @@ namespace hpx::debug {
                 // Static storage duration: the cached pointer below stays
                 // valid for the whole lifetime of the program.
                 static char buffer[32] = {'\0'};
+
+                // the rank suffix, if any, has to fit behind the host name
+                char suffix[16] = {'\0'};
+                int const rank = this->guess_rank();
+                if (rank >= 0)
+                {
+                    std::snprintf(suffix, sizeof(suffix), "(%d)", rank);
+                }
+                [[maybe_unused]] std::size_t const max_name_len =
+                    sizeof(buffer) - 1 - std::strlen(suffix);
+
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__)
                 // gethostname needs an initialized Winsock and fails if the
                 // name does not fit into the buffer; the DNS host name of
@@ -283,20 +294,17 @@ namespace hpx::debug {
                 DWORD size = sizeof(name);
                 if (GetComputerNameExA(ComputerNameDnsHostname, name, &size))
                 {
+                    auto const name_len = static_cast<std::size_t>(size);
                     std::memcpy(buffer, name,
-                        (std::min) (static_cast<std::size_t>(size),
-                            sizeof(buffer) - 1));
+                        name_len < max_name_len ? name_len : max_name_len);
                 }
 #elif !defined(__FreeBSD__)
-                gethostname(buffer, sizeof(buffer) - 1);
+                // the byte behind max_name_len stays zero, even if the name
+                // is truncated
+                gethostname(buffer, max_name_len);
 #endif
-                int const rank = this->guess_rank();
-                if (rank >= 0)
-                {
-                    std::size_t const len = std::strlen(buffer);
-                    std::snprintf(
-                        buffer + len, sizeof(buffer) - len, "(%d)", rank);
-                }
+                std::size_t const len = std::strlen(buffer);
+                std::memcpy(buffer + len, suffix, std::strlen(suffix) + 1);
                 return buffer;
             }();
             return hostname;
