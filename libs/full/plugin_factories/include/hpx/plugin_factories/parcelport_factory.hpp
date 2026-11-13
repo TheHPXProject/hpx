@@ -30,6 +30,14 @@
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx::plugins {
 
+    // Returns the name of the module (HPX_PLUGIN_STRING) that registers the
+    // given parcelport. It is defined by HPX_REGISTER_PARCELPORT, which
+    // expands in the module's own sources: HPX_PLUGIN_STRING used in a
+    // template exported from a C++ module would have the value it had when
+    // the module was compiled.
+    HPX_CXX_EXPORT template <typename Parcelport>
+    HPX_ALWAYS_EXPORT char const* get_parcelport_module_name() noexcept;
+
     ///////////////////////////////////////////////////////////////////////////
     /// The \a parcelport_factory provides a minimal implementation of a
     /// parcelport factory. If no additional functionality is required
@@ -76,9 +84,10 @@ namespace hpx::plugins {
         {
             std::string name = unique_plugin_name<parcelport_factory>::call();
             fillini.emplace_back(std::string("[hpx.parcel.") + name + "]");
-            fillini.emplace_back("name = " HPX_PLUGIN_STRING);
+            char const* module_name = get_parcelport_module_name<Parcelport>();
+            fillini.emplace_back(std::string("name = ") + module_name);
             fillini.emplace_back(std::string("path = ") +
-                util::find_prefixes("/hpx", HPX_PLUGIN_STRING));
+                util::find_prefixes("/hpx", module_name));
             fillini.emplace_back("enable = $[hpx.parcel.enable]");
 
             std::string name_uc;
