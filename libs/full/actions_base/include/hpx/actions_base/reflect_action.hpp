@@ -143,7 +143,7 @@ namespace hpx::actions {
 #if defined(HPX_HAVE_CXX26_REFLECTION_ANNOTATIONS)
         // The member function can give the action a size with an annotation,
         // for instance [[=hpx::task_size::small_]]. HPX_ACTION_HAS_TASK_SIZE
-        // is not seen yet for the component action macros, see #8019.
+        // on the action, the type the component action macros name, wins.
         static constexpr threads::task_size function_task_size() noexcept
         {
             return hpx::traits::detail::annotated_function_task_size<F>();
@@ -169,14 +169,14 @@ namespace hpx::actions {
         }
 
         static detail::register_action_invocation_count<
-            reflect_component_action>
+            detail::action_type_t<reflect_component_action, Derived>>
             invocation_count_registrar_;
     };
 
     template <std::meta::info F, typename Component, typename Derived>
         requires(std::meta::is_function(F) && std::meta::is_class_member(F))
-    detail::register_action_invocation_count<
-        reflect_component_action<F, Component, Derived>>
+    detail::register_action_invocation_count<detail::action_type_t<
+        reflect_component_action<F, Component, Derived>, Derived>>
         reflect_component_action<F, Component,
             Derived>::invocation_count_registrar_;
 
@@ -208,27 +208,36 @@ namespace hpx::actions {
         }
 
         static detail::register_action_invocation_count<
-            reflect_component_direct_action>
+            detail::action_type_t<reflect_component_direct_action, Derived>>
             invocation_count_registrar_;
     };
     template <std::meta::info F, typename Component, typename Derived>
         requires(std::meta::is_function(F) && std::meta::is_class_member(F))
-    detail::register_action_invocation_count<
-        reflect_component_direct_action<F, Component, Derived>>
+    detail::register_action_invocation_count<detail::action_type_t<
+        reflect_component_direct_action<F, Component, Derived>, Derived>>
         reflect_component_direct_action<F, Component,
             Derived>::invocation_count_registrar_;
 
 /// \brief Convenience macro for component actions.
 /// Usage: HPX_COMPONENT_ACTION(component, func, action_name)
+/// The action is passed as Derived, so that its derived_type is the action
+/// and macros like HPX_ACTION_HAS_PRIORITY apply.
 #define HPX_COMPONENT_ACTION(component, func, name)                            \
-    struct name : ::hpx::actions::reflect_component_action<^^component::func>  \
+    struct name                                                                \
+      : ::hpx::actions::reflect_component_action<^^component::func,            \
+            typename ::hpx::actions::detail::reflect_component_action_base<    \
+                ^^component::func>::component_type,                            \
+            name>                                                              \
     {                                                                          \
     } /**/
 /// \brief Convenience macro for direct component actions.
 /// Usage: HPX_COMPONENT_DIRECT_ACTION(component, func, action_name)
 #define HPX_COMPONENT_DIRECT_ACTION(component, func, name)                     \
     struct name                                                                \
-      : ::hpx::actions::reflect_component_direct_action<^^component::func>     \
+      : ::hpx::actions::reflect_component_direct_action<^^component::func,     \
+            typename ::hpx::actions::detail::reflect_component_action_base<    \
+                ^^component::func>::component_type,                            \
+            name>                                                              \
     {                                                                          \
     } /**/
 /// \brief Convenience macro for direct plain actions.

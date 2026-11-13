@@ -121,6 +121,15 @@ namespace hpx::parcelset {
                 {
                     return true;
                 }
+
+                // Once the runtime has stopped (or is gone), nothing can handle
+                // a failed send anymore: the destination can't be looked up and
+                // rethrowing the error would terminate the I/O thread that
+                // reports it.
+                if (hpx::is_stopped())
+                {
+                    return true;
+                }
             }
             else if (hpx::tolerate_node_faults())
             {
