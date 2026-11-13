@@ -361,7 +361,7 @@ namespace hpx::parallel::detail {
                 });
     }
 
-    // Binary transform1
+    // Binary transform
 
     // sequential remote implementation
     template <typename Algo, typename ExPolicy, typename InIter1,

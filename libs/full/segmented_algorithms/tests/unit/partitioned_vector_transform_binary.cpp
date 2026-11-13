@@ -6,12 +6,12 @@
 
 #include <hpx/config.hpp>
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
-#include <hpx/components/containers/partitioned_vector/partitioned_vector.hpp>
-#include <hpx/components/containers/partitioned_vector/partitioned_vector_component.hpp>
 #include <hpx/hpx_main.hpp>
+#include <hpx/include/partitioned_vector.hpp>
 #include <hpx/include/runtime.hpp>
 #include <hpx/modules/testing.hpp>
 
+#include <cstddef>
 #include <string>
 #include <vector>
 
