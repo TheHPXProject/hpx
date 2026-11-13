@@ -172,7 +172,6 @@ function(hpx_setup_target target)
   if("${_type}" STREQUAL "COMPONENT")
     target_compile_definitions(
       ${target} PRIVATE "HPX_COMPONENT_NAME=hpx_${name}"
-                        "HPX_COMPONENT_STRING=\"hpx_${name}\""
     )
     target_link_libraries(${target} ${__tll_private} HPX::component)
   endif()
