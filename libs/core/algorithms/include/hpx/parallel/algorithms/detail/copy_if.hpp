@@ -66,9 +66,9 @@ namespace hpx::parallel::detail {
 #else
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename InIter1,
         typename InIter2, typename OutIter, typename Pred, typename Proj>
-    HPX_HOST_DEVICE HPX_FORCEINLINE
-        util::in_out_result<InIter1, OutIter> sequential_copy_if(
-            InIter1 first, InIter2 last, OutIter dest, Pred&& pred, Proj&& proj)
+    HPX_HOST_DEVICE HPX_FORCEINLINE util::in_out_result<InIter1, OutIter>
+    sequential_copy_if(
+        InIter1 first, InIter2 last, OutIter dest, Pred&& pred, Proj&& proj)
     {
         return sequential_copy_if_t<ExPolicy>{}(first, last, dest,
             HPX_FORWARD(Pred, pred), HPX_FORWARD(Proj, proj));
