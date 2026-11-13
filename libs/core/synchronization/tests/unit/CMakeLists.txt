@@ -10,6 +10,7 @@ set(tests
     binary_semaphore_cpp20
     channel_mpmc_fib
     channel_mpmc_shift
+    channel_mpsc_dont_support_close
     channel_mpsc_fib
     channel_mpsc_shift
     channel_spsc_fib
@@ -40,6 +41,7 @@ set(barrier_cpp20_PARAMETERS THREADS_PER_LOCALITY 4)
 set(binary_semaphore_cpp20_PARAMETERS THREADS_PER_LOCALITY 4)
 set(channel_mpmc_fib_PARAMETERS THREADS_PER_LOCALITY 4)
 set(channel_mpmc_shift_PARAMETERS THREADS_PER_LOCALITY 4)
+set(channel_mpsc_dont_support_close_PARAMETERS THREADS_PER_LOCALITY 4)
 set(channel_mpsc_fib_PARAMETERS THREADS_PER_LOCALITY 4)
 set(channel_mpsc_shift_PARAMETERS THREADS_PER_LOCALITY 4)
 set(channel_spsc_fib_PARAMETERS THREADS_PER_LOCALITY 4)
