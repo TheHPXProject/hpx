@@ -535,6 +535,8 @@ namespace hpx::parallel {
         HPX_CXX_CORE_EXPORT template <typename IterPair>
         struct copy_if : public algorithm<copy_if<IterPair>, IterPair>
         {
+            static constexpr bool uses_legacy_futures = true;
+
             constexpr copy_if() noexcept
               : algorithm<copy_if, IterPair>("copy_if")
             {
@@ -552,10 +554,9 @@ namespace hpx::parallel {
 
             template <typename ExPolicy, typename FwdIter1, typename FwdIter2,
                 typename FwdIter3, typename Pred, typename Proj = hpx::identity>
-            static typename util::detail::algorithm_result<ExPolicy,
-                util::in_out_result<FwdIter1, FwdIter3>>::type
-            parallel(ExPolicy&& policy, FwdIter1 first, FwdIter2 last,
-                FwdIter3 dest, Pred&& pred, Proj&& proj /* = Proj()*/)
+            static decltype(auto) parallel(ExPolicy&& policy, FwdIter1 first,
+                FwdIter2 last, FwdIter3 dest, Pred&& pred,
+                Proj&& proj /* = Proj()*/)
             {
                 typedef hpx::util::zip_iterator<FwdIter1, bool*> zip_iterator;
                 typedef util::detail::algorithm_result<ExPolicy,
@@ -792,9 +793,8 @@ namespace hpx {
                 >
             )
         // clang-format on
-        static parallel::util::detail::algorithm_result_t<ExPolicy, FwdIter2>
-        invoke_default(ExPolicy&& policy, FwdIter1 first, FwdIter1 last,
-            FwdIter2 dest, Pred pred)
+        static decltype(auto) invoke_default(ExPolicy&& policy, FwdIter1 first,
+            FwdIter1 last, FwdIter2 dest, Pred pred)
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Required at least forward iterator.");

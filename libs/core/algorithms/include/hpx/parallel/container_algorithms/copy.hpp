@@ -719,10 +719,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
-            ranges::copy_if_result<FwdIter1, FwdIter>>
-        invoke_default(ExPolicy&& policy, FwdIter1 iter, Sent1 sent,
-            FwdIter dest, Pred pred, Proj proj = Proj())
+        static decltype(auto) invoke_default(ExPolicy&& policy, FwdIter1 iter,
+            Sent1 sent, FwdIter dest, Pred pred, Proj proj = Proj())
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Required at least forward iterator.");
@@ -752,12 +750,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
-            ranges::copy_if_result<
-                typename hpx::traits::range_traits<Rng>::iterator_type,
-                FwdIter>>
-        invoke_default(ExPolicy&& policy, Rng&& rng, FwdIter dest, Pred pred,
-            Proj proj = Proj())
+        static decltype(auto) invoke_default(ExPolicy&& policy, Rng&& rng,
+            FwdIter dest, Pred pred, Proj proj = Proj())
         {
             static_assert(std::forward_iterator<FwdIter> ||
                     (hpx::is_sequenced_execution_policy_v<ExPolicy> &&
