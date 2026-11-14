@@ -9,11 +9,21 @@
 #include <hpx/config.hpp>
 
 #include <cstddef>
+#include <cstdint>
 #include <type_traits>
 #include <utility>
 
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx::util::cache::entries {
+
+    namespace detail {
+
+        /// Returns a number larger than all numbers it returned before, in
+        /// this process. Cache entries use it to order events (insertions,
+        /// accesses) that happen within one tick of the steady clock.
+        HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT std::uint64_t
+        next_entry_sequence() noexcept;
+    }    // namespace detail
 
     ///////////////////////////////////////////////////////////////////////////
     /// \class entry entry.hpp hpx/cache/entries/entry.hpp
