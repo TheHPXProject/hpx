@@ -52,6 +52,7 @@
 #include <mutex>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <type_traits>
 #include <unordered_set>
 #include <utility>
@@ -96,6 +97,21 @@ void test_execute()
 
     loop.finish();
     loop.run();
+}
+
+void test_run_loop_finish_race_7890()
+{
+    ex::run_loop loop;
+    auto sched = loop.get_scheduler();
+    std::atomic<bool> executed{false};
+
+    loop.finish();
+    ex::start_detached(ex::schedule(sched) | ex::then([&]() noexcept {
+        executed.store(true, std::memory_order_relaxed);
+    }));
+
+    loop.run();
+    HPX_TEST(executed.load(std::memory_order_relaxed));
 }
 
 struct check_context_receiver
@@ -2179,6 +2195,66 @@ void test_throwing_connect()
     HPX_TEST(caught_exception);
 }
 
+void test_run_loop_shared_futures_7891()
+{
+    // 1. Synchronous completion where Sender 1 finishes quickly. Sender 2's
+    // continuation must still be executed by run_until and f2.get() must
+    // complete successfully.
+    {
+        ex::run_loop loop;
+
+        bool executed = false;
+        auto s1 = ex::just() | ex::continues_on(loop.get_scheduler());
+        auto s2 = ex::just() | ex::continues_on(loop.get_scheduler()) |
+            ex::then([&]() { executed = true; });
+
+        auto f1 = ex::make_future(loop.get_scheduler(), std::move(s1));
+        auto f2 = ex::make_future(loop.get_scheduler(), std::move(s2));
+
+        f1.get();
+        f2.get();
+
+        HPX_TEST(executed);
+    }
+
+    // 2. Delayed continuation: Sender 1 finishes while the queue is empty.
+    // Sender 2's continuation is posted after a brief delay from an async task.
+    // run_until must keep waiting on cond_var and not exit prematurely.
+    {
+        ex::run_loop loop;
+
+        bool executed = false;
+        auto s1 = ex::just() | ex::continues_on(loop.get_scheduler());
+        auto f1 = ex::make_future(loop.get_scheduler(), std::move(s1));
+        f1.get();
+
+        auto f_delay = hpx::async([]() {
+            hpx::this_thread::sleep_for(std::chrono::milliseconds(20));
+        });
+        auto s2 = ex::continues_on(
+                      ex::as_sender(std::move(f_delay)), loop.get_scheduler()) |
+            ex::then([&]() { executed = true; });
+
+        auto f2 = ex::make_future(loop.get_scheduler(), std::move(s2));
+        f2.get();
+
+        HPX_TEST(executed);
+    }
+}
+
+void test_run_loop_thread_pool_completion()
+{
+    for (int i = 0; i < 500; ++i)
+    {
+        ex::run_loop loop;
+        auto f = ex::make_future(loop.get_scheduler(),
+            ex::schedule(
+                hpx::execution::experimental::thread_pool_scheduler{}) |
+                ex::then([] { return 42; }));
+        HPX_TEST_EQ(f.get(), 42);
+    }
+}
+
 void do_run_test(void (*func)(), char const* func_name)
 {
     std::cout << func_name << "\n";
@@ -2193,6 +2269,7 @@ int hpx_main()
 {
     RUN_TEST(test_concepts);
     RUN_TEST(test_execute);
+    RUN_TEST(test_run_loop_finish_race_7890);
     RUN_TEST(test_sender_receiver_basic);
     RUN_TEST(test_sender_receiver_then);
     RUN_TEST(test_sender_receiver_then_wait);
@@ -2221,6 +2298,8 @@ int hpx_main()
     RUN_TEST(test_completion_domain);
     RUN_TEST(test_empty_destruction);
     RUN_TEST(test_throwing_connect);
+    RUN_TEST(test_run_loop_shared_futures_7891);
+    RUN_TEST(test_run_loop_thread_pool_completion);
 
     return hpx::local::finalize();
 }
