@@ -153,6 +153,7 @@
 /**/
 #define HPX_REGISTER_MINIMAL_COMPONENT_REGISTRY_3(                             \
     ComponentType, componentname, state)                                       \
+    HPX_ASSERT_COMPONENT_NOT_REGISTERED_ELSEWHERE(ComponentType::type_holder)  \
     HPX_DEFINE_COMPONENT_MODULE_NAME(ComponentType)                            \
     using componentname##_component_registry_type =                            \
         hpx::components::component_registry<ComponentType, state>;             \
@@ -191,6 +192,7 @@
 /**/
 #define HPX_REGISTER_MINIMAL_COMPONENT_REGISTRY_DYNAMIC_3(                     \
     ComponentType, componentname, state)                                       \
+    HPX_ASSERT_COMPONENT_NOT_REGISTERED_ELSEWHERE(ComponentType::type_holder)  \
     HPX_DEFINE_COMPONENT_MODULE_NAME(ComponentType)                            \
     using componentname##_component_registry_type =                            \
         hpx::components::component_registry<ComponentType, state>;             \
