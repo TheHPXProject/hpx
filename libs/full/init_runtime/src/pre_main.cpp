@@ -25,6 +25,9 @@
 
 #include <hpx/init_runtime/pre_main.hpp>
 
+#include <cstddef>
+#include <exception>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -267,15 +270,48 @@ namespace hpx::detail {
             distributed::barrier::synchronize();
             lbt_ << "(3rd stage) pre_main: passed 3rd stage boot barrier";
 
-            runtime_support::call_startup_functions(find_here(), true);
-            lbt_ << "(3rd stage) pre_main: ran pre-startup functions";
+            std::exception_ptr startup_exception;
+            try
+            {
+                runtime_support::call_startup_functions(find_here(), true);
+                lbt_ << "(3rd stage) pre_main: ran pre-startup functions";
+            }
+            catch (...)
+            {
+                startup_exception = std::current_exception();
+            }
 
             // Third stage separates pre-startup and startup function phase.
             distributed::barrier::synchronize();
             lbt_ << "(4th stage) pre_main: passed 4th stage boot barrier";
 
-            runtime_support::call_startup_functions(find_here(), false);
-            lbt_ << "(4th stage) pre_main: ran startup functions";
+            auto const num_localities =
+                static_cast<std::size_t>(rt.get_config().get_num_localities());
+            auto const this_locality =
+                static_cast<std::size_t>(hpx::get_locality_id());
+
+            bool any_pre_startup_error = (startup_exception != nullptr);
+            if (num_localities > 1)
+            {
+                any_pre_startup_error = hpx::collectives::all_reduce(
+                    hpx::launch::sync, "/0/hpx/pre_startup_status",
+                    any_pre_startup_error, std::logical_or<bool>{},
+                    hpx::collectives::num_sites_arg(num_localities),
+                    hpx::collectives::this_site_arg(this_locality));
+            }
+
+            if (!any_pre_startup_error)
+            {
+                try
+                {
+                    runtime_support::call_startup_functions(find_here(), false);
+                    lbt_ << "(4th stage) pre_main: ran startup functions";
+                }
+                catch (...)
+                {
+                    startup_exception = std::current_exception();
+                }
+            }
 
             // Forth stage bootstrap synchronizes startup functions across all
             // localities. This is done after component loading to guarantee that
@@ -283,6 +319,26 @@ namespace hpx::detail {
             // component tables are populated.
             distributed::barrier::synchronize();
             lbt_ << "(5th stage) pre_main: passed 5th stage boot barrier";
+
+            bool any_startup_error = (startup_exception != nullptr);
+            if (!any_pre_startup_error && num_localities > 1)
+            {
+                any_startup_error = hpx::collectives::all_reduce(
+                    hpx::launch::sync, "/0/hpx/startup_status",
+                    any_startup_error, std::logical_or<bool>{},
+                    hpx::collectives::num_sites_arg(num_localities),
+                    hpx::collectives::this_site_arg(this_locality));
+            }
+
+            if (startup_exception)
+            {
+                std::rethrow_exception(startup_exception);
+            }
+            if (any_pre_startup_error || any_startup_error)
+            {
+                HPX_THROW_EXCEPTION(hpx::error::invalid_status, "pre_main",
+                    "a startup function failed on a remote locality");
+            }
 #endif
         }
 
