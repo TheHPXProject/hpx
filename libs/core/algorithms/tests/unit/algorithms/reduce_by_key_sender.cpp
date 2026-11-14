@@ -27,8 +27,10 @@ void test(Policy policy)
             [](int value) { return value == -1; }));
         auto result = sender_test::wait(std::move(sender));
         auto count = (n + 3) / 4;
-        HPX_TEST(hpx::get<0>(*result).in == out_keys.begin() + count);
-        HPX_TEST(hpx::get<0>(*result).out == out_values.begin() + count);
+        auto const result_offset = static_cast<std::ptrdiff_t>(count);
+        HPX_TEST(hpx::get<0>(*result).in == out_keys.begin() + result_offset);
+        HPX_TEST(
+            hpx::get<0>(*result).out == out_values.begin() + result_offset);
         for (std::size_t j = 0; j != count; ++j)
         {
             HPX_TEST_EQ(out_keys[j], static_cast<int>(j % 17));
