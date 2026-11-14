@@ -16,13 +16,14 @@ void test(Policy policy)
     for (std::size_t n : {0, 1, 17, 10007, 131073})
     {
         auto data = sender_test::values(n);
-        auto middle = data.begin() + n / 2;
+        auto const middle_offset = static_cast<std::ptrdiff_t>(n / 2);
+        auto middle = data.begin() + middle_offset;
         std::sort(data.begin(), middle);
         std::sort(middle, data.end());
         auto original = data;
         auto expected = data;
         std::inplace_merge(
-            expected.begin(), expected.begin() + n / 2, expected.end());
+            expected.begin(), expected.begin() + middle_offset, expected.end());
         auto sender =
             hpx::inplace_merge(policy, data.begin(), middle, data.end());
         HPX_TEST(data == original);
