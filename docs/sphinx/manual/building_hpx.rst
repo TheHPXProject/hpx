@@ -163,8 +163,11 @@ used CMake options.
    Record the call stack, up to 10 frames deep, with every message that |hpx| sends to Tracy.
    Defaults to ``OFF``, because a call stack makes every message slower while a profiler is
    connected, and |hpx| sends a few messages for every task. If Tracy is configured with
-   ``-DTRACY_NO_CALLSTACK=ON``, messages have no call stacks even with this ``ON``. Applies to
-   Tracy builds only.
+   ``-DTRACY_NO_CALLSTACK=ON``, messages have no call stacks even with this ``ON``. If Tracy was
+   built with ``TRACY_NO_CALLSTACK`` but |hpx| is not compiled with that define, for example
+   because a ``tracy::tracy`` target defined before |hpx| is configured does not carry it, a
+   Debug Tracy server asserts on these messages and a Release server usually shows them without
+   a call stack. Applies to Tracy builds only.
 
 .. option:: HPX_WITH_TRACING_SAMPLE_RATE
 

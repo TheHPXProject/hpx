@@ -1270,7 +1270,7 @@ if(HPX_WITH_TRACY)
   hpx_option(
     HPX_WITH_TRACING_MESSAGE_CALLSTACKS
     BOOL
-    "Record a call stack of up to 10 frames with every message HPX sends to Tracy. Tracy backend only. Default: OFF."
+    "Record a call stack of up to 10 frames with every message HPX sends to Tracy. Tracy backend only. If Tracy was built with TRACY_NO_CALLSTACK but HPX is not compiled with that define, a Debug Tracy server asserts on these messages and a Release server usually shows them without a call stack. Default: OFF."
     OFF
     CATEGORY "Profiling"
   )

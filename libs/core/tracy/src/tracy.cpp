@@ -102,7 +102,14 @@ namespace hpx::tracy {
 #else
         constexpr std::int32_t callstack_depth = 0;
 #endif
-        TracyCMessageCS(text, size, color, callstack_depth);
+        if (color == 0)
+        {
+            TracyCMessageS(text, size, callstack_depth);
+        }
+        else
+        {
+            TracyCMessageCS(text, size, color, callstack_depth);
+        }
     }
 
     void frame_mark(char const* name) noexcept
