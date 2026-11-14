@@ -432,7 +432,8 @@ namespace hpx::parallel::util {
                     "scheduler scan partitioning does not produce futures "
                     "from the final scan phase");
 
-                auto operation = ex::let_value(ex::just(),
+                auto sched = policy.executor().sched();
+                auto operation = ex::let_value(ex::schedule(sched),
                     scan_sender_factory<ExPolicy_, FwdIter, Initializer, F1, F2,
                         F3, F4>{HPX_FORWARD(ExPolicy_, policy), first, count,
                         HPX_FORWARD(Initializer, init), HPX_FORWARD(F1, f1),
