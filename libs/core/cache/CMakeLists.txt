@@ -39,7 +39,7 @@ set(cache_compat_headers
 # cmake-format: on
 
 # Default location is $HPX_ROOT/libs/cache/src
-set(cache_sources)
+set(cache_sources entries/lru_entry.cpp)
 
 include(HPX_AddModule)
 add_hpx_module(
