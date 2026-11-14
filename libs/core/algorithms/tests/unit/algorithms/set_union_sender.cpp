@@ -17,6 +17,7 @@
 #include <iostream>
 #include <iterator>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "test_utils.hpp"
@@ -62,6 +63,37 @@ void test_set_union_sender(
 
     // verify values
     HPX_TEST(std::equal(std::begin(c3), result_last, std::begin(c4)));
+
+    for (bool const empty_first : {false, true})
+    {
+        std::vector<std::size_t> left{1, 3, 5};
+        if (empty_first)
+        {
+            left.clear();
+        }
+        std::vector<std::size_t> right{2, 3, 6};
+        std::vector<std::size_t> output(left.size() + right.size());
+        std::vector<std::size_t> expected(output.size());
+        auto expected_end = std::set_union(left.begin(), left.end(),
+            right.begin(), right.end(), expected.begin());
+
+        auto range_sender = hpx::ranges::set_union(
+            ex_policy.on(exec), left, right, output.begin());
+        static_assert(ex::is_sender_v<decltype(range_sender)>);
+        auto range_result = tt::sync_wait(std::move(range_sender));
+        HPX_TEST(range_result.has_value());
+        if (!range_result.has_value())
+        {
+            continue;
+        }
+
+        auto const actual = hpx::get<0>(*range_result);
+        HPX_TEST(actual.in1 == left.end());
+        HPX_TEST(actual.in2 == right.end());
+        HPX_TEST(
+            actual.out - output.begin() == expected_end - expected.begin());
+        HPX_TEST(std::equal(output.begin(), actual.out, expected.begin()));
+    }
 }
 
 // custom comparator (operator>) -- exercises the F predicate through the
