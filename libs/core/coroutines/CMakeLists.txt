@@ -14,23 +14,6 @@ hpx_option(
   MODULE COROUTINES
 )
 
-hpx_option(
-  HPX_COROUTINES_WITH_THREAD_SCHEDULE_HINT_RUNS_AS_CHILD
-  BOOL
-  "Futures attempt to run associated threads directly if those have not been started (default: OFF)"
-  OFF
-  CATEGORY "Thread Manager"
-  ADVANCED
-  MODULE COROUTINES
-)
-
-if(HPX_COROUTINES_WITH_THREAD_SCHEDULE_HINT_RUNS_AS_CHILD)
-  hpx_add_config_define_namespace(
-    DEFINE HPX_COROUTINES_HAVE_THREAD_SCHEDULE_HINT_RUNS_AS_CHILD
-    NAMESPACE COROUTINES
-  )
-endif()
-
 set(coroutines_headers
     hpx/coroutines/coroutine.hpp
     hpx/coroutines/coroutine_fwd.hpp

@@ -41,6 +41,18 @@ Breaking changes
   ``hpx/functional/traits/get_task_size.hpp`` directly has to include
   ``hpx/modules/thread_support.hpp`` instead; ``hpx/functional.hpp`` and
   ``hpx/modules/functional.hpp`` still provide them.
+- The thread enumerations (``hpx::threads::thread_schedule_state``,
+  ``thread_restart_state``, ``thread_priority``, ``thread_stacksize``, the
+  scheduling hints and ``thread_schedule_hint``) moved from the ``coroutines``
+  module to the ``thread_support`` module. Their names are unchanged.
+  ``hpx::threads::thread_state`` stays in ``coroutines``. Code that included
+  ``hpx/coroutines/thread_enums.hpp`` directly for the enumerations has to
+  include ``hpx/modules/thread_support.hpp`` instead.
+- The CMake option ``HPX_COROUTINES_WITH_THREAD_SCHEDULE_HINT_RUNS_AS_CHILD``
+  is now ``HPX_THREAD_SUPPORT_WITH_THREAD_SCHEDULE_HINT_RUNS_AS_CHILD``, and the
+  macro it defines is now
+  ``HPX_THREAD_SUPPORT_HAVE_THREAD_SCHEDULE_HINT_RUNS_AS_CHILD``. The old option
+  name is still accepted with a deprecation warning.
 
 Supervision Module
 ==================
