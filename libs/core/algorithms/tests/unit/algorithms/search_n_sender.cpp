@@ -15,6 +15,26 @@
 struct record
 {
     int key;
+    bool query = false;
+};
+
+struct moving_projection
+{
+    std::unique_ptr<int> key = std::make_unique<int>(7);
+
+    moving_projection() = default;
+
+    moving_projection(moving_projection const& other)
+      : key(std::make_unique<int>(*other.key))
+    {
+    }
+
+    moving_projection(moving_projection&&) noexcept = default;
+
+    int const& operator()(record const& value) const
+    {
+        return value.query ? *key : value.key;
+    }
 };
 
 struct record_with_unique_key
@@ -80,6 +100,10 @@ void test(Policy policy)
     auto projected_result = sender_test::wait(hpx::ranges::search_n(
         policy, records, 2, record{7}, hpx::ranges::equal_to{}, &record::key));
     HPX_TEST(hpx::get<0>(*projected_result) == records.begin() + 1);
+    auto moving_projection_result =
+        sender_test::wait(hpx::ranges::search_n(policy, records, 2,
+            record{0, true}, hpx::ranges::equal_to{}, moving_projection{}));
+    HPX_TEST(hpx::get<0>(*moving_projection_result) == records.begin() + 1);
 
     std::vector<record_with_unique_key> unique_key_records;
     for (int key : {1, 7, 7, 2})

@@ -14,6 +14,7 @@
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/parallel/algorithms/detail/advance_to_sentinel.hpp>
+#include <hpx/parallel/algorithms/detail/algorithm_value.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
@@ -27,9 +28,7 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <functional>
 #include <iterator>
-#include <memory>
 #include <type_traits>
 #include <utility>
 
@@ -108,8 +107,7 @@ namespace hpx::parallel::detail {
             util::loop_idx_n<ExPolicy>(base_idx, it, part_size, tok,
                 [max_start, count, it, &value_proj, &tok, &idx,
                     pred = HPX_FORWARD(Pred, pred),
-                    proj = HPX_FORWARD(Proj, proj)](
-                    reference, std::size_t abs_idx) mutable -> void {
+                    &proj](reference, std::size_t abs_idx) mutable -> void {
                     if (static_cast<difference_type>(abs_idx) >= max_start)
                         return;
                     Iter start = it;
@@ -397,22 +395,6 @@ namespace hpx::parallel::detail {
             difference_type max_start =
                 n - static_cast<difference_type>(count) + 1;
 
-            using projected_type = decltype(HPX_INVOKE(proj, value));
-            auto projected = [&]() {
-                if constexpr (std::is_lvalue_reference_v<projected_type>)
-                {
-                    // Reference-valued projections retain the input value's
-                    // lifetime requirement for asynchronous algorithms.
-                    return std::ref(HPX_INVOKE(proj, value));
-                }
-                else
-                {
-                    return std::make_shared<
-                        std::remove_cvref_t<projected_type>>(
-                        HPX_INVOKE(proj, value));
-                }
-            }();
-
             decltype(auto) policy =
                 hpx::execution::experimental::adapt_placement_mode(
                     HPX_FORWARD(ExPolicy, orgpolicy),
@@ -424,17 +406,14 @@ namespace hpx::parallel::detail {
             hpx::parallel::util::cancellation_token<difference_type> tok(
                 max_start);
 
-            auto f1 = [max_start, count, projected = HPX_MOVE(projected),
+            auto f1 = [max_start, count,
+                          stored_value = algorithm_value<ExPolicy, T>(value),
                           pred = HPX_FORWARD(Pred, pred),
                           proj = HPX_FORWARD(Proj, proj),
                           tok](FwdIter it, std::size_t part_size,
                           std::size_t base_idx) mutable -> void {
-                decltype(auto) value_proj = [&]() -> decltype(auto) {
-                    if constexpr (std::is_lvalue_reference_v<projected_type>)
-                        return projected.get();
-                    else
-                        return *projected;
-                }();
+                decltype(auto) value_proj =
+                    HPX_INVOKE(proj, stored_value.get());
                 sequential_search_n_t<policy_type>{}(it, base_idx, part_size,
                     static_cast<std::ptrdiff_t>(max_start), count, value_proj,
                     tok, HPX_FORWARD(Pred, pred), HPX_FORWARD(Proj, proj));
