@@ -9,11 +9,27 @@
 #include <algorithm>
 #include <cstddef>
 #include <limits>
+#include <memory>
 #include <vector>
 
 struct record
 {
     int key;
+};
+
+struct record_with_unique_key
+{
+    std::unique_ptr<int> key;
+
+    explicit record_with_unique_key(int value)
+      : key(std::make_unique<int>(value))
+    {
+    }
+
+    record_with_unique_key(record_with_unique_key const& other)
+      : key(std::make_unique<int>(*other.key))
+    {
+    }
 };
 
 template <typename Policy>
@@ -64,6 +80,21 @@ void test(Policy policy)
     auto projected_result = sender_test::wait(hpx::ranges::search_n(
         policy, records, 2, record{7}, hpx::ranges::equal_to{}, &record::key));
     HPX_TEST(hpx::get<0>(*projected_result) == records.begin() + 1);
+
+    std::vector<record_with_unique_key> unique_key_records;
+    for (int key : {1, 7, 7, 2})
+        unique_key_records.emplace_back(key);
+    record_with_unique_key value(7);
+    auto compare_keys = [](auto const& left, auto const& right) {
+        return *left == *right;
+    };
+    HPX_TEST(
+        hpx::ranges::search_n(unique_key_records, 2, value, compare_keys,
+            &record_with_unique_key::key) == unique_key_records.begin() + 1);
+    auto unique_key_result =
+        sender_test::wait(hpx::ranges::search_n(policy, unique_key_records, 2,
+            value, compare_keys, &record_with_unique_key::key));
+    HPX_TEST(hpx::get<0>(*unique_key_result) == unique_key_records.begin() + 1);
 }
 
 int hpx_main()
