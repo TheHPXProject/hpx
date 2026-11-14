@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <stdexcept>
 #include <vector>
 
 template <typename Policy>
@@ -59,9 +60,31 @@ void test(Policy policy)
     }
 }
 
+void test_errors()
+{
+    auto data = sender_test::values(10007);
+    std::vector<int> yes(data.size()), no(data.size());
+    auto exec = sender_test::ex::explicit_scheduler_executor(
+        sender_test::ex::thread_pool_policy_scheduler(hpx::launch::async));
+    auto policy = hpx::execution::par(hpx::execution::task).on(exec);
+    try
+    {
+        (void) sender_test::tt::sync_wait(hpx::partition_copy(policy,
+            data.begin(), data.end(), yes.begin(), no.begin(), [](int) -> bool {
+                throw std::runtime_error("partition copy predicate failed");
+            }));
+        HPX_TEST(false);
+    }
+    catch (hpx::exception_list const& errors)
+    {
+        HPX_TEST(errors.size() != 0);
+    }
+}
+
 int hpx_main()
 {
     sender_test::policies([](auto policy) { test(policy); });
+    test_errors();
     return hpx::local::finalize();
 }
 

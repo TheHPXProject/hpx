@@ -7,6 +7,7 @@
 #include "sender_algorithm_test_utils.hpp"
 
 #include <cstddef>
+#include <stdexcept>
 #include <utility>
 
 template <typename Policy>
@@ -28,9 +29,6 @@ void test(Policy policy)
             expected_end - expected.begin());
         HPX_TEST(std::is_partitioned(data.begin(), data.end(), pred));
         HPX_TEST(data == expected);
-        std::sort(data.begin(), data.end());
-        std::sort(expected.begin(), expected.end());
-        HPX_TEST(data == expected);
 
         data = original;
         auto range_result = sender_test::wait(
@@ -39,6 +37,7 @@ void test(Policy policy)
             expected_end - expected.begin());
         HPX_TEST(hpx::get<0>(*range_result).end() == data.end());
         HPX_TEST(std::is_partitioned(data.begin(), data.end(), pred));
+        HPX_TEST(data == expected);
 
         data = original;
         auto iterator_result = sender_test::wait(hpx::ranges::stable_partition(
@@ -46,12 +45,34 @@ void test(Policy policy)
         HPX_TEST(hpx::get<0>(*iterator_result).begin() - data.begin() ==
             expected_end - expected.begin());
         HPX_TEST(hpx::get<0>(*iterator_result).end() == data.end());
+        HPX_TEST(data == expected);
+    }
+}
+
+void test_errors()
+{
+    auto data = sender_test::values(10007);
+    auto exec = sender_test::ex::explicit_scheduler_executor(
+        sender_test::ex::thread_pool_policy_scheduler(hpx::launch::async));
+    auto policy = hpx::execution::par(hpx::execution::task).on(exec);
+    try
+    {
+        (void) sender_test::tt::sync_wait(hpx::stable_partition(
+            policy, data.begin(), data.end(), [](int) -> bool {
+                throw std::runtime_error("stable partition predicate failed");
+            }));
+        HPX_TEST(false);
+    }
+    catch (hpx::exception_list const& errors)
+    {
+        HPX_TEST(errors.size() != 0);
     }
 }
 
 int hpx_main()
 {
     sender_test::policies([](auto policy) { test(policy); });
+    test_errors();
     return hpx::local::finalize();
 }
 
