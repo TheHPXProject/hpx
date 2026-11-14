@@ -652,6 +652,8 @@ namespace hpx {
             runtime_support_->stopped();    // re-activate shutdown HPX-thread
             thread_manager_->stop(blocking);    // wait for thread manager
 
+            stop_parcel_handler(blocking);
+
             deinit_global_data();
 
             // this disables all logging from the main thread
@@ -661,9 +663,6 @@ namespace hpx {
         }
 
         // stop the rest of the system
-#if defined(HPX_HAVE_NETWORKING)
-        parcel_handler_.stop(blocking);
-#endif
 #ifdef HPX_HAVE_TIMER_POOL
         LTM_(info).format("stop: stopping timer pool");
         timer_pool_->stop();
@@ -698,6 +697,18 @@ namespace hpx {
         return 0;
     }
 
+    // Stops the parcelports once no HPX thread runs anymore, but before the
+    // runtime pointer is cleared: their I/O threads may still complete sends
+    // and receive parcels until they have stopped, and the callbacks for those
+    // use the runtime (get_runtime_distributed()).
+    void runtime_distributed::stop_parcel_handler(
+        [[maybe_unused]] bool blocking)
+    {
+#if defined(HPX_HAVE_NETWORKING)
+        parcel_handler_.stop(blocking);
+#endif
+    }
+
     // Second step in termination: shut down all services.
     // This gets executed as a task in the timer_pool io_service and not as
     // a HPX thread!
@@ -707,6 +718,8 @@ namespace hpx {
         // wait for thread manager to exit
         runtime_support_->stopped();        // re-activate shutdown HPX-thread
         thread_manager_->stop(blocking);    // wait for thread manager
+
+        stop_parcel_handler(blocking);
 
         deinit_global_data();
 
