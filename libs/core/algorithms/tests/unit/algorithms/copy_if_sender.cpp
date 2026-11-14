@@ -209,10 +209,62 @@ void copy_if_sender_test()
         hpx::launch::async, par(task), IteratorTag{});
 }
 
+void test_copy_remove_ranges_sender()
+{
+    using namespace hpx::execution;
+
+    std::vector<int> input{1, 2, 3, 4, 5, 6};
+    std::vector<int> output(input.size(), -1);
+    auto exec = ex::explicit_scheduler_executor(
+        ex::thread_pool_policy_scheduler(hpx::launch::async));
+    auto policy = par(task).on(exec);
+    auto projection = [](int value) { return value + 1; };
+    auto predicate = [](int value) { return value % 2 == 0; };
+
+    auto check = [&](auto sender, std::vector<int> const& expected) {
+        static_assert(ex::is_sender_v<decltype(sender)>);
+        auto result = tt::sync_wait(std::move(sender));
+        HPX_TEST(result.has_value());
+        if (!result.has_value())
+        {
+            return;
+        }
+
+        auto const positions = hpx::get<0>(*result);
+        HPX_TEST(positions.in == input.end());
+        HPX_TEST(positions.out ==
+            output.begin() + static_cast<std::ptrdiff_t>(expected.size()));
+        HPX_TEST(std::equal(expected.begin(), expected.end(), output.begin()));
+        HPX_TEST(std::all_of(positions.out, output.end(),
+            [](int value) { return value == -1; }));
+        std::fill(output.begin(), output.end(), -1);
+    };
+
+    check(hpx::ranges::copy_if(policy, input.begin(), input.end(),
+              output.begin(), predicate, projection),
+        {1, 3, 5});
+    check(hpx::ranges::copy_if(
+              policy, input, output.begin(), predicate, projection),
+        {1, 3, 5});
+    check(hpx::ranges::remove_copy_if(policy, input.begin(), input.end(),
+              output.begin(), predicate, projection),
+        {2, 4, 6});
+    check(hpx::ranges::remove_copy_if(
+              policy, input, output.begin(), predicate, projection),
+        {2, 4, 6});
+    check(hpx::ranges::remove_copy(policy, input.begin(), input.end(),
+              output.begin(), 3, projection),
+        {1, 3, 4, 5, 6});
+    check(
+        hpx::ranges::remove_copy(policy, input, output.begin(), 3, projection),
+        {1, 3, 4, 5, 6});
+}
+
 int hpx_main()
 {
     copy_if_sender_test<std::forward_iterator_tag>();
     copy_if_sender_test<std::random_access_iterator_tag>();
+    test_copy_remove_ranges_sender();
     return hpx::local::finalize();
 }
 
