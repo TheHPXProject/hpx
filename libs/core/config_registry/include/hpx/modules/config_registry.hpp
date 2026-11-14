@@ -7,8 +7,12 @@
 
 #pragma once
 
+#include <hpx/config.hpp>
+
+#if defined(HPX_HAVE_TEXTUAL_STD_INCLUDES)
 #include <string>
 #include <vector>
+#endif
 
 #if defined(_WIN32) || defined(__WIN32__) || defined(WIN32)
 #if !defined(HPX_MODULE_STATIC_LINKING)
