@@ -31,6 +31,20 @@ namespace sender_test {
         return result;
     }
 
+    template <typename F>
+    void policies(F test)
+    {
+        using namespace hpx::execution;
+        auto sync = ex::explicit_scheduler_executor(
+            ex::thread_pool_policy_scheduler(hpx::launch::sync));
+        auto async = ex::explicit_scheduler_executor(
+            ex::thread_pool_policy_scheduler(hpx::launch::async));
+        test(seq(task).on(sync));
+        test(unseq(task).on(sync));
+        test(par(task).on(async));
+        test(par_unseq(task).on(async));
+    }
+
     inline int main(int argc, char* argv[], int (*entry)())
     {
         hpx::local::init_params args;
