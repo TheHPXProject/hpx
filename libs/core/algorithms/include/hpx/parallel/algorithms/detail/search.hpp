@@ -14,6 +14,7 @@
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/parallel/algorithms/detail/advance_to_sentinel.hpp>
+#include <hpx/parallel/algorithms/detail/algorithm_value.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
@@ -26,6 +27,7 @@
 #include <hpx/parallel/util/partitioner.hpp>
 
 #include <cstddef>
+#include <cstdint>
 #include <iterator>
 #include <type_traits>
 #include <utility>
@@ -105,8 +107,7 @@ namespace hpx::parallel::detail {
             util::loop_idx_n<ExPolicy>(base_idx, it, part_size, tok,
                 [max_start, count, it, &value_proj, &tok, &idx,
                     pred = HPX_FORWARD(Pred, pred),
-                    proj = HPX_FORWARD(Proj, proj)](
-                    reference, std::size_t abs_idx) mutable -> void {
+                    &proj](reference, std::size_t abs_idx) mutable -> void {
                     if (static_cast<difference_type>(abs_idx) >= max_start)
                         return;
                     Iter start = it;
@@ -289,6 +290,8 @@ namespace hpx::parallel::detail {
     HPX_CXX_CORE_EXPORT template <typename FwdIter, typename Sent>
     struct search_n final : public algorithm<search_n<FwdIter, Sent>, FwdIter>
     {
+        static constexpr bool uses_legacy_futures = true;
+
         constexpr search_n() noexcept
           : algorithm<search_n, FwdIter>("search_n")
         {
@@ -307,12 +310,13 @@ namespace hpx::parallel::detail {
             if (first == last)
                 return first;
             difference_type n = hpx::parallel::detail::distance(first, last);
-            if (static_cast<difference_type>(count) > n)
+            if (static_cast<std::uintmax_t>(count) >
+                static_cast<std::uintmax_t>(n))
             {
                 return hpx::parallel::detail::advance_to_sentinel(first, last);
             }
 
-            auto value_proj = proj(value);
+            decltype(auto) value_proj = HPX_INVOKE(proj, value);
 
             if constexpr (hpx::is_vectorpack_execution_policy_v<ExPolicy> &&
                 std::random_access_iterator<FwdIter>)
@@ -348,7 +352,8 @@ namespace hpx::parallel::detail {
                     FwdIter curr = it;
                     Size matched = 0;
 
-                    while (matched < count && pred(proj(*curr), value_proj))
+                    while (matched < count &&
+                        HPX_INVOKE(pred, HPX_INVOKE(proj, *curr), value_proj))
                     {
                         ++curr;
                         ++matched;
@@ -379,7 +384,8 @@ namespace hpx::parallel::detail {
                 return result_type::get(HPX_MOVE(first));
 
             difference_type n = hpx::parallel::detail::distance(first, last);
-            if (static_cast<difference_type>(count) > n)
+            if (static_cast<std::uintmax_t>(count) >
+                static_cast<std::uintmax_t>(n))
             {
                 return result_type::get(
                     hpx::parallel::detail::advance_to_sentinel(first, last));
@@ -388,8 +394,6 @@ namespace hpx::parallel::detail {
             // Number of valid starting positions
             difference_type max_start =
                 n - static_cast<difference_type>(count) + 1;
-
-            auto value_proj = proj(value);
 
             decltype(auto) policy =
                 hpx::execution::experimental::adapt_placement_mode(
@@ -402,11 +406,14 @@ namespace hpx::parallel::detail {
             hpx::parallel::util::cancellation_token<difference_type> tok(
                 max_start);
 
-            auto f1 = [max_start, count, value_proj,
+            auto f1 = [max_start, count,
+                          stored_value = algorithm_value<ExPolicy, T>(value),
                           pred = HPX_FORWARD(Pred, pred),
                           proj = HPX_FORWARD(Proj, proj),
                           tok](FwdIter it, std::size_t part_size,
                           std::size_t base_idx) mutable -> void {
+                decltype(auto) value_proj =
+                    HPX_INVOKE(proj, stored_value.get());
                 sequential_search_n_t<policy_type>{}(it, base_idx, part_size,
                     static_cast<std::ptrdiff_t>(max_start), count, value_proj,
                     tok, HPX_FORWARD(Pred, pred), HPX_FORWARD(Proj, proj));
