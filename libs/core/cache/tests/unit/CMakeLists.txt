@@ -4,7 +4,7 @@
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-set(tests local_lru_cache local_mru_cache local_statistics)
+set(tests local_fifo_cache local_lru_cache local_mru_cache local_statistics)
 
 foreach(test ${tests})
   set(sources ${test}.cpp)

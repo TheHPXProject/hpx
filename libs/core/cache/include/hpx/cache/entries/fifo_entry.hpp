@@ -10,6 +10,7 @@
 #include <hpx/cache/entries/entry.hpp>
 
 #include <chrono>
+#include <cstdint>
 #include <type_traits>
 #include <utility>
 
@@ -66,9 +67,10 @@ namespace hpx::util::cache::entries {
         /// \returns  This function should return \a true if the entry should
         ///           be added to the cache, otherwise it should return
         ///           \a false.
-        constexpr bool insert()
+        bool insert()
         {
             insertion_time_ = std::chrono::steady_clock::now();
+            insertion_sequence_ = detail::next_entry_sequence();
             return true;
         }
 
@@ -80,9 +82,15 @@ namespace hpx::util::cache::entries {
 
         /// \brief Compare the 'age' of two entries. An entry is 'older' than
         ///        another entry if it has been created earlier (FIFO).
+        ///        Of two entries inserted within the same tick of the clock,
+        ///        the one inserted first is older.
         friend auto operator<(fifo_entry const& lhs, fifo_entry const& rhs)
         {
-            return lhs.get_creation_time() < rhs.get_creation_time();
+            if (lhs.insertion_time_ != rhs.insertion_time_)
+            {
+                return rhs.insertion_time_ < lhs.insertion_time_;
+            }
+            return rhs.insertion_sequence_ < lhs.insertion_sequence_;
         }
         friend auto operator>(fifo_entry const& lhs, fifo_entry const& rhs)
         {
@@ -98,7 +106,8 @@ namespace hpx::util::cache::entries {
         }
         friend auto operator==(fifo_entry const& lhs, fifo_entry const& rhs)
         {
-            return lhs.get_creation_time() == rhs.get_creation_time();
+            return lhs.insertion_time_ == rhs.insertion_time_ &&
+                lhs.insertion_sequence_ == rhs.insertion_sequence_;
         }
         friend auto operator!=(fifo_entry const& lhs, fifo_entry const& rhs)
         {
@@ -107,5 +116,6 @@ namespace hpx::util::cache::entries {
 
     private:
         time_point insertion_time_;
+        std::uint64_t insertion_sequence_ = 0;
     };
 }    // namespace hpx::util::cache::entries

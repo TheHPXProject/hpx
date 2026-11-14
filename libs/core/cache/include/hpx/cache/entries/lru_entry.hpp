@@ -17,15 +17,6 @@
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx::util::cache::entries {
 
-    namespace detail {
-
-        /// Returns a number larger than all numbers it returned before, in
-        /// this process. It orders accesses that happen within one tick of
-        /// the steady clock.
-        HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT std::uint64_t
-        next_lru_access_sequence() noexcept;
-    }    // namespace detail
-
     ///////////////////////////////////////////////////////////////////////////
     /// \class lru_entry lru_entry.hpp hpx/cache/entries/lru_entry.hpp
     ///
@@ -53,7 +44,7 @@ namespace hpx::util::cache::entries {
         /// \brief Any cache entry has to be default constructible
         lru_entry()
           : access_time_(std::chrono::steady_clock::now())
-          , access_sequence_(detail::next_lru_access_sequence())
+          , access_sequence_(detail::next_entry_sequence())
         {
         }
 
@@ -63,7 +54,7 @@ namespace hpx::util::cache::entries {
             std::is_nothrow_constructible_v<base_type, Value const&>)
           : base_type(val)
           , access_time_(std::chrono::steady_clock::now())
-          , access_sequence_(detail::next_lru_access_sequence())
+          , access_sequence_(detail::next_entry_sequence())
         {
         }
 
@@ -72,7 +63,7 @@ namespace hpx::util::cache::entries {
         explicit lru_entry(Value&& val) noexcept
           : base_type(HPX_MOVE(val))
           , access_time_(std::chrono::steady_clock::now())
-          , access_sequence_(detail::next_lru_access_sequence())
+          , access_sequence_(detail::next_entry_sequence())
         {
         }
 
@@ -91,7 +82,7 @@ namespace hpx::util::cache::entries {
         bool touch()
         {
             access_time_ = std::chrono::steady_clock::now();
-            access_sequence_ = detail::next_lru_access_sequence();
+            access_sequence_ = detail::next_entry_sequence();
             return true;
         }
 
