@@ -72,9 +72,12 @@ void test_for_loop_reduction_multiplies_sender(
     auto exec = ex::explicit_scheduler_executor(scheduler_t(ln_policy));
 
     std::vector<std::size_t> c(10007);
-    std::iota(std::begin(c), std::end(c), gen());
+    std::fill(std::begin(c), std::end(c), std::size_t(1));
+    c[3 + gen() % 100] = 2;
+    c[c.size() / 2] = 3;
+    c[c.size() - 4] = 5;
 
-    std::size_t prod = 0;
+    std::size_t prod = 1;
 
     tt::sync_wait(ex::just(iterator(std::begin(c)), iterator(std::end(c)),
                       hpx::experimental::reduction_multiplies(prod),
@@ -105,6 +108,8 @@ void test_for_loop_reduction_min_sender(
 
     std::vector<std::size_t> c(10007);
     std::iota(std::begin(c), std::end(c), gen());
+    c[0] = 17;
+    c[c.size() / 2] = 0;
 
     std::size_t minval = c[0];
 
