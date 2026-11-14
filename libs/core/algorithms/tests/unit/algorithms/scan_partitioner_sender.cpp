@@ -161,8 +161,9 @@ void test_task_scheduler_results()
     auto exec = ex::explicit_scheduler_executor(
         ex::thread_pool_policy_scheduler(hpx::launch::async));
     auto policy = par(task).on(exec);
-    for (std::vector<int> const& input : {std::vector<int>{},
-             std::vector<int>{1}, std::vector<int>{1, 1, 2, 2, 3, 3, 4, 4}})
+    for (std::vector<int> const& input :
+        {std::vector<int>{}, std::vector<int>{1}, std::vector<int>{1, 1},
+            std::vector<int>{1, 2}, std::vector<int>{1, 1, 2, 2, 3, 3, 4, 4}})
     {
         std::vector<int> output(input.size(), -1);
         std::vector<int> expected;

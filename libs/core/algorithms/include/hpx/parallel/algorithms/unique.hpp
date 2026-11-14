@@ -522,7 +522,9 @@ namespace hpx::parallel {
 
                 std::size_t const scan_count =
                     count > 0 ? static_cast<std::size_t>(count - 1) : 0;
-                std::shared_ptr<bool[]> flags(new bool[scan_count]);
+                // The scan advances the flag iterator before using it.
+                // Keep a padding element at index zero.
+                std::shared_ptr<bool[]> flags(new bool[scan_count + 1]);
 
                 std::size_t init = 0;
 
@@ -580,8 +582,7 @@ namespace hpx::parallel {
                         HPX_MOVE(last_iter), HPX_MOVE(dest)};
                 };
 
-                auto flag_begin =
-                    scan_count != 0 ? flags.get() - 1 : flags.get();
+                auto flag_begin = flags.get();
                 if constexpr (hpx::execution_policy_has_scheduler_executor_v<
                                   ExPolicy>)
                 {
