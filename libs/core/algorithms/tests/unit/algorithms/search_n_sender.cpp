@@ -48,12 +48,13 @@ void test(Policy policy)
         }
     }
 
-    std::vector<int> small{1, 1, 2};
+    std::vector<int> short_values{1, 1, 2};
     auto const huge_count = (std::numeric_limits<std::size_t>::max)();
-    HPX_TEST(hpx::ranges::search_n(small, huge_count, 1) == small.end());
-    auto huge_result =
-        sender_test::wait(hpx::ranges::search_n(policy, small, huge_count, 1));
-    HPX_TEST(hpx::get<0>(*huge_result) == small.end());
+    HPX_TEST(hpx::ranges::search_n(short_values, huge_count, 1) ==
+        short_values.end());
+    auto huge_result = sender_test::wait(
+        hpx::ranges::search_n(policy, short_values, huge_count, 1));
+    HPX_TEST(hpx::get<0>(*huge_result) == short_values.end());
 
     std::vector<record> records{{1}, {7}, {7}, {2}};
     HPX_TEST(hpx::ranges::search_n(records, 2, record{7},
