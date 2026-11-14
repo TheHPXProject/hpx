@@ -1650,10 +1650,10 @@ private:
     struct ProducerBase : public details::ConcurrentQueueProducerTypelessBase
     {
         ProducerBase(ConcurrentQueue* parent_, bool isExplicit_) :
-            tailIndex(0),
             headIndex(0),
             dequeueOptimisticCount(0),
             dequeueOvercommit(0),
+            tailIndex(0),
             tailBlock(nullptr),
             isExplicit(isExplicit_),
             parent(parent_)
@@ -1695,13 +1695,22 @@ private:
 
         inline index_t getTail() const { return tailIndex.load(std::memory_order_relaxed); }
     protected:
-        std::atomic<index_t> tailIndex;    // Where to enqueue to next
+        // The consumers' indices, the producer's and the rest are kept a
+        // destructive interference region apart: the producer writes
+        // tailIndex and tailBlock on every enqueue, the consumers update
+        // headIndex and the dequeue counts on every dequeue. Padding rather
+        // than alignas, as the producers are allocated with Traits::malloc.
         std::atomic<index_t> headIndex;    // Where to dequeue from next
 
         std::atomic<index_t> dequeueOptimisticCount;
         std::atomic<index_t> dequeueOvercommit;
 
+        char consumerPad[hpx::threads::get_destructive_interference_size()];
+
+        std::atomic<index_t> tailIndex;    // Where to enqueue to next
         Block* tailBlock;
+
+        char producerPad[hpx::threads::get_destructive_interference_size()];
 
     public:
         bool isExplicit;
