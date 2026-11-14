@@ -144,6 +144,7 @@ namespace hpx::distributed {
         using base_type::set_exception;
     };
 
+    /// Specializes a distributed promise for a void result.
     template <>
     class promise<void, hpx::util::unused_type>
       : public lcos::detail::promise_base<void, hpx::util::unused_type,

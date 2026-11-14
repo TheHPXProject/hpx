@@ -77,6 +77,7 @@ namespace hpx::supervision::server {
         std::chrono::steady_clock::time_point deadline;
     };
 
+    /// Implements supervision state and lifecycle operations on a locality.
     struct supervision_manager
       : hpx::components::fixed_component_base<supervision_manager>
     {

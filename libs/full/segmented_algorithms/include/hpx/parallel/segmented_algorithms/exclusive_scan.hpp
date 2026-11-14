@@ -228,6 +228,8 @@ namespace hpx::parallel::detail {
 // The segmented iterators we support all live in namespace hpx::segmented
 namespace hpx::segmented {
 
+    /// \cond NOINTERNAL
+
     HPX_CXX_EXPORT template <typename InIter, typename OutIter, typename T,
         typename Op = std::plus<T>>
         requires(hpx::traits::is_iterator_v<InIter> &&
@@ -285,4 +287,5 @@ namespace hpx::segmented {
             HPX_FORWARD(ExPolicy, policy), first, last, dest, HPX_MOVE(init),
             HPX_FORWARD(Op, op), is_seq(), hpx::identity_v);
     }
+    /// \endcond
 }    // namespace hpx::segmented

@@ -23,6 +23,7 @@
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx::naming {
 
+    /// Describes the locality, component type, and address of a component.
     HPX_CXX_EXPORT struct address
     {
         using component_type = naming::component_type;

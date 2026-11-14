@@ -135,6 +135,8 @@ namespace hpx::util {
 
 namespace std::ranges {
 
+    /// \cond NOINTERNAL
+
     // The range owns only its iterators; destroying it does not invalidate
     // them.
     template <typename I, typename S>
@@ -144,6 +146,8 @@ namespace std::ranges {
     template <typename I, typename S>
     inline constexpr bool disable_sized_range<hpx::util::iterator_range<I, S>> =
         !std::sized_sentinel_for<S, I>;
+
+    /// \endcond
 }    // namespace std::ranges
 
 namespace hpx::ranges {

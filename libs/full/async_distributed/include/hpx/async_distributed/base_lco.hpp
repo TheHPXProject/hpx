@@ -34,7 +34,8 @@ namespace hpx::lcos {
         // noop by default
         virtual void connect(hpx::id_type const&);
 
-        // noop by default
+        /// Disconnects this LCO from the given target. The default
+        /// implementation is a no-op.
         virtual void disconnect(hpx::id_type const&);
 
         // components must contain a typedef for wrapping_type defining the
