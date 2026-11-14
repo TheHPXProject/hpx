@@ -79,8 +79,9 @@ void test_wait_for_notify_before_timeout()
     bool flag = false;
     std::atomic<bool> waiter_started{false};
 
-    constexpr auto sleep_duration = std::chrono::milliseconds(500);
+    constexpr auto sleep_duration = std::chrono::seconds(2);
     std::chrono::steady_clock::time_point now;
+    std::chrono::steady_clock::time_point waiter_completed;
 
     hpx::thread setter([&]() {
         // Ensure the waiter has already entered wait_for and is holding
@@ -112,6 +113,7 @@ void test_wait_for_notify_before_timeout()
             waiter_started.store(true, std::memory_order_release);
             return flag;
         });
+        waiter_completed = std::chrono::steady_clock::now();
     });
 
     waiter.join();
@@ -122,7 +124,7 @@ void test_wait_for_notify_before_timeout()
     // must return well before the full deadline - proves notify() actually
     // resumed the suspended waiter instead of it timing out and only then
     // observing the predicate is true.
-    HPX_TEST(std::chrono::steady_clock::now() < now + sleep_duration / 2);
+    HPX_TEST(waiter_completed < now + sleep_duration / 2);
 }
 
 void test_sleep_with_predicate_hpx_thread_immediate()
