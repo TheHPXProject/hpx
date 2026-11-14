@@ -36,8 +36,18 @@ jobs:
         REPO: ${{ github.repository }}
         PR: ${{ github.event.pull_request.number }}
       run: |
-        failed=$(gh api --paginate "repos/${REPO}/pulls/${PR}/commits" |
-          jq -s 'add' | jq -r -f .github/ci-scripts/dco.jq)
+        # GitHub lists at most 250 commits of a pull request, more can't be
+        # checked (the count is read first, a push may add commits meanwhile)
+        expected=$(gh api "repos/${REPO}/pulls/${PR}" --jq '.commits')
+        commits=$(gh api --paginate "repos/${REPO}/pulls/${PR}/commits" |
+          jq -s 'add')
+        received=$(jq 'length' <<< "${commits}")
+        if [ "${received}" -lt "${expected}" ]; then
+          echo "::error::The DCO check got ${received} of the ${expected}" \
+            "commits of the pull request"
+          exit 1
+        fi
+        failed=$(jq -r -f .github/ci-scripts/dco.jq <<< "${commits}")
         if [ -n "${failed}" ]; then
           echo "::error::The DCO check failed"
           echo "${failed}"
