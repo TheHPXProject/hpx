@@ -1827,14 +1827,15 @@ namespace hpx::agas {
 
     namespace detail {
 
-        // This function has to return false if the key is already in the cache (true
-        // means go ahead with the cache update).
+        // This function has to return false if the cache holds an overlapping
+        // but different range (a collision), true means go ahead with the
+        // cache update.
         static bool check_for_collisions(
             addressing_service::gva_cache_key const& new_key,
             addressing_service::gva_cache_key const& old_key)
         {
-            return (new_key.get_gid() != old_key.get_gid()) ||
-                (new_key.get_count() != old_key.get_count());
+            return (new_key.get_gid() == old_key.get_gid()) &&
+                (new_key.get_count() == old_key.get_count());
         }
     }    // namespace detail
 

@@ -101,17 +101,17 @@ namespace hpx::util::cache {
         /// \brief Change the maximum size this cache can grow to
         ///
         /// \param max_size    [in] The new maximum size this cache will be
-        ///             allowed to grow to.
+        ///             allowed to grow to. If this number is zero the cache
+        ///             has no limitation with regard to a maximum size.
         ///
         void reserve(size_type max_size)
         {
-            if (max_size > max_size_)
+            max_size_ = max_size;
+            if (max_size_ == 0)
             {
-                max_size_ = max_size;
-                return;
+                return;    // no size limitation
             }
 
-            max_size_ = max_size;
             while (current_size_ > max_size_)    //-V776
             {
                 evict();
@@ -191,7 +191,7 @@ namespace hpx::util::cache {
         ///
         /// \returns      This function returns \a true if the cache holds the
         ///               referenced entry, otherwise it returns \a false.
-        bool get_entry(key_type const& key, entry_type const& entry)
+        bool get_entry(key_type const& key, entry_type& entry)
         {
             key_type tmp;
             return get_entry(key, tmp, entry);
@@ -236,8 +236,9 @@ namespace hpx::util::cache {
             // update statistics
             statistics_.got_insertion();
 
-            // Do we need to evict a cache entry?
-            if (current_size_ > max_size_)
+            // Do we need to evict a cache entry? A maximum size of zero means
+            // no size limitation.
+            if (max_size_ != 0 && current_size_ > max_size_)
             {
                 // evict an entry
                 evict();
@@ -332,7 +333,7 @@ namespace hpx::util::cache {
                 return true;
             }
 
-            if (f(key, it->first))
+            if (!f(key, it->first))
                 return false;
 
             // got hit!
@@ -371,6 +372,7 @@ namespace hpx::util::cache {
                 if (ep(*jt))
                 {
                     ++erased;
+                    --current_size_;
 
                     storage_.erase(jt);
                     it = map_.erase(it);
