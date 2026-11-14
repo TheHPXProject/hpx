@@ -27,6 +27,17 @@ void test(Policy policy)
                 auto result = sender_test::wait(hpx::search_n(
                     policy, data.begin(), data.end(), count, value));
                 HPX_TEST(hpx::get<0>(*result) == expected);
+
+                auto iterator_result = sender_test::wait(hpx::ranges::search_n(
+                    policy, data.begin(), data.end(), count, value));
+                HPX_TEST(hpx::get<0>(*iterator_result) == expected);
+
+                auto range_result = sender_test::wait(
+                    hpx::ranges::search_n(policy, data, count, value));
+                HPX_TEST(hpx::get<0>(*range_result) == expected);
+                HPX_TEST(hpx::ranges::search_n(data.begin(), data.end(), count,
+                             value) == expected);
+                HPX_TEST(hpx::ranges::search_n(data, count, value) == expected);
             }
         }
     }
