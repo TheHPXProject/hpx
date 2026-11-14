@@ -221,7 +221,7 @@ void test_copy_remove_ranges_sender()
     auto projection = [](int value) { return value + 1; };
     auto predicate = [](int value) { return value % 2 == 0; };
 
-    auto check = [&](auto sender, std::vector<int> const& expected) {
+    auto verify_result = [&](auto sender, std::vector<int> const& expected) {
         static_assert(ex::is_sender_v<decltype(sender)>);
         auto result = tt::sync_wait(std::move(sender));
         HPX_TEST(result.has_value());
@@ -240,22 +240,22 @@ void test_copy_remove_ranges_sender()
         std::fill(output.begin(), output.end(), -1);
     };
 
-    check(hpx::ranges::copy_if(policy, input.begin(), input.end(),
-              output.begin(), predicate, projection),
+    verify_result(hpx::ranges::copy_if(policy, input.begin(), input.end(),
+                      output.begin(), predicate, projection),
         {1, 3, 5});
-    check(hpx::ranges::copy_if(
-              policy, input, output.begin(), predicate, projection),
+    verify_result(hpx::ranges::copy_if(
+                      policy, input, output.begin(), predicate, projection),
         {1, 3, 5});
-    check(hpx::ranges::remove_copy_if(policy, input.begin(), input.end(),
-              output.begin(), predicate, projection),
+    verify_result(hpx::ranges::remove_copy_if(policy, input.begin(),
+                      input.end(), output.begin(), predicate, projection),
         {2, 4, 6});
-    check(hpx::ranges::remove_copy_if(
-              policy, input, output.begin(), predicate, projection),
+    verify_result(hpx::ranges::remove_copy_if(
+                      policy, input, output.begin(), predicate, projection),
         {2, 4, 6});
-    check(hpx::ranges::remove_copy(policy, input.begin(), input.end(),
-              output.begin(), 3, projection),
+    verify_result(hpx::ranges::remove_copy(policy, input.begin(), input.end(),
+                      output.begin(), 3, projection),
         {1, 3, 4, 5, 6});
-    check(
+    verify_result(
         hpx::ranges::remove_copy(policy, input, output.begin(), 3, projection),
         {1, 3, 4, 5, 6});
 }
