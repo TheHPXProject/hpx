@@ -38,7 +38,8 @@ jobs:
               -DHPX_WITH_VERIFY_LOCKS_BACKTRACE=ON \
               -DHPX_WITH_CHECK_MODULE_DEPENDENCIES=On \
               -DHPX_WITH_TRACY=ON \
-              -DHPX_WITH_TRACING_LOCK_EVENTS=ON
+              -DHPX_WITH_TRACING_LOCK_EVENTS=ON \
+              -DHPX_WITH_TRACING_MESSAGE_CALLSTACKS=ON
     - name: Build
       shell: bash
       run: |
