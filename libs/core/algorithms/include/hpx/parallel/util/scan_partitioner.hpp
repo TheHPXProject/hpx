@@ -330,9 +330,12 @@ namespace hpx::parallel::util {
                     exec,
                     [f1 = HPX_MOVE(f1), partial_results](
                         chunk_type<FwdIter> const& chunk) mutable {
+                        // Bulk execution can share this callable across chunks.
+                        // Each scan step needs its own mutable function state.
+                        auto f1_copy = f1;
                         (*partial_results)[hpx::get<0>(chunk)].emplace(
-                            HPX_INVOKE(
-                                f1, hpx::get<1>(chunk), hpx::get<2>(chunk)));
+                            HPX_INVOKE(f1_copy, hpx::get<1>(chunk),
+                                hpx::get<2>(chunk)));
                     },
                     chunks);
 
@@ -371,7 +374,8 @@ namespace hpx::parallel::util {
                             exec,
                             [f3 = HPX_MOVE(f3)](final_chunk_type<FwdIter> const&
                                     chunk) mutable {
-                                HPX_INVOKE(f3, hpx::get<0>(chunk),
+                                auto f3_copy = f3;
+                                HPX_INVOKE(f3_copy, hpx::get<0>(chunk),
                                     hpx::get<1>(chunk), hpx::get<2>(chunk));
                             },
                             final_chunks);

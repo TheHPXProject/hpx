@@ -8,6 +8,7 @@
 
 #include <hpx/modules/algorithms.hpp>
 
+#include <algorithm>
 #include <atomic>
 #include <cstddef>
 #include <exception>
@@ -126,8 +127,32 @@ void test_failure(failure_phase failure)
     }
 }
 
+void test_synchronous_scheduler_results()
+{
+    namespace ex = hpx::execution::experimental;
+    using namespace hpx::execution;
+
+    auto exec = ex::explicit_scheduler_executor(
+        ex::thread_pool_policy_scheduler(hpx::launch::async));
+    std::vector<int> input{1, 1, 2, 2, 3, 3, 4, 4};
+    std::vector<int> output(input.size(), -1);
+
+    auto copied = hpx::copy_if(par.on(exec), input.begin(), input.end(),
+        output.begin(), [](int value) { return value % 2 == 0; });
+    std::vector<int> const even{2, 2, 4, 4};
+    HPX_TEST(copied == output.begin() + even.size());
+    HPX_TEST(std::equal(even.begin(), even.end(), output.begin()));
+
+    auto unique = hpx::unique_copy(
+        par.on(exec), input.begin(), input.end(), output.begin());
+    std::vector<int> const distinct{1, 2, 3, 4};
+    HPX_TEST(unique == output.begin() + distinct.size());
+    HPX_TEST(std::equal(distinct.begin(), distinct.end(), output.begin()));
+}
+
 int hpx_main()
 {
+    test_synchronous_scheduler_results();
     test_deferred_and_independent_operations();
     test_failure(failure_phase::first);
     test_failure(failure_phase::prefix);

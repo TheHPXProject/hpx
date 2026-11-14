@@ -570,18 +570,18 @@ namespace hpx::parallel {
                         HPX_MOVE(last_iter), HPX_MOVE(dest)};
                 };
 
-                return scan_partitioner_type::call(
-                    HPX_FORWARD(ExPolicy, policy),
-                    zip_iterator(first, flags.get() - 1), count - 1, init,
-                    // step 1 performs first part of scan algorithm
-                    HPX_MOVE(f1),
-                    // step 2 propagates the partition results from left
-                    // to right
-                    std::plus<std::size_t>(),
-                    // step 3 runs final accumulation on each partition
-                    HPX_MOVE(f3),
-                    // step 4 use this return value
-                    HPX_MOVE(f4));
+                return algorithm_result::get(
+                    scan_partitioner_type::call(HPX_FORWARD(ExPolicy, policy),
+                        zip_iterator(first, flags.get() - 1), count - 1, init,
+                        // step 1 performs first part of scan algorithm
+                        HPX_MOVE(f1),
+                        // step 2 propagates the partition results from left
+                        // to right
+                        std::plus<std::size_t>(),
+                        // step 3 runs final accumulation on each partition
+                        HPX_MOVE(f3),
+                        // step 4 use this return value
+                        HPX_MOVE(f4)));
             }
         };
         /// \endcond
