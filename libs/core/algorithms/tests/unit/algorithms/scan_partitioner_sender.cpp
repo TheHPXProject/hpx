@@ -140,14 +140,16 @@ void test_synchronous_scheduler_results()
     auto copied = hpx::copy_if(par.on(exec), input.begin(), input.end(),
         output.begin(), [](int value) { return value % 2 == 0; });
     std::vector<int> const even{2, 2, 4, 4};
-    HPX_TEST(copied == output.begin() + even.size());
+    HPX_TEST(
+        copied == output.begin() + static_cast<std::ptrdiff_t>(even.size()));
     HPX_TEST(std::equal(even.begin(), even.end(), output.begin()));
 
     std::fill(output.begin(), output.end(), -1);
     auto unique = hpx::unique_copy(
         par.on(exec), input.begin(), input.end(), output.begin());
     std::vector<int> const distinct{1, 2, 3, 4};
-    HPX_TEST(unique == output.begin() + distinct.size());
+    HPX_TEST(unique ==
+        output.begin() + static_cast<std::ptrdiff_t>(distinct.size()));
     HPX_TEST(std::equal(distinct.begin(), distinct.end(), output.begin()));
 }
 
@@ -172,7 +174,8 @@ void test_task_scheduler_results()
         HPX_TEST(std::all_of(output.begin(), output.end(),
             [](int value) { return value == -1; }));
         auto copy_result = sender_test::wait(HPX_MOVE(copy_sender));
-        HPX_TEST(hpx::get<0>(*copy_result) == output.begin() + expected.size());
+        HPX_TEST(hpx::get<0>(*copy_result) ==
+            output.begin() + static_cast<std::ptrdiff_t>(expected.size()));
         HPX_TEST(std::equal(expected.begin(), expected.end(), output.begin()));
 
         std::fill(output.begin(), output.end(), -1);
@@ -184,8 +187,8 @@ void test_task_scheduler_results()
         HPX_TEST(std::all_of(output.begin(), output.end(),
             [](int value) { return value == -1; }));
         auto unique_result = sender_test::wait(HPX_MOVE(unique_sender));
-        HPX_TEST(
-            hpx::get<0>(*unique_result) == output.begin() + expected.size());
+        HPX_TEST(hpx::get<0>(*unique_result) ==
+            output.begin() + static_cast<std::ptrdiff_t>(expected.size()));
         HPX_TEST(std::equal(expected.begin(), expected.end(), output.begin()));
     }
 }
