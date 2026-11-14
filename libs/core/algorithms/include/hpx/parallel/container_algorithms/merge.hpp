@@ -709,11 +709,9 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
-            hpx::ranges::merge_result<std::ranges::iterator_t<Rng1>,
-                std::ranges::iterator_t<Rng2>, Iter3>>
-        invoke_default(ExPolicy&& policy, Rng1&& rng1, Rng2&& rng2, Iter3 dest,
-            Comp comp = Comp(), Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
+        static decltype(auto) invoke_default(ExPolicy&& policy, Rng1&& rng1,
+            Rng2&& rng2, Iter3 dest, Comp comp = Comp(), Proj1 proj1 = Proj1(),
+            Proj2 proj2 = Proj2())
         {
             using iterator_type1 = std::ranges::iterator_t<Rng1>;
             using iterator_type2 = std::ranges::iterator_t<Rng2>;
@@ -753,11 +751,9 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
-            hpx::ranges::merge_result<Iter1, Iter2, Iter3>>
-        invoke_default(ExPolicy&& policy, Iter1 first1, Sent1 last1,
-            Iter2 first2, Sent2 last2, Iter3 dest, Comp comp = Comp(),
-            Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
+        static decltype(auto) invoke_default(ExPolicy&& policy, Iter1 first1,
+            Sent1 last1, Iter2 first2, Sent2 last2, Iter3 dest,
+            Comp comp = Comp(), Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
         {
             static_assert(std::random_access_iterator<Iter1>,
                 "Required at least random access iterator.");
@@ -872,9 +868,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy, Iter>
-        invoke_default(ExPolicy&& policy, Rng&& rng, Iter middle,
-            Comp comp = Comp(), Proj proj = Proj())
+        static decltype(auto) invoke_default(ExPolicy&& policy, Rng&& rng,
+            Iter middle, Comp comp = Comp(), Proj proj = Proj())
         {
             using iterator_type = std::ranges::iterator_t<Rng>;
 
@@ -901,9 +896,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy, Iter>
-        invoke_default(ExPolicy&& policy, Iter first, Iter middle, Sent last,
-            Comp comp = Comp(), Proj proj = Proj())
+        static decltype(auto) invoke_default(ExPolicy&& policy, Iter first,
+            Iter middle, Sent last, Comp comp = Comp(), Proj proj = Proj())
         {
             static_assert(std::random_access_iterator<Iter>,
                 "Required at least random access iterator.");
