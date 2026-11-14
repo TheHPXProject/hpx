@@ -121,8 +121,7 @@ double thread_func_multi_consumer(
 
     for (int i = 0; i != total_items; ++i)
     {
-        data d = channel_get(c);
-        HPX_UNUSED(d);
+        [[maybe_unused]] data d = channel_get(c);
     }
 
     std::uint64_t end = hpx::chrono::high_resolution_clock::now();
