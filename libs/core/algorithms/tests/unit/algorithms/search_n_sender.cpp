@@ -8,7 +8,13 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <limits>
 #include <vector>
+
+struct record
+{
+    int key;
+};
 
 template <typename Policy>
 void test(Policy policy)
@@ -41,6 +47,20 @@ void test(Policy policy)
             }
         }
     }
+
+    std::vector<int> small{1, 1, 2};
+    auto const huge_count = (std::numeric_limits<std::size_t>::max)();
+    HPX_TEST(hpx::ranges::search_n(small, huge_count, 1) == small.end());
+    auto huge_result =
+        sender_test::wait(hpx::ranges::search_n(policy, small, huge_count, 1));
+    HPX_TEST(hpx::get<0>(*huge_result) == small.end());
+
+    std::vector<record> records{{1}, {7}, {7}, {2}};
+    HPX_TEST(hpx::ranges::search_n(records, 2, record{7},
+                 hpx::ranges::equal_to{}, &record::key) == records.begin() + 1);
+    auto projected_result = sender_test::wait(hpx::ranges::search_n(
+        policy, records, 2, record{7}, hpx::ranges::equal_to{}, &record::key));
+    HPX_TEST(hpx::get<0>(*projected_result) == records.begin() + 1);
 }
 
 int hpx_main()
