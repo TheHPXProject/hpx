@@ -25,6 +25,7 @@ jobs:
       configure: |
         cmake . -Bbuild -GNinja \
             -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX="$(cygpath -m "$GITHUB_WORKSPACE")/install" \
             -DHPX_WITH_PSEUDO_DEPENDENCIES=ON \
             -DCMAKE_TOOLCHAIN_FILE='C:/projects/vcpkg/scripts/buildsystems/vcpkg.cmake' \
             -DHPX_WITH_FETCH_ASIO=ON \
@@ -44,6 +45,9 @@ jobs:
             -DHPX_WITH_DATAPAR=ON \
             -DHPX_WITH_DATAPAR_BACKEND=EMULATE
       base-targets: hpx_core core components
+      # the external CMake build tests, against the build and the installed
+      # directory
+      extra-targets: install tests.unit.build
       shards: 20
       exclude-files: >-
         .github/workflows/exclude.targets

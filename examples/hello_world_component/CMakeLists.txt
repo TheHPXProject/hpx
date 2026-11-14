@@ -87,24 +87,34 @@ if(EXISTS "${HPX_DIR}")
     message(FATAL_ERROR "Unknown SETUP_TYPE=\"${SETUP_TYPE}\"")
   endif()
 
-  if(MSVC)
-    # Only for the purposes of testing we output the executable and libraries to
-    # the output directory of HPX
-    set_target_properties(
-      hello_world_client PROPERTIES RUNTIME_OUTPUT_DIRECTORY
-                                    ${HPX_OUTPUT_DIRECTORY}
-    )
-    if(HPX_WITH_DISTRIBUTED_RUNTIME)
-      set_target_properties(
-        hello_world_component PROPERTIES RUNTIME_OUTPUT_DIRECTORY
-                                         ${HPX_OUTPUT_DIRECTORY}
+  enable_testing()
+  add_test(NAME hello_world_test COMMAND hello_world_client)
+
+  if(WIN32)
+    # The executable and the component stay in the binary directory of this
+    # project, so that several of these projects can be built concurrently. Make
+    # the HPX DLLs reachable for the test instead: the directory of the HPX
+    # library used by this project first, then HPX_OUTPUT_DIRECTORY (the binary
+    # directory of the HPX build, which holds the DLLs of the HPX dependencies
+    # as well).
+    set(hello_world_test_path)
+    if(TARGET HPXInternal::hpx_full)
+      list(APPEND hello_world_test_path
+           "$<TARGET_FILE_DIR:HPXInternal::hpx_full>"
       )
     endif()
+    if(HPX_OUTPUT_DIRECTORY)
+      file(TO_CMAKE_PATH "${HPX_OUTPUT_DIRECTORY}" hpx_output_directory)
+      list(APPEND hello_world_test_path "${hpx_output_directory}")
+    endif()
+    file(TO_CMAKE_PATH "$ENV{PATH}" environment_path)
+    list(APPEND hello_world_test_path ${environment_path})
+    # escape the separators, ENVIRONMENT is a list itself
+    string(REPLACE ";" "\\;" hello_world_test_path "${hello_world_test_path}")
+    set_tests_properties(
+      hello_world_test PROPERTIES ENVIRONMENT "PATH=${hello_world_test_path}"
+    )
   endif()
-
-  enable_testing()
-  # the target name finds the executable also in HPX_OUTPUT_DIRECTORY
-  add_test(NAME hello_world_test COMMAND hello_world_client)
 else()
   message(
     WARNING
