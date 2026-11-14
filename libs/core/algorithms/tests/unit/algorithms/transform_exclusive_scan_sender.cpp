@@ -6,6 +6,10 @@
 
 #include "sender_algorithm_test_utils.hpp"
 
+#include <cstddef>
+#include <utility>
+#include <vector>
+
 struct twice
 {
     int operator()(int value) const
