@@ -348,9 +348,8 @@ namespace hpx::parallel::util {
                         std::vector<Result1> scan_results;
                         scan_results.reserve(partial_results->size() + 1);
 
-                        if (!partial_results->empty())
+                        if (init.has_value())
                         {
-                            HPX_ASSERT(init.has_value());
                             Result1 result = HPX_MOVE(*init);
                             scan_results.push_back(result);
                             for (auto& partial_result : *partial_results)
@@ -360,6 +359,10 @@ namespace hpx::parallel::util {
                                     HPX_INVOKE(f2, result, *partial_result);
                                 scan_results.push_back(result);
                             }
+                        }
+                        else
+                        {
+                            HPX_ASSERT(partial_results->empty());
                         }
 
                         std::vector<final_chunk_type<FwdIter>> final_chunks;
