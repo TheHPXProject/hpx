@@ -71,6 +71,7 @@ char const* hpx_no_inspect = "hpx-"
 #include "license_check.hpp"
 #include "link_check.hpp"
 #include "minmax_check.hpp"
+#include "module_std_include_check.hpp"
 #include "path_name_check.hpp"
 #include "pragma_once_check.hpp"
 #include "spdx_license_check.hpp"
@@ -1039,6 +1040,7 @@ int cpp_main(int argc_param, char* argv_param[])
     bool pragma_once_ck = false;
     bool deprecated_include_ck = false;
     bool deprecated_names_ck = false;
+    bool module_std_include_ck = false;
 
     // clang-format off
     desc_commandline.add_options()
@@ -1095,6 +1097,9 @@ int cpp_main(int argc_param, char* argv_param[])
         ("deprecated_name",
             value<bool>(&deprecated_names_ck)->implicit_value(true)->zero_tokens(),
             "check for deprecated names usage violations (default: off)")
+        ("module_std_include",
+            value<bool>(&module_std_include_ck)->implicit_value(true)->zero_tokens(),
+            "check for unguarded standard library #include's in converted modules (default: off)")
 
         ("all,a", "check for all violations (default: no checks are performed)")
         ;
@@ -1175,6 +1180,7 @@ int cpp_main(int argc_param, char* argv_param[])
         pragma_once_ck = true;
         deprecated_include_ck = true;
         deprecated_names_ck = true;
+        module_std_include_ck = true;
     }
 
     std::string output_path("-");
@@ -1245,6 +1251,9 @@ int cpp_main(int argc_param, char* argv_param[])
     if (deprecated_names_ck)
         inspectors.push_back(
             inspector_element(new boost::inspect::deprecated_name_check()));
+    if (module_std_include_ck)
+        inspectors.push_back(
+            inspector_element(new boost::inspect::module_std_include_check()));
 
     // perform the actual inspection, using the requested type of iteration
     for (auto const& search_root : search_roots)
