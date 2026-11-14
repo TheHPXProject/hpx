@@ -847,6 +847,22 @@ namespace hpx::parallel {
             return distance;
         }
 
+        HPX_CXX_CORE_EXPORT template <typename B, typename E>
+        HPX_HOST_DEVICE constexpr std::size_t loop_size(B first, E last)
+        {
+            if constexpr (std::is_integral_v<B> && std::is_signed_v<B> &&
+                std::is_integral_v<E> && std::is_signed_v<E>)
+            {
+                if (first >= last)
+                {
+                    return 0;
+                }
+            }
+
+            return static_cast<std::size_t>(
+                parallel::detail::distance(first, last));
+        }
+
         ///////////////////////////////////////////////////////////////////////
         HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename F,
             typename S = void, typename Tuple = hpx::tuple<>>
@@ -872,8 +888,9 @@ namespace hpx::parallel {
             }
 
             template <typename B>
-            HPX_HOST_DEVICE HPX_FORCEINLINE constexpr void operator()(
-                B part_begin, std::size_t part_steps, std::size_t part_index)
+            HPX_HOST_DEVICE HPX_FORCEINLINE constexpr void invoke(B part_begin,
+                std::size_t part_steps, std::size_t part_index,
+                hpx::tuple<Ts...>& args)
             {
                 std::size_t current_thread = -1;
                 if constexpr (hpx::util::any_of_v<has_needs_current_thread_num<
@@ -883,15 +900,18 @@ namespace hpx::parallel {
                 }
 
                 auto pack = hpx::util::make_index_pack_t<sizeof...(Ts)>();
-                detail::init_iteration(args_, pack, part_index, current_thread);
+                auto const stride_size =
+                    static_cast<std::size_t>(parallel::detail::abs(stride_));
+                detail::init_iteration(
+                    args, pack, part_index / stride_size, current_thread);
 
                 if (stride_ == 1)
                 {
                     while (part_steps-- != 0)
                     {
                         detail::invoke_iteration(
-                            args_, pack, f_, part_begin++, current_thread);
-                        detail::next_iteration(args_, pack, current_thread);
+                            args, pack, f_, part_begin++, current_thread);
+                        detail::next_iteration(args, pack, current_thread);
                     }
                 }
                 else
@@ -899,21 +919,39 @@ namespace hpx::parallel {
                     while (part_steps >= static_cast<std::size_t>(stride_))
                     {
                         detail::invoke_iteration(
-                            args_, pack, f_, part_begin, current_thread);
+                            args, pack, f_, part_begin, current_thread);
 
                         part_begin =
                             parallel::detail::next(part_begin, stride_);
                         part_steps -= static_cast<std::size_t>(stride_);
 
-                        detail::next_iteration(args_, pack, current_thread);
+                        detail::next_iteration(args, pack, current_thread);
                     }
 
                     if (part_steps != 0)
                     {
                         detail::invoke_iteration(
-                            args_, pack, f_, part_begin, current_thread);
-                        detail::next_iteration(args_, pack, current_thread);
+                            args, pack, f_, part_begin, current_thread);
+                        detail::next_iteration(args, pack, current_thread);
                     }
+                }
+            }
+
+            template <typename B>
+            HPX_HOST_DEVICE HPX_FORCEINLINE constexpr void operator()(
+                B part_begin, std::size_t part_steps, std::size_t part_index)
+            {
+                if constexpr (hpx::execution_policy_has_scheduler_executor_v<
+                                  ExPolicy>)
+                {
+                    // Bulk senders share this function between chunks. Keep
+                    // mutable induction counters local to each invocation.
+                    auto args = args_;
+                    invoke(part_begin, part_steps, part_index, args);
+                }
+                else
+                {
+                    invoke(part_begin, part_steps, part_index, args_);
                 }
             }
 
@@ -1021,18 +1059,72 @@ namespace hpx::parallel {
             }
 
             template <typename B, typename E>
-            HPX_HOST_DEVICE HPX_FORCEINLINE constexpr void loop_iter(
+            HPX_HOST_DEVICE HPX_FORCEINLINE constexpr void loop_iter_impl(
                 B part_begin, E part_end, std::size_t part_index,
-                std::uint32_t current_thread)
+                std::uint32_t current_thread, hpx::tuple<Ts...>& args)
             {
                 auto pack = hpx::util::make_index_pack_t<sizeof...(Ts)>();
-                detail::init_iteration(args_, pack, part_index, current_thread);
+                detail::init_iteration(args, pack, part_index, current_thread);
 
                 while (part_begin != part_end)
                 {
                     detail::invoke_iteration(
-                        args_, pack, f_, part_begin++, current_thread);
-                    detail::next_iteration(args_, pack, current_thread);
+                        args, pack, f_, part_begin++, current_thread);
+                    detail::next_iteration(args, pack, current_thread);
+                }
+            }
+
+            template <typename B, typename E>
+            HPX_HOST_DEVICE HPX_FORCEINLINE constexpr void loop_iter(
+                B part_begin, E part_end, std::size_t part_index,
+                std::uint32_t current_thread)
+            {
+                if constexpr (hpx::execution_policy_has_scheduler_executor_v<
+                                  ExPolicy>)
+                {
+                    auto args = args_;
+                    loop_iter_impl(
+                        part_begin, part_end, part_index, current_thread, args);
+                }
+                else
+                {
+                    loop_iter_impl(part_begin, part_end, part_index,
+                        current_thread, args_);
+                }
+            }
+
+            template <typename B>
+            HPX_HOST_DEVICE HPX_FORCEINLINE constexpr void loop_n_impl(
+                B part_begin, std::size_t part_steps, std::size_t part_index,
+                std::uint32_t current_thread, hpx::tuple<Ts...>& args)
+            {
+                auto pack = hpx::util::make_index_pack_t<sizeof...(Ts)>();
+                detail::init_iteration(args, pack, part_index, current_thread);
+
+                parallel::util::const_loop_n<std::decay_t<ExPolicy>>(
+                    part_begin, part_steps, [&](auto it) {
+                        detail::invoke_iteration(
+                            args, pack, f_, it, current_thread);
+                        detail::next_iteration(args, pack, current_thread);
+                    });
+            }
+
+            template <typename B>
+            HPX_HOST_DEVICE HPX_FORCEINLINE constexpr void const_loop_n(
+                B part_begin, std::size_t part_steps, std::size_t part_index,
+                std::uint32_t current_thread)
+            {
+                if constexpr (hpx::execution_policy_has_scheduler_executor_v<
+                                  ExPolicy>)
+                {
+                    auto args = args_;
+                    loop_n_impl(part_begin, part_steps, part_index,
+                        current_thread, args);
+                }
+                else
+                {
+                    loop_n_impl(part_begin, part_steps, part_index,
+                        current_thread, args_);
                 }
             }
 
@@ -1061,16 +1153,8 @@ namespace hpx::parallel {
                 }
                 else
                 {
-                    auto pack = hpx::util::make_index_pack_t<sizeof...(Ts)>();
-                    detail::init_iteration(
-                        args_, pack, part_index, current_thread);
-
-                    parallel::util::const_loop_n<std::decay_t<ExPolicy>>(
-                        part_begin, part_steps, [&](auto it) {
-                            detail::invoke_iteration(
-                                args_, pack, f_, it, current_thread);
-                            detail::next_iteration(args_, pack, current_thread);
-                        });
+                    const_loop_n(
+                        part_begin, part_steps, part_index, current_thread);
                 }
             }
 
@@ -1438,8 +1522,11 @@ namespace hpx::parallel {
         auto for_loop(ExPolicy&& policy, B first, E last,
             hpx::util::index_pack<Is...>, Args&&... args)
         {
-            if constexpr (std::is_integral_v<B> && std::is_signed_v<B> &&
-                std::is_integral_v<E> && std::is_signed_v<E> &&
+            constexpr bool has_signed_integral_bounds = std::is_integral_v<B> &&
+                std::is_signed_v<B> && std::is_integral_v<E> &&
+                std::is_signed_v<E>;
+
+            if constexpr (has_signed_integral_bounds &&
                 !hpx::execution_policy_has_scheduler_executor_v<ExPolicy>)
             {
                 if (first >= last)
@@ -1452,7 +1539,7 @@ namespace hpx::parallel {
                 "Requires at least forward iterator or integral loop "
                 "boundaries.");
 
-            std::size_t size = parallel::detail::distance(first, last);
+            std::size_t size = detail::loop_size(first, last);
             auto&& t = hpx::forward_as_tuple(HPX_FORWARD(Args, args)...);
 
             auto f = hpx::get<sizeof...(Args) - 1>(t);
@@ -1520,7 +1607,7 @@ namespace hpx::parallel {
                 "Requires at least forward iterator or integral loop "
                 "boundaries.");
 
-            std::size_t size = parallel::detail::distance(first, last);
+            std::size_t size = detail::loop_size(first, last);
             auto&& t = hpx::forward_as_tuple(HPX_FORWARD(Args, args)...);
 
             auto f = hpx::get<sizeof...(Args) - 1>(t);
@@ -1563,9 +1650,8 @@ namespace hpx::parallel {
         // reshuffle arguments, last argument is function object, will go first
         HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename B,
             typename Size, typename S, std::size_t... Is, typename... Args>
-        util::detail::algorithm_result_t<ExPolicy> for_loop_n(ExPolicy&& policy,
-            B first, Size size, S stride, hpx::util::index_pack<Is...>,
-            Args&&... args)
+        decltype(auto) for_loop_n(ExPolicy&& policy, B first, Size size,
+            S stride, hpx::util::index_pack<Is...>, Args&&... args)
         {
             // stride shall be positive, negative strides are not supported
             HPX_ASSERT(stride > 0);
@@ -1643,9 +1729,8 @@ namespace hpx::experimental {
             (hpx::traits::is_iterator_v<I> || std::is_integral_v<I>)
         )
         // clang-format on
-        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy>
-        invoke_default(ExPolicy&& policy, std::decay_t<I> first, I last,
-            S stride, Args&&... args)
+        static decltype(auto) invoke_default(ExPolicy&& policy,
+            std::decay_t<I> first, I last, S stride, Args&&... args)
         {
             static_assert(sizeof...(Args) >= 1,
                 "for_loop_strided must be called with at least a function "
@@ -1693,8 +1778,8 @@ namespace hpx::experimental {
             (hpx::traits::is_iterator_v<I> || std::is_integral_v<I>)
         )
         // clang-format on
-        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy>
-        invoke_default(ExPolicy&& policy, I first, Size size, Args&&... args)
+        static decltype(auto) invoke_default(
+            ExPolicy&& policy, I first, Size size, Args&&... args)
         {
             static_assert(sizeof...(Args) >= 1,
                 "for_loop_n must be called with at least a function object");
@@ -1740,8 +1825,7 @@ namespace hpx::experimental {
             (hpx::traits::is_iterator_v<I> || std::is_integral_v<I>)
         )
         // clang-format on
-        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy>
-        invoke_default(
+        static decltype(auto) invoke_default(
             ExPolicy&& policy, I first, Size size, S stride, Args&&... args)
         {
             static_assert(sizeof...(Args) >= 1,
