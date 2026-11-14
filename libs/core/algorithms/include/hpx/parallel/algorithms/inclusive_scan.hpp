@@ -441,6 +441,7 @@ namespace hpx {
 #include <algorithm>
 #include <cstddef>
 #include <iterator>
+#include <optional>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -528,10 +529,8 @@ namespace hpx::parallel {
 
             template <typename ExPolicy, typename FwdIter1, typename Sent,
                 typename FwdIter2, typename T, typename Op>
-            static util::detail::algorithm_result_t<ExPolicy,
-                util::in_out_result<FwdIter1, FwdIter2>>
-            parallel(ExPolicy&& policy, FwdIter1 first, Sent last,
-                FwdIter2 dest, T init, Op&& op)
+            static decltype(auto) parallel(ExPolicy&& policy, FwdIter1 first,
+                Sent last, FwdIter2 dest, T init, Op&& op)
             {
                 using result = util::detail::algorithm_result<ExPolicy,
                     util::in_out_result<FwdIter1, FwdIter2>>;
@@ -540,10 +539,15 @@ namespace hpx::parallel {
                 using difference_type =
                     typename std::iterator_traits<FwdIter1>::difference_type;
 
-                if (first == last)
+                if constexpr (!hpx::execution_policy_has_scheduler_executor_v<
+                                  ExPolicy>)
                 {
-                    return result::get(
-                        util::in_out_result<FwdIter1, FwdIter2>{first, dest});
+                    if (first == last)
+                    {
+                        return result::get(
+                            util::in_out_result<FwdIter1, FwdIter2>{
+                                first, dest});
+                    }
                 }
 
                 FwdIter1 last_iter = first;
@@ -610,12 +614,91 @@ namespace hpx::parallel {
 
             template <typename ExPolicy, typename FwdIter1, typename Sent,
                 typename FwdIter2, typename Op>
-            static util::detail::algorithm_result_t<ExPolicy,
-                util::in_out_result<FwdIter1, FwdIter2>>
-            parallel(ExPolicy&& policy, FwdIter1 first, Sent last,
-                FwdIter2 dest, Op&& op)
+            static decltype(auto) parallel_scheduler_noinit(ExPolicy&& policy,
+                FwdIter1 first, Sent last, FwdIter2 dest, Op&& op)
             {
+                using value_type = hpx::traits::iter_value_t<FwdIter1>;
+                using result_type = util::in_out_result<FwdIter1, FwdIter2>;
+                using zip_iterator =
+                    hpx::util::zip_iterator<FwdIter1, FwdIter2>;
+                using difference_type =
+                    typename std::iterator_traits<FwdIter1>::difference_type;
+
+                FwdIter1 const initial_first = first;
+                FwdIter2 const initial_dest = dest;
                 if (first != last)
+                {
+                    ++first;
+                    ++dest;
+                }
+
+                FwdIter1 last_iter = first;
+                difference_type count =
+                    detail::advance_and_get_distance(last_iter, last);
+                FwdIter2 final_dest = dest;
+                std::advance(final_dest, count);
+
+                using hpx::get;
+
+                auto f3 = [op](zip_iterator part_begin, std::size_t part_size,
+                              value_type val) mutable -> void {
+                    FwdIter2 dst = get<1>(part_begin.get_iterator_tuple());
+                    util::const_loop_n<std::decay_t<ExPolicy>>(
+                        dst, part_size, [=, &val](FwdIter2 it) mutable -> void {
+                            *it = HPX_INVOKE(op, val, *it);
+                        });
+                };
+
+                return util::scan_partitioner<ExPolicy, result_type,
+                    value_type>::
+                    call_with_initializer(
+                        HPX_FORWARD(ExPolicy, policy),
+                        zip_iterator(first, dest),
+                        static_cast<std::size_t>(count),
+                        [initial_first, last, initial_dest]() mutable {
+                            std::optional<value_type> init;
+                            if (initial_first != last)
+                            {
+                                init.emplace(*initial_first);
+                                *initial_dest = *init;
+                            }
+                            return init;
+                        },
+                        [op, last](zip_iterator part_begin,
+                            std::size_t part_size) -> value_type {
+                            value_type part_init = get<0>(*part_begin);
+                            get<1>(*part_begin++) = part_init;
+
+                            auto iters = part_begin.get_iterator_tuple();
+                            if (get<0>(iters) != last)
+                            {
+                                return sequential_inclusive_scan_n(
+                                    get<0>(iters), part_size - 1, get<1>(iters),
+                                    part_init, op);
+                            }
+                            return part_init;
+                        },
+                        HPX_FORWARD(Op, op), HPX_MOVE(f3),
+                        [last_iter, final_dest](std::vector<value_type>&&,
+                            std::vector<hpx::future<void>>&& data) {
+                            util::detail::clear_container(data);
+                            return result_type{last_iter, final_dest};
+                        });
+            }
+
+            template <typename ExPolicy, typename FwdIter1, typename Sent,
+                typename FwdIter2, typename Op>
+            static decltype(auto) parallel(ExPolicy&& policy, FwdIter1 first,
+                Sent last, FwdIter2 dest, Op&& op)
+            {
+                if constexpr (hpx::execution_policy_has_scheduler_executor_v<
+                                  ExPolicy>)
+                {
+                    return parallel_scheduler_noinit(
+                        HPX_FORWARD(ExPolicy, policy), first, last, dest,
+                        HPX_FORWARD(Op, op));
+                }
+                else if (first != last)
                 {
                     auto init = *first;
                     *dest++ = init;
@@ -623,10 +706,13 @@ namespace hpx::parallel {
                         last, dest, HPX_MOVE(init), HPX_FORWARD(Op, op));
                 }
 
-                using result = util::detail::algorithm_result<ExPolicy,
-                    util::in_out_result<FwdIter1, FwdIter2>>;
-                return result::get(
-                    util::in_out_result<FwdIter1, FwdIter2>{first, dest});
+                else
+                {
+                    using result = util::detail::algorithm_result<ExPolicy,
+                        util::in_out_result<FwdIter1, FwdIter2>>;
+                    return result::get(
+                        util::in_out_result<FwdIter1, FwdIter2>{first, dest});
+                }
             }
         };
         /// \endcond
@@ -674,8 +760,7 @@ namespace hpx {
                 hpx::traits::is_iterator_v<FwdIter2>
             )
         // clang-format on
-        static parallel::util::detail::algorithm_result_t<ExPolicy, FwdIter2>
-        invoke_default(
+        static decltype(auto) invoke_default(
             ExPolicy&& policy, FwdIter1 first, FwdIter1 last, FwdIter2 dest)
         {
             static_assert(std::forward_iterator<FwdIter1>,
@@ -734,9 +819,8 @@ namespace hpx {
                 >
             )
         // clang-format on
-        static parallel::util::detail::algorithm_result_t<ExPolicy, FwdIter2>
-        invoke_default(ExPolicy&& policy, FwdIter1 first, FwdIter1 last,
-            FwdIter2 dest, Op op)
+        static decltype(auto) invoke_default(ExPolicy&& policy, FwdIter1 first,
+            FwdIter1 last, FwdIter2 dest, Op op)
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Requires at least forward iterator.");
@@ -795,9 +879,8 @@ namespace hpx {
                 >
             )
         // clang-format on
-        static parallel::util::detail::algorithm_result_t<ExPolicy, FwdIter2>
-        invoke_default(ExPolicy&& policy, FwdIter1 first, FwdIter1 last,
-            FwdIter2 dest, Op op, T init)
+        static decltype(auto) invoke_default(ExPolicy&& policy, FwdIter1 first,
+            FwdIter1 last, FwdIter2 dest, Op op, T init)
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Requires at least forward iterator.");
