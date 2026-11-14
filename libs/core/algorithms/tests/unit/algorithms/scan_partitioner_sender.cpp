@@ -151,9 +151,49 @@ void test_synchronous_scheduler_results()
     HPX_TEST(std::equal(distinct.begin(), distinct.end(), output.begin()));
 }
 
+void test_task_scheduler_results()
+{
+    namespace ex = hpx::execution::experimental;
+    using namespace hpx::execution;
+
+    auto exec = ex::explicit_scheduler_executor(
+        ex::thread_pool_policy_scheduler(hpx::launch::async));
+    auto policy = par(task).on(exec);
+    for (std::vector<int> const& input : {std::vector<int>{},
+             std::vector<int>{1}, std::vector<int>{1, 1, 2, 2, 3, 3, 4, 4}})
+    {
+        std::vector<int> output(input.size(), -1);
+        std::vector<int> expected;
+        std::copy_if(input.begin(), input.end(), std::back_inserter(expected),
+            [](int value) { return value % 2 == 0; });
+
+        auto copy_sender = hpx::copy_if(policy, input.begin(), input.end(),
+            output.begin(), [](int value) { return value % 2 == 0; });
+        HPX_TEST(std::all_of(output.begin(), output.end(),
+            [](int value) { return value == -1; }));
+        auto copy_result = sender_test::wait(HPX_MOVE(copy_sender));
+        HPX_TEST(hpx::get<0>(*copy_result) == output.begin() + expected.size());
+        HPX_TEST(std::equal(expected.begin(), expected.end(), output.begin()));
+
+        std::fill(output.begin(), output.end(), -1);
+        expected.clear();
+        std::unique_copy(
+            input.begin(), input.end(), std::back_inserter(expected));
+        auto unique_sender = hpx::unique_copy(
+            policy, input.begin(), input.end(), output.begin());
+        HPX_TEST(std::all_of(output.begin(), output.end(),
+            [](int value) { return value == -1; }));
+        auto unique_result = sender_test::wait(HPX_MOVE(unique_sender));
+        HPX_TEST(
+            hpx::get<0>(*unique_result) == output.begin() + expected.size());
+        HPX_TEST(std::equal(expected.begin(), expected.end(), output.begin()));
+    }
+}
+
 int hpx_main()
 {
     test_synchronous_scheduler_results();
+    test_task_scheduler_results();
     test_deferred_and_independent_operations();
     test_failure(failure_phase::first);
     test_failure(failure_phase::prefix);
