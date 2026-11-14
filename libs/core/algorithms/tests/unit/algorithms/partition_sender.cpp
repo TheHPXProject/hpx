@@ -12,7 +12,7 @@
 template <typename Policy>
 void test(Policy policy)
 {
-    for (std::size_t n : {0, 1, 17, 10007})
+    for (std::size_t n : {0, 1, 17, 10007, 100007})
     {
         auto data = sender_test::values(n);
         auto original = data;
