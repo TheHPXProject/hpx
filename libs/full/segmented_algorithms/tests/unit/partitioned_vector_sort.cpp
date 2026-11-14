@@ -331,87 +331,95 @@ void test_sort_subranges(
     }
 }
 
-struct move_only_sort_value
+/// Verify compare-split phases with uneven runs and duplicate values.
+///
+/// \tparam ExPolicy The execution policy type.
+/// \param policy The policy used to invoke segmented sort.
+/// \param localities The localities that own the test partitions.
+template <typename ExPolicy>
+void test_uneven_merge_split(
+    ExPolicy const& policy, std::vector<hpx::id_type> const& localities)
 {
-    explicit move_only_sort_value(int value)
-      : value(value)
+    // Eleven physical partitions across four localities exercise both parities
+    // of the compare-split network, unequal run sizes, and duplicate values.
+    hpx::partitioned_vector<int> values(
+        257, 0, hpx::container_layout(11, localities));
+    initialize_values(values,
+        [](std::size_t i) { return static_cast<int>((i * 37 + 11) % 23); });
+    auto const expected = copy_values(values);
+
+    if constexpr (hpx::is_async_execution_policy_v<ExPolicy>)
     {
+        hpx::sort(policy, values.begin(), values.end()).get();
     }
-
-    move_only_sort_value() = delete;
-    move_only_sort_value(move_only_sort_value const&) = delete;
-    move_only_sort_value& operator=(move_only_sort_value const&) = delete;
-    move_only_sort_value(move_only_sort_value&&) = default;
-    move_only_sort_value& operator=(move_only_sort_value&&) = default;
-
-    int value;
-};
-
-// Cover arbitrary run counts, short final runs, duplicates, and value types
-// that cannot be copied or default constructed.
-void test_kway_merge()
-{
-    namespace detail = hpx::parallel::detail;
-
-    for (std::size_t run_count : {3, 5, 6, 7})
+    else
     {
-        for (std::size_t tail = 1; tail != 5; ++tail)
+        hpx::sort(policy, values.begin(), values.end());
+    }
+    verify_sorted(values, expected);
+}
+
+/// Verify that a complete two-run exchange remains chunked and distributed.
+///
+/// \param localities The localities that own the two test partitions.
+void test_two_run_merge_split(std::vector<hpx::id_type> const& localities)
+{
+    // Put two reversed runs on different localities. Every value crosses the
+    // merge partition, exercising the bounded exchange without gathering the
+    // complete input on either locality.
+    std::vector<hpx::id_type> hosts{
+        localities[0], localities[localities.size() > 1 ? 1 : 0]};
+    hpx::partitioned_vector<int> values(
+        2 * (65536 + 7), 0, hpx::container_layout(2, hosts));
+    initialize_values(values, [&](std::size_t i) {
+        auto const run_size = values.size() / 2;
+        if (i < run_size)
         {
-            for (std::size_t seed = 0; seed != 16; ++seed)
-            {
-                std::vector<int> values;
-                std::vector<std::size_t> offsets;
-                std::vector<std::size_t> counts;
-                std::vector<int> expected;
-                for (std::size_t run = 0; run != run_count; ++run)
-                {
-                    offsets.push_back(values.size());
-                    auto const count = run + 1 == run_count ? tail : 5;
-                    counts.push_back(count);
-                    std::vector<int> part(count);
-                    for (std::size_t i = 0; i != count; ++i)
-                    {
-                        part[i] = static_cast<int>(
-                            (run * 17 + i * 13 + seed * 7) % 11);
-                    }
-                    std::sort(part.begin(), part.end());
-                    expected.insert(expected.end(), part.begin(), part.end());
-                    values.insert(values.end(), part.begin(), part.end());
-                }
-                std::sort(expected.begin(), expected.end());
-
-                std::vector<int> output;
-                output.reserve(values.size());
-                std::less<int> pred;
-                detail::segmented_sort_kway_for_each(values, offsets, counts,
-                    pred,
-                    [&](int&& value) { output.push_back(HPX_MOVE(value)); });
-                HPX_TEST(output == expected);
-            }
+            return static_cast<int>(run_size + i);
         }
-    }
+        return static_cast<int>(i - run_size);
+    });
+    auto const expected = copy_values(values);
 
-    std::vector<move_only_sort_value> values;
-    for (int value : {0, 3, 6, 1, 4, 7, 2, 5, 8})
-    {
-        values.emplace_back(value);
-    }
-    std::vector<std::size_t> const offsets{0, 3, 6};
-    std::vector<std::size_t> const counts{3, 3, 3};
-    auto pred = [](move_only_sort_value const& lhs,
-                    move_only_sort_value const& rhs) {
-        return lhs.value < rhs.value;
-    };
-    std::vector<move_only_sort_value> output;
-    detail::segmented_sort_kway_for_each(
-        values, offsets, counts, pred, [&](move_only_sort_value&& value) {
-            output.push_back(HPX_MOVE(value));
-        });
-    HPX_TEST_EQ(output.size(), std::size_t(9));
-    for (std::size_t i = 0; i != output.size(); ++i)
-    {
-        HPX_TEST_EQ(output[i].value, static_cast<int>(i));
-    }
+    hpx::sort(hpx::execution::par, values.begin(), values.end());
+    verify_sorted(values, expected);
+}
+
+/// Verify convergence when adjacent runs have strongly unequal capacities.
+///
+/// \param localities The localities used by the explicit partition layout.
+void test_unequal_explicit_layout(std::vector<hpx::id_type> const& localities)
+{
+    std::vector<std::size_t> const sizes{100, 1, 100};
+    std::vector<hpx::id_type> const owners{localities[0],
+        localities[localities.size() > 1 ? 1 : 0],
+        localities[localities.size() > 2 ? 2 : 0]};
+    hpx::partitioned_vector<int> values(
+        201, 0, hpx::explicit_container_layout(sizes, owners));
+    initialize_values(values, [](std::size_t i) { return i < 100 ? 1 : 0; });
+    auto const expected = copy_values(values);
+
+    hpx::sort(hpx::execution::par, values.begin(), values.end());
+    verify_sorted(values, expected);
+}
+
+/// Verify that consecutive partitions on one locality are merged locally.
+///
+/// \param localities The localities used by the explicit partition layout.
+void test_adjacent_local_partitions(std::vector<hpx::id_type> const& localities)
+{
+    std::vector<std::size_t> const sizes{17, 19, 13, 23};
+    auto const second = localities[localities.size() > 1 ? 1 : 0];
+    std::vector<hpx::id_type> const owners{
+        localities[0], localities[0], second, second};
+    hpx::partitioned_vector<int> values(
+        72, 0, hpx::explicit_container_layout(sizes, owners));
+    initialize_values(
+        values, [](std::size_t i) { return static_cast<int>(71 - i); });
+    auto const expected = copy_values(values);
+
+    hpx::sort(hpx::execution::par, values.begin(), values.end());
+    verify_sorted(values, expected);
 }
 
 void test_large_transfers(std::vector<hpx::id_type> const& localities)
@@ -606,7 +614,13 @@ void test_async_run_collection(ExPolicy const& policy)
 int main()
 {
     std::vector<hpx::id_type> localities = hpx::find_all_localities();
-    test_kway_merge();
+    test_uneven_merge_split(hpx::execution::seq, localities);
+    test_uneven_merge_split(hpx::execution::par, localities);
+    test_uneven_merge_split(
+        hpx::execution::par(hpx::execution::task), localities);
+    test_two_run_merge_split(localities);
+    test_unequal_explicit_layout(localities);
+    test_adjacent_local_partitions(localities);
     test_large_transfers(localities);
     test_async_run_collection(hpx::execution::seq(hpx::execution::task));
     test_async_run_collection(hpx::execution::par(hpx::execution::task));
