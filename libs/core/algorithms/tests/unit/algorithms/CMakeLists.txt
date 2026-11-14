@@ -202,6 +202,7 @@ set(sender_tests
     none_of_sender
     nth_element_sender
     partial_sort_sender
+    reduce_by_key_sender
     reduce_sender
     remove_sender
     remove_if_sender
@@ -219,6 +220,7 @@ set(sender_tests
     set_intersection_sender
     shift_left_sender
     shift_right_sender
+    sort_by_key_sender
     starts_with_sender
     swapranges_sender
     transform_sender
