@@ -143,6 +143,7 @@ void test_synchronous_scheduler_results()
     HPX_TEST(copied == output.begin() + even.size());
     HPX_TEST(std::equal(even.begin(), even.end(), output.begin()));
 
+    std::fill(output.begin(), output.end(), -1);
     auto unique = hpx::unique_copy(
         par.on(exec), input.begin(), input.end(), output.begin());
     std::vector<int> const distinct{1, 2, 3, 4};
