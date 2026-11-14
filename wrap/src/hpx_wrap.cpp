@@ -8,9 +8,9 @@
 #include <hpx/init.hpp>
 
 // The following implementation has been divided for Linux and Mac OSX
-#if defined(HPX_HAVE_DYNAMIC_HPX_MAIN) &&                                      \
-    (defined(__linux) || defined(__linux__) || defined(linux) ||               \
-        defined(__APPLE__))
+#if (defined(__linux) || defined(__linux__) || defined(linux) ||               \
+    defined(__APPLE__)) &&                                                     \
+    !defined(__ANDROID__)
 
 #include <string>
 

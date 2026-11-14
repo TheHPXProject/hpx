@@ -46,11 +46,13 @@ if(EXISTS "${HPX_DIR}")
                                  ${hpx_cxx_module_targets}
     )
 
-    # We still support not linking to HPX::wrap_main when
-    # HPX_WITH_DYNAMIC_HPX_MAIN=OFF for legacy use. This can only be done using
-    # an installed HPX. It is strongly recommended to always link to
-    # HPX::wrap_main when implicitly using main as the runtime entry point.
-    if(USING_INSTALL_DIR AND NOT HPX_WITH_DYNAMIC_HPX_MAIN)
+    # We still support not linking to HPX::wrap_main for legacy use on platforms
+    # other than Linux and Apple. This can only be done using an installed HPX.
+    # It is strongly recommended to always link to HPX::wrap_main when
+    # implicitly using main as the runtime entry point.
+    if(USING_INSTALL_DIR AND NOT ("${CMAKE_SYSTEM_NAME}" STREQUAL "Linux"
+                                  OR APPLE)
+    )
       add_executable(hello_world_client_only_hpx_init hello_world_client.cpp)
       target_include_directories(
         hello_world_client_only_hpx_init PRIVATE ${test_SOURCE_DIR}

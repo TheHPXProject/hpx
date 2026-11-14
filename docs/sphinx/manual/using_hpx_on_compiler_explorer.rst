@@ -352,6 +352,6 @@ Known limitations in sandboxed environments
   containers, so this only matters when building the CE integration locally on
   macOS for testing.
 
-* **Windows does not use** ``-Wl,-wrap=main``. ``HPX_WITH_DYNAMIC_HPX_MAIN``
-  is unavailable on Windows, so ``hpx/hpx_main.hpp`` uses the ``main``
+* **Windows does not use** ``-Wl,-wrap=main``. The Windows linker has no
+  equivalent of ``--wrap``, so ``hpx/hpx_main.hpp`` uses the ``main``
   macro instead. Link ``HPX::wrap_main`` without a GNU wrap flag.
