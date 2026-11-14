@@ -44,7 +44,8 @@ namespace hpx::parallel::detail {
             using hpx::get;
             std::size_t curr = 0;
 
-            // Note: replacing invoke() with HPX_INVOKE() below makes gcc generate errors
+            // Note: replacing invoke() with HPX_INVOKE() below makes gcc
+            // generate errors
             util::const_loop_n<ExPolicy>(part_begin, part_size,
                 [&pred, &proj, &curr](ZipIter it) mutable -> void {
                     bool f = static_cast<bool>(

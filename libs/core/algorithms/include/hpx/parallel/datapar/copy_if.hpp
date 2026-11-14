@@ -29,14 +29,6 @@
 
 namespace hpx::parallel::detail {
 
-    template <typename Mask>
-    inline constexpr bool has_mask_lane_access_v =
-        requires(Mask const& m, std::size_t idx) {
-            { m.get(idx) } -> std::convertible_to<bool>;
-        } || requires(Mask const& m, std::size_t idx) {
-            { m[idx] } -> std::convertible_to<bool>;
-        };
-
     template <typename Pred, typename Proj, typename Vector>
     inline constexpr bool is_copy_if_invocable_v = false;
 
@@ -70,29 +62,6 @@ namespace hpx::parallel::detail {
     HPX_CXX_CORE_EXPORT template <typename ExPolicy>
     struct datapar_copy_if
     {
-        template <typename Mask>
-        static HPX_HOST_DEVICE HPX_FORCEINLINE bool mask_lane_is_true(
-            Mask const& msk, std::size_t i) noexcept
-        {
-            if constexpr (requires(
-                              Mask const& m, std::size_t idx) { m.get(idx); })
-            {
-                return static_cast<bool>(msk.get(i));
-            }
-            else if constexpr (requires(
-                                   Mask const& m, std::size_t idx) { m[idx]; })
-            {
-                return static_cast<bool>(msk[i]);
-            }
-            else
-            {
-                static_assert(sizeof(Mask) == 0,
-                    "mask_lane_is_true: unexpected mask type with no lane "
-                    "access");
-                return false;
-            }
-        }
-
         template <typename InIter1, typename InIter2, typename OutIter,
             typename Pred, typename Proj>
         static util::in_out_result<InIter1, OutIter> call(
@@ -128,13 +97,7 @@ namespace hpx::parallel::detail {
                 constexpr std::size_t num_lanes =
                     traits::vector_pack_size_v<vector_type>;
 
-                constexpr bool is_contiguous =
-                    std::contiguous_iterator<std::decay_t<InIter1>> ||
-                    hpx::traits::is_contiguous_iterator_v<
-                        std::decay_t<InIter1>>;
-
                 constexpr bool can_vectorize = (num_lanes > 1) &&
-                    is_contiguous &&
                     is_copy_if_datapar_compatible_v<Pred, Proj, vector_type>;
 
                 if constexpr (!can_vectorize)
@@ -229,12 +192,7 @@ namespace hpx::parallel::detail {
                 constexpr std::size_t num_lanes =
                     traits::vector_pack_size_v<vector_type>;
 
-                constexpr bool is_contiguous =
-                    std::contiguous_iterator<std::decay_t<Iter1>> ||
-                    hpx::traits::is_contiguous_iterator_v<std::decay_t<Iter1>>;
-
                 constexpr bool can_vectorize = (num_lanes > 1) &&
-                    is_contiguous &&
                     is_copy_if_datapar_compatible_v<Pred, Proj, vector_type>;
 
                 if constexpr (!can_vectorize)
@@ -279,13 +237,9 @@ namespace hpx::parallel::detail {
                         {
                             for (std::size_t i = 0; i != num_lanes; ++i)
                             {
-                                bool const f = mask_lane_is_true(msk, i);
-                                *flags_ptr++ = f;
-                                if (f)
-                                {
-                                    ++curr;
-                                }
+                                *flags_ptr++ = mask_lane_is_true(msk, i);
                             }
+                            curr += traits::count_bits(msk);
                         }
 
                         std::advance(first, num_lanes);

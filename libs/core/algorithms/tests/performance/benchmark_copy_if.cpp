@@ -72,33 +72,77 @@ double run_copy_if_benchmark_std(
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-void run_benchmark(std::size_t vector_size, int test_count)
+void run_benchmark(std::size_t vector_size, int test_count, int selectivity,
+    bool reverse_order)
 {
     std::cout << "* Preparing Benchmark..." << std::endl;
 
     std::vector<int> c(vector_size);
     std::vector<int> dest(vector_size, 0);
 
+    // Touch all pages of dest upfront to eliminate first-touch allocation overhead
+    std::fill(dest.begin(), dest.end(), 1);
+
     std::mt19937 gen(42);
-    std::uniform_int_distribution<> dis(-1000, 1000);
-    for (std::size_t i = 0; i != vector_size; ++i)
+    if (selectivity <= 0)
     {
-        c[i] = dis(gen);
+        std::fill(c.begin(), c.end(), -1);
     }
+    else if (selectivity >= 100)
+    {
+        std::fill(c.begin(), c.end(), 1);
+    }
+    else
+    {
+        std::bernoulli_distribution dis(
+            static_cast<double>(selectivity) / 100.0);
+        for (std::size_t i = 0; i != vector_size; ++i)
+        {
+            c[i] = dis(gen) ? 1 : -1;
+        }
+    }
+
+    std::cout << "* Warming up caches..." << std::endl;
+    run_copy_if_benchmark_std(1, c, dest);
+    run_copy_if_benchmark(1, hpx::execution::simd, c, dest);
 
     std::cout << "* Running Benchmark..." << std::endl;
 
-    double time_std = run_copy_if_benchmark_std(test_count, c, dest);
-    double time_seq =
-        run_copy_if_benchmark(test_count, hpx::execution::seq, c, dest);
-    double time_simd =
-        run_copy_if_benchmark(test_count, hpx::execution::simd, c, dest);
-    double time_par =
-        run_copy_if_benchmark(test_count, hpx::execution::par, c, dest);
-    double time_par_unseq =
-        run_copy_if_benchmark(test_count, hpx::execution::par_unseq, c, dest);
-    double time_par_simd =
-        run_copy_if_benchmark(test_count, hpx::execution::par_simd, c, dest);
+    double time_std = 0.0;
+    double time_seq = 0.0;
+    double time_simd = 0.0;
+    double time_par = 0.0;
+    double time_par_unseq = 0.0;
+    double time_par_simd = 0.0;
+
+    if (reverse_order)
+    {
+        time_par_simd = run_copy_if_benchmark(
+            test_count, hpx::execution::par_simd, c, dest);
+        time_par_unseq = run_copy_if_benchmark(
+            test_count, hpx::execution::par_unseq, c, dest);
+        time_par =
+            run_copy_if_benchmark(test_count, hpx::execution::par, c, dest);
+        time_simd =
+            run_copy_if_benchmark(test_count, hpx::execution::simd, c, dest);
+        time_seq =
+            run_copy_if_benchmark(test_count, hpx::execution::seq, c, dest);
+        time_std = run_copy_if_benchmark_std(test_count, c, dest);
+    }
+    else
+    {
+        time_std = run_copy_if_benchmark_std(test_count, c, dest);
+        time_seq =
+            run_copy_if_benchmark(test_count, hpx::execution::seq, c, dest);
+        time_simd =
+            run_copy_if_benchmark(test_count, hpx::execution::simd, c, dest);
+        time_par =
+            run_copy_if_benchmark(test_count, hpx::execution::par, c, dest);
+        time_par_unseq = run_copy_if_benchmark(
+            test_count, hpx::execution::par_unseq, c, dest);
+        time_par_simd = run_copy_if_benchmark(
+            test_count, hpx::execution::par_simd, c, dest);
+    }
 
     std::cout << "\n-------------- Benchmark Result --------------"
               << std::endl;
@@ -119,6 +163,8 @@ int hpx_main(hpx::program_options::variables_map& vm)
 {
     std::size_t vector_size = vm["vector_size"].as<std::size_t>();
     int test_count = vm["test_count"].as<int>();
+    int selectivity = vm["selectivity"].as<int>();
+    bool reverse_order = vm.count("reverse_order") != 0;
 
     if (test_count < 1 || vector_size < 1)
     {
@@ -132,11 +178,14 @@ int hpx_main(hpx::program_options::variables_map& vm)
     std::cout << "-------------- Benchmark Config --------------" << std::endl;
     std::cout << "vector_size  : " << vector_size << std::endl;
     std::cout << "test_count   : " << test_count << std::endl;
+    std::cout << "selectivity  : " << selectivity << "%" << std::endl;
+    std::cout << "reverse_order: " << (reverse_order ? "yes" : "no")
+              << std::endl;
     std::cout << "os_threads   : " << os_threads << std::endl;
     std::cout << "----------------------------------------------\n"
               << std::endl;
 
-    run_benchmark(vector_size, test_count);
+    run_benchmark(vector_size, test_count, selectivity, reverse_order);
 
     return hpx::local::finalize();
 }
@@ -151,7 +200,10 @@ int main(int argc, char* argv[])
         value<std::size_t>()->default_value(10000000),
         "size of vector (default: 10000000)")("test_count",
         value<int>()->default_value(10),
-        "number of runs to average (default: 10)");
+        "number of runs to average (default: 10)")("selectivity",
+        value<int>()->default_value(50),
+        "percentage of matching elements (0 to 100, default: 50)")(
+        "reverse_order", "run policies in reverse order");
 
     std::vector<std::string> const cfg = {"hpx.os_threads=all"};
 
