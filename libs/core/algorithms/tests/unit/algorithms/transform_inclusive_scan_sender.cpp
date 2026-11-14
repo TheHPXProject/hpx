@@ -7,6 +7,8 @@
 #include "sender_algorithm_test_utils.hpp"
 
 #include <cstddef>
+#include <functional>
+#include <numeric>
 #include <utility>
 #include <vector>
 
@@ -34,6 +36,25 @@ void test(Policy policy)
         auto result = sender_test::wait(std::move(sender));
         HPX_TEST(hpx::get<0>(*result) == output.end());
         HPX_TEST(output == expected);
+
+        if (n == 17)
+        {
+            std::fill(output.begin(), output.end(), -1);
+            auto piped = sender_test::ex::just(data.begin(), data.end(),
+                             output.begin(), std::plus<int>{}, twice{}, 17) |
+                hpx::transform_inclusive_scan(policy);
+            auto piped_result = sender_test::wait(std::move(piped));
+            HPX_TEST(hpx::get<0>(*piped_result) == output.end());
+            HPX_TEST(output == expected);
+
+            std::fill(output.begin(), output.end(), -1);
+            auto ranged = hpx::ranges::transform_inclusive_scan(
+                policy, data, output.begin(), std::plus<int>{}, twice{}, 17);
+            auto ranged_result = sender_test::wait(std::move(ranged));
+            HPX_TEST(hpx::get<0>(*ranged_result).in == data.end());
+            HPX_TEST(hpx::get<0>(*ranged_result).out == output.end());
+            HPX_TEST(output == expected);
+        }
 
         std::fill(output.begin(), output.end(), -1);
         std::transform_inclusive_scan(data.begin(), data.end(),
