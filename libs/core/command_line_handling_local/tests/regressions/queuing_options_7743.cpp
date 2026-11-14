@@ -35,8 +35,8 @@ namespace {
                     !std::string_view(argv[i + 1]).starts_with('-'))
                 {
                     ++i;
-                    continue;
                 }
+                continue;
             }
             else if (arg.starts_with("--hpx:queuing="))
             {
@@ -69,11 +69,10 @@ namespace {
         {
             char* argv[] = {program, queuing, threads};
             std::vector<char*> const result = remove_queuing_option(3, argv);
-            HPX_TEST_EQ(result.size(), std::size_t(4));
+            HPX_TEST_EQ(result.size(), std::size_t(3));
             HPX_TEST_EQ(result[0], program);
-            HPX_TEST_EQ(result[1], queuing);
-            HPX_TEST_EQ(result[2], threads);
-            HPX_TEST(result[3] == nullptr);
+            HPX_TEST_EQ(result[1], threads);
+            HPX_TEST(result[2] == nullptr);
         }
     }
 
