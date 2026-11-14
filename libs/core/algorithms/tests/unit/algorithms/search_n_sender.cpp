@@ -22,7 +22,9 @@ void test(Policy policy)
     for (std::size_t n : {0, 1, 17, 10007})
     {
         std::vector<int> data(n, 1);
-        std::fill(data.begin() + n / 3, data.begin() + 2 * n / 3, 7);
+        auto const first_offset = static_cast<std::ptrdiff_t>(n / 3);
+        auto const last_offset = static_cast<std::ptrdiff_t>(2 * n / 3);
+        std::fill(data.begin() + first_offset, data.begin() + last_offset, 7);
         for (std::size_t count :
             {std::size_t(0), std::size_t(1), std::size_t(3), n + 1})
         {
