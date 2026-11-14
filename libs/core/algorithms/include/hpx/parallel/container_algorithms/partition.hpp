@@ -1155,7 +1155,8 @@ namespace hpx::ranges {
                 "Requires at least bidirectional iterator.");
 
             using is_seq = std::integral_constant<bool,
-                !std::random_access_iterator<BidirIter>>;
+                hpx::is_sequenced_execution_policy_v<ExPolicy> ||
+                    !std::random_access_iterator<BidirIter>>;
 
             return hpx::parallel::util::make_subrange<BidirIter, BidirIter>(
                 hpx::parallel::detail::stable_partition<BidirIter>().call2(

@@ -6,6 +6,10 @@
 
 #include "sender_algorithm_test_utils.hpp"
 
+#include <algorithm>
+#include <cstddef>
+#include <vector>
+
 template <typename Policy>
 void test(Policy policy)
 {
@@ -23,6 +27,32 @@ void test(Policy policy)
         HPX_TEST(actual.first - yes.begin() ==
             expected.first - expected_yes.begin());
         HPX_TEST(actual.second - no.begin() ==
+            expected.second - expected_no.begin());
+        HPX_TEST(yes == expected_yes);
+        HPX_TEST(no == expected_no);
+
+        std::fill(yes.begin(), yes.end(), -1);
+        std::fill(no.begin(), no.end(), -1);
+        auto iterator_result = sender_test::wait(hpx::ranges::partition_copy(
+            policy, data.begin(), data.end(), yes.begin(), no.begin(), pred));
+        auto iterator_actual = hpx::get<0>(*iterator_result);
+        HPX_TEST(iterator_actual.in == data.end());
+        HPX_TEST(iterator_actual.out1 - yes.begin() ==
+            expected.first - expected_yes.begin());
+        HPX_TEST(iterator_actual.out2 - no.begin() ==
+            expected.second - expected_no.begin());
+        HPX_TEST(yes == expected_yes);
+        HPX_TEST(no == expected_no);
+
+        std::fill(yes.begin(), yes.end(), -1);
+        std::fill(no.begin(), no.end(), -1);
+        auto range_result = sender_test::wait(hpx::ranges::partition_copy(
+            policy, data, yes.begin(), no.begin(), pred));
+        auto range_actual = hpx::get<0>(*range_result);
+        HPX_TEST(range_actual.in == data.end());
+        HPX_TEST(range_actual.out1 - yes.begin() ==
+            expected.first - expected_yes.begin());
+        HPX_TEST(range_actual.out2 - no.begin() ==
             expected.second - expected_no.begin());
         HPX_TEST(yes == expected_yes);
         HPX_TEST(no == expected_no);

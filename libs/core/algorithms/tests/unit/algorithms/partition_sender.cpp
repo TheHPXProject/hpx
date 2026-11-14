@@ -6,6 +6,9 @@
 
 #include "sender_algorithm_test_utils.hpp"
 
+#include <cstddef>
+#include <utility>
+
 template <typename Policy>
 void test(Policy policy)
 {
@@ -26,6 +29,21 @@ void test(Policy policy)
         std::sort(data.begin(), data.end());
         std::sort(expected.begin(), expected.end());
         HPX_TEST(data == expected);
+
+        data = original;
+        auto range_result =
+            sender_test::wait(hpx::ranges::partition(policy, data, pred));
+        HPX_TEST(hpx::get<0>(*range_result).begin() - data.begin() ==
+            expected_end - expected.begin());
+        HPX_TEST(hpx::get<0>(*range_result).end() == data.end());
+        HPX_TEST(std::is_partitioned(data.begin(), data.end(), pred));
+
+        data = original;
+        auto iterator_result = sender_test::wait(
+            hpx::ranges::partition(policy, data.begin(), data.end(), pred));
+        HPX_TEST(hpx::get<0>(*iterator_result).begin() - data.begin() ==
+            expected_end - expected.begin());
+        HPX_TEST(hpx::get<0>(*iterator_result).end() == data.end());
     }
 }
 

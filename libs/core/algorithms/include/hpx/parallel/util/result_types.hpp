@@ -377,6 +377,17 @@ namespace hpx::parallel::util {
             });
     }
 
+    HPX_CXX_CORE_EXPORT template <typename Sender>
+        requires(hpx::execution::experimental::is_sender_v<Sender>)
+    decltype(auto) make_in_out_out_result(Sender&& sender)
+    {
+        return hpx::execution::experimental::then(
+            HPX_FORWARD(Sender, sender), [](auto&& result) {
+                return make_in_out_out_result(
+                    HPX_FORWARD(decltype(result), result));
+            });
+    }
+
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT template <typename I, typename F>
     struct in_fun_result
@@ -425,6 +436,18 @@ namespace hpx::parallel::util {
         return hpx::make_future<hpx::util::iterator_range<Iterator, Sentinel>>(
             HPX_MOVE(iterator), [sentinel](Iterator&& it) {
                 return hpx::util::iterator_range(it, sentinel);
+            });
+    }
+
+    HPX_CXX_CORE_EXPORT template <typename Iterator, typename Sentinel,
+        typename Sender>
+        requires(hpx::execution::experimental::is_sender_v<Sender>)
+    decltype(auto) make_subrange(Sender&& sender, Sentinel sentinel)
+    {
+        return hpx::execution::experimental::then(
+            HPX_FORWARD(Sender, sender), [sentinel](Iterator iterator) {
+                return hpx::util::iterator_range<Iterator, Sentinel>(
+                    HPX_MOVE(iterator), sentinel);
             });
     }
 
