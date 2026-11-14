@@ -1098,14 +1098,17 @@ namespace hpx::parallel::detail {
             buffer_iterator2 first2, buffer_iterator2 last2,
             output_iterator dest, CallArgs&&... args)
         {
-            if (first1 == last1)
+            if constexpr (Algo::copy_empty_chunks)
             {
-                return copy_chunk(policy, first2, last2, HPX_MOVE(dest));
-            }
+                if (first1 == last1)
+                {
+                    return copy_chunk(policy, first2, last2, HPX_MOVE(dest));
+                }
 
-            if (first2 == last2)
-            {
-                return copy_chunk(policy, first1, last1, HPX_MOVE(dest));
+                if (first2 == last2)
+                {
+                    return copy_chunk(policy, first1, last1, HPX_MOVE(dest));
+                }
             }
 
             return invoke_dispatcher(algo, HPX_MOVE(policy), first1, last1,
