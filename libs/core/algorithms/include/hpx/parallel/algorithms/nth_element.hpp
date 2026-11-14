@@ -464,13 +464,10 @@ namespace hpx {
             static_assert(std::random_access_iterator<RandomIt>,
                 "Requires at least random iterator.");
 
-            using result_type =
-                hpx::parallel::util::detail::algorithm_result_t<ExPolicy>;
-
-            return hpx::util::void_guard<result_type>(),
-                   hpx::parallel::detail::nth_element<RandomIt>().call(
-                       HPX_FORWARD(ExPolicy, policy), first, nth, last,
-                       HPX_MOVE(pred), hpx::identity_v);
+            return hpx::parallel::util::detail::algorithm_result<ExPolicy>::get(
+                hpx::parallel::detail::nth_element<RandomIt>().call(
+                    HPX_FORWARD(ExPolicy, policy), first, nth, last,
+                    HPX_MOVE(pred), hpx::identity_v));
         }
     } nth_element{};
 }    // namespace hpx
