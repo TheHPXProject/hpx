@@ -50,7 +50,7 @@ namespace sender_test {
     inline std::vector<int> values(std::size_t size)
     {
         std::vector<int> result(size);
-        int i = 0;
+        int i = 1;
         std::generate(
             result.begin(), result.end(), [&i] { return (i++ * 37) % 1009; });
         return result;
