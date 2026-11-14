@@ -1722,7 +1722,7 @@ hpx_option(
 hpx_option(
   HPX_WITH_THREAD_DEBUG_INFO
   BOOL
-  "Enable thread debugging information (default: OFF, implicitly enabled in debug builds)"
+  "Enable thread debugging information: thread descriptions, target address, parent reference, phase information and minimal deadlock detection (default: OFF). The APEX, ITTNotify and Tracy backends enable thread descriptions on their own."
   OFF
   CATEGORY "Debugging"
   ADVANCED

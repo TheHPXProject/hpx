@@ -45,6 +45,9 @@ endif()
 
 if(HPX_WITH_TRACY)
   hpx_add_config_define(HPX_HAVE_TRACY)
+  # Tracy names task zones and fibers after the thread description, so without
+  # it every task shows as <unknown>. ITT and APEX builds define it as well.
+  hpx_add_config_define(HPX_HAVE_THREAD_DESCRIPTION)
 endif()
 
 if(HPX_WITH_APEX
