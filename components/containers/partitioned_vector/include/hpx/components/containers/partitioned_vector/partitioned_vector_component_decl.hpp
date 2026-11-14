@@ -315,6 +315,18 @@ namespace hpx::server {
     };
 }    // namespace hpx::server
 
+#if !defined(HPX_PARTITIONED_VECTOR_MODULE_EXPORTS) &&                         \
+    !defined(HPX_HAVE_STATIC_LINKING)
+HPX_COMPONENT_REGISTERED_ELSEWHERE(
+    hpx::server::partitioned_vector<double, std::vector<double>>)
+HPX_COMPONENT_REGISTERED_ELSEWHERE(
+    hpx::server::partitioned_vector<int, std::vector<int>>)
+HPX_COMPONENT_REGISTERED_ELSEWHERE(
+    hpx::server::partitioned_vector<long long, std::vector<long long>>)
+HPX_COMPONENT_REGISTERED_ELSEWHERE(
+    hpx::server::partitioned_vector<std::string, std::vector<std::string>>)
+#endif
+
 ///////////////////////////////////////////////////////////////////////////////
 #if 0
 #define HPX_REGISTER_PARTITIONED_VECTOR_DECLARATION(...)

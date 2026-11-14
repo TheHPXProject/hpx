@@ -10,6 +10,8 @@
 #include <hpx/assert.hpp>
 #include <hpx/modules/preprocessor.hpp>
 
+#include <type_traits>
+
 ///////////////////////////////////////////////////////////////////////////////
 // from hpx/component_base/component_commandline.hpp
 #define HPX_DEFINE_COMPONENT_COMMANDLINE_OPTIONS(add_options_function)         \
@@ -262,4 +264,26 @@
             return heap.get();                                                 \
         }                                                                      \
     }                                                                          \
+    /**/
+
+///////////////////////////////////////////////////////////////////////////////
+// from hpx/components_base/traits/component_registered_elsewhere.hpp
+
+/// Mark a component type as registered by another module. This has to be
+/// visible before any registration of the component type, i.e. in the header
+/// declaring it, hidden from the sources of the module that registers it.
+#define HPX_COMPONENT_REGISTERED_ELSEWHERE(...)                                \
+    namespace hpx::traits {                                                    \
+        template <>                                                            \
+        struct component_registered_elsewhere<__VA_ARGS__> : std::true_type    \
+        {                                                                      \
+        };                                                                     \
+    }                                                                          \
+    /**/
+
+#define HPX_ASSERT_COMPONENT_NOT_REGISTERED_ELSEWHERE(Component)               \
+    static_assert(!hpx::traits::component_registered_elsewhere_v<Component>,   \
+        "this component type is already registered by the library that "       \
+        "declares it; a component type must be registered in exactly one "     \
+        "module, remove this registration and use the declaration only");      \
     /**/
