@@ -186,6 +186,7 @@ set(sender_tests
     foreachn_sender
     generate_sender
     generaten_sender
+    inplace_merge_sender
     is_heap_sender
     is_heap_until_sender
     includes_sender
@@ -193,15 +194,21 @@ set(sender_tests
     is_sorted_sender
     is_sorted_until_sender
     lexicographical_compare_sender
+    make_heap_sender
     max_element_sender
+    merge_sender
     min_element_sender
     minmax_element_sender
     mismatch_sender
     mismatch_binary_sender
     move_sender
     none_of_sender
+    nth_element_extended_sender
     nth_element_sender
+    partial_sort_copy_sender
+    partial_sort_extended_sender
     partial_sort_sender
+    reduce_by_key_sender
     reduce_sender
     remove_sender
     remove_if_sender
@@ -219,6 +226,9 @@ set(sender_tests
     set_intersection_sender
     shift_left_sender
     shift_right_sender
+    sort_by_key_sender
+    sort_sender
+    stable_sort_sender
     starts_with_sender
     swapranges_sender
     transform_sender
