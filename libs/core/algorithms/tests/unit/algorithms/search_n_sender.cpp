@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <limits>
 #include <memory>
+#include <utility>
 #include <vector>
 
 struct record
@@ -100,9 +101,10 @@ void test(Policy policy)
     auto projected_result = sender_test::wait(hpx::ranges::search_n(
         policy, records, 2, record{7}, hpx::ranges::equal_to{}, &record::key));
     HPX_TEST(hpx::get<0>(*projected_result) == records.begin() + 1);
+    auto moving_projection_sender = hpx::ranges::search_n(policy, records, 2,
+        record{0, true}, hpx::ranges::equal_to{}, moving_projection{});
     auto moving_projection_result =
-        sender_test::wait(hpx::ranges::search_n(policy, records, 2,
-            record{0, true}, hpx::ranges::equal_to{}, moving_projection{}));
+        sender_test::wait(std::move(moving_projection_sender));
     HPX_TEST(hpx::get<0>(*moving_projection_result) == records.begin() + 1);
 
     std::vector<record_with_unique_key> unique_key_records;
