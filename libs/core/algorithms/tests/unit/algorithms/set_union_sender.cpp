@@ -235,6 +235,35 @@ void set_union_sender_test()
         hpx::launch::async, par_unseq(task), IteratorTag());
 }
 
+void test_parallel_result_positions()
+{
+    std::vector<int> left(10007), right(10007);
+    int even = 0;
+    int odd = 1;
+    std::generate(left.begin(), left.end(), [&even] {
+        int value = even;
+        even += 2;
+        return value;
+    });
+    std::generate(right.begin(), right.end(), [&odd] {
+        int value = odd;
+        odd += 2;
+        return value;
+    });
+
+    std::vector<int> output(left.size() + right.size());
+    std::vector<int> expected(output.size());
+    auto expected_end = std::set_union(
+        left.begin(), left.end(), right.begin(), right.end(), expected.begin());
+    auto result = hpx::ranges::set_union(
+        hpx::execution::par, left, right, output.begin());
+
+    HPX_TEST(result.in1 == left.end());
+    HPX_TEST(result.in2 == right.end());
+    HPX_TEST(result.out - output.begin() == expected_end - expected.begin());
+    HPX_TEST(output == expected);
+}
+
 int hpx_main(hpx::program_options::variables_map& vm)
 {
     unsigned int seed = static_cast<unsigned int>(std::time(nullptr));
@@ -246,6 +275,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
 
     set_union_sender_test<std::forward_iterator_tag>();
     set_union_sender_test<std::random_access_iterator_tag>();
+    test_parallel_result_positions();
 
     return hpx::local::finalize();
 }

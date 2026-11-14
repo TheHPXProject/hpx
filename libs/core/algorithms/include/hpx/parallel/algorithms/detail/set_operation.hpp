@@ -114,10 +114,7 @@ namespace hpx::parallel::detail {
                 policy.parameters(), policy.executor(),
                 hpx::chrono::null_duration, (std::min) (len1, len2));
 
-        // an entirely empty first range still needs exactly one chunk to
-        // route the degenerate case through below -- without this, a hint
-        // of 0 (from (std::min)(len1, len2) == 0) can make the partitioner
-        // allocate zero chunks and the special case below would never run
+        // An empty first range uses one synthetic chunk for the second range.
         cores = (std::max) (cores, static_cast<std::size_t>(1));
 
         std::size_t const step = len1 == 0 ? 0 : (len1 + cores - 1) / cores;
@@ -128,13 +125,8 @@ namespace hpx::parallel::detail {
 
         // first step, is applied to each chunk of sequence 1
         auto handle_chunk = [=](set_chunk_data* curr_chunk) mutable -> void {
-            // An entirely empty first range cannot be chunked by
-            // partitioning first1 (step collapses to 0 above). Route the
-            // single synthetic chunk against the full second range instead
-            // of bailing out, so algorithms whose degenerate-case
-            // semantics differ from "empty" (e.g. set_symmetric_difference,
-            // set_union) still produce correct output through this shared
-            // partitioned code path.
+            // The synthetic chunk applies the set operation to the full
+            // second range when the first range is empty.
             if (len1 == 0)
             {
                 if (curr_chunk != chunks.get())
