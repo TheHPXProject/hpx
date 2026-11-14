@@ -173,7 +173,8 @@ void test_set_union_sender_empty(
             hpx::set_union(ex_policy.on(exec)));
 
         auto const result_last = hpx::get<0>(result.value());
-        HPX_TEST(result_last == std::begin(c3) + c2.size());
+        HPX_TEST(result_last ==
+            std::begin(c3) + static_cast<std::ptrdiff_t>(c2.size()));
         HPX_TEST(std::equal(std::begin(c3), result_last, std::begin(c2)));
     }
 
@@ -190,7 +191,8 @@ void test_set_union_sender_empty(
             hpx::set_union(ex_policy.on(exec)));
 
         auto const result_last = hpx::get<0>(result.value());
-        HPX_TEST(result_last == std::begin(c3) + c1.size());
+        HPX_TEST(result_last ==
+            std::begin(c3) + static_cast<std::ptrdiff_t>(c1.size()));
         HPX_TEST(std::equal(std::begin(c3), result_last, std::begin(c1)));
     }
 
