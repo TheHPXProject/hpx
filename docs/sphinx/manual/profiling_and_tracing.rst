@@ -70,16 +70,15 @@ fiber, so you can follow a task across worker threads.
 Building |hpx| with Tracy
 -------------------------
 
-Configure |hpx| with :option:`HPX_WITH_TRACY`\ ``=ON``. To get readable task
-names, also set ``HPX_WITH_THREAD_DEBUG_INFO=ON`` (see
+Configure |hpx| with :option:`HPX_WITH_TRACY`\ ``=ON``. A Tracy build always
+stores thread descriptions, so task names need no further CMake options (see
 :ref:`tracy_task_names`):
 
 .. code-block:: shell-session
 
    $ cmake -S hpx -B build -G Ninja \
        -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-       -DHPX_WITH_TRACY=ON \
-       -DHPX_WITH_THREAD_DEBUG_INFO=ON
+       -DHPX_WITH_TRACY=ON
    $ cmake --build build
 
 You do not need to install Tracy first. At configure time, CMake downloads the
@@ -141,11 +140,12 @@ need to install first. The release page also has prebuilt profiler binaries.
 Naming your tasks
 -----------------
 
-Tracy labels each task with its |hpx| thread description. |hpx| stores these
-descriptions only when it is built with ``HPX_WITH_THREAD_DEBUG_INFO=ON``.
-Without this option every task is called ``<unknown>``. The option also turns
-on other per-task debug data (target address, parent reference, thread phase),
-which adds work to every task.
+Tracy labels each task with its |hpx| thread description. A Tracy build always
+stores these descriptions, as ITT and APEX builds do, so you do not need
+``HPX_WITH_THREAD_DEBUG_INFO`` for task names. That option adds other per-task
+debug data (target address, parent reference, thread phase) and is needed only
+for those, for example to see the thread phase as the zone value. Storing the
+descriptions adds some work to every task, also when no profiler is connected.
 
 When descriptions are stored, a task gets its name from:
 
@@ -534,9 +534,9 @@ installation of the ITT API works. |vtune| also ships the ITT API. To use that
 copy, set ``Amplifier_ROOT`` to the folder of the |vtune| installation that
 contains ``include/ittnotify.h``.
 
-The ITT backend always stores thread descriptions, so you do not need
-``HPX_WITH_THREAD_DEBUG_INFO`` to get task names. Name your tasks as described
-in :ref:`tracy_task_names`.
+Like the Tracy backend, the ITT backend always stores thread descriptions, so
+you do not need ``HPX_WITH_THREAD_DEBUG_INFO`` to get task names. Name your
+tasks as described in :ref:`tracy_task_names`.
 
 Enabling the events at runtime
 ------------------------------
