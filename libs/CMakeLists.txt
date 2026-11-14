@@ -354,6 +354,9 @@ foreach(lib ${HPX_LIBS})
   # creation can move here as well.
   if(HPX_WITH_CXX_MODULES)
     add_library(hpx_${lib}_module STATIC)
+    if(HPX_WITH_CXX_MODULE_STD)
+      set_target_properties(hpx_${lib}_module PROPERTIES CXX_MODULE_STD ON)
+    endif()
     set_target_properties(
       hpx_${lib}_module PROPERTIES POSITION_INDEPENDENT_CODE ON
     )
@@ -492,6 +495,13 @@ if(HPX_WITH_CXX_MODULES)
     INPUT "${HPX_SOURCE_DIR}/cmake/templates/std_headers.hpp.in"
     OUTPUT
       "${PROJECT_BINARY_DIR}/libs/core/config/include/hpx/config/std_headers.hpp"
+    CONFIGURE_ARGS @ONLY
+  )
+
+  hpx_configure_if_changed(
+    INPUT "${HPX_SOURCE_DIR}/cmake/templates/third_party_headers.hpp.in"
+    OUTPUT
+      "${PROJECT_BINARY_DIR}/libs/core/config/include/hpx/config/third_party_headers.hpp"
     CONFIGURE_ARGS @ONLY
   )
 endif()

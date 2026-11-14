@@ -17,3 +17,7 @@
     !defined(HPX_HAVE_MORE_THAN_64_THREADS)
 #define HPX_HAVE_MORE_THAN_64_THREADS
 #endif
+
+#if !defined(HPX_COMPILE_BMI) || !defined(HPX_HAVE_CXX_MODULE_STD)
+#define HPX_HAVE_TEXTUAL_STD_INCLUDES
+#endif

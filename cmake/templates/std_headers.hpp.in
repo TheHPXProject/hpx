@@ -9,32 +9,13 @@
 
 #pragma once
 
-#include <hpx/config/defines.hpp>
-#include <hpx/config/compiler_specific.hpp>
-#include <hpx/config/modules_enabled.hpp>
+#include <hpx/config/third_party_headers.hpp>
 
+// Standard library headers
 @cxx_standard_headers@
 #if defined(HPX_HAVE_CXX17_STD_EXECUTION_POLICES)
 # include <execution>
 #endif
-
-# if defined(HPX_GCC_VERSION)
-#  pragma GCC diagnostic push
-#  pragma GCC diagnostic ignored "-Wall"
-#  pragma GCC diagnostic ignored "-Wextra"
-#  pragma GCC diagnostic ignored "-Wmissing-braces"
-# elif defined(HPX_CLANG_VERSION)
-#  pragma clang diagnostic push
-#  pragma clang diagnostic ignored "-Weverything"
-# endif
-
-# include <stdexec/execution.hpp>
-
-# if defined(HPX_GCC_VERSION)
-#  pragma GCC diagnostic pop
-# elif defined(HPX_CLANG_VERSION)
-#  pragma clang diagnostic pop
-# endif
 
 #if defined(HPX_HAVE_CXX20_COROUTINES)
 # if defined(__has_include)
@@ -51,83 +32,4 @@
 
 #if defined(HPX_HAVE_CXX23_STD_GENERATOR)
 # include <generator>
-#endif
-
-#if defined(HPX_GCC_VERSION)
-# include <cxxabi.h>
-#endif
-
-#if defined(HPX_WINDOWS)
-# include <excpt.h>
-# undef exception_info
-#endif
-
-# include <hwloc.h>
-
-#if defined(HPX_HAVE_MODULE_LIKWID)
-# include <likwid.h>
-#endif
-
-// Include MPI headers if required
-#if (defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_PARCELPORT_MPI)) ||      \
-    defined(HPX_HAVE_MODULE_MPI_BASE)
-
-# if defined(HPX_CLANG_VERSION)
-#  pragma clang diagnostic push
-#  pragma clang diagnostic ignored "-Wcast-qual"
-# elif defined(HPX_GCC_VERSION)
-#  pragma GCC diagnostic push
-#  pragma GCC diagnostic ignored "-Wcast-qual"
-# endif
-
-# include <mpi.h>
-
-# if defined(HPX_GCC_VERSION)
-#  pragma GCC diagnostic pop
-# elif defined(HPX_CLANG_VERSION)
-#  pragma clang diagnostic pop
-# endif
-
-#endif
-
-// Include LCI headers if required
-#if (defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_PARCELPORT_LCI)) ||      \
-    defined(HPX_HAVE_MODULE_LCI_BASE)
-# include "lci.hpp"
-# include "lct.h"
-#endif
-
-#if defined(HPX_HAVE_MODULE_ASYNC_CUDA)
-# if defined(HPX_HAVE_CUDA) && defined(HPX_HAVE_GPUBLAS)
-#  include <cublas_v2.h>
-# elif defined(HPX_HAVE_HIP) && defined(HPX_HAVE_GPUBLAS)
-#  include <hipblas.h>
-# endif
-#endif
-
-#if defined(HPX_HAVE_MODULE_THRUST)
-# include <hpx/thrust/thrust_headers.hpp>
-#endif
-
-#if defined(HPX_HAVE_MM_PREFETCH)
-# if defined(HPX_MSVC)
-#  include <intrin.h>
-# endif
-# if defined(HPX_GCC_VERSION)
-#  include <emmintrin.h>
-# endif
-#endif
-
-#if defined(HPX_HAVE_DATAPAR)
-# if defined(HPX_HAVE_DATAPAR_EVE)
-#  include <eve/eve.hpp>
-#  include <eve/memory/aligned_ptr.hpp>
-# endif
-# if defined(HPX_HAVE_DATAPAR_STD_EXPERIMENTAL_SIMD)
-#  include <experimental/simd>
-# endif
-# if defined(HPX_HAVE_DATAPAR_VC)
-#  include <Vc/Vc>
-#  include <Vc/global.h>
-# endif
 #endif

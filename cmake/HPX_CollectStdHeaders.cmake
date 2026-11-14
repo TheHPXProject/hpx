@@ -6,107 +6,25 @@
 
 include(HPX_Message)
 
-# List of known standard library headers
-set(STANDARD_LIBRARY_HEADERS
-    "<algorithm>"
-    "<any>"
-    "<array>"
-    "<atomic>"
-    "<barrier>"
-    "<bitset>"
-    "<charconv>"
-    "<chrono>"
-    "<codecvt>"
-    "<compare>"
-    "<complex>"
-    "<concepts>"
-    "<condition_variable>"
-    "<deque>"
-    "<exception>"
-    "<filesystem>"
-    "<format>"
-    "<forward_list>"
-    "<fstream>"
-    "<functional>"
-    "<future>"
-    "<initializer_list>"
-    "<iomanip>"
-    "<ios>"
-    "<iosfwd>"
-    "<iostream>"
-    "<istream>"
-    "<iterator>"
-    "<latch>"
-    "<limits>"
-    "<list>"
-    "<locale>"
-    "<map>"
-    "<memory>"
-    "<memory_resource>"
-    "<mutex>"
-    "<new>"
-    "<numbers>"
-    "<numeric>"
-    "<optional>"
-    "<ostream>"
-    "<queue>"
-    "<random>"
-    "<ranges>"
-    "<ratio>"
-    "<regex>"
-    "<scoped_allocator>"
-    "<semaphore>"
-    "<set>"
-    "<shared_mutex>"
-    "<sstream>"
-    "<stack>"
-    "<stdexcept>"
-    "<stop_token>"
-    "<streambuf>"
-    "<string>"
-    "<string_view>"
-    "<strstream>"
-    "<syncstream>"
-    "<system_error>"
-    "<sstream>"
-    "<thread>"
-    "<tuple>"
-    "<type_traits>"
-    "<typeindex>"
-    "<typeinfo>"
-    "<unordered_map>"
-    "<unordered_set>"
-    "<utility>"
-    "<valarray>"
-    "<variant>"
-    "<vector>"
-    "<version>"
-    "<cassert>"
-    "<cctype>"
-    "<cerrno>"
-    "<cfenv>"
-    "<cfloat>"
-    "<cinttypes>"
-    "<climits>"
-    "<clocale>"
-    "<cmath>"
-    "<csetjmp>"
-    "<csignal>"
-    "<cstdarg>"
-    "<cstddef>"
-    "<cstdint>"
-    "<cstdio>"
-    "<cstdlib>"
-    "<cstring>"
-    "<ctime>"
-    "<cuchar>"
-    "<cwchar>"
-    "<cwctype>"
-)
-
-if(HPX_WITH_CXX26_REFLECTION)
-  list(APPEND STANDARD_LIBRARY_HEADERS "<meta>")
-endif()
+# List of known standard library headers (read from central definition in
+# standard_headers.inc)
+file(STRINGS "${CMAKE_CURRENT_LIST_DIR}/standard_headers.inc" _std_lines)
+set(STANDARD_LIBRARY_HEADERS)
+foreach(_line ${_std_lines})
+  if(NOT _line MATCHES "^//")
+    string(REGEX MATCHALL "\"([a-zA-Z0-9_]+)\"" _matches "${_line}")
+    foreach(_m ${_matches})
+      string(REGEX REPLACE "\"" "" _hdr_clean "${_m}")
+      if(_hdr_clean STREQUAL "meta")
+        if(HPX_WITH_CXX26_REFLECTION)
+          list(APPEND STANDARD_LIBRARY_HEADERS "<meta>")
+        endif()
+      else()
+        list(APPEND STANDARD_LIBRARY_HEADERS "<${_hdr_clean}>")
+      endif()
+    endforeach()
+  endif()
+endforeach()
 
 # Function to extract #includes from a file recursively
 function(hpx_extract_includes_from_file module)

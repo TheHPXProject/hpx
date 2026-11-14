@@ -63,6 +63,24 @@ macro(hpx_check_cxx_modules_support)
       )
       set(HPX_MODULE_INTERFACE_EXTENSION ".cppm")
     endif()
+
+    if(HPX_WITH_CXX_MODULE_STD)
+      if(CMAKE_VERSION VERSION_LESS "4.5")
+        hpx_error(
+          "CMake 4.5+ is required for 'import std;' support (HPX_WITH_CXX_MODULE_STD). Current version: ${CMAKE_VERSION}"
+        )
+      endif()
+      if(HPX_CXX_STANDARD LESS 23)
+        hpx_error(
+          "HPX_WITH_CXX_MODULE_STD requires C++23 or newer. Current standard: C++${HPX_CXX_STANDARD}"
+        )
+      endif()
+      if(NOT HPX_WITH_CXX_MODULE_STD_UNRESTRICTED)
+        hpx_error(
+          "HPX_WITH_CXX_MODULE_STD cannot be enabled yet because not all HPX modules have been converted to support 'import std;'."
+        )
+      endif()
+    endif()
   endif()
 endmacro()
 
