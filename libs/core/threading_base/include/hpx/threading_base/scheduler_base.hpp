@@ -14,6 +14,7 @@
 #include <hpx/modules/functional.hpp>
 #include <hpx/threading_base/scheduler_mode.hpp>
 #include <hpx/threading_base/scheduler_state.hpp>
+#include <hpx/threading_base/scheduling_policy.hpp>
 #include <hpx/threading_base/thread_data.hpp>
 #include <hpx/threading_base/thread_init_data.hpp>
 #include <hpx/threading_base/thread_pool_base.hpp>
@@ -125,7 +126,40 @@ namespace hpx::threads::policies {
             return description_;
         }
 
+        /// The idle callback of the workers of most schedulers. It uses
+        /// idle_step_for and free_pass_after_wake.
         bool idle_callback(std::size_t num_thread);
+
+        /// The idle callback of a scheduler that has scheduling rules of its
+        /// own (see local_priority_queue_scheduler): if Rules::tunes_idle,
+        /// rules 6 to 8 come from rules, otherwise from idle_step_for and
+        /// free_pass_after_wake, as in idle_callback. Defined in
+        /// detail/idle_callback.hpp, instantiated for fixed_scheduling_rules
+        /// in scheduler_base.cpp and for tuned_scheduling_rules in
+        /// scheduler_base_tuned.cpp.
+        template <typename Rules>
+        bool idle_callback_with_rules(
+            std::size_t num_thread, Rules const& rules);
+
+#if defined(HPX_HAVE_THREAD_MANAGER_IDLE_BACKOFF)
+        /// What the given worker does for its next idle backoff period after
+        /// count periods without work (rules 6 and 7 of scheduling_policy,
+        /// called by idle_callback): the period doubles with every one, up to
+        /// hpx.max_idle_backoff_time, and periods shorter than
+        /// hpx.min_idle_backoff_time are spent spinning. This uses the
+        /// configured values; a scheduler with tunable rules takes them from
+        /// its rules instead (see idle_callback_with_rules).
+        [[nodiscard]] idle_step idle_step_for(
+            std::size_t num_thread, std::uint32_t count) const;
+
+        /// Whether a worker woken up by a notification may steal once
+        /// without the early minima of the scheduler (rule 8 of
+        /// scheduling_policy, called by idle_callback, as idle_step_for).
+        [[nodiscard]] constexpr bool free_pass_after_wake() const noexcept
+        {
+            return true;
+        }
+#endif
 
         /// Called by a worker thread that found work: clear its idle backoff
         /// count (if set), so that do_some_work does not keep notifying it
@@ -151,13 +185,12 @@ namespace hpx::threads::policies {
         /// Whether this scheduler wakes up workers for new threads of the
         /// given size itself (in create_thread). Then create_thread and
         /// create_work don't call do_some_work for them.
-        [[nodiscard]] bool wakes_up_for(
+        [[nodiscard]] constexpr bool wakes_up_for(
             [[maybe_unused]] threads::task_size size) const noexcept
         {
 #if defined(HPX_HAVE_THREAD_MANAGER_IDLE_BACKOFF)
-            return wakes_up_for_small_ &&
-                (size == threads::task_size::nano ||
-                    size == threads::task_size::small_);
+            return size != threads::task_size::unknown &&
+                size <= wake_one_max_size_;
 #else
             return false;
 #endif
@@ -415,9 +448,10 @@ namespace hpx::threads::policies {
         std::vector<util::aligned_line_data<idle_backoff_data>>
             wait_count_data_;
 
-        // set by schedulers that wake up workers for nano and small threads
-        // themselves, see wakes_up_for
-        bool wakes_up_for_small_ = false;
+        // set by schedulers that wake up workers for new threads up to this
+        // size themselves (rule 1 of scheduling_policy), see wakes_up_for;
+        // unknown for the others
+        threads::task_size wake_one_max_size_ = threads::task_size::unknown;
 
         // one bit per worker that announced it is going to sleep
         std::vector<util::aligned_line_data<std::atomic<std::uint64_t>>>
@@ -530,6 +564,14 @@ namespace hpx::threads::policies {
         void apply_to_matching_modes(
             hpx::threads::mask_cref_type pu_mask, F&& f) noexcept;
     };
+
+    // see scheduler_base.cpp and scheduler_base_tuned.cpp
+    extern template HPX_CORE_EXPORT bool
+    scheduler_base::idle_callback_with_rules<fixed_scheduling_rules>(
+        std::size_t, fixed_scheduling_rules const&);
+    extern template HPX_CORE_EXPORT bool
+    scheduler_base::idle_callback_with_rules<tuned_scheduling_rules>(
+        std::size_t, tuned_scheduling_rules const&);
 
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT std::ostream& operator<<(
         std::ostream& os, scheduler_base const& scheduler);

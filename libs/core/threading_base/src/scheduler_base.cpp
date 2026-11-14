@@ -8,6 +8,7 @@
 #include <hpx/assert.hpp>
 #include <hpx/modules/execution_base.hpp>
 
+#include <hpx/threading_base/detail/idle_callback.hpp>
 #include <hpx/threading_base/scheduler_base.hpp>
 #include <hpx/threading_base/scheduler_mode.hpp>
 #include <hpx/threading_base/scheduler_state.hpp>
@@ -41,16 +42,6 @@ namespace hpx::threads::policies {
 #if defined(HPX_HAVE_THREAD_MANAGER_IDLE_BACKOFF)
     namespace {
 
-        // one round of the spin of idle_callback, without its look at the
-        // queues
-        void spin_round() noexcept
-        {
-            for (int i = 0; i != 16; ++i)
-            {
-                HPX_SMT_PAUSE;
-            }
-        }
-
         // The number of spin rounds per microsecond, measured once per
         // process (the best of three runs of 1000 rounds, each with a load of
         // an atomic for the look at a queue). A pause takes very different
@@ -67,7 +58,7 @@ namespace hpx::threads::policies {
                     auto const start = std::chrono::steady_clock::now();
                     for (int i = 0; i != rounds; ++i)
                     {
-                        spin_round();
+                        detail::spin_round();
                         if (queue_length.load(std::memory_order_relaxed) != 0)
                         {
                             break;
@@ -235,121 +226,55 @@ namespace hpx::threads::policies {
     }
 #endif
 
-    bool scheduler_base::idle_callback([[maybe_unused]] std::size_t num_thread)
-    {
 #if defined(HPX_HAVE_THREAD_MANAGER_IDLE_BACKOFF)
-        if (modes_[num_thread].data_.load(std::memory_order_relaxed) &
-            policies::scheduler_mode::enable_idle_backoff)
+    // Short periods are spent spinning: a timed wait lasts at least the time
+    // the OS takes to wake the thread up (a millisecond or more on Windows,
+    // the timer slack of 50 us on Linux), so a short sleep would be a long
+    // one. A spinning worker looks at its own queues every round, but at the
+    // queues it steals from only every hpx.idle_backoff_steal_check_interval
+    // microseconds, since that reads the length of the queue of every victim.
+    // It counts rounds instead of reading the clock: the period and the check
+    // interval are converted to rounds with the rate measured at startup,
+    // because a round lasts from a few nanoseconds (yield on AArch64) to most
+    // of a microsecond (pause on recent Intel cores). Inlined into the
+    // instance of idle_callback_with_rules below, which calls it under the
+    // lock of the worker.
+    HPX_FORCEINLINE idle_step scheduler_base::idle_step_for(
+        std::size_t, std::uint32_t const count) const
+    {
+        // exponential back-off with a maximum sleep time
+        constexpr double max_exponent =
+            std::numeric_limits<double>::max_exponent - 1;
+        double const exponent =
+            (std::min) (static_cast<double>(count), max_exponent);
+
+        idle_step step{};
+        step.period = std::chrono::microseconds(std::lround(
+            (std::min) (max_idle_backoff_time_, std::pow(2.0, exponent))));
+
+        if (static_cast<double>(step.period.count()) >= min_idle_backoff_time_)
         {
-            HPX_TRACING_MARK_EVENT("idle_callback");
-            // Put this thread to sleep for some time, additionally it gets
-            // woken up on new work.
-
-            auto& data = wait_count_data_[num_thread].data_;
-
-            // going to sleep again ends a free pass
-            data.free_pass = false;
-
-            std::unique_lock<pu_mutex_type> l(data.wait_mtx, std::try_to_lock);
-            if (!l)
-            {
-                return false;
-            }
-
-            // Exponential back-off with a maximum sleep time.
-            constexpr double max_exponent =
-                std::numeric_limits<double>::max_exponent - 1;
-            std::uint32_t const count =
-                data.wait_count.fetch_add(1, std::memory_order_relaxed);
-            double const exponent =
-                (std::min) (static_cast<double>(count), max_exponent);
-
-            std::chrono::microseconds const period(std::lround(
-                (std::min) (max_idle_backoff_time_, std::pow(2.0, exponent))));
-
-            // Short periods are spent spinning: a timed wait lasts at least
-            // the time the OS takes to wake the thread up (a millisecond or
-            // more on Windows, the timer slack of 50 us on Linux), so a short
-            // sleep would be a long one. A spinning worker is awake: it is
-            // not announced in sleep_mask_, and it leaves as soon as it sees
-            // work. do_some_work may still reset its count and notify it,
-            // which is harmless. It looks at its own queues every round, but
-            // at the queues it steals from only every
-            // hpx.idle_backoff_steal_check_interval microseconds, since that
-            // reads the length of the queue of every victim. It counts rounds
-            // instead of reading the clock: the period and the check interval
-            // are converted to rounds with the rate measured at startup,
-            // because a round lasts from a few nanoseconds (yield on AArch64)
-            // to most of a microsecond (pause on recent Intel cores).
-            if (static_cast<double>(period.count()) < min_idle_backoff_time_)
-            {
-                l.unlock();
-                spinning_workers_.data_.fetch_add(1, std::memory_order_relaxed);
-                auto const rounds = (std::max) (std::uint64_t(1),
-                    static_cast<std::uint64_t>(
-                        std::llround(static_cast<double>(period.count()) *
-                            spin_rounds_per_us_)));
-                for (std::uint64_t round = 1; round <= rounds; ++round)
-                {
-                    spin_round();
-                    if (get_queue_length(num_thread) != 0 ||
-                        (round % idle_backoff_steal_check_rounds_ == 0 &&
-                            has_visible_work(num_thread)))
-                    {
-                        break;
-                    }
-                }
-
-                // No fence after leaving the spin. A seq_cst fence here,
-                // paired with one in has_spinning_worker, would make sure
-                // that either a worker that queues small work for itself sees
-                // this one leave (and wakes up a sleeper) or this one sees the
-                // work when it looks for work next. The fence on the other
-                // side would run for each such thread, so both are gone (see
-                // wake_one). Without them, the worker that queued the thread
-                // may still count this one as spinning while this one misses
-                // the thread. The thread is not lost: its caller runs it once
-                // it gets to it, and this worker finds it in its next look
-                // for work or after its next backoff period (at most
-                // max_idle_backoff_time).
-                spinning_workers_.data_.fetch_sub(1, std::memory_order_relaxed);
-                return true;
-            }
-
-            // Announce, then check for work once more. There is no fence
-            // between the two: it would only help together with a fence in
-            // wake_one and wake_if_sleeping, on the path of every new nano and
-            // small thread (see wake_one for why that one is gone). Without
-            // them, the announcement may become visible only after the check
-            // has read the queues, so a thread queued at the same time can be
-            // missed by both sides: the worker that queued it does not see
-            // this worker in the sleep mask, and this worker does not see the
-            // thread. This worker then sleeps for the period it has computed
-            // (at most max_idle_backoff_time) and finds the thread when it
-            // wakes up, unless another worker has run it by then. The check
-            // still finds work that was queued before this worker got here,
-            // so the window is only as long as the announcement takes to
-            // become visible. do_some_work accepts the same race.
-            std::uint64_t const bit = std::uint64_t(1) << (num_thread % 64);
-            auto& word = sleep_mask_[num_thread / 64].data_;
-            word.fetch_or(bit, std::memory_order_relaxed);
-
-            if (!has_visible_work(num_thread) &&
-                data.wait_cond.wait_for(l, period) ==    //-V1089
-                    std::cv_status::no_timeout)
-            {
-                // reset counter if thread was woken up
-                data.wait_count.store(0, std::memory_order_relaxed);
-                data.free_pass = true;
-            }
-
-            // withdraw the announcement if nobody claimed it
-            word.fetch_and(~bit, std::memory_order_relaxed);
-            return true;
+            return step;    // sleep
         }
-#endif
-        return false;
+
+        step.pauses_per_round = scheduling_policy::calibration_pauses_per_round;
+        step.spin_rounds = (std::max) (std::uint64_t(1),
+            static_cast<std::uint64_t>(
+                std::llround(static_cast<double>(step.period.count()) *
+                    spin_rounds_per_us_)));
+        step.steal_check_rounds = idle_backoff_steal_check_rounds_;
+        return step;
     }
+#endif
+
+    bool scheduler_base::idle_callback(std::size_t num_thread)
+    {
+        return idle_callback_with_rules(num_thread, fixed_scheduling_rules(0));
+    }
+
+    template HPX_CORE_EXPORT bool
+    scheduler_base::idle_callback_with_rules<fixed_scheduling_rules>(
+        std::size_t, fixed_scheduling_rules const&);
 
     /// This function gets called by the thread-manager whenever new work
     /// has been added, allowing the scheduler to reactivate one or more of

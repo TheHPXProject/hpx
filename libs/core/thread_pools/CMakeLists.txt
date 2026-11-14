@@ -24,8 +24,9 @@ set(thread_pools_compat_headers
 )
 # cmake-format: on
 
-set(thread_pools_sources detail/background_thread.cpp detail/scheduling_log.cpp
-                         scheduled_thread_pool.cpp
+set(thread_pools_sources
+    detail/background_thread.cpp detail/scheduling_log.cpp
+    scheduled_thread_pool.cpp scheduled_thread_pool_tuned.cpp
 )
 
 include(HPX_AddModule)

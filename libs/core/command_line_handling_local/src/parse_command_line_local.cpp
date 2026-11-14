@@ -576,7 +576,7 @@ namespace hpx::local::detail {
             ("hpx:queuing", value<argument_string>(),
                 "the queue scheduling policy to use, options are "
                 "'local', 'local-priority-fifo', 'local-priority-fifo-double', "
-                "'local-priority-lifo', "
+                "'local-priority-lifo', 'local-priority-tuned-fifo', "
                 "'abp-priority-fifo', 'abp-priority-lifo', 'static', "
                 "'static-priority', 'local-workrequesting-fifo', "
                 "'local-workrequesting-lifo', and 'local-workrequesting-mc' "
@@ -588,6 +588,7 @@ namespace hpx::local::detail {
                 "--hpx:queuing=local-priority-fifo, "
                 "--hpx:queuing=local-priority-fifo-double, "
                 "--hpx:queuing=local-priority-lifo, "
+                "--hpx:queuing=local-priority-tuned-fifo, "
                 "--hpx:queuing=static-priority, "
                 "--hpx:queuing=local-workrequesting-fifo, "
                 "--hpx:queuing=local-workrequesting-lifo, "

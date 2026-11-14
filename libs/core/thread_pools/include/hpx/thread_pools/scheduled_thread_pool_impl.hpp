@@ -549,8 +549,7 @@ namespace hpx::threads::detail {
 
                 detail::scheduling_callbacks callbacks(
                     util::deferred_call(    //-V107
-                        &policies::scheduler_base::idle_callback, sched_.get(),
-                        thread_num),
+                        &Scheduler::idle_callback, sched_.get(), thread_num),
                     nullptr, nullptr, max_background_threads_,
                     max_idle_loop_count_, max_busy_loop_count_);
 

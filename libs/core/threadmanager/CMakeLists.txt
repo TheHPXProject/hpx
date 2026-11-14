@@ -17,7 +17,7 @@ set(threadmanager_compat_headers
 )
 # cmake-format: on
 
-set(threadmanager_sources threadmanager.cpp)
+set(threadmanager_sources threadmanager.cpp threadmanager_tuned.cpp)
 
 include(HPX_AddModule)
 add_hpx_module(
