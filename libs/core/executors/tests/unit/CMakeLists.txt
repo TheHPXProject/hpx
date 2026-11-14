@@ -40,6 +40,10 @@ if(HPX_WITH_CXX17_STD_EXECUTION_POLICES)
   set(tests ${tests} std_execution_policies)
 endif()
 
+if(HPX_WITH_CXX20_COROUTINES)
+  set(tests ${tests} coroutine_task)
+endif()
+
 if(HPX_LIKWID_WITH_LIKWID)
   set(tests ${tests} likwid_executor)
 endif()
