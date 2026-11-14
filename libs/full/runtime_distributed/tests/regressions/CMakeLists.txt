@@ -10,6 +10,13 @@ set(tests multiple_init multiple_init_2918 shutdown_hang_6699
 
 set(unhandled_exception_582_PARAMETERS THREADS_PER_LOCALITY 1)
 
+if(HPX_WITH_NETWORKING)
+  set(tests ${tests} startup_exception_8070)
+  set(startup_exception_8070_PARAMETERS LOCALITIES 2 THREADS_PER_LOCALITY 2
+                                        TIMEOUT 60
+  )
+endif()
+
 if(HPX_WITH_FORCE_DISCONNECT)
   set(tests ${tests} dijkstra_termination_disconnected_locality_7474
             dijkstra_termination_disconnected_localities_7474

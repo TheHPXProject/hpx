@@ -429,6 +429,13 @@ namespace hpx {
             HPX_ASSERT(exception_);
             report_error(exception_, false);
             finalize(-1.0);    // make sure the application exits
+            if (post_main_ != nullptr)
+            {
+                post_main_();
+            }
+            return threads::thread_result_type(
+                threads::thread_schedule_state::terminated,
+                threads::invalid_thread_id);
         }
 
         auto result_value = runtime::run_helper(func, result, false);
