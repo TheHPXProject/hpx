@@ -51,12 +51,13 @@ namespace hpx::traits {
         };
 
         ///////////////////////////////////////////////////////////////////////
-        template <typename T>
+        // exported for the unit test of the traits
+        HPX_CXX_CORE_EXPORT template <typename T>
         inline constexpr bool has_valid_vector_v =
             std::is_copy_assignable_v<T> && !std::is_function_v<T> &&
             !std::is_same_v<T, bool>;
 
-        template <typename T, typename Enable = void>
+        HPX_CXX_CORE_EXPORT template <typename T, typename Enable = void>
         struct is_std_vector_iterator : std::false_type
         {
         };

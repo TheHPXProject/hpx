@@ -49,7 +49,6 @@ foreach(test ${tests})
   target_link_libraries(${test}_test PRIVATE hpx_execution_test_utilities)
 
   add_hpx_unit_test("modules.execution_base" ${test} ${${test}_PARAMETERS})
-  target_compile_definitions(${test}_test PRIVATE -DHPX_MODULE_STATIC_LINKING)
 
 endforeach()
 

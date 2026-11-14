@@ -19,11 +19,13 @@ set(tests
     includes_chunk_boundary
     includes_empty_ranges
     is_sorted_until_chunk_boundary
+    make_heap_pow2
     minimal_findend
     mismatch_differently_sized_ranges
     num_cores
     partial_sort_early_return
     prefetching_iterator
+    ranges_distinct_sentinel_8003
     reduce_3641
     reduce_with_auto_chunk_size
     reverse_rotate_copy_result
@@ -33,6 +35,7 @@ set(tests
     search_larger_2nd_range
     search_zerolength
     set_operations_3442
+    set_operations_8064
     sort_depth_limit_fallback
     stable_merge_2964
     static_chunker_2282

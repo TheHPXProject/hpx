@@ -12,7 +12,7 @@
 #include <hpx/modules/testing.hpp>
 
 #if defined(HPX_HAVE_DISTRIBUTED_RUNTIME)
-#include <hpx/lcos_distributed/channel.hpp>
+#include <hpx/modules/lcos_distributed.hpp>
 
 HPX_REGISTER_CHANNEL(int)
 #endif

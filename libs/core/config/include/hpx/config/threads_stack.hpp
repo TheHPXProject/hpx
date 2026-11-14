@@ -25,6 +25,9 @@
 #  else
 #    if defined(HPX_INTEL_VERSION)
 #      define HPX_THREADS_STACK_OVERHEAD 0x2800
+#    elif defined(HPX_MSVC)
+// MSVC uses up to about 3 KB of stack before an HPX thread function runs
+#      define HPX_THREADS_STACK_OVERHEAD 0x1000
 #    else
 #      define HPX_THREADS_STACK_OVERHEAD 0x800
 #    endif

@@ -1,0 +1,52 @@
+# Copyright (c) 2020 Mikael Simberg
+# Copyright (c) 2024-2026 The STE||AR Group
+#
+# SPDX-License-Identifier: BSL-1.0
+# Distributed under the Boost Software License, Version 1.0. (See accompanying
+# file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+
+name: Windows (Release, VS2026, C++20 Modules)
+
+on: [pull_request]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: MSVC
+    uses: ./.github/workflows/sharded-build-and-test.yml
+    with:
+      runs-on: windows-2025-vs2026
+      get-cmake: true
+      vcpkg: true
+      msvc-dev-env: true
+      configure: |
+        cmake . -Bbuild -GNinja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DHPX_WITH_PSEUDO_DEPENDENCIES=ON \
+            -DCMAKE_TOOLCHAIN_FILE='C:/projects/vcpkg/scripts/buildsystems/vcpkg.cmake' \
+            -DHPX_WITH_FETCH_ASIO=ON \
+            -DHPX_WITH_ASIO_TAG=asio-1-38-0 \
+            -DHPX_WITH_EXAMPLES=ON \
+            -DHPX_WITH_TESTS=ON \
+            -DHPX_WITH_TESTS_EXAMPLES=ON \
+            -DHPX_WITH_TESTS_UNIT=ON \
+            -DHPX_WITH_SUPERVISION=ON \
+            -DHPX_WITH_DEPRECATION_WARNINGS=OFF \
+            -DHPX_WITH_TESTS_MAX_THREADS_PER_LOCALITY=2 \
+            -DHPX_COROUTINES_WITH_SWAP_CONTEXT_EMULATION=ON \
+            -DHPX_WITH_VERIFY_LOCKS=ON \
+            -DHPX_WITH_VERIFY_LOCKS_BACKTRACE=ON \
+            -DHPX_WITH_CHECK_MODULE_DEPENDENCIES=ON \
+            -DHPX_WITH_CXX_MODULES=ON \
+            -DHPX_WITH_DATAPAR=ON \
+            -DHPX_WITH_DATAPAR_BACKEND=EMULATE
+      base-targets: hpx_core core components
+      shards: 20
+      exclude-files: >-
+        .github/workflows/exclude.targets
+        .github/workflows/tests.examples.targets
+      # the default timeout of ctest, as in the other Windows workflows
+      ctest-timeout: "1500"

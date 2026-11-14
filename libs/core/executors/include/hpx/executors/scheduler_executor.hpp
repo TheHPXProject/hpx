@@ -55,6 +55,39 @@ namespace hpx::execution::experimental {
         {
         };
 
+        // Schedulers that wrap a scheduler with a thread pool backend and
+        // give access to it through get_underlying_scheduler()
+        template <typename Scheduler>
+        concept has_underlying_thread_pool_backend =
+            requires(
+                Scheduler const& sched) { sched.get_underlying_scheduler(); } &&
+            has_thread_pool_backend<
+                std::decay_t<decltype(std::declval<Scheduler const&>()
+                        .get_underlying_scheduler())>>::value;
+
+        template <typename Scheduler>
+        inline constexpr bool uses_thread_pool_backend =
+            has_thread_pool_backend<Scheduler>::value ||
+            has_underlying_thread_pool_backend<Scheduler>;
+
+        // The scheduler whose thread pool runs the bulk operations. This has
+        // to be a function template of its own: MSVC checks the expressions
+        // in discarded 'if constexpr' branches of the members of
+        // scheduler_executor that depend only on its template parameter.
+        template <typename Scheduler>
+        HPX_FORCEINLINE decltype(auto) thread_pool_backend(
+            Scheduler const& sched)
+        {
+            if constexpr (has_thread_pool_backend<Scheduler>::value)
+            {
+                return (sched);
+            }
+            else
+            {
+                return sched.get_underlying_scheduler();
+            }
+        }
+
         // Helper to extract thread pool parameters from a scheduler
         template <typename Scheduler>
         struct thread_pool_params;    // primary: not defined
@@ -310,39 +343,12 @@ namespace hpx::execution::experimental {
 
             if constexpr (std::is_void_v<result_type>)
             {
-                if constexpr (detail::has_thread_pool_backend<
-                                  std::decay_t<BaseScheduler>>::value)
+                if constexpr (detail::uses_thread_pool_backend<
+                                  std::decay_t<BaseScheduler>>)
                 {
-                    return detail::scheduler_bulk_async_via_thread_pool(sched_,
-                        HPX_FORWARD(F, f), shape, HPX_FORWARD(Ts, ts)...);
-                }
-                else if constexpr (requires {
-                                       sched_.get_underlying_scheduler();
-                                   })
-                {
-                    using underlying_type = std::decay_t<
-                        decltype(sched_.get_underlying_scheduler())>;
-                    if constexpr (detail::has_thread_pool_backend<
-                                      underlying_type>::value)
-                    {
-                        auto const& underlying =
-                            sched_.get_underlying_scheduler();
-                        return detail::scheduler_bulk_async_via_thread_pool(
-                            underlying, HPX_FORWARD(F, f), shape,
-                            HPX_FORWARD(Ts, ts)...);
-                    }
-                    else
-                    {
-                        return make_future(bulk(schedule(sched_), n,
-                            [shape = HPX_MOVE(shape),
-                                bound_f = hpx::bind_back(
-                                    HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...)](
-                                size_type i) mutable {
-                                auto it = std::ranges::begin(shape);
-                                std::ranges::advance(it, i);
-                                HPX_INVOKE(bound_f, *it);
-                            }));
-                    }
+                    return detail::scheduler_bulk_async_via_thread_pool(
+                        detail::thread_pool_backend(sched_), HPX_FORWARD(F, f),
+                        shape, HPX_FORWARD(Ts, ts)...);
                 }
                 else
                 {
@@ -416,42 +422,13 @@ namespace hpx::execution::experimental {
             size_type const n =
                 static_cast<size_type>(std::ranges::distance(shape));
 
-            if constexpr (detail::has_thread_pool_backend<
-                              std::decay_t<BaseScheduler>>::value)
+            if constexpr (detail::uses_thread_pool_backend<
+                              std::decay_t<BaseScheduler>>)
             {
                 return hpx::util::void_guard<result_type>(),
-                       detail::scheduler_bulk_sync_via_thread_pool(sched_,
+                       detail::scheduler_bulk_sync_via_thread_pool(
+                           detail::thread_pool_backend(sched_),
                            HPX_FORWARD(F, f), shape, HPX_FORWARD(Ts, ts)...);
-            }
-            else if constexpr (requires { sched_.get_underlying_scheduler(); })
-            {
-                using underlying_type =
-                    std::decay_t<decltype(sched_.get_underlying_scheduler())>;
-                if constexpr (detail::has_thread_pool_backend<
-                                  underlying_type>::value)
-                {
-                    auto const& underlying = sched_.get_underlying_scheduler();
-
-                    return hpx::util::void_guard<result_type>(),
-                           detail::scheduler_bulk_sync_via_thread_pool(
-                               underlying, HPX_FORWARD(F, f), shape,
-                               HPX_FORWARD(Ts, ts)...);
-                }
-                else
-                {
-                    return hpx::util::void_guard<result_type>(),
-                           // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
-                           *hpx::this_thread::experimental::sync_wait(bulk(
-                               schedule(sched_), n,
-                               [shape,
-                                   bound_f = hpx::bind_back(HPX_FORWARD(F, f),
-                                       HPX_FORWARD(Ts, ts)...)](
-                                   size_type i) mutable {
-                                   auto it = std::ranges::begin(shape);
-                                   std::ranges::advance(it, i);
-                                   HPX_INVOKE(bound_f, *it);
-                               }));
-                }
             }
             else
             {

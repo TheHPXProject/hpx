@@ -157,9 +157,10 @@ namespace hpx::parallel {
                 return util::move_n(first, detail::distance(first, last), dest);
             }
 
-            template <typename ExPolicy, typename FwdIter1, typename FwdIter2>
+            template <typename ExPolicy, typename FwdIter1, typename Sent1,
+                typename FwdIter2>
             static decltype(auto) parallel(
-                ExPolicy&& policy, FwdIter1 first, FwdIter1 last, FwdIter2 dest)
+                ExPolicy&& policy, FwdIter1 first, Sent1 last, FwdIter2 dest)
             {
                 using zip_iterator =
                     hpx::util::zip_iterator<FwdIter1, FwdIter2>;

@@ -302,6 +302,16 @@ namespace HPX_COROUTINE_NAMESPACE_STD {
 
             promise_type() = default;
 
+            // Return the coroutine's return type itself: if the type
+            // differed, the compiler would have to convert the returned
+            // object, which some compilers get wrong for a coroutine frame
+            // outliving the call
+            hpx::shared_future<T> get_return_object()
+            {
+                return hpx::shared_future<T>(
+                    this->base_type::get_return_object());
+            }
+
             template <typename U>
             void return_value(U&& value)
             {
@@ -339,6 +349,15 @@ namespace HPX_COROUTINE_NAMESPACE_STD {
                 hpx::lcos::detail::coroutine_promise_base<void, promise_type>;
 
             promise_type() = default;
+
+            // see coroutine_traits<hpx::shared_future<T>, Ts...>; the template
+            // parameter defers the use of shared_future<void>, which is not
+            // complete yet here
+            template <typename SharedFuture = hpx::shared_future<void>>
+            SharedFuture get_return_object()
+            {
+                return SharedFuture(this->base_type::get_return_object());
+            }
 
             void return_void()
             {

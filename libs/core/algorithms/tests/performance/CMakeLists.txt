@@ -32,7 +32,9 @@ set(benchmarks
 )
 
 if(HPX_WITH_DATAPAR)
-  list(APPEND benchmarks benchmark_search benchmark_search_n)
+  list(APPEND benchmarks benchmark_search benchmark_search_n
+       benchmark_lexicographical_compare
+  )
 endif()
 
 set(perftest_reports
@@ -78,6 +80,12 @@ set(benchmark_is_heap_until_perftest_PARAMETERS THREADS_PER_LOCALITY 4
 # a few seconds
 set(benchmark_merge_perftest_PARAMETERS THREADS_PER_LOCALITY 4
                                         --vector_size=16777216 --test_count=10
+)
+# the same for the test, which otherwise runs 100 times with 2^28 elements; the
+# Debug configuration keeps its default of 268435 elements (selected when the
+# test runs, as multi-configuration generators have no CMAKE_BUILD_TYPE)
+set(benchmark_merge_PARAMETERS
+    ARGS --vector_size=$<IF:$<CONFIG:Debug>,268435,16777216> --test_count=10
 )
 
 set(benchmark_inplace_merge_perftest_PARAMETERS THREADS_PER_LOCALITY 4

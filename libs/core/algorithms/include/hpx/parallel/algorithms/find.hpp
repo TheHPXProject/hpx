@@ -1399,10 +1399,11 @@ namespace hpx::parallel {
             {
             }
 
-            template <typename ExPolicy, typename InIter1, typename InIter2,
-                typename Pred, typename Proj1, typename Proj2>
-            static InIter1 sequential(ExPolicy, InIter1 first, InIter1 last,
-                InIter2 s_first, InIter2 s_last, Pred&& op, Proj1&& proj1,
+            template <typename ExPolicy, typename InIter1, typename Sent1,
+                typename InIter2, typename Sent2, typename Pred,
+                typename Proj1, typename Proj2>
+            static InIter1 sequential(ExPolicy, InIter1 first, Sent1 last,
+                InIter2 s_first, Sent2 s_last, Pred&& op, Proj1&& proj1,
                 Proj2&& proj2)
             {
                 return sequential_find_first_of<std::decay_t<ExPolicy>>(first,
@@ -1410,10 +1411,10 @@ namespace hpx::parallel {
                     HPX_FORWARD(Proj1, proj1), HPX_FORWARD(Proj2, proj2));
             }
 
-            template <typename ExPolicy, typename FwdIter2, typename Pred,
-                typename Proj1, typename Proj2>
+            template <typename ExPolicy, typename Sent1, typename FwdIter2,
+                typename Sent2, typename Pred, typename Proj1, typename Proj2>
             static decltype(auto) parallel(ExPolicy&& orgpolicy, FwdIter first,
-                FwdIter last, FwdIter2 s_first, FwdIter2 s_last, Pred&& op,
+                Sent1 last, FwdIter2 s_first, Sent2 s_last, Pred&& op,
                 Proj1&& proj1, Proj2&& proj2)
             {
                 using result =
@@ -1426,7 +1427,7 @@ namespace hpx::parallel {
                 if constexpr (!has_scheduler_executor)
                 {
                     if (first == last)
-                        return result::get(HPX_MOVE(last));
+                        return result::get(HPX_MOVE(first));
                 }
 
                 difference_type count =
@@ -1440,7 +1441,8 @@ namespace hpx::parallel {
                     }
                     else
                     {
-                        return result::get(HPX_MOVE(last));
+                        // nothing to search for: return the end of the range
+                        return result::get(std::next(first, count));
                     }
                 }
 

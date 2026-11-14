@@ -28,7 +28,7 @@ set(iostreams_headers
 )
 
 set(iostreams_sources server/output_stream.cpp component_module.cpp
-                      manipulators.cpp standard_streams.cpp
+                      standard_streams.cpp
 )
 
 add_hpx_component(

@@ -35,6 +35,7 @@ set(algorithms_headers
     hpx/parallel/algorithms/detail/insertion_sort.hpp
     hpx/parallel/algorithms/detail/iota.hpp
     hpx/parallel/algorithms/detail/is_sorted.hpp
+    hpx/parallel/algorithms/detail/lexicographical_compare.hpp
     hpx/parallel/algorithms/detail/mismatch.hpp
     hpx/parallel/algorithms/detail/parallel_stable_sort.hpp
     hpx/parallel/algorithms/detail/pivot.hpp
@@ -241,6 +242,7 @@ if(HPX_WITH_DATAPAR)
       hpx/parallel/datapar/generate.hpp
       hpx/parallel/datapar/handle_local_exceptions.hpp
       hpx/parallel/datapar/iterator_helpers.hpp
+      hpx/parallel/datapar/lexicographical_compare.hpp
       hpx/parallel/datapar/loop.hpp
       hpx/parallel/datapar/mismatch.hpp
       hpx/parallel/datapar/reduce.hpp

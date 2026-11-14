@@ -25,6 +25,7 @@ if(HPX_WITH_WORK_REQUESTING_SCHEDULERS)
     APPEND
     tests
     workrequesting_numa
+    workrequesting_numa_hint
     workrequesting_random_victim
     workrequesting_run_as_child
     workrequesting_steal
@@ -34,6 +35,8 @@ if(HPX_WITH_WORK_REQUESTING_SCHEDULERS)
   )
   set(workrequesting_staged_stealing_PARAMETERS THREADS_PER_LOCALITY 4)
 endif()
+
+set(workrequesting_numa_hint_PARAMETERS THREADS_PER_LOCALITY 4)
 
 set(min_tasks_to_steal_staged_PARAMETERS THREADS_PER_LOCALITY 4)
 set(queue_length_all_threads_PARAMETERS THREADS_PER_LOCALITY 1)

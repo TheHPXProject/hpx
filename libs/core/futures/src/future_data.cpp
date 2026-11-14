@@ -144,7 +144,10 @@ namespace hpx::lcos::detail {
                            "directly execute child({}), description({})",
             thrd, thrd->get_description());
 
-        if (threads::detail::execute_thread(HPX_MOVE(runs_child)))
+        // runs_child keeps the thread data alive until we return: thrd is used
+        // below after the child has terminated (or has been rescheduled) and
+        // runs_child_ was reset
+        if (threads::detail::execute_thread(runs_child))
         {
             // don't try running this twice
             {
