@@ -874,10 +874,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
-            FwdIter>
-        invoke_default(ExPolicy&& policy, FwdIter first, std::size_t count,
-            FwdIter2 s_first, Sent2 s_last, Pred op = Pred(),
+        static decltype(auto) invoke_default(ExPolicy&& policy, FwdIter first,
+            std::size_t count, FwdIter2 s_first, Sent2 s_last, Pred op = Pred(),
             Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
         {
             return hpx::parallel::detail::search_n<FwdIter, FwdIter>().call(
@@ -931,11 +929,9 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
-            std::ranges::iterator_t<Rng1>>
-        invoke_default(ExPolicy&& policy, Rng1&& rng1, std::size_t count,
-            Rng2&& rng2, Pred op = Pred(), Proj1 proj1 = Proj1(),
-            Proj2 proj2 = Proj2())
+        static decltype(auto) invoke_default(ExPolicy&& policy, Rng1&& rng1,
+            std::size_t count, Rng2&& rng2, Pred op = Pred(),
+            Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
         {
             using fwditer_type = std::ranges::iterator_t<Rng1>;
             using sent_type = std::ranges::sentinel_t<Rng1>;
