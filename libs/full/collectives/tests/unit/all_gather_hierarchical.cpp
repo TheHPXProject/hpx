@@ -30,7 +30,9 @@ constexpr char const* all_gather_direct_basename =
     "/test/all_gather_hierarchical/";
 constexpr char const* all_gather_direct_local_basename =
     "/test/all_gather_hierarchical/local/";
-#if defined(HPX_DEBUG)
+// Fewer iterations on Windows as well: each step of a hierarchical collective
+// waits for idle workers to wake up, which takes much longer there
+#if defined(HPX_DEBUG) || defined(HPX_WINDOWS)
 constexpr int ITERATIONS = 50;
 #else
 constexpr int ITERATIONS = 500;

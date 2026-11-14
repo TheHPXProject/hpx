@@ -24,7 +24,7 @@
     defined(HPX_COMPILE_BMI) || defined(HPX_HAVE_FORCE_NO_CXX_MODULES)
 @module_headers@
 #else
-
+@module_config_header@
 // Include all standard library headers before importing module to prevent ODR
 // violations.
 #include <hpx/config/std_headers.hpp>

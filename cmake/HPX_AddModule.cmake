@@ -234,9 +234,15 @@ function(add_hpx_module libname modulename)
         )
       endforeach()
       if(NOT ${modulename}_NO_CONFIG_IN_GENERATED_HEADERS)
+        # as in the generated header without modules, hpx/config.hpp comes
+        # first: on Windows it includes winsock2.h before anything else can
+        # include winsock.h
+        set(module_config_header "\n#include <hpx/config.hpp>\n")
         if(MSVC)
           set(module_macro_headers "${module_macro_headers}${autolink_block}")
         endif()
+      else()
+        set(module_config_header "")
       endif()
       set(template_file "global_module_header_modules.hpp.in")
     else()

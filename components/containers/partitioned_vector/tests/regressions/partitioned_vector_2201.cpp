@@ -16,8 +16,10 @@
 #include <random>
 
 ///////////////////////////////////////////////////////////////////////////////
-// Define the vector types to be used.
+// partitioned_vector<int> is predefined in the partitioned_vector module
+#if defined(HPX_HAVE_STATIC_LINKING)
 HPX_REGISTER_PARTITIONED_VECTOR(int)
+#endif
 unsigned int seed = std::random_device{}();
 
 ///////////////////////////////////////////////////////////////////////////////

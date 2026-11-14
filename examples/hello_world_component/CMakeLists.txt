@@ -103,7 +103,8 @@ if(EXISTS "${HPX_DIR}")
   endif()
 
   enable_testing()
-  add_test(hello_world_test hello_world_client)
+  # the target name finds the executable also in HPX_OUTPUT_DIRECTORY
+  add_test(NAME hello_world_test COMMAND hello_world_client)
 else()
   message(
     WARNING
