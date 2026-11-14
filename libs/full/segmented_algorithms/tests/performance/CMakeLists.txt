@@ -6,10 +6,6 @@
 
 set(benchmarks minmax_element_performance partitioned_vector_sort_performance)
 
-set(partitioned_vector_sort_performance_PARAMETERS LOCALITIES 2
-                                                   THREADS_PER_LOCALITY 2
-)
-
 foreach(benchmark ${benchmarks})
   set(sources ${benchmark}.cpp)
 
@@ -25,7 +21,32 @@ foreach(benchmark ${benchmarks})
     FOLDER "Benchmarks/Modules/Full/SegmentedAlgorithms"
   )
 
-  add_hpx_performance_test(
-    "modules.segmented_algorithms" ${benchmark} ${${benchmark}_PARAMETERS}
-  )
+  if(benchmark STREQUAL "partitioned_vector_sort_performance")
+    add_hpx_performance_test(
+      "modules.segmented_algorithms"
+      partitioned_vector_sort_performance_2_localities
+      EXECUTABLE
+      partitioned_vector_sort_performance
+      PSEUDO_DEPS_NAME
+      partitioned_vector_sort_performance
+      LOCALITIES
+      2
+      THREADS_PER_LOCALITY
+      2
+    )
+    add_hpx_performance_test(
+      "modules.segmented_algorithms"
+      partitioned_vector_sort_performance_4_localities
+      EXECUTABLE
+      partitioned_vector_sort_performance
+      PSEUDO_DEPS_NAME
+      partitioned_vector_sort_performance
+      LOCALITIES
+      4
+      THREADS_PER_LOCALITY
+      2
+    )
+  else()
+    add_hpx_performance_test("modules.segmented_algorithms" ${benchmark})
+  endif()
 endforeach()

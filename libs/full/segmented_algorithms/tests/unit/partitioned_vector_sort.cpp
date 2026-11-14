@@ -403,6 +403,25 @@ void test_unequal_explicit_layout(std::vector<hpx::id_type> const& localities)
     verify_sorted(values, expected);
 }
 
+/// Verify that consecutive partitions on one locality are merged locally.
+///
+/// \param localities The localities used by the explicit partition layout.
+void test_adjacent_local_partitions(std::vector<hpx::id_type> const& localities)
+{
+    std::vector<std::size_t> const sizes{17, 19, 13, 23};
+    auto const second = localities[localities.size() > 1 ? 1 : 0];
+    std::vector<hpx::id_type> const owners{
+        localities[0], localities[0], second, second};
+    hpx::partitioned_vector<int> values(
+        72, 0, hpx::explicit_container_layout(sizes, owners));
+    initialize_values(
+        values, [](std::size_t i) { return static_cast<int>(71 - i); });
+    auto const expected = copy_values(values);
+
+    hpx::sort(hpx::execution::par, values.begin(), values.end());
+    verify_sorted(values, expected);
+}
+
 void test_large_transfers(std::vector<hpx::id_type> const& localities)
 {
     // Large enough to exercise multiple bounded transfers through the public
@@ -601,6 +620,7 @@ int main()
         hpx::execution::par(hpx::execution::task), localities);
     test_two_run_merge_split(localities);
     test_unequal_explicit_layout(localities);
+    test_adjacent_local_partitions(localities);
     test_large_transfers(localities);
     test_async_run_collection(hpx::execution::seq(hpx::execution::task));
     test_async_run_collection(hpx::execution::par(hpx::execution::task));
