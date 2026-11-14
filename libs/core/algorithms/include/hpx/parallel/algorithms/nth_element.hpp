@@ -256,8 +256,8 @@ namespace hpx::parallel {
             {
                 auto end = detail::advance_to_sentinel(first, last);
                 auto nelem = end - first;
-                if (nelem == 0)
-                    return first;
+                if (nelem == 0 || nth == end)
+                    return end;
 
                 HPX_ASSERT(nelem >= 0 && nth - first + 1 > 0 &&
                     nth - first + 1 <= nelem);
@@ -292,6 +292,11 @@ namespace hpx::parallel {
                                      RandomIt end) mutable -> RandomIt {
                             auto last_iter =
                                 detail::advance_to_sentinel(begin, end);
+
+                            if (nth_it == last_iter)
+                            {
+                                return last_iter;
+                            }
 
                             while (begin != last_iter)
                             {
