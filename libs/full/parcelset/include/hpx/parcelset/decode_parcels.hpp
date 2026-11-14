@@ -391,6 +391,22 @@ namespace hpx::parcelset {
             }
             catch (hpx::exception const& e)
             {
+                // A single parcel is scheduled while it is decoded (see
+                // load_schedule), on a thread of the parcelport, which may
+                // still run after the worker threads have stopped. No new
+                // threads are created then, and the parcel can't be handled
+                // anymore. As in handle_received_parcels, only a shutdown is
+                // expected here; reporting it would stop the runtime again
+                // from this thread.
+                if (!threads::threadmanager_is(hpx::state::running))
+                {
+                    LPT_(debug).format(
+                        "decode_message: dropped a parcel received while "
+                        "the runtime is stopping: {}",
+                        e.what());
+                    return {};
+                }
+
                 LPT_(error).format(
                     "decode_message: caught hpx::exception: {}", e.what());
                 hpx::report_error(std::current_exception());

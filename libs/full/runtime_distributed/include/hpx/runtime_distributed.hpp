@@ -130,6 +130,10 @@ namespace hpx {
         void stop_helper(
             bool blocking, std::condition_variable& cond, std::mutex& mtx);
 
+    private:
+        void stop_parcel_handler(bool blocking);
+
+    public:
         /// \brief Suspend the runtime system
         ///
         int suspend() override;
