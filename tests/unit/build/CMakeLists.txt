@@ -144,6 +144,11 @@ else()
   set(with_cmake_tests ON)
 endif()
 
+set(hpx_main_uses_linker_wrap OFF)
+if("${CMAKE_SYSTEM_NAME}" STREQUAL "Linux" OR APPLE)
+  set(hpx_main_uses_linker_wrap ON)
+endif()
+
 if(with_cmake_tests)
   foreach(build_type ${build_types})
     string(TOLOWER "${build_type}" build_type_lc)
@@ -172,7 +177,7 @@ if(with_cmake_tests)
       ${build_type} "examples/hello_world_component"
     )
 
-    if(HPX_WITH_DYNAMIC_HPX_MAIN)
+    if(hpx_main_uses_linker_wrap)
       # Google test emulation
       create_cmake_test(
         cmake_${build_type_lc}_build_dir_gtest_emulation_test FALSE
@@ -192,7 +197,7 @@ endif()
 set(cmake_tests build_dir_targets install_dir_targets build_dir_macros
                 install_dir_macros
 )
-if(HPX_WITH_DYNAMIC_HPX_MAIN)
+if(hpx_main_uses_linker_wrap)
   list(APPEND cmake_tests build_dir_gtest_emulation install_dir_gtest_emulation)
 endif()
 

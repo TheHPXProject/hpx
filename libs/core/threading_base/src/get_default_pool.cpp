@@ -14,9 +14,9 @@
 #include <hpx/threading_base/thread_pool_base.hpp>
 
 // The following implementation has been divided for Linux and Mac OSX
-#if defined(HPX_HAVE_DYNAMIC_HPX_MAIN) &&                                      \
-    (defined(__linux) || defined(__linux__) || defined(linux) ||               \
-        defined(__APPLE__))
+#if (defined(__linux) || defined(__linux__) || defined(linux) ||               \
+    defined(__APPLE__)) &&                                                     \
+    !defined(__ANDROID__)
 
 namespace hpx_start {
 
@@ -54,9 +54,9 @@ namespace hpx::threads::detail {
         else
         {
 // The following implementation has been divided for Linux and Mac OSX
-#if defined(HPX_HAVE_DYNAMIC_HPX_MAIN) &&                                      \
-    (defined(__linux) || defined(__linux__) || defined(linux) ||               \
-        defined(__APPLE__))
+#if (defined(__linux) || defined(__linux__) || defined(linux) ||               \
+    defined(__APPLE__)) &&                                                     \
+    !defined(__ANDROID__)
 
             // hpx_main.hpp is included but not linked to libhpx_wrap
             if (!hpx_start::is_linked && hpx_start::include_libhpx_wrap)

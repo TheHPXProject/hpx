@@ -382,31 +382,6 @@ if(HPX_WITH_PRECOMPILED_HEADERS)
 endif()
 
 # ##############################################################################
-# Dynamic hpx_main
-# ##############################################################################
-
-set(HPX_WITH_DYNAMIC_HPX_MAIN_DEFAULT OFF)
-if("${CMAKE_SYSTEM_NAME}" STREQUAL "Linux" OR APPLE)
-  set(HPX_WITH_DYNAMIC_HPX_MAIN_DEFAULT ON)
-endif()
-
-hpx_option(
-  HPX_WITH_DYNAMIC_HPX_MAIN
-  BOOL
-  "Enable dynamic overload of system ``main()`` (Linux and Apple only, default: ON)"
-  ${HPX_WITH_DYNAMIC_HPX_MAIN_DEFAULT}
-  ADVANCED
-)
-if(HPX_WITH_DYNAMIC_HPX_MAIN)
-  if(NOT HPX_WITH_DYNAMIC_HPX_MAIN_DEFAULT)
-    hpx_error(
-      "HPX_WITH_DYNAMIC_HPX_MAIN was set to ON, but the option is only available on Linux and Apple (this is \"${CMAKE_SYSTEM_NAME}\")."
-    )
-  endif()
-  hpx_add_config_define(HPX_HAVE_DYNAMIC_HPX_MAIN)
-endif()
-
-# ##############################################################################
 # Some platforms do not support dynamic linking. Enable this to link all
 # libraries statically. This also changes some of the internals of HPX related
 # to how components are loaded.

@@ -8,9 +8,9 @@
 
 // We support different implementation depending upon the Operating
 // System in use.
-#if !(defined(HPX_HAVE_DYNAMIC_HPX_MAIN) &&                                    \
-    (defined(__linux) || defined(__linux__) || defined(linux) ||               \
-        defined(__APPLE__)))
+#if !((defined(__linux) || defined(__linux__) || defined(linux) ||             \
+          defined(__APPLE__)) &&                                               \
+    !defined(__ANDROID__))
 
 // when statically linking the default definition of main happens on demand only
 #if !defined(HPX_HAVE_STATIC_LINKING)
