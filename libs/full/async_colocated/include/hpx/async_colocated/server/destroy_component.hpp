@@ -55,8 +55,26 @@ namespace hpx::components::server {
         // NOLINTNEXTLINE(bugprone-bitwise-pointer-cast)
         Component* c = hpx::bit_cast<Component*>(addr.address_);
         c->finalize();
-        std::destroy_at(c);
-        component_heap<Component>().free(c, 1);
+
+        auto destroy_instance = [c] {
+            std::destroy_at(c);
+            component_heap<Component>().free(c, 1);
+        };
+
+        if constexpr (traits::component_supports_migration<Component>::call())
+        {
+            // An action may still have a migratable component pinned, it may
+            // have sent its result already, which allowed the last reference
+            // to the component to be released. The component is destroyed
+            // once it is unpinned in this case.
+            if (traits::component_pin_support<Component>::defer_destroy(
+                    c, destroy_instance))
+            {
+                return;
+            }
+        }
+
+        destroy_instance();
     }
 
     HPX_CXX_EXPORT template <typename Component>
