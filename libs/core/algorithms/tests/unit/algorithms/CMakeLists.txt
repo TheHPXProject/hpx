@@ -217,6 +217,8 @@ set(sender_tests
     sender_algorithm_contracts
     set_difference_sender
     set_intersection_sender
+    set_symmetric_difference_sender
+    set_union_sender
     shift_left_sender
     shift_right_sender
     starts_with_sender
