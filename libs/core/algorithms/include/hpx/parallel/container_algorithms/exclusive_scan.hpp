@@ -396,10 +396,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        static parallel::util::detail::algorithm_result_t<ExPolicy,
-            exclusive_scan_result<FwdIter1, FwdIter2>>
-        invoke_default(ExPolicy&& policy, FwdIter1 first, Sent last,
-            FwdIter2 dest, T init, Op op = Op())
+        static decltype(auto) invoke_default(ExPolicy&& policy, FwdIter1 first,
+            Sent last, FwdIter2 dest, T init, Op op = Op())
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Requires at least forward iterator.");
@@ -454,9 +452,7 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        static parallel::util::detail::algorithm_result_t<ExPolicy,
-            exclusive_scan_result<std::ranges::iterator_t<Rng>, O>>
-        invoke_default(
+        static decltype(auto) invoke_default(
             ExPolicy&& policy, Rng&& rng, O dest, T init, Op op = Op())
         {
             static_assert(std::forward_iterator<std::ranges::iterator_t<Rng>>,
