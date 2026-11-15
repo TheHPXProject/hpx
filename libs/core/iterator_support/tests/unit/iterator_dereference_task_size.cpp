@@ -155,6 +155,19 @@ void test_hpx_iterators()
     HPX_TEST(iterator_dereference_task_size<sized_iterator>::call(
                  sized_iterator(&i, sized)) == task_size::nano);
 
+    // the transformer gets the underlying iterator, not an element, so only
+    // the size of its call counts, also over an iterator of unknown size it
+    // doesn't dereference
+    static_assert(iterator_dereference_task_size_v<computing_iterator<int>> ==
+        task_size::unknown);
+    auto const ignores_element = hpx::threads::nano_task(
+        [](computing_iterator<int> const&) { return 42; });
+    using ignoring_iterator =
+        hpx::util::transform_iterator<computing_iterator<int>,
+            decltype(ignores_element)>;
+    static_assert(
+        iterator_dereference_task_size_v<ignoring_iterator> == task_size::nano);
+
     // zip_iterator dereferences all of its iterators
     static_assert(
         iterator_dereference_task_size_v<

@@ -146,25 +146,25 @@ namespace hpx::util {
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx::traits {
 
-    // Dereferencing a transform_iterator dereferences the underlying iterator
-    // and calls the transformer with it.
+    // Dereferencing a transform_iterator calls its transformer with the
+    // underlying iterator, not with an element: the transformer dereferences
+    // that iterator itself, if at all. So the size is that of the call, which
+    // includes whatever the transformer does with the iterator; the size of
+    // dereferencing the underlying iterator doesn't count on its own.
     template <typename Iterator, typename Transformer, typename Reference,
         typename Value, typename Category, typename Difference>
     struct iterator_dereference_task_size<hpx::util::transform_iterator<
         Iterator, Transformer, Reference, Value, Category, Difference>>
     {
-        static constexpr threads::task_size value = threads::combined_task_size(
-            iterator_dereference_task_size<Iterator>::value,
-            get_task_size_for<Transformer, Iterator const&>::value);
+        static constexpr threads::task_size value =
+            get_task_size_for<Transformer, Iterator const&>::value;
 
         [[nodiscard]] static constexpr threads::task_size call(
             hpx::util::transform_iterator<Iterator, Transformer, Reference,
                 Value, Category, Difference> const& it) noexcept
         {
-            return threads::combined_task_size(
-                iterator_dereference_task_size<Iterator>::call(it.base()),
-                get_task_size_for<Transformer, Iterator const&>::call(
-                    it.transformer()));
+            return get_task_size_for<Transformer, Iterator const&>::call(
+                it.transformer());
         }
     };
 }    // namespace hpx::traits
