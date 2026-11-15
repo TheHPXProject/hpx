@@ -171,9 +171,7 @@ namespace hpx::threads::policies {
                     no_sentinel, num_thread + 1, std::memory_order_relaxed))
             {
                 l.unlock();
-                spin_as_sentinel(num_thread,
-                    static_cast<std::uint64_t>(step.period.count()),
-                    step.steal_check_rounds);
+                spin_as_sentinel(num_thread, step);
                 return true;
             }
 

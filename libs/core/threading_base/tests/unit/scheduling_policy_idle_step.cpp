@@ -87,11 +87,47 @@ namespace {
         HPX_TEST_EQ(static_cast<double>(step.period.count()),
             parameters.get(0, t.max_time));
 
-        // the interval to look at the queues to steal from is given in
-        // rounds also for a period to sleep, for a worker that becomes the
-        // sentinel and spins through it instead
+        // the rounds and the interval to look at the queues to steal from in
+        // rounds are given also for a period to sleep, for a worker that
+        // becomes the sentinel and spins through it instead
+        HPX_TEST_EQ(step.pauses_per_round,
+            scheduling_policy::calibration_pauses_per_round);
         HPX_TEST_EQ(step.steal_check_rounds,
             rounds(parameters.get(0, t.interval), rate));
+    }
+
+    void test_tuned_pauses()
+    {
+        rules_for_test t;
+        auto& parameters = t.rules.parameters();
+        std::size_t const pauses =
+            parameters.find("hpx.idle_backoff_spin_round_pauses");
+        HPX_TEST(pauses != parameters.npos);
+
+        // a tuner gives worker 1 rounds of 4 times the pauses, which last 4
+        // times as long
+        parameters.set(
+            1, pauses, 4.0 * scheduling_policy::calibration_pauses_per_round);
+        double const rate1 = rate / 4.0;
+        double const interval = parameters.get(1, t.interval);
+
+        idle_step const spin = t.rules.idle_step_for(1, 4, rate);
+        HPX_TEST_EQ(spin.pauses_per_round,
+            4 * scheduling_policy::calibration_pauses_per_round);
+        HPX_TEST_EQ(spin.spin_rounds, rounds(16.0, rate1));
+        HPX_TEST_EQ(spin.steal_check_rounds, rounds(interval, rate1));
+
+        // the sentinel spins rounds of the same pauses
+        idle_step const sleep = t.rules.idle_step_for(1, sleep_count, rate);
+        HPX_TEST_EQ(sleep.spin_rounds, std::uint64_t(0));
+        HPX_TEST_EQ(sleep.pauses_per_round,
+            4 * scheduling_policy::calibration_pauses_per_round);
+        HPX_TEST_EQ(sleep.steal_check_rounds, rounds(interval, rate1));
+
+        // worker 0 keeps the default
+        HPX_TEST_EQ(
+            t.rules.idle_step_for(0, sleep_count, rate).pauses_per_round,
+            scheduling_policy::calibration_pauses_per_round);
     }
 
     void test_tuned_interval()
@@ -135,6 +171,7 @@ int main()
     test_spin_step();
     test_sleep_step();
     test_tuned_interval();
+    test_tuned_pauses();
     test_at_least_one_round();
 #endif
 

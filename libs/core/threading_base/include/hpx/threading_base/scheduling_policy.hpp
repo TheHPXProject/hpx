@@ -132,9 +132,10 @@ namespace hpx::threads::policies {
         /// the pause instructions per spin round
         std::uint32_t pauses_per_round;
 
-        /// look at the queues to steal from every this many spin rounds (for
-        /// a period to sleep, rounds of calibration_pauses_per_round pauses,
-        /// as spun by a worker that becomes the sentinel instead)
+        /// look at the queues to steal from every this many spin rounds
+        ///
+        /// Both are given also for a period to sleep, for a worker that
+        /// becomes the sentinel and spins through it instead.
         std::uint64_t steal_check_rounds;
     };
 
@@ -323,31 +324,27 @@ namespace hpx::threads::policies {
                 (std::min) (parameters.get(worker, max_idle_backoff_time_),
                     std::pow(2.0, exponent))));
 
-            if (static_cast<double>(step.period.count()) >=
-                parameters.get(worker, min_idle_backoff_time_))
-            {
-                // sleep, or spin rounds of calibration_pauses_per_round
-                // pauses as the sentinel
-                step.steal_check_rounds = (std::max) (std::uint64_t(1),
-                    static_cast<std::uint64_t>(std::llround(
-                        parameters.get(worker, steal_check_interval_) *
-                        spin_rounds_per_us)));
-                return step;
-            }
-
-            // a round of more pauses lasts longer than the measured one
+            // a round of more pauses lasts longer than the measured one; the
+            // rounds are also those of the sentinel, which spins through a
+            // period to sleep
             step.pauses_per_round = static_cast<std::uint32_t>(
                 parameters.get(worker, pauses_per_round_));
             double const rounds_per_us = spin_rounds_per_us *
                 calibration_pauses_per_round / step.pauses_per_round;
-
-            step.spin_rounds = (std::max) (std::uint64_t(1),
-                static_cast<std::uint64_t>(std::llround(
-                    static_cast<double>(step.period.count()) * rounds_per_us)));
             step.steal_check_rounds = (std::max) (std::uint64_t(1),
                 static_cast<std::uint64_t>(
                     std::llround(parameters.get(worker, steal_check_interval_) *
                         rounds_per_us)));
+
+            if (static_cast<double>(step.period.count()) >=
+                parameters.get(worker, min_idle_backoff_time_))
+            {
+                return step;    // sleep, or spin as the sentinel
+            }
+
+            step.spin_rounds = (std::max) (std::uint64_t(1),
+                static_cast<std::uint64_t>(std::llround(
+                    static_cast<double>(step.period.count()) * rounds_per_us)));
             return step;
         }
 

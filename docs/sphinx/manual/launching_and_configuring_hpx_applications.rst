@@ -324,8 +324,8 @@ The |hpx| configuration section
        ``HPX_IDLE_BACKOFF_STEAL_CHECK_INTERVAL`` (``8``).
    * * ``hpx.idle_backoff_spin_round_pauses``
      * This setting defines the number of pause instructions of a round of the
-       idle spin of the ``local-priority-tuned-fifo`` scheduler (the other
-       schedulers use ``16``). The default is ``16``.
+       idle spin, also of the sentinel, of the ``local-priority-tuned-fifo``
+       scheduler (the other schedulers use ``16``). The default is ``16``.
    * * ``hpx.scheduler_tuner``
      * This setting selects by name the tuner of the ``local-priority-tuned-fifo``
        scheduler, which decides the values of the settings in

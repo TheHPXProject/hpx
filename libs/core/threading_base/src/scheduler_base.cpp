@@ -227,33 +227,48 @@ namespace hpx::threads::policies {
         return false;
     }
 
-    // The sentinel spins for the period it would have slept. It looks at its
-    // own queues every round, and at the queues it steals from right after a
+    // The sentinel spins for the period it would have slept, in rounds of
+    // the pauses of step, as other spinning workers do. It looks at its own
+    // queues every round, and at the queues it steals from right after a
     // thread was queued anywhere (sentinel_.new_threads), otherwise every
-    // hpx.idle_backoff_steal_check_interval microseconds, as other spinning
-    // workers do. A thread queued while this worker becomes the sentinel may
-    // not be counted; it is found at the next of these regular looks. Out of
-    // line, so that idle_callback keeps its size.
+    // step.steal_check_rounds rounds (hpx.idle_backoff_steal_check_interval
+    // microseconds). A thread queued while this worker becomes the sentinel
+    // may not be counted; it is found at the next of these regular looks.
+    // Out of line, so that idle_callback keeps its size.
     HPX_NOINLINE void scheduler_base::spin_as_sentinel(
-        std::size_t const num_thread, std::uint64_t const period_us,
-        std::uint64_t const steal_check_rounds)
+        std::size_t const num_thread, idle_step const& step)
     {
-        HPX_ASSERT(steal_check_rounds != 0);
+        HPX_ASSERT(step.pauses_per_round != 0 && step.steal_check_rounds != 0);
         auto& data = sentinel_.data_;
+
+        // a round of more pauses lasts longer than the measured one
+        double const rounds_per_us = spin_rounds_per_us_ *
+            scheduling_policy::calibration_pauses_per_round /
+            step.pauses_per_round;
         auto const rounds = (std::max) (std::uint64_t(1),
             static_cast<std::uint64_t>(std::llround(
-                static_cast<double>(period_us) * spin_rounds_per_us_)));
+                static_cast<double>(step.period.count()) * rounds_per_us)));
+        bool const calibration_round = step.pauses_per_round ==
+            scheduling_policy::calibration_pauses_per_round;
+
         std::uint64_t seen = data.new_threads.load(std::memory_order_relaxed);
         for (std::uint64_t round = 1; round <= rounds; ++round)
         {
-            detail::spin_round();
+            if (calibration_round)
+            {
+                detail::spin_round();
+            }
+            else
+            {
+                detail::spin_round(step.pauses_per_round);
+            }
             if (get_queue_length(num_thread) != 0)
             {
                 break;
             }
             std::uint64_t const now =
                 data.new_threads.load(std::memory_order_relaxed);
-            if ((now != seen || round % steal_check_rounds == 0) &&
+            if ((now != seen || round % step.steal_check_rounds == 0) &&
                 has_visible_work(num_thread))
             {
                 break;
@@ -290,13 +305,13 @@ namespace hpx::threads::policies {
         step.period = std::chrono::microseconds(std::lround(
             (std::min) (max_idle_backoff_time_, std::pow(2.0, exponent))));
 
+        step.pauses_per_round = scheduling_policy::calibration_pauses_per_round;
         step.steal_check_rounds = idle_backoff_steal_check_rounds_;
         if (static_cast<double>(step.period.count()) >= min_idle_backoff_time_)
         {
             return step;    // sleep, or spin as the sentinel
         }
 
-        step.pauses_per_round = scheduling_policy::calibration_pauses_per_round;
         step.spin_rounds = (std::max) (std::uint64_t(1),
             static_cast<std::uint64_t>(
                 std::llround(static_cast<double>(step.period.count()) *
