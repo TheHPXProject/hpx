@@ -11,6 +11,7 @@
 #include <hpx/modules/lcos_local.hpp>
 #include <hpx/modules/synchronization.hpp>
 #include <hpx/modules/testing.hpp>
+#include <hpx/thread.hpp>
 
 #include <atomic>
 #include <cstddef>
@@ -642,6 +643,55 @@ void test_synchronize_async_move()
     f3.get();
 }
 
+// Each continuation advances the gate, which releases the waiter for the next
+// generation, and its continuation runs inline. HPX bounds this recursion: at
+// the stack or depth limit it runs the continuation on a new thread. Thus some
+// of the continuations run on a thread other than the one that starts the
+// chain.
+void test_synchronize_async_long_chain()
+{
+    constexpr std::size_t num_generations = 10000;
+
+    hpx::spinlock mtx;
+    hpx::lcos::local::and_gate gate;
+    hpx::thread::id const starting_thread = hpx::this_thread::get_id();
+    std::atomic<std::size_t> num_on_other_thread(0);
+
+    auto advance = [&]() {
+        lock_type l(mtx);
+        gate.next_generation(l);
+        auto released = gate.take_released_waiters(l);
+        l.unlock();
+        released.set();
+    };
+
+    std::vector<hpx::future<void>> chain;
+    chain.reserve(num_generations);
+    {
+        lock_type l(mtx);
+        for (std::size_t g = 2; g != num_generations + 2; ++g)
+        {
+            chain.push_back(gate.synchronize_async(g, l).then(
+                hpx::launch::sync, [&](hpx::future<void>&& f) {
+                    f.get();
+                    if (hpx::this_thread::get_id() != starting_thread)
+                    {
+                        ++num_on_other_thread;
+                    }
+                    advance();
+                }));
+        }
+    }
+
+    advance();    // generation: 1 -> 2, starts the chain
+
+    for (auto& f : chain)
+    {
+        f.get();
+    }
+    HPX_TEST_LT(std::size_t(0), num_on_other_thread.load());
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 int hpx_main()
 {
@@ -669,6 +719,7 @@ int hpx_main()
     test_synchronize_async_move_assigned_to();
     test_synchronize_async_next_generation_without_lock();
     test_synchronize_async_move();
+    test_synchronize_async_long_chain();
 
     return hpx::local::finalize();
 }
