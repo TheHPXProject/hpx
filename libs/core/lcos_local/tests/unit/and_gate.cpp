@@ -577,15 +577,20 @@ void test_synchronize_async_released_not_taken()
     HPX_TEST(not_reached.has_exception());
 }
 
-// The lock-free next_generation() sets the released waiters itself. It
-// needs a gate with a real mutex, and base_and_gate's synchronize_async() is
-// protected.
+// The next_generation() overload that takes no lock sets the released waiters
+// itself. and_gate inherits that overload, but it does not compile for
+// and_gate: with hpx::no_mutex it passes a std::unique_lock<hpx::no_mutex> to
+// conditional_cv, which accepts only std::unique_lock<hpx::spinlock>. Thus this
+// test uses base_and_gate<hpx::spinlock>, whose synchronize_async() is
+// protected. Its mutex is private, so the test holds a separate lock for
+// synchronize_async(), which only asserts that a lock is held. The test runs
+// on one thread.
 struct async_gate : hpx::lcos::local::base_and_gate<hpx::spinlock>
 {
     using base_and_gate::synchronize_async;
 };
 
-void test_synchronize_async_lock_free_next_generation()
+void test_synchronize_async_next_generation_without_lock()
 {
     async_gate gate;
     hpx::spinlock mtx;
@@ -655,7 +660,7 @@ int hpx_main()
     test_synchronize_async_error_paths();
     test_synchronize_async_gate_destroyed();
     test_synchronize_async_released_not_taken();
-    test_synchronize_async_lock_free_next_generation();
+    test_synchronize_async_next_generation_without_lock();
     test_synchronize_async_move();
 
     return hpx::local::finalize();
