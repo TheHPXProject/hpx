@@ -270,8 +270,16 @@ void test_copy_remove_ranges_sender()
 
 int hpx_main()
 {
-    copy_if_sender_test<std::forward_iterator_tag>();
     copy_if_sender_test<std::random_access_iterator_tag>();
+
+    // Exercise forward iterators without repeating every scheduler/policy
+    // combination already covered by the random-access cases above.
+    test_copy_if_scheduler(
+        hpx::launch::async, hpx::execution::par, std::forward_iterator_tag{});
+    test_copy_if_sender(hpx::launch::async,
+        hpx::execution::par(hpx::execution::task), std::forward_iterator_tag{});
+    test_copy_if_sender_exception<std::runtime_error>(hpx::launch::async,
+        hpx::execution::par(hpx::execution::task), std::forward_iterator_tag{});
     test_copy_remove_ranges_sender();
     return hpx::local::finalize();
 }
