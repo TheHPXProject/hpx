@@ -39,11 +39,25 @@ namespace {
     // the thread yields between setting the timer and suspending
     void timer_yield_then_suspend()
     {
-        hpx::threads::set_thread_state(hpx::threads::get_self_id(), in_10ms());
+        auto const deadline = in_10ms();
+        hpx::threads::set_thread_state(hpx::threads::get_self_id(), deadline);
 
         // yield: active -> pending -> active, each change increments the tag
         // of the thread's state
         hpx::this_thread::suspend(thread_schedule_state::pending);
+
+        // A timer that fires while its thread is pending doesn't change the
+        // thread's state (it is about to run anyway), so the suspension below
+        // would never be resumed. That can only have happened if the
+        // deadline has passed by now; then this round is skipped, waiting
+        // for the timer if it fires while this thread is still active
+        // (which is retried until the thread is suspended).
+        if (std::chrono::steady_clock::now() >= deadline.value())
+        {
+            hpx::this_thread::suspend(hpx::chrono::steady_time_point(
+                deadline.value() + std::chrono::milliseconds(10)));
+            return;
+        }
 
         thread_restart_state const statex =
             hpx::this_thread::suspend(thread_schedule_state::suspended);
