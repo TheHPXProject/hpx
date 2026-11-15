@@ -242,7 +242,8 @@ void for_loop_strided_test_induction()
     constexpr std::size_t stride = 3;
     std::vector<std::size_t> observed(size, size);
     std::size_t live_out = 0;
-    hpx::experimental::for_loop_strided(par, std::size_t(0), size, stride,
+    auto policy = par.with(hpx::execution::experimental::static_chunk_size(12));
+    hpx::experimental::for_loop_strided(policy, std::size_t(0), size, stride,
         hpx::experimental::induction(live_out),
         [&observed](std::size_t index, std::size_t induction) {
             observed[index] = induction;
