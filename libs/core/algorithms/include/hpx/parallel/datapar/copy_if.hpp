@@ -33,10 +33,9 @@ namespace hpx::parallel::detail {
     inline constexpr bool is_copy_if_invocable_v = false;
 
     template <typename Pred, typename Proj, typename Vector>
-        requires(std::is_invocable_v<std::decay_t<Proj>&, Vector&>)
+        requires(std::is_invocable_v<Proj&, Vector&>)
     inline constexpr bool is_copy_if_invocable_v<Pred, Proj, Vector> =
-        std::is_invocable_v<std::decay_t<Pred>&,
-            std::invoke_result_t<std::decay_t<Proj>&, Vector&>>;
+        std::is_invocable_v<Pred&, std::invoke_result_t<Proj&, Vector&>>;
 
     template <typename Pred, typename Proj, typename Vector>
     inline constexpr bool is_copy_if_datapar_compatible_impl_v = false;
@@ -45,7 +44,7 @@ namespace hpx::parallel::detail {
         requires(is_copy_if_invocable_v<Pred, Proj, Vector>)
     inline constexpr bool
         is_copy_if_datapar_compatible_impl_v<Pred, Proj, Vector> = requires(
-            std::decay_t<Pred>& pred, std::decay_t<Proj>& proj, Vector& v) {
+            Pred& pred, Proj& proj, Vector& v) {
             requires(!std::is_convertible_v<
                 std::decay_t<decltype(HPX_INVOKE(pred, HPX_INVOKE(proj, v)))>,
                 bool>);

@@ -643,6 +643,44 @@ void test_copy_if_explicit_bool_wrapper()
     run_test(par_simd(task));
 }
 
+struct non_const_pack_pred
+{
+    template <typename V>
+        requires(hpx::parallel::traits::is_vector_pack_v<std::decay_t<V>>)
+    auto operator()(V const& v)
+    {
+        return v > 0;
+    }
+
+    bool operator()(int x) const
+    {
+        return x > 0;
+    }
+};
+
+void test_copy_if_non_const_pack_pred()
+{
+    using namespace hpx::execution;
+
+    std::vector<int> c = {1, -2, 3, 4, -5, 6, -7, 8};
+    std::vector<int> expected = {1, 3, 4, 6, 8};
+
+    non_const_pack_pred const pred{};
+
+    auto run_test = [&](auto&& pol) {
+        std::vector<int> d(c.size(), 0);
+        auto res =
+            copy_if_test_invoke(pol, c.begin(), c.end(), d.begin(), pred);
+        HPX_TEST_EQ(static_cast<std::size_t>(res - d.begin()), expected.size());
+        HPX_TEST(std::equal(d.begin(), res, expected.begin()));
+    };
+
+    run_test(simd);
+    run_test(par_simd);
+    run_test(simd(task));
+    run_test(par_simd(task));
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 int hpx_main(hpx::program_options::variables_map& vm)
 {
@@ -679,6 +717,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
     test_copy_if_scalar_generic_pred_proj();
     test_copy_if_explicit_bool_wrapper();
     test_copy_if_user_type();
+    test_copy_if_non_const_pack_pred();
 
     test_copy_if_projections(simd);
     test_copy_if_projections(par_simd);
