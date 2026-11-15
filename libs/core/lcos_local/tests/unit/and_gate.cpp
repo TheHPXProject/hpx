@@ -544,6 +544,39 @@ void test_synchronize_async_gate_destroyed()
     HPX_TEST(f.has_exception());
 }
 
+// A waiter whose generation was reached but which was not taken yet becomes
+// ready when the gate is destroyed or move-assigned to, instead of reporting a
+// broken promise.
+void test_synchronize_async_released_not_taken()
+{
+    hpx::spinlock mtx;
+    hpx::future<void> f;
+    {
+        hpx::lcos::local::and_gate gate;
+        lock_type l(mtx);
+        f = gate.synchronize_async(2, l);
+        gate.next_generation(l);    // released, but not taken
+    }
+    HPX_TEST(f.is_ready());
+    HPX_TEST(!f.has_exception());
+
+    hpx::lcos::local::and_gate target;
+    hpx::future<void> reached;
+    hpx::future<void> not_reached;
+    {
+        lock_type l(mtx);
+        reached = target.synchronize_async(2, l);
+        not_reached = target.synchronize_async(3, l);
+        target.next_generation(l);    // generation: 1 -> 2
+    }
+
+    target = hpx::lcos::local::and_gate();
+    HPX_TEST(reached.is_ready());
+    HPX_TEST(!reached.has_exception());
+    HPX_TEST(not_reached.is_ready());
+    HPX_TEST(not_reached.has_exception());
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 int hpx_main()
 {
@@ -568,6 +601,7 @@ int hpx_main()
     test_synchronize_async_continuation_without_lock();
     test_synchronize_async_error_paths();
     test_synchronize_async_gate_destroyed();
+    test_synchronize_async_released_not_taken();
 
     return hpx::local::finalize();
 }
