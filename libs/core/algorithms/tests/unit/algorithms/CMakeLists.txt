@@ -217,6 +217,7 @@ set(sender_tests
     reverse_copy_sender
     rotate_sender
     rotate_copy_sender
+    search_n_sender
     search_sender
     scan_partitioner_sender
     sender_algorithm_contracts
