@@ -8,6 +8,8 @@
 
 #include <hpx/config.hpp>
 #include <hpx/modules/functional.hpp>
+#include <hpx/modules/iterator_support.hpp>
+#include <hpx/modules/thread_support.hpp>
 #include <hpx/modules/type_support.hpp>
 
 #include <iterator>
@@ -36,5 +38,22 @@ namespace hpx::parallel::detail {
         F const& f) noexcept
     {
         return hpx::traits::get_task_size_for<F, Args...>::call(f);
+    }
+
+    // The size of an iteration that dereferences the iterators its and calls
+    // f with arguments of the types Args, to be read before f is moved into
+    // the function that calls it. Dereferencing an iterator that computes
+    // its element can take any amount of time, which makes the size of the
+    // iteration unknown (see traits::iterator_dereference_task_size).
+    HPX_CXX_CORE_EXPORT template <typename... Args, typename F,
+        typename... Iters>
+    [[nodiscard]] constexpr hpx::threads::task_size task_size_of_iteration(
+        F const& f, Iters const&... its) noexcept
+    {
+        hpx::threads::task_size size = task_size_of_call<Args...>(f);
+        ((size = hpx::threads::combined_task_size(size,
+              hpx::traits::iterator_dereference_task_size<Iters>::call(its))),
+            ...);
+        return size;
     }
 }    // namespace hpx::parallel::detail

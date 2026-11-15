@@ -287,7 +287,7 @@ namespace hpx {
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/iterator_support.hpp>
-
+#include <hpx/modules/thread_support.hpp>
 #include <hpx/modules/threading_base.hpp>
 #include <hpx/modules/tracing.hpp>
 #include <hpx/modules/type_support.hpp>
@@ -669,6 +669,11 @@ namespace hpx::parallel {
             hpx::tuple<std::size_t, std::size_t> data_ = hpx::make_tuple(0, 0);
 
         public:
+            // returns a copy of the stored indices, dereferencing it is a nano
+            // task
+            static constexpr hpx::threads::task_size dereference_task_size =
+                hpx::threads::task_size::nano;
+
             const_index_value_iterator() = default;
             explicit constexpr const_index_value_iterator(
                 std::size_t value, std::size_t start = 0) noexcept
@@ -894,10 +899,10 @@ namespace hpx::parallel {
             };
 
             // an iteration has the size of the comparison of two elements
-            auto f1 = hpx::threads::detail::with_task_size_of<
-                task_size_argument_t<Iter1, Proj1>,
-                task_size_argument_t<Iter2, Proj2>>(
-                HPX_MOVE(merge_chunk), comp);
+            auto f1 = hpx::threads::detail::with_task_size(
+                HPX_MOVE(merge_chunk),
+                task_size_of_iteration<task_size_argument_t<Iter1, Proj1>,
+                    task_size_argument_t<Iter2, Proj2>>(comp, first1, first2));
 
             auto f2 = [end1, end2, len1, len2, dest](auto&&) {
                 return result_type{end1, end2, std::next(dest, len1 + len2)};

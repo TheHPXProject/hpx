@@ -565,8 +565,8 @@ namespace hpx::parallel {
                 // an iteration has the size of the predicate called with an
                 // element of each range
                 auto const size =
-                    task_size_of_call<task_size_argument_t<Iter1, Proj1>,
-                        task_size_argument_t<Iter2, Proj2>>(f);
+                    task_size_of_iteration<task_size_argument_t<Iter1, Proj1>,
+                        task_size_argument_t<Iter2, Proj2>>(f, first1, first2);
                 auto f1 = [tok, f = HPX_FORWARD(F, f),
                               proj1 = HPX_FORWARD(Proj1, proj1),
                               proj2 = HPX_FORWARD(Proj2, proj2)](
@@ -661,8 +661,8 @@ namespace hpx::parallel {
                 // an iteration has the size of the predicate called with an
                 // element of each range
                 auto const size =
-                    task_size_of_call<task_size_argument_t<FwdIter1>,
-                        task_size_argument_t<FwdIter2>>(f);
+                    task_size_of_iteration<task_size_argument_t<FwdIter1>,
+                        task_size_argument_t<FwdIter2>>(f, first1, first2);
                 auto f1 = [f, tok](
                               zip_iterator it, std::size_t part_count) mutable
                     -> intermediate_result_t {

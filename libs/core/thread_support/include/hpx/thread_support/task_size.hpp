@@ -92,6 +92,19 @@ namespace hpx::threads {
         }
         return task_size::nano;
     }
+
+    /// The size of a task that does work of the size \p first and then work of
+    /// the size \p second, for instance dereferencing an iterator and calling
+    /// a function with the element. It is unknown if either size is unknown,
+    /// otherwise it is the larger one: the sizes are a hundred times apart, so
+    /// the smaller one hardly adds to the larger one.
+    HPX_CXX_CORE_EXPORT [[nodiscard]] constexpr task_size combined_task_size(
+        task_size const first, task_size const second) noexcept
+    {
+        if (first == task_size::unknown || second == task_size::unknown)
+            return task_size::unknown;
+        return first < second ? second : first;
+    }
 }    // namespace hpx::threads
 
 namespace hpx {
@@ -99,6 +112,7 @@ namespace hpx {
     HPX_CXX_CORE_EXPORT using threads::task_size;
     HPX_CXX_CORE_EXPORT using threads::task_size_duration;
     HPX_CXX_CORE_EXPORT using threads::bulk_task_size;
+    HPX_CXX_CORE_EXPORT using threads::combined_task_size;
 }    // namespace hpx
 
 namespace hpx::traits {

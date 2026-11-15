@@ -348,9 +348,9 @@ namespace hpx::parallel {
                 return util::partitioner<ExPolicy, difference_type>::call(
                     HPX_FORWARD(ExPolicy, policy), first,
                     detail::distance(first, last),
-                    hpx::threads::detail::with_task_size_of<
-                        task_size_argument_t<IterB, Proj>>(
-                        HPX_MOVE(f1), f1.op_),
+                    hpx::threads::detail::with_task_size(HPX_MOVE(f1),
+                        task_size_of_iteration<
+                            task_size_argument_t<IterB, Proj>>(f1.op_, first)),
                     hpx::unwrapping([](auto&& results, auto&&...) {
                         return util::accumulate_n(hpx::util::begin(results),
                             hpx::util::size(results), difference_type(0),
@@ -418,9 +418,9 @@ namespace hpx::parallel {
                 return util::partitioner<ExPolicy, difference_type>::call(
                     HPX_FORWARD(ExPolicy, policy), first,
                     detail::distance(first, last),
-                    hpx::threads::detail::with_task_size_of<
-                        task_size_argument_t<IterB, Proj>>(
-                        HPX_MOVE(f1), f1.op_),
+                    hpx::threads::detail::with_task_size(HPX_MOVE(f1),
+                        task_size_of_iteration<
+                            task_size_argument_t<IterB, Proj>>(f1.op_, first)),
                     hpx::unwrapping([](auto&& results, auto&&...) {
                         return util::accumulate_n(hpx::util::begin(results),
                             hpx::util::size(results), difference_type(0),

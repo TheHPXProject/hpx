@@ -9,7 +9,9 @@
 #include <hpx/config.hpp>
 #include <hpx/iterator_support/iterator_adaptor.hpp>
 #include <hpx/iterator_support/traits/is_iterator.hpp>
+#include <hpx/iterator_support/traits/iterator_dereference_task_size.hpp>
 #include <hpx/modules/functional.hpp>
+#include <hpx/modules/thread_support.hpp>
 #include <hpx/modules/type_support.hpp>
 
 #include <iterator>
@@ -140,3 +142,29 @@ namespace hpx::util {
         return transform_iterator<Iterator, Transformer>(it, Transformer());
     }
 }    // namespace hpx::util
+
+///////////////////////////////////////////////////////////////////////////////
+namespace hpx::traits {
+
+    // Dereferencing a transform_iterator dereferences the underlying iterator
+    // and calls the transformer with it.
+    template <typename Iterator, typename Transformer, typename Reference,
+        typename Value, typename Category, typename Difference>
+    struct iterator_dereference_task_size<hpx::util::transform_iterator<
+        Iterator, Transformer, Reference, Value, Category, Difference>>
+    {
+        static constexpr threads::task_size value = threads::combined_task_size(
+            iterator_dereference_task_size<Iterator>::value,
+            get_task_size_for<Transformer, Iterator const&>::value);
+
+        [[nodiscard]] static constexpr threads::task_size call(
+            hpx::util::transform_iterator<Iterator, Transformer, Reference,
+                Value, Category, Difference> const& it) noexcept
+        {
+            return threads::combined_task_size(
+                iterator_dereference_task_size<Iterator>::call(it.base()),
+                get_task_size_for<Transformer, Iterator const&>::call(
+                    it.transformer()));
+        }
+    };
+}    // namespace hpx::traits

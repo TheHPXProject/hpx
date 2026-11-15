@@ -298,8 +298,8 @@ namespace hpx::parallel {
                 // an iteration has the size of the predicate called with two
                 // adjacent elements
                 auto const size =
-                    task_size_of_call<task_size_argument_t<FwdIter_, Proj>,
-                        task_size_argument_t<FwdIter_, Proj>>(pred);
+                    task_size_of_iteration<task_size_argument_t<FwdIter_, Proj>,
+                        task_size_argument_t<FwdIter_, Proj>>(pred, first);
                 util::invoke_projected<Pred, Proj> pred_projected{
                     HPX_FORWARD(Pred, pred), HPX_FORWARD(Proj, proj)};
                 hpx::parallel::util::cancellation_token<> tok;
@@ -399,8 +399,8 @@ namespace hpx::parallel {
                 // an iteration has the size of the predicate called with two
                 // adjacent elements
                 auto const size =
-                    task_size_of_call<task_size_argument_t<FwdIter_, Proj>,
-                        task_size_argument_t<FwdIter_, Proj>>(pred);
+                    task_size_of_iteration<task_size_argument_t<FwdIter_, Proj>,
+                        task_size_argument_t<FwdIter_, Proj>>(pred, first);
                 util::invoke_projected<Pred, Proj> pred_projected{
                     HPX_FORWARD(Pred, pred), HPX_FORWARD(Proj, proj)};
 

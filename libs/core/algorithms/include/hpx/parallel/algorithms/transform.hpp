@@ -519,9 +519,11 @@ namespace hpx::parallel {
                 // element
                 auto iteration = transform_iteration<ExPolicy, F, Proj>(
                     HPX_FORWARD(F, f), HPX_FORWARD(Proj, proj));
-                auto f1 = hpx::threads::detail::with_task_size_of<
-                    task_size_argument_t<FwdIter1B, Proj>>(
-                    HPX_MOVE(iteration), iteration.f_);
+                auto f1 =
+                    hpx::threads::detail::with_task_size(HPX_MOVE(iteration),
+                        task_size_of_iteration<
+                            task_size_argument_t<FwdIter1B, Proj>>(
+                            iteration.f_, first));
 
                 return util::detail::get_in_out_result(
                     util::foreach_partitioner<ExPolicy>::call(
@@ -770,10 +772,12 @@ namespace hpx::parallel {
                     transform_binary_iteration<ExPolicy, F, Proj1, Proj2>(
                         HPX_FORWARD(F, f), HPX_FORWARD(Proj1, proj1),
                         HPX_FORWARD(Proj2, proj2));
-                auto f1 = hpx::threads::detail::with_task_size_of<
-                    task_size_argument_t<FwdIter1B, Proj1>,
-                    task_size_argument_t<FwdIter2, Proj2>>(
-                    HPX_MOVE(iteration), iteration.f_);
+                auto f1 =
+                    hpx::threads::detail::with_task_size(HPX_MOVE(iteration),
+                        task_size_of_iteration<
+                            task_size_argument_t<FwdIter1B, Proj1>,
+                            task_size_argument_t<FwdIter2, Proj2>>(
+                            iteration.f_, first1, first2));
 
                 return util::detail::get_in_in_out_result(
                     util::foreach_partitioner<ExPolicy>::call(
@@ -857,10 +861,12 @@ namespace hpx::parallel {
                     transform_binary_iteration<ExPolicy, F, Proj1, Proj2>(
                         HPX_FORWARD(F, f), HPX_FORWARD(Proj1, proj1),
                         HPX_FORWARD(Proj2, proj2));
-                auto f1 = hpx::threads::detail::with_task_size_of<
-                    task_size_argument_t<FwdIter1B, Proj1>,
-                    task_size_argument_t<FwdIter2B, Proj2>>(
-                    HPX_MOVE(iteration), iteration.f_);
+                auto f1 =
+                    hpx::threads::detail::with_task_size(HPX_MOVE(iteration),
+                        task_size_of_iteration<
+                            task_size_argument_t<FwdIter1B, Proj1>,
+                            task_size_argument_t<FwdIter2B, Proj2>>(
+                            iteration.f_, first1, first2));
 
                 // different versions of clang-format do different things
                 // clang-format off

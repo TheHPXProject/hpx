@@ -368,8 +368,8 @@ namespace hpx::parallel {
                 // an iteration has the size of the comparison of an element
                 // with its parent
                 auto const size =
-                    task_size_of_call<task_size_argument_t<Iter, Proj>,
-                        task_size_argument_t<Iter, Proj>>(comp);
+                    task_size_of_iteration<task_size_argument_t<Iter, Proj>,
+                        task_size_argument_t<Iter, Proj>>(comp, first);
                 // Note: replacing the invoke() with HPX_INVOKE()
                 // below makes gcc generate errors
                 auto f1 = [tok, first, comp = HPX_FORWARD(Comp, comp),
@@ -510,8 +510,8 @@ namespace hpx::parallel {
                 // an iteration has the size of the comparison of an element
                 // with its parent
                 auto const size =
-                    task_size_of_call<task_size_argument_t<Iter, Proj>,
-                        task_size_argument_t<Iter, Proj>>(comp);
+                    task_size_of_iteration<task_size_argument_t<Iter, Proj>,
+                        task_size_argument_t<Iter, Proj>>(comp, first);
                 // Note: replacing the invoke() with HPX_INVOKE()
                 // below makes gcc generate errors
                 auto f1 = [tok, first, comp = HPX_FORWARD(Comp, comp),

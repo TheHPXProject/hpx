@@ -401,7 +401,8 @@ namespace hpx::parallel {
                 // an iteration has the size of the predicate called with an
                 // element
                 auto const size =
-                    task_size_of_call<task_size_argument_t<FwdIter, Proj>>(op);
+                    task_size_of_iteration<task_size_argument_t<FwdIter, Proj>>(
+                        op, first);
                 auto f1 = [op = HPX_FORWARD(F, op), tok,
                               proj = HPX_FORWARD(Proj, proj)](
                               FwdIter part_begin,
@@ -482,7 +483,8 @@ namespace hpx::parallel {
                 // an iteration has the size of the predicate called with an
                 // element
                 auto const size =
-                    task_size_of_call<task_size_argument_t<FwdIter, Proj>>(op);
+                    task_size_of_iteration<task_size_argument_t<FwdIter, Proj>>(
+                        op, first);
                 auto f1 = [op = HPX_FORWARD(F, op), tok,
                               proj = HPX_FORWARD(Proj, proj)](
                               FwdIter part_begin,
@@ -561,7 +563,8 @@ namespace hpx::parallel {
                 // an iteration has the size of the predicate called with an
                 // element
                 auto const size =
-                    task_size_of_call<task_size_argument_t<FwdIter, Proj>>(op);
+                    task_size_of_iteration<task_size_argument_t<FwdIter, Proj>>(
+                        op, first);
                 auto f1 = [op = HPX_FORWARD(F, op), tok,
                               proj = HPX_FORWARD(Proj, proj)](
                               FwdIter part_begin,

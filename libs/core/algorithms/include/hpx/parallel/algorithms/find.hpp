@@ -1075,8 +1075,8 @@ namespace hpx::parallel {
                 // an iteration has the size of the comparison of an element
                 // with the value
                 auto const size =
-                    task_size_of_call<task_size_argument_t<Iter, Proj>,
-                        T const&>(hpx::parallel::detail::equal_to{});
+                    task_size_of_iteration<task_size_argument_t<Iter, Proj>,
+                        T const&>(hpx::parallel::detail::equal_to{}, first);
                 auto f1 = [val, proj = HPX_FORWARD(Proj, proj), tok](Iter it,
                               std::size_t part_size,
                               std::size_t base_idx) mutable -> void {
@@ -1164,7 +1164,8 @@ namespace hpx::parallel {
                 // an iteration has the size of the predicate called with an
                 // element
                 auto const size =
-                    task_size_of_call<task_size_argument_t<Iter, Proj>>(f);
+                    task_size_of_iteration<task_size_argument_t<Iter, Proj>>(
+                        f, first);
                 auto f1 = [f = HPX_FORWARD(F, f),
                               proj = HPX_FORWARD(Proj, proj),
                               tok](Iter it, std::size_t part_size,
@@ -1252,7 +1253,8 @@ namespace hpx::parallel {
                 // an iteration has the size of the predicate called with an
                 // element
                 auto const size =
-                    task_size_of_call<task_size_argument_t<Iter, Proj>>(f);
+                    task_size_of_iteration<task_size_argument_t<Iter, Proj>>(
+                        f, first);
                 auto f1 = [f = HPX_FORWARD(F, f),
                               proj = HPX_FORWARD(Proj, proj),
                               tok](Iter it, std::size_t part_size,
@@ -1887,8 +1889,8 @@ namespace hpx::parallel::detail {
             // an iteration has the size of the comparison of an element with
             // the value
             auto const size =
-                task_size_of_call<task_size_argument_t<Iter, Proj>, T const&>(
-                    hpx::parallel::detail::equal_to{});
+                task_size_of_iteration<task_size_argument_t<Iter, Proj>,
+                    T const&>(hpx::parallel::detail::equal_to{}, first);
             auto f1 = [val, proj = HPX_FORWARD(Proj, proj), tok](Iter it,
                           std::size_t part_size,
                           std::size_t base_idx) mutable -> void {
@@ -1980,7 +1982,8 @@ namespace hpx::parallel::detail {
 
             // an iteration has the size of the predicate called with an element
             auto const size =
-                task_size_of_call<task_size_argument_t<Iter, Proj>>(f);
+                task_size_of_iteration<task_size_argument_t<Iter, Proj>>(
+                    f, first);
             auto f1 = [f = HPX_FORWARD(F, f), proj = HPX_FORWARD(Proj, proj),
                           tok](Iter it, std::size_t part_size,
                           std::size_t base_idx) mutable -> void {
@@ -2073,7 +2076,8 @@ namespace hpx::parallel::detail {
 
             // an iteration has the size of the predicate called with an element
             auto const size =
-                task_size_of_call<task_size_argument_t<Iter, Proj>>(f);
+                task_size_of_iteration<task_size_argument_t<Iter, Proj>>(
+                    f, first);
             auto f1 = [f = HPX_FORWARD(F, f), proj = HPX_FORWARD(Proj, proj),
                           tok](Iter it, std::size_t part_size,
                           std::size_t base_idx) mutable -> void {

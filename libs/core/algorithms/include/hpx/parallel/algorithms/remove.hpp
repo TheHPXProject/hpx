@@ -310,7 +310,8 @@ namespace hpx::parallel {
                 // an iteration has the size of the predicate called with an
                 // element
                 auto const size =
-                    task_size_of_call<task_size_argument_t<Iter, Proj>>(pred);
+                    task_size_of_iteration<task_size_argument_t<Iter, Proj>>(
+                        pred, first);
                 // Note: replacing the invoke() with HPX_INVOKE()
                 // below makes gcc generate errors
                 auto f1 = [pred = HPX_FORWARD(Pred, pred),

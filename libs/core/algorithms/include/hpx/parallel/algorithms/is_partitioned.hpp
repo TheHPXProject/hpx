@@ -218,7 +218,8 @@ namespace hpx::parallel {
                 // an iteration has the size of the predicate called with an
                 // element
                 auto const size =
-                    task_size_of_call<task_size_argument_t<Iter_, Proj>>(pred);
+                    task_size_of_iteration<task_size_argument_t<Iter_, Proj>>(
+                        pred, first);
                 util::invoke_projected<Pred, Proj> pred_projected(
                     HPX_FORWARD(Pred, pred), HPX_FORWARD(Proj, proj));
                 util::cancellation_token<> tok;
