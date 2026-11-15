@@ -33,6 +33,10 @@ foreach(benchmark ${benchmarks})
       2
       THREADS_PER_LOCALITY
       2
+      ARGS
+      --vector_size=65536
+      --test_count=1
+      --partitions_per_locality=8
     )
     add_hpx_performance_test(
       "modules.segmented_algorithms"
@@ -45,6 +49,10 @@ foreach(benchmark ${benchmarks})
       4
       THREADS_PER_LOCALITY
       2
+      ARGS
+      --vector_size=65536
+      --test_count=1
+      --partitions_per_locality=8
     )
   else()
     add_hpx_performance_test("modules.segmented_algorithms" ${benchmark})
