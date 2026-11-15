@@ -234,9 +234,12 @@ namespace hpx::collectives::detail {
                 if (!reached.is_ready())
                 {
                     // The request runs inline on the thread that releases
-                    // it, after the gate's lock was released. HPX moves a
-                    // continuation to a new thread if the stack runs low, so
-                    // a chain of kept generations does not overflow it.
+                    // it, after the gate's lock was released. To bound the
+                    // stack, HPX checks the free stack space (with
+                    // HPX_HAVE_THREADS_GET_STACK_POINTER) or else the nesting
+                    // depth (HPX_CONTINUATION_MAX_RECURSION_DEPTH). At the
+                    // limit it runs the continuation on a new thread, and the
+                    // releasing thread waits for that thread to finish.
                     return Result(reached.then(hpx::launch::sync,
                         [f = HPX_FORWARD(F, f)](hpx::future<void>&& r) mutable {
                             r.get();
