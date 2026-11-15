@@ -577,6 +577,59 @@ void test_synchronize_async_released_not_taken()
     HPX_TEST(not_reached.has_exception());
 }
 
+// The lock-free next_generation() sets the released waiters itself. It
+// needs a gate with a real mutex, and base_and_gate's synchronize_async() is
+// protected.
+struct async_gate : hpx::lcos::local::base_and_gate<hpx::spinlock>
+{
+    using base_and_gate::synchronize_async;
+};
+
+void test_synchronize_async_lock_free_next_generation()
+{
+    async_gate gate;
+    hpx::spinlock mtx;
+
+    hpx::future<void> f;
+    {
+        lock_type l(mtx);
+        f = gate.synchronize_async(2, l);
+    }
+    HPX_TEST(!f.is_ready());
+
+    gate.next_generation();    // generation: 1 -> 2
+    HPX_TEST(f.is_ready());
+    f.get();
+}
+
+// Asynchronous waiters move with the gate. The moved-from gate does not
+// break their promises, and the gate they moved to releases them.
+void test_synchronize_async_move()
+{
+    hpx::spinlock mtx;
+    lock_type l(mtx);
+
+    hpx::lcos::local::and_gate gate;
+    hpx::future<void> f2 = gate.synchronize_async(2, l);
+    hpx::future<void> f3 = gate.synchronize_async(3, l);
+
+    hpx::lcos::local::and_gate moved(std::move(gate));
+    HPX_TEST(!f2.is_ready());
+
+    moved.next_generation(l);    // generation: 1 -> 2
+    moved.take_released_waiters(l).set();
+    f2.get();
+    HPX_TEST(!f3.is_ready());
+
+    hpx::lcos::local::and_gate target;
+    target = std::move(moved);
+    HPX_TEST(!f3.is_ready());
+
+    target.next_generation(l);    // generation: 2 -> 3
+    target.take_released_waiters(l).set();
+    f3.get();
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 int hpx_main()
 {
@@ -602,6 +655,8 @@ int hpx_main()
     test_synchronize_async_error_paths();
     test_synchronize_async_gate_destroyed();
     test_synchronize_async_released_not_taken();
+    test_synchronize_async_lock_free_next_generation();
+    test_synchronize_async_move();
 
     return hpx::local::finalize();
 }
