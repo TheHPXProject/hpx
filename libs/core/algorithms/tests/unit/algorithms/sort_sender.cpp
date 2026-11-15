@@ -7,6 +7,7 @@
 #include "sender_algorithm_test_utils.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <cstddef>
 #include <exception>
 #include <functional>
@@ -85,10 +86,81 @@ void test_exceptions()
     HPX_TEST(caught_bad_alloc);
 }
 
+template <bool BadAlloc>
+void test_recursive_exception()
+{
+    auto data = sender_test::values(131073);
+    std::atomic<std::size_t> comparisons{0};
+    std::atomic<bool> child_compared{false};
+    // For this fixed input, the top-level sortedness check and partitioning
+    // use fewer than five comparisons per element. The later comparisons run
+    // after recursive child futures have been created.
+    std::size_t const child_threshold = 5 * data.size();
+    auto comp = [&](int lhs, int rhs) {
+        if (comparisons.fetch_add(1, std::memory_order_relaxed) >=
+            child_threshold)
+        {
+            child_compared.store(true, std::memory_order_relaxed);
+            if constexpr (BadAlloc)
+            {
+                throw std::bad_alloc();
+            }
+            else
+            {
+                throw std::runtime_error("recursive sort comparator failed");
+            }
+        }
+        return lhs < rhs;
+    };
+
+    bool caught_expected = false;
+    try
+    {
+        hpx::sort(hpx::execution::par.with(
+                      hpx::execution::experimental::static_chunk_size(65536)),
+            data.begin(), data.end(), comp);
+    }
+    catch (hpx::exception_list const& errors)
+    {
+        if constexpr (BadAlloc)
+        {
+            HPX_TEST(false);
+        }
+        else
+        {
+            caught_expected = errors.size() != 0;
+            for (auto const& error : errors)
+            {
+                try
+                {
+                    std::rethrow_exception(error);
+                }
+                catch (std::runtime_error const& e)
+                {
+                    HPX_TEST_EQ(std::string(e.what()),
+                        "recursive sort comparator failed");
+                }
+                catch (...)
+                {
+                    HPX_TEST(false);
+                }
+            }
+        }
+    }
+    catch (std::bad_alloc const&)
+    {
+        caught_expected = BadAlloc;
+    }
+    HPX_TEST(child_compared.load(std::memory_order_relaxed));
+    HPX_TEST(caught_expected);
+}
+
 int hpx_main()
 {
     sender_test::policies([](auto policy) { test(policy); });
     test_exceptions();
+    test_recursive_exception<false>();
+    test_recursive_exception<true>();
     return hpx::local::finalize();
 }
 
