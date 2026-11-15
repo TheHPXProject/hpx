@@ -84,6 +84,13 @@ namespace {
     // See hpx::supervision::testing::set_evict_peer_hook_for_testing().
     testing_hook evict_peer_hook;
 
+    // See hpx::supervision::testing::set_lifecycle_observer_hook_for_testing().
+    testing_hook lifecycle_observer_hook;
+
+    // See hpx::supervision::testing::
+    // set_evict_fenced_in_progress_hook_for_testing().
+    testing_hook evict_fenced_in_progress_hook;
+
     // See
     // hpx::supervision::testing::evict_peers_waiting_for_mirrors_for_testing().
     std::atomic<std::size_t> evict_peers_waiting_for_mirrors{0};
@@ -129,6 +136,17 @@ namespace hpx::supervision::testing {
     void set_evict_peer_hook_for_testing(hpx::function<void()> hook)
     {
         evict_peer_hook.set(HPX_MOVE(hook));
+    }
+
+    void set_lifecycle_observer_hook_for_testing(hpx::function<void()> hook)
+    {
+        lifecycle_observer_hook.set(HPX_MOVE(hook));
+    }
+
+    void set_evict_fenced_in_progress_hook_for_testing(
+        hpx::function<void()> hook)
+    {
+        evict_fenced_in_progress_hook.set(HPX_MOVE(hook));
     }
 
     std::size_t evict_peers_waiting_for_mirrors_for_testing()
@@ -182,7 +200,9 @@ namespace hpx::supervision::server {
     // event of an older epoch, delivered after the peer started a newer one,
     // does not evict the newer lifecycle. evict_fenced() relies on the
     // mirroring bookkeeping to tell whether a lifecycle transition was
-    // mirrored between its terminal check and its removal (see there). A
+    // mirrored between its terminal check and its removal, and while it
+    // checks the local state a second time before the removal, the callback
+    // waits on `cond_` before announcing the mirroring (see there). A
     // notification for an entry that is no longer in `peers_` (it
     // was evicted, or left and joined again, which creates a new entry with a
     // new generation and observers of its own) is not mirrored at all, so it
@@ -199,18 +219,33 @@ namespace hpx::supervision::server {
             [peer_locality, generation, this, keep_alive = get_id()](
                 hpx::supervision::lifecycle_event_notification const&
                     notification) {
+                lifecycle_observer_hook.run();
+
                 // Announce the mirroring below, unless the entry this observer
                 // was registered for is gone already (see the comment on
-                // register_observers() above).
+                // register_observers() above). While evict_fenced() decides
+                // whether to remove the entry, wait for its decision, so the
+                // local state it checks cannot change through this mirroring
+                // (see evict_fenced()). evict_fenced() holds no lock while
+                // deciding and only queries the local state, so the wait is
+                // short.
                 {
-                    std::scoped_lock<hpx::spinlock> l(mtx_);
-                    auto const it = peers_.find(peer_locality);
-                    if (it == peers_.end() ||
-                        it->second.generation != generation)
+                    std::unique_lock l(mtx_);
+                    for (;;)
                     {
-                        return true;
+                        auto const it = peers_.find(peer_locality);
+                        if (it == peers_.end() ||
+                            it->second.generation != generation)
+                        {
+                            return true;
+                        }
+                        if (!it->second.evict_fenced_in_progress)
+                        {
+                            ++it->second.mirrors_in_flight;
+                            break;
+                        }
+                        cond_.wait(l);
                     }
-                    ++it->second.mirrors_in_flight;
                 }
 
                 // Record that the mirroring is done, only once its result is
@@ -709,12 +744,14 @@ namespace hpx::supervision::server {
         // (see peer_entry::mirror_sequence). If one was, back off: the state
         // the check saw may already be superseded, and failure detection calls
         // this again on its next sweep if the state is still terminal by then.
-        // No lock is held across query_state().
+        // Another evict_fenced() call already deciding about the entry does
+        // so for this one as well. No lock is held across query_state().
         std::uint64_t mirror_sequence = 0;
         {
             std::scoped_lock<hpx::spinlock> l(mtx_);
             auto const it = find_entry();
-            if (it == peers_.end() || it->second.mirrors_in_flight != 0)
+            if (it == peers_.end() || it->second.mirrors_in_flight != 0 ||
+                it->second.evict_fenced_in_progress)
             {
                 return;
             }
@@ -730,27 +767,82 @@ namespace hpx::supervision::server {
 
         evict_fenced_hook.run();
 
+        // The mirroring bookkeeping only sees a lifecycle transition once its
+        // observer runs. The local state of a peer this registry does not
+        // exclusively mirror (a registry that joined its own locality, or
+        // several registries on this locality joining the same peer) can
+        // change before that, so the state the check above saw may be
+        // superseded although nothing was mirrored. Hold back the entry's
+        // lifecycle observer from here on (see register_observers()) and
+        // check the state again: a transition that changed it before this
+        // point is visible to that check. One that changes it afterwards is
+        // ordered after the removal, its notification is not mirrored, and the
+        // peer has to join again to be monitored, as after any other eviction.
+        {
+            std::scoped_lock<hpx::spinlock> l(mtx_);
+            auto const it = find_entry();
+            if (it == peers_.end() || it->second.mirrors_in_flight != 0 ||
+                it->second.mirror_sequence != mirror_sequence ||
+                it->second.evict_fenced_in_progress)
+            {
+                return;
+            }
+            it->second.evict_fenced_in_progress = true;
+        }
+
+        // Let a held-back lifecycle observer continue unless the entry is
+        // erased below. It mirrors its notification as usual.
+        auto release_entry = hpx::experimental::scope_exit([&] {
+            std::unique_lock l(mtx_);
+            if (auto const it = find_entry(); it != peers_.end())
+            {
+                it->second.evict_fenced_in_progress = false;
+            }
+            cond_.notify_all(HPX_MOVE(l));
+        });
+
+        evict_fenced_in_progress_hook.run();
+
+        hpx::error_code ec_recheck(hpx::throwmode::lightweight);
+        auto const current_state =
+            hpx::supervision::query_state(peer_locality, ec_recheck);
+
+        // Every publication applied to the local state changes its epoch or
+        // its event sequence number.
+        if (ec_recheck || current_state.epoch != state.epoch ||
+            current_state.event_sequence_number !=
+                state.event_sequence_number ||
+            current_state.last_event != state.last_event)
+        {
+            return;
+        }
+
         hpx::id_type lifecycle_observer;
         hpx::id_type activity_observer;
 
         {
             std::unique_lock l(mtx_);
 
-            // Once the entry is erased below, a notification its lifecycle
-            // observer receives before cleanup_peer() unregisters it is no
-            // longer mirrored (see register_observers()), so the tombstone
-            // stays in place and the peer has to join again to be monitored.
+            // A lifecycle observer that waited for the decision finds the
+            // entry gone and does not mirror its notification, nor does one
+            // notified before cleanup_peer() unregisters it (see
+            // register_observers()). leave() or a terminal notification's
+            // evict_peer() may have removed the entry already, in which case
+            // there is nothing left to do.
             auto const it = find_entry();
-            if (it == peers_.end() || it->second.mirrors_in_flight != 0 ||
-                it->second.mirror_sequence != mirror_sequence)
+            if (it == peers_.end())
             {
                 return;
             }
+
+            HPX_ASSERT(it->second.mirrors_in_flight == 0);
+            HPX_ASSERT(it->second.mirror_sequence == mirror_sequence);
 
             lifecycle_observer = it->second.lifecycle_observer;
             activity_observer = it->second.activity_observer;
 
             peers_.erase(it);
+            release_entry.release();
 
             cond_.notify_all(HPX_MOVE(l));
         }

@@ -84,4 +84,6 @@ Supervision Module
   new epoch while it was being removed, which left the peer unmonitored, and
   the eviction a terminal lifecycle notification schedules no longer removes
   a peer that started a newer epoch meanwhile (:hpx-issue:`7924`,
-  :hpx-pr:`8027`).
+  :hpx-pr:`8027`). This now also holds for a registry that joined its own
+  locality, whose new epoch changes the peer's local state before the
+  registry is notified of it (:hpx-issue:`8030`).
