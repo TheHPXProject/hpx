@@ -1481,13 +1481,21 @@ namespace hpx::parallel {
                 util::cancellation_token<difference_type> tok(count);
 
                 // an iteration compares an element with each element of
-                // [s_first, s_last)
-                auto const size = hpx::threads::bulk_task_size(
+                // [s_first, s_last); the length of that range doesn't change
+                // an unknown or large size, so it isn't counted then (for a
+                // forward iterator that would walk the whole range before
+                // the search starts)
+                auto const compare_size =
                     task_size_of_iteration<task_size_argument_t<FwdIter, Proj1>,
                         task_size_argument_t<FwdIter2, Proj2>>(
-                        op, first, s_first),
-                    static_cast<std::size_t>(
-                        hpx::parallel::detail::distance(s_first, s_last)));
+                        op, first, s_first);
+                auto const size =
+                    compare_size == hpx::threads::task_size::unknown ||
+                        compare_size == hpx::threads::task_size::large ?
+                    compare_size :
+                    hpx::threads::bulk_task_size(compare_size,
+                        static_cast<std::size_t>(
+                            hpx::parallel::detail::distance(s_first, s_last)));
                 auto f1 = [s_first, s_last, tok, op = HPX_FORWARD(Pred, op),
                               proj1 = HPX_FORWARD(Proj1, proj1),
                               proj2 = HPX_FORWARD(Proj2, proj2)](FwdIter it,
