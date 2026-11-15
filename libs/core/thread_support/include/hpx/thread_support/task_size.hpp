@@ -229,9 +229,14 @@ namespace hpx::traits {
     // The size of a call of f with arguments of the types Args. Unless it is
     // specialized, it is the size of f itself (get_task_size), so that a size
     // given to f (nano_task(f), with_task_size<Size>(f), ...) always wins.
+    //
+    // As for get_task_size, value is the size known from the types, call(f)
+    // the size for the function object f.
     HPX_CXX_CORE_EXPORT template <typename F, typename... Args>
     struct get_task_size_for
     {
+        static constexpr threads::task_size value = get_task_size<F>::value;
+
         [[nodiscard]] static constexpr threads::task_size call(
             F const& f) noexcept
         {
@@ -251,20 +256,24 @@ namespace hpx::traits {
     // Function objects of a builtin operation, which runs for about a
     // nanosecond on builtin types.
     //
-    // A transparent function object, which doesn't name the type of its
-    // operands (for instance std::less<>), specializes
-    // is_transparent_builtin_operation, its size depends on the arguments it
-    // is called with.
+    // Their size depends on the types they are called with, they are sized
+    // only for a call with arguments (get_task_size_for). A transparent
+    // function object, which doesn't name the type of its operands (for
+    // instance std::less<>), specializes is_transparent_builtin_operation.
+    // A typed one (for instance std::less<int>) specializes
+    // is_typed_builtin_operation if the type it names is builtin, it then
+    // converts builtin arguments only, which is as fast as the operation.
+    //
+    // The work that produces the arguments is not part of the call: an
+    // algorithm adds the size of dereferencing its iterators (see
+    // hpx::traits::iterator_dereference_task_size).
     HPX_CXX_CORE_EXPORT template <typename F>
     struct is_transparent_builtin_operation : std::false_type
     {
     };
 
-    // A typed function object, which names the type of its operands (for
-    // instance std::less<int>), specializes typed_builtin_operation_operand,
-    // its size depends on that type.
     HPX_CXX_CORE_EXPORT template <typename F>
-    struct typed_builtin_operation_operand
+    struct is_typed_builtin_operation : std::false_type
     {
     };
 
@@ -275,19 +284,20 @@ namespace hpx::traits {
         concept builtin_operand = std::is_arithmetic_v<std::decay_t<T>> ||
             std::is_enum_v<std::decay_t<T>> ||
             std::is_pointer_v<std::decay_t<T>>;
-
-        HPX_CXX_CORE_EXPORT template <typename F>
-        concept typed_builtin_operation = requires {
-            typename typed_builtin_operation_operand<F>::type;
-        } && builtin_operand<typename typed_builtin_operation_operand<F>::type>;
     }    // namespace detail
 
-    // A builtin operation on a builtin type is a nano task.
-    template <typename F, threads::task_size Size>
-        requires(detail::typed_builtin_operation<F>)
-    struct get_task_size<F, Size>
+    // A builtin operation called with builtin types is a nano task. Without
+    // arguments, the size stays unknown.
+    template <typename F, typename... Args>
+        requires((is_transparent_builtin_operation<F>::value ||
+                     is_typed_builtin_operation<F>::value) &&
+            sizeof...(Args) != 0)
+    struct get_task_size_for<F, Args...>
     {
-        static constexpr threads::task_size value = threads::task_size::nano;
+        static constexpr threads::task_size value =
+            (detail::builtin_operand<Args> && ...) ?
+            threads::task_size::nano :
+            threads::task_size::unknown;
 
         [[nodiscard]] static constexpr threads::task_size call(
             F const&) noexcept
@@ -296,33 +306,19 @@ namespace hpx::traits {
         }
     };
 
-    // A builtin operation called with builtin types is a nano task. Without
-    // arguments, the size stays unknown.
-    template <typename F, typename... Args>
-        requires(
-            is_transparent_builtin_operation<F>::value && sizeof...(Args) != 0)
-    struct get_task_size_for<F, Args...>
-    {
-        [[nodiscard]] static constexpr threads::task_size call(
-            F const&) noexcept
-        {
-            return (detail::builtin_operand<Args> && ...) ?
-                threads::task_size::nano :
-                threads::task_size::unknown;
-        }
-    };
-
-    // The function objects of the standard library.
+    // The function objects of the standard library: std::op<> is the
+    // transparent one, std::op<T> a typed one (std::op<> is std::op<void>,
+    // which is not builtin).
 #define HPX_TASK_SIZE_BUILTIN_OPERATION(op)                                    \
     template <>                                                                \
     struct is_transparent_builtin_operation<std::op<>> : std::true_type        \
     {                                                                          \
     };                                                                         \
+                                                                               \
     template <typename T>                                                      \
-        requires(!std::is_void_v<T>)                                           \
-    struct typed_builtin_operation_operand<std::op<T>>                         \
+    struct is_typed_builtin_operation<std::op<T>>                              \
+      : std::bool_constant<detail::builtin_operand<T>>                         \
     {                                                                          \
-        using type = T;                                                        \
     } /**/
 
     HPX_TASK_SIZE_BUILTIN_OPERATION(plus);

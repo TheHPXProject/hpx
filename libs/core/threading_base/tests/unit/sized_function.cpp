@@ -490,25 +490,51 @@ enum class color
     red
 };
 
-template <typename F>
-inline constexpr bool names_operand = requires {
-    typename hpx::traits::typed_builtin_operation_operand<F>::type;
+// converting it to int may be any amount of work
+struct convertible_to_int
+{
+    operator int() const
+    {
+        return 0;
+    }
 };
 
 void test_builtin_operations()
 {
-    // a typed function object names the type of its operands
-    static_assert(size_of<std::less<int>> == task_size::nano);
-    static_assert(size_of<std::plus<double>> == task_size::nano);
-    static_assert(size_of<std::equal_to<color>> == task_size::nano);
-    static_assert(size_of<std::less<int const*>> == task_size::nano);
-    static_assert(size_of<std::less<std::string>> == task_size::unknown);
+    // a typed function object of a builtin type is sized for builtin
+    // arguments
+    static_assert(size_of<std::less<int>> == task_size::unknown);
+    static_assert(size_of<std::plus<double>> == task_size::unknown);
+    static_assert(size_for<std::less<int>> == task_size::unknown);
+    static_assert(size_for<std::less<int>, int, int> == task_size::nano);
     static_assert(
-        size_of<hpx::parallel::detail::min_of<int>> == task_size::nano);
+        size_for<std::plus<double>, int const&, float&> == task_size::nano);
+    static_assert(size_for<std::logical_not<bool>, int> == task_size::nano);
+    static_assert(size_for<std::less<color>, color, color> == task_size::nano);
+    static_assert(size_for<hpx::parallel::detail::min_of<int>, int, int> ==
+        task_size::nano);
 
-    // a transparent one doesn't, its size depends on the arguments
-    static_assert(!names_operand<std::less<>>);
-    static_assert(names_operand<std::less<int>>);
+    // the size is known from the types as well
+    static_assert(
+        hpx::traits::get_task_size_for<std::less<int>, int, int>::value ==
+        task_size::nano);
+    static_assert(
+        hpx::traits::get_task_size_for<std::less<>, int, std::string>::value ==
+        task_size::unknown);
+    static_assert(
+        hpx::traits::get_task_size_for<hpx::parallel::detail::compare_to<int>,
+            int&>::value == task_size::nano);
+
+    // not for arguments it converts from a class type, nor for a class type
+    static_assert(size_for<std::less<int>, convertible_to_int, int> ==
+        task_size::unknown);
+    static_assert(
+        size_for<std::less<std::string>, std::string const&, char const*> ==
+        task_size::unknown);
+    static_assert(size_for<hpx::parallel::detail::max_of<std::string>,
+                      std::string, std::string> == task_size::unknown);
+
+    // a transparent one too, its size depends on the arguments
     static_assert(size_of<std::less<>> == task_size::unknown);
     static_assert(size_for<std::less<>> == task_size::unknown);
     static_assert(
@@ -527,9 +553,9 @@ void test_builtin_operations()
     static_assert(
         size_for<std::less<>, int, std::string> == task_size::unknown);
 
-    // the size of the type wins over the arguments, and a size given to the
-    // function always wins
-    static_assert(size_for<std::less<int>, std::string> == task_size::nano);
+    // a size given to the function always wins
+    static_assert(size_for<decltype(nano_task(std::less<int>{})), int, int> ==
+        task_size::nano);
     static_assert(size_for<decltype(small_task(std::less<>{})), int, int> ==
         task_size::small_);
     static_assert(size_for<decltype(large_task(std::less<int>{})), int, int> ==

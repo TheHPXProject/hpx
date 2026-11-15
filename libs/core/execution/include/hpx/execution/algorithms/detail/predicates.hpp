@@ -443,20 +443,17 @@ HPX_TASK_SIZE_BUILTIN_OPERATION(divides);
 
 #undef HPX_TASK_SIZE_BUILTIN_OPERATION
 
+// min_of and max_of name the type of their operands.
 template <typename T>
-    requires(!std::is_void_v<T>)
-struct hpx::traits::typed_builtin_operation_operand<
-    hpx::parallel::detail::min_of<T>>
+struct hpx::traits::is_typed_builtin_operation<hpx::parallel::detail::min_of<T>>
+  : std::bool_constant<hpx::traits::detail::builtin_operand<T>>
 {
-    using type = T;
 };
 
 template <typename T>
-    requires(!std::is_void_v<T>)
-struct hpx::traits::typed_builtin_operation_operand<
-    hpx::parallel::detail::max_of<T>>
+struct hpx::traits::is_typed_builtin_operation<hpx::parallel::detail::max_of<T>>
+  : std::bool_constant<hpx::traits::detail::builtin_operand<T>>
 {
-    using type = T;
 };
 
 // compare_to compares its argument with its value, which is as fast as
@@ -465,11 +462,14 @@ template <typename Value, typename Arg>
 struct hpx::traits::get_task_size_for<hpx::parallel::detail::compare_to<Value>,
     Arg>
 {
+    static constexpr threads::task_size value =
+        get_task_size_for<hpx::parallel::detail::equal_to, Value const&,
+            Arg>::value;
+
     [[nodiscard]] static constexpr threads::task_size call(
         hpx::parallel::detail::compare_to<Value> const&) noexcept
     {
-        return get_task_size_for<hpx::parallel::detail::equal_to, Value const&,
-            Arg>::call(hpx::parallel::detail::equal_to{});
+        return value;
     }
 };
 
