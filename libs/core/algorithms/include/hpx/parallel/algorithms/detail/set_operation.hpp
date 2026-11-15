@@ -114,7 +114,10 @@ namespace hpx::parallel::detail {
                 policy.parameters(), policy.executor(),
                 hpx::chrono::null_duration, (std::min) (len1, len2));
 
-        std::size_t const step = (len1 + cores - 1) / cores;
+        // An empty first range uses one synthetic chunk for the second range.
+        cores = (std::max) (cores, static_cast<std::size_t>(1));
+
+        std::size_t const step = len1 == 0 ? 0 : (len1 + cores - 1) / cores;
 
         std::shared_ptr<buffer_type[]> buffer(
             new buffer_type[combiner(len1, len2)]);
@@ -122,6 +125,25 @@ namespace hpx::parallel::detail {
 
         // first step, is applied to each chunk of sequence 1
         auto handle_chunk = [=](set_chunk_data* curr_chunk) mutable -> void {
+            // The synthetic chunk applies the set operation to the full
+            // second range when the first range is empty.
+            if (len1 == 0)
+            {
+                if (curr_chunk != chunks.get())
+                {
+                    return;    // only the first chunk does the work
+                }
+
+                curr_chunk->start = combiner(0, 0);
+                auto buffer_dest = buffer.get() + curr_chunk->start;
+                auto op_result = setop(
+                    first1, first1, first2, first2 + len2, buffer_dest, f);
+                curr_chunk->first1 = op_result.in1 - first1;
+                curr_chunk->first2 = op_result.in2 - first2;
+                curr_chunk->len = op_result.out - buffer_dest;
+                return;
+            }
+
             // find start in sequence 1
             std::size_t start1 = (curr_chunk - chunks.get()) * step;
             std::size_t end1 =
@@ -246,6 +268,15 @@ namespace hpx::parallel::detail {
                 {
                     first2_pos = (std::max) (first2_pos, curr_chunk->first2);
                 }
+            }
+
+            if (chunk->first1 != set_chunk_data::uninit_first1)
+            {
+                first1_pos = (std::max) (first1_pos, chunk->first1);
+            }
+            if (chunk->first2 != set_chunk_data::uninit_first2)
+            {
+                first2_pos = (std::max) (first2_pos, chunk->first2);
             }
 
             // finally, copy data to destination
