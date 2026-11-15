@@ -103,9 +103,7 @@ namespace hpx::parallel::detail {
             using reference = typename std::iterator_traits<Iter>::reference;
             std::size_t idx = 0;
             util::loop_idx_n<ExPolicy>(base_idx, it, part_size, tok,
-                [max_start, count, it, &value_proj, &tok, &idx,
-                    pred = HPX_FORWARD(Pred, pred),
-                    proj = HPX_FORWARD(Proj, proj)](
+                [max_start, count, it, &value_proj, &tok, &idx, &pred, &proj](
                     reference, std::size_t abs_idx) mutable -> void {
                     if (static_cast<difference_type>(abs_idx) >= max_start)
                         return;
@@ -289,6 +287,8 @@ namespace hpx::parallel::detail {
     HPX_CXX_CORE_EXPORT template <typename FwdIter, typename Sent>
     struct search_n final : public algorithm<search_n<FwdIter, Sent>, FwdIter>
     {
+        static constexpr bool uses_legacy_futures = true;
+
         constexpr search_n() noexcept
           : algorithm<search_n, FwdIter>("search_n")
         {
@@ -409,7 +409,7 @@ namespace hpx::parallel::detail {
                           std::size_t base_idx) mutable -> void {
                 sequential_search_n_t<policy_type>{}(it, base_idx, part_size,
                     static_cast<std::ptrdiff_t>(max_start), count, value_proj,
-                    tok, HPX_FORWARD(Pred, pred), HPX_FORWARD(Proj, proj));
+                    tok, pred, proj);
             };
 
             auto f2 = [first, last, max_start, tok](
