@@ -842,7 +842,7 @@ namespace hpx::lcos::local {
         ///          reports an error.
         template <typename Lock>
         hpx::future<void> synchronize_async(std::size_t generation_value,
-            Lock& l, char const* function_name = "and_gate::synchronize",
+            Lock& l, char const* function_name = "and_gate::synchronize_async",
             error_code& ec = throws)
         {
             return this->base_type::synchronize_async(
