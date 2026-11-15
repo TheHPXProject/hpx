@@ -14,7 +14,9 @@
 #include <hpx/modules/tracing.hpp>
 #include <hpx/threading_base/create_thread.hpp>
 #include <hpx/threading_base/detail/get_default_timer_service.hpp>
+#include <hpx/threading_base/set_thread_state.hpp>
 #include <hpx/threading_base/set_thread_state_timed.hpp>
+#include <hpx/threading_base/thread_data.hpp>
 #include <hpx/threading_base/threading_base_fwd.hpp>
 #ifdef HPX_HAVE_MODULE_LIKWID
 #include <hpx/modules/likwid.hpp>
@@ -34,6 +36,9 @@
 #include <utility>
 
 namespace hpx::threads::detail {
+
+    // marks a timer that is not tied to one suspension of its target thread
+    inline constexpr std::int64_t no_suspension_tag = -1;
 
     // Who is responsible for resuming the wake_timer thread: the timer handler
     // or, if the timer was aborted first, the at_timer thread itself.
@@ -96,7 +101,8 @@ namespace hpx::threads::detail {
         std::chrono::steady_clock::time_point const& abs_time,
         thread_id_ref_type const& thrd, thread_schedule_state newstate,
         thread_restart_state newstate_ex, thread_priority priority,
-        std::atomic<bool>* started, bool retry_on_active)
+        std::atomic<bool>* started, bool retry_on_active,
+        std::int64_t suspension_tag)
     {
         if (HPX_UNLIKELY(!thrd))
         {
@@ -217,6 +223,15 @@ namespace hpx::threads::detail {
             // wake_timer is pending by now, so the cancel handler is a no-op
             t.cancel();
         }
+        else if (suspension_tag != no_suspension_tag)
+        {
+            // The target may have been woken by someone else (and then
+            // aborted this timer) after the timer fired: only wake it if it
+            // is still in the suspension this timer was set for, otherwise
+            // it would resume whatever it waits for by now.
+            set_suspended_thread_state(
+                thrd.noref(), suspension_tag, newstate, newstate_ex, priority);
+        }
         else
         {
             detail::set_thread_state(
@@ -244,12 +259,30 @@ namespace hpx::threads::detail {
             return invalid_thread_id;
         }
 
+        // A timer a thread sets on itself belongs to the suspension it is
+        // about to enter: switching from active to suspended increments the
+        // tag of its state.
+        std::int64_t suspension_tag = no_suspension_tag;
+        if (newstate == thread_schedule_state::pending ||
+            newstate == thread_schedule_state::pending_boost)
+        {
+            if (thread_data const* self = get_self_id_data();
+                self != nullptr && self == get_thread_id_data(thrd))
+            {
+                if (thread_state const current = self->get_state();
+                    current.state() == thread_schedule_state::active)
+                {
+                    suspension_tag = current.tag() + 1;
+                }
+            }
+        }
+
         // this creates a new thread that creates the timer and handles the
         // requested actions
         thread_init_data data(
             hpx::bind(&at_timer, scheduler, abs_time.value(),
                 thread_id_ref_type(thrd), newstate, newstate_ex, priority,
-                started, retry_on_active),
+                started, retry_on_active, suspension_tag),
             "at_timer (expire at)", priority, schedulehint,
             thread_stacksize::small_, thread_schedule_state::pending, true);
 
