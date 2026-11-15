@@ -76,10 +76,11 @@ void test_default()
 {
     // an iterator that returns a reference reads an existing element
     static_assert(iterator_dereference_task_size_v<int*> == task_size::nano);
-    static_assert(iterator_dereference_task_size_v<int const*> ==
+    static_assert(
+        iterator_dereference_task_size_v<int const*> == task_size::nano);
+    static_assert(
+        iterator_dereference_task_size_v<std::vector<int>::const_iterator> ==
         task_size::nano);
-    static_assert(iterator_dereference_task_size_v<
-                      std::vector<int>::const_iterator> == task_size::nano);
     static_assert(iterator_dereference_task_size_v<std::move_iterator<int*>> ==
         task_size::nano);
 
@@ -87,24 +88,25 @@ void test_default()
     static_assert(iterator_dereference_task_size_v<
                       computing_iterator<std::tuple<int&, int const&>>> ==
         task_size::nano);
-    static_assert(iterator_dereference_task_size_v<
-                      computing_iterator<std::pair<int&, double&&>>> ==
-        task_size::nano);
+    static_assert(
+        iterator_dereference_task_size_v<
+            computing_iterator<std::pair<int&, double&&>>> == task_size::nano);
 
     // an iterator that returns a value may do any amount of work
     static_assert(iterator_dereference_task_size_v<computing_iterator<int>> ==
         task_size::unknown);
-    static_assert(iterator_dereference_task_size_v<
-                      computing_iterator<std::tuple<int&, int>>> ==
-        task_size::unknown);
+    static_assert(
+        iterator_dereference_task_size_v<
+            computing_iterator<std::tuple<int&, int>>> == task_size::unknown);
 
     // the iterator type can give the size itself
     static_assert(iterator_dereference_task_size_v<small_computing_iterator> ==
         task_size::small_);
 
     // a qualified iterator type has the size of the unqualified one
-    static_assert(iterator_dereference_task_size_v<
-                      small_computing_iterator const&> == task_size::small_);
+    static_assert(
+        iterator_dereference_task_size_v<small_computing_iterator const&> ==
+        task_size::small_);
 
     // call gives the size for an iterator
     int i = 0;
@@ -117,11 +119,12 @@ void test_adaptors()
     // it wraps
     static_assert(iterator_dereference_task_size_v<forwarding_adaptor<int*>> ==
         task_size::nano);
-    static_assert(iterator_dereference_task_size_v<forwarding_adaptor<
-                      hpx::util::counting_iterator<int>>> == task_size::nano);
     static_assert(iterator_dereference_task_size_v<
-                      forwarding_adaptor<computing_iterator<int>>> ==
-        task_size::unknown);
+                      forwarding_adaptor<hpx::util::counting_iterator<int>>> ==
+        task_size::nano);
+    static_assert(
+        iterator_dereference_task_size_v<
+            forwarding_adaptor<computing_iterator<int>>> == task_size::unknown);
 
     // an adaptor that replaces it does not
     static_assert(iterator_dereference_task_size_v<replacing_adaptor> ==
@@ -131,37 +134,41 @@ void test_adaptors()
 void test_hpx_iterators()
 {
     // counting_iterator returns its counter
-    static_assert(iterator_dereference_task_size_v<
-                      hpx::util::counting_iterator<int>> == task_size::nano);
-    static_assert(iterator_dereference_task_size_v<
-                      hpx::util::counting_iterator<int*>> == task_size::nano);
+    static_assert(
+        iterator_dereference_task_size_v<hpx::util::counting_iterator<int>> ==
+        task_size::nano);
+    static_assert(
+        iterator_dereference_task_size_v<hpx::util::counting_iterator<int*>> ==
+        task_size::nano);
 
     // transform_iterator calls its transformer
     auto const plain = [](int* p) { return *p; };
     auto const sized = hpx::threads::nano_task(plain);
     using plain_iterator = hpx::util::transform_iterator<int*, decltype(plain)>;
     using sized_iterator = hpx::util::transform_iterator<int*, decltype(sized)>;
-    static_assert(iterator_dereference_task_size_v<plain_iterator> ==
-        task_size::unknown);
-    static_assert(iterator_dereference_task_size_v<sized_iterator> ==
-        task_size::nano);
+    static_assert(
+        iterator_dereference_task_size_v<plain_iterator> == task_size::unknown);
+    static_assert(
+        iterator_dereference_task_size_v<sized_iterator> == task_size::nano);
 
     int i = 0;
     HPX_TEST(iterator_dereference_task_size<sized_iterator>::call(
                  sized_iterator(&i, sized)) == task_size::nano);
 
     // zip_iterator dereferences all of its iterators
-    static_assert(iterator_dereference_task_size_v<
-                      hpx::util::zip_iterator<int*, double*>> ==
-        task_size::nano);
-    static_assert(iterator_dereference_task_size_v<hpx::util::zip_iterator<
-                      int*, hpx::util::counting_iterator<int>>> ==
+    static_assert(
+        iterator_dereference_task_size_v<
+            hpx::util::zip_iterator<int*, double*>> == task_size::nano);
+    static_assert(
+        iterator_dereference_task_size_v<
+            hpx::util::zip_iterator<int*, hpx::util::counting_iterator<int>>> ==
         task_size::nano);
     static_assert(iterator_dereference_task_size_v<
                       hpx::util::zip_iterator<int*, plain_iterator>> ==
         task_size::unknown);
-    static_assert(iterator_dereference_task_size_v<
-                      hpx::util::zip_iterator<int*, small_computing_iterator>> ==
+    static_assert(
+        iterator_dereference_task_size_v<
+            hpx::util::zip_iterator<int*, small_computing_iterator>> ==
         task_size::small_);
 }
 

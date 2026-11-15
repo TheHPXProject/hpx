@@ -1418,8 +1418,8 @@ namespace hpx::parallel {
             }
 
             template <typename ExPolicy, typename InIter1, typename Sent1,
-                typename InIter2, typename Sent2, typename Pred,
-                typename Proj1, typename Proj2>
+                typename InIter2, typename Sent2, typename Pred, typename Proj1,
+                typename Proj2>
             static InIter1 sequential(ExPolicy, InIter1 first, Sent1 last,
                 InIter2 s_first, Sent2 s_last, Pred&& op, Proj1&& proj1,
                 Proj2&& proj2)
