@@ -210,6 +210,26 @@ void test_all_operations(std::vector<std::size_t> const& order)
         });
 }
 
+// Each generation that completes releases the requests kept for the next one,
+// which run inline. With many generations requested in reverse order, this
+// checks that the chain does not overflow the stack.
+void test_many_kept_generations()
+{
+    std::vector<std::size_t> order(1000);
+    for (std::size_t i = 0; i != order.size(); ++i)
+    {
+        order[i] = order.size() - i;
+    }
+
+    test_early_generation(
+        "many_kept", order, [](communicator c, std::uint32_t s, std::size_t g) {
+            return check_equal(all_reduce(std::move(c), value(s, g),
+                                   std::plus<std::uint32_t>{}, this_site_arg(s),
+                                   generation_arg(g)),
+                value(sum_of_sites, num_sites * g));
+        });
+}
+
 // An explicit generation after an auto-generation operation is rejected when
 // the request arrives, also when the gate has not reached that generation.
 void test_explicit_after_auto()
@@ -250,6 +270,8 @@ int main()
     test_all_operations({2, 1});
     // generations 3 and 4 (in reverse order) before generation 2
     test_all_operations({4, 3, 1, 2});
+
+    test_many_kept_generations();
 
     test_explicit_after_auto();
 
