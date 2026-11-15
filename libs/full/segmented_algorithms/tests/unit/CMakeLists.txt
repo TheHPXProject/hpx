@@ -25,7 +25,11 @@ set(tests
     partitioned_vector_max_element2
     partitioned_vector_merge
     partitioned_vector_merge_extended
-    partitioned_vector_merge_regressions
+    partitioned_vector_merge_regressions_exceptions
+    partitioned_vector_merge_regressions_heterogeneous
+    partitioned_vector_merge_regressions_int
+    partitioned_vector_merge_regressions_projected
+    partitioned_vector_merge_regressions_records
     partitioned_vector_min_element1
     partitioned_vector_min_element2
     partitioned_vector_minmax_element1
@@ -87,8 +91,16 @@ endif()
 
 # These merge tests require multiple localities.
 if(NOT HPX_WITH_NETWORKING)
-  list(REMOVE_ITEM tests partitioned_vector_merge
-       partitioned_vector_merge_extended partitioned_vector_merge_regressions
+  list(
+    REMOVE_ITEM
+    tests
+    partitioned_vector_merge
+    partitioned_vector_merge_extended
+    partitioned_vector_merge_regressions_exceptions
+    partitioned_vector_merge_regressions_heterogeneous
+    partitioned_vector_merge_regressions_int
+    partitioned_vector_merge_regressions_projected
+    partitioned_vector_merge_regressions_records
   )
 endif()
 
@@ -97,7 +109,7 @@ foreach(test ${tests})
 
   set(${test}_FLAGS DEPENDENCIES partitioned_vector_component)
   if(test STREQUAL "partitioned_vector_sort"
-     OR test MATCHES "^partitioned_vector_merge(_extended|_regressions)?$"
+     OR test MATCHES "^partitioned_vector_merge(_extended|_regressions_.*)?$"
   )
     # Four localities exercise concurrent merges and remote transfers.
     set(test_localities 4)
