@@ -17,14 +17,15 @@
 .[]
 | select((.parents | length) < 2 and .author.type != "Bot")
 | ([.commit.author, .commit.committer]
-   | map([.name, .email] | map(ascii_downcase))) as $identities
+   | map(select(.email != null) | [.name // "", .email] | map(ascii_downcase)))
+  as $identities
 | [.commit.message | split("\n")[]
    | capture("^Signed-off-by: (?<name>.*) <(?<email>.*)>$"; "i")
    | [.name, .email] | map(ascii_downcase)] as $signoffs
 | (.commit.author.email // .commit.committer.email) as $email
 | if ($signoffs | length) == 0 then
     "\(.sha[0:10]) the sign-off is missing"
-  elif ($email | test("^[^@ ]+@[^@ ]+[.][^@ ]+$") | not) then
+  elif (($email // "") | test("^[^@ ]+@[^@ ]+[.][^@ ]+$") | not) then
     "\(.sha[0:10]) \($email) is not a valid email address"
   elif any($signoffs[]; IN($identities[])) then
     empty
