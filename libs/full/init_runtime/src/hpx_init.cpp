@@ -93,8 +93,10 @@ namespace hpx_startup {
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx::detail {
 
+#if defined(HPX_HAVE_DISTRIBUTED_RUNTIME)
     // forward declarations only
     static void console_print(std::string const&);
+#endif
 
     int init_impl(
         hpx::function<int(hpx::program_options::variables_map&)> const& f,
