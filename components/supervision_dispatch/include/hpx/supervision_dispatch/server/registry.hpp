@@ -175,13 +175,35 @@ namespace hpx::supervision::server {
         ///     at all, so the tombstone stays in place and the peer has to
         ///     join again to be monitored, as after any other eviction.
         ///
-        /// This assumes that the peer's local supervision state is changed
-        /// only through this registry's mirroring, which holds for a remote
-        /// peer joined by a single registry (discovery never joins the own
-        /// locality). It does not hold for a registry that joined its own
-        /// locality, whose lifecycle events change that state directly, nor
-        /// for several registries on one locality joining the same peer,
-        /// which share that state (see #8030).
+        /// The local state can also change before the lifecycle observer
+        /// runs: a registry that joined its own locality shares that state
+        /// with the peer's own lifecycle events, and several registries on
+        /// one locality joining the same peer share it with each other's
+        /// mirroring. To cover that, the removal is decided in two steps.
+        /// After the terminal check, the entry is marked
+        /// (peer_entry::evict_fenced_in_progress), which holds back its
+        /// lifecycle observer before it announces a mirroring, and the local
+        /// state is queried again. The entry is removed only if that state is
+        /// still the one the terminal check saw (same epoch, event sequence
+        /// number, and event). So for every change of the local state:
+        ///   - if it happened before the entry was marked, the second query
+        ///     sees it, and this call backs off, leaving the entry and its
+        ///     observers in place;
+        ///   - if it happened after the entry was marked and before the
+        ///     second query, this call backs off as well;
+        ///   - if it happened after the second query, it is ordered after the
+        ///     removal: its notification is not mirrored, and the peer has to
+        ///     join again to be monitored. For a registry that joined its own
+        ///     locality, the local state then reflects the peer's newer
+        ///     lifecycle instead of the tombstone, as it would if the peer
+        ///     started that lifecycle after this call returned.
+        /// A lifecycle observer held back by a call that backs off mirrors its
+        /// notification once the mark is cleared, so no notification is lost.
+        /// While the entry is marked, a local publish_event() for the peer
+        /// waits for the observer it notifies, i.e. for one local query of
+        /// the peer's state. Two calls for the same entry do not run the
+        /// removal at the same time: a call that finds the entry marked
+        /// returns without doing anything.
         ///
         /// No lock is held while the local supervision state is queried or
         /// while the observers are unregistered on the peer's locality.
@@ -348,6 +370,16 @@ namespace hpx::supervision::server {
             /// changed in between, so a newer lifecycle transition cannot slip
             /// in between the check and the removal unnoticed.
             std::uint64_t mirror_sequence = 0;
+
+            /// True while evict_fenced() checks the local supervision state a
+            /// second time before removing this entry. Set and cleared under
+            /// mtx_, cond_ is notified when it is cleared. The lifecycle
+            /// observer installed by register_observers() waits until it is
+            /// cleared (or the entry is removed) before it announces a
+            /// mirroring, so the state evict_fenced() checks cannot change
+            /// through that mirroring. Only set while mirrors_in_flight is
+            /// zero.
+            bool evict_fenced_in_progress = false;
 
             /// The preserve_terminal_state argument evict_peer() was called
             /// with when it set evict_pending above, remembered so that
