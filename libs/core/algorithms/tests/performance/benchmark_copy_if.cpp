@@ -80,7 +80,8 @@ void run_benchmark(std::size_t vector_size, int test_count, int selectivity,
     std::vector<int> c(vector_size);
     std::vector<int> dest(vector_size, 0);
 
-    // Touch all pages of dest upfront to eliminate first-touch allocation overhead
+    // Touch all pages of dest upfront to eliminate first-touch allocation
+    // overhead
     std::fill(dest.begin(), dest.end(), 1);
 
     std::mt19937 gen(42);
