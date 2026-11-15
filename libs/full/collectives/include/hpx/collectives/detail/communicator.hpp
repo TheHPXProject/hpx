@@ -233,11 +233,11 @@ namespace hpx::collectives::detail {
 
                 if (!reached.is_ready())
                 {
-                    // Run the request on a new thread: running it inline
-                    // could complete its generation and run the requests
-                    // kept for the next one inline as well, so the stack
-                    // would grow with the number of kept generations.
-                    return Result(reached.then(hpx::launch::async,
+                    // The request runs inline on the thread that releases
+                    // it, after the gate's lock was released. HPX moves a
+                    // continuation to a new thread if the stack runs low, so
+                    // a chain of kept generations does not overflow it.
+                    return Result(reached.then(hpx::launch::sync,
                         [f = HPX_FORWARD(F, f)](hpx::future<void>&& r) mutable {
                             r.get();
                             return f();
