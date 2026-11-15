@@ -53,6 +53,27 @@ Breaking changes
   macro it defines is now
   ``HPX_THREAD_SUPPORT_HAVE_THREAD_SCHEDULE_HINT_RUNS_AS_CHILD``. The old option
   name is still accepted with a deprecation warning.
+- A component type has to be registered in exactly one module. Registering a
+  component that a library already registers and has marked as such is now a
+  compile time error (:hpx-issue:`8075`). Before, this went unnoticed on Linux
+  and failed only at run time on Windows with ``duplicate_component_id``. In
+  particular, ``partitioned_vector`` and ``coarray`` for ``double``, ``int``,
+  ``long long`` and ``std::string`` are predefined by the
+  ``partitioned_vector`` library when |hpx| is linked dynamically, and
+  applications that register one of these types unconditionally no longer
+  compile. Register them only if |hpx| is linked statically:
+
+  .. code-block:: c++
+
+     #if defined(HPX_HAVE_STATIC_LINKING)
+     HPX_REGISTER_PARTITIONED_VECTOR(double);
+     #endif
+
+  Libraries that register components on behalf of their users can mark them
+  with ``HPX_COMPONENT_REGISTERED_ELSEWHERE`` in the part of their headers
+  that is visible to their users only (not while compiling the library
+  itself), which turns a second registration of these components into a
+  compile time error as well.
 
 Supervision Module
 ==================
