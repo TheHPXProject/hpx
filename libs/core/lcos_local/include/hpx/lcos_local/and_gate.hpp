@@ -206,6 +206,11 @@ namespace hpx::lcos::local {
         {
             if (this != &rhs)
             {
+                // The generation of a released waiter was reached, so its
+                // future becomes ready. It is set when released goes out of
+                // scope, after l was unlocked.
+                released_waiters released(released_);
+
                 std::lock_guard<mutex_type> l(rhs.mtx_);
                 mtx_ = mutex_type();
                 received_segments_ = HPX_MOVE(rhs.received_segments_);
@@ -213,7 +218,6 @@ namespace hpx::lcos::local {
                 generation_ = rhs.generation_;
                 rhs.generation_ = static_cast<std::size_t>(-1);
                 delete_async_entries(conditions_);
-                delete_async_entries(released_);
                 conditions_ = HPX_MOVE(rhs.conditions_);
                 released_ = HPX_MOVE(rhs.released_);
                 rhs.conditions_.reset();
@@ -222,12 +226,14 @@ namespace hpx::lcos::local {
             return *this;
         }
 
-        // The futures of asynchronous waiters that are still held report a
-        // broken promise.
+        // The futures of asynchronous waiters whose generation was not
+        // reached report a broken promise. The futures of released waiters
+        // that were not taken yet become ready, since their generation was
+        // reached.
         ~base_and_gate()
         {
             delete_async_entries(conditions_);
-            delete_async_entries(released_);
+            released_waiters(released_).set();
         }
 
     protected:
