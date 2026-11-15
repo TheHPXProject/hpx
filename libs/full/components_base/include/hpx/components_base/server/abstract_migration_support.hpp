@@ -57,6 +57,7 @@ namespace hpx::components {
         virtual bool pin() = 0;
         virtual bool unpin() = 0;
         [[nodiscard]] virtual std::uint32_t pin_count() const = 0;
+        virtual bool defer_destroy(hpx::move_only_function<void()>&& f) = 0;
         virtual void mark_as_migrated() = 0;
 
         // migration support
@@ -182,6 +183,11 @@ namespace hpx::components {
         bool unpin() override
         {
             return this->base_type::unpin();
+        }
+
+        bool defer_destroy(hpx::move_only_function<void()>&& f) override
+        {
+            return this->base_type::defer_destroy(HPX_MOVE(f));
         }
 
         void on_migrated() override
