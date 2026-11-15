@@ -34,6 +34,8 @@
 #   PERFTEST_BACKFILL_DIR  the work directory of backfill.sh (default next to
 #                          the workspace, kept between builds)
 #   PERFTEST_BACKFILL_MAX  at most this many commits per build (default 6)
+#   PERFTEST_BACKFILL_QUEUE_TIMEOUT  how long to wait for the history node,
+#                          as HPX_SLURM_QUEUE_TIMEOUT (default 24h)
 #   PERFTEST_HISTORY_REPO  the data repository (default hpx-performance)
 #   PERFTEST_HPX_REPO      where master is fetched from (default TheHPXProject/hpx)
 #   PERFTEST_BACKFILL_DRY_RUN  if set, only list the missing commits
@@ -42,6 +44,7 @@
 set -u
 
 source "$(dirname "$0")/report_common.sh"
+source "$(dirname "$0")/../common/slurm.sh"
 
 workspace="${WORKSPACE:?the Jenkins workspace}"
 commit="${GIT_COMMIT:?the built commit}"
@@ -49,6 +52,8 @@ partition="${configuration_slurm_partition:?the Slurm partition}"
 node="${configuration_slurm_nodelist:?the history node}"
 history_repo="${PERFTEST_HISTORY_REPO:-https://github.com/TheHPXProject/hpx-performance.git}"
 max_commits="${PERFTEST_BACKFILL_MAX:-6}"
+queue_seconds=$(hpx_slurm_seconds "${PERFTEST_BACKFILL_QUEUE_TIMEOUT:-24h}") ||
+    exit 1
 hpx_repo="${PERFTEST_HPX_REPO:-https://github.com/TheHPXProject/hpx.git}"
 job_name="jenkins-hpx-master-perftests"
 backfill_job_name="${job_name}-backfill"
@@ -177,12 +182,15 @@ git -C "${src}" fetch --quiet "${workspace}" "${commit}" || {
 
 # The allocation of the history node, for the most commits a build adds:
 # half an hour per commit and half an hour more (backfill.sh stops when less
-# than 30 minutes are left). It waits for the node as the build did.
+# than 30 minutes are left). It waits for the node as the build did, for at
+# most the queue timeout (--time doesn't limit the wait, --immediate cancels
+# the request once it is over).
 minutes=$((30 * max_commits + 30))
-perftest_log "Asking for ${node} for ${minutes} minutes"
+perftest_log "Asking for ${node} for ${minutes} minutes, waiting up to" \
+    "$((queue_seconds / 60)) minutes for it"
 alloc_log="${base}/salloc.log"
 salloc --no-shell --exclusive --nodes=1 --partition="${partition}" \
-    --nodelist="${node}" --time="${minutes}" \
+    --nodelist="${node}" --time="${minutes}" --immediate="${queue_seconds}" \
     --job-name="${backfill_job_name}" > "${alloc_log}" 2>&1
 alloc_status=$?
 job=$(grep -o 'Granted job allocation [0-9]*' "${alloc_log}" | grep -o '[0-9]*$')

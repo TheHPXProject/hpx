@@ -360,11 +360,14 @@ def plot(benchmark, series, analyzed, commits, position, args, path):
     left = ax.get_tightbbox(renderer).x0
     center = ((left + graph.x1) / 2 - graph.x0) / graph.width
     for ncol in (1,) if len(series) < 6 else (2, 1):
-        # the lines are passed, since a label that starts with '_' (after the
-        # prefix is cut) would otherwise be left out of the legend
-        legend = ax.legend(lines, [line.get_label() for line in lines],
+        # Matplotlib leaves a label that starts with '_' out of the legend
+        # (before 3.10 even if it is passed explicitly), so the legend is made
+        # with labels that don't, and their texts are set afterwards
+        legend = ax.legend(lines, [f" {line.get_label()}" for line in lines],
             fontsize=7, loc='upper center', bbox_to_anchor=(center, -0.28),
             ncol=ncol, frameon=False, title=title, title_fontsize=7)
+        for text, line in zip(legend.get_texts(), lines):
+            text.set_text(line.get_label())
         if legend.get_window_extent(renderer).width <= graph.x1 - left:
             break
     fig.savefig(path, format='svg', bbox_inches='tight',

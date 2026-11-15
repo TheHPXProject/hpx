@@ -25,9 +25,8 @@
 /// Contracts are disabled by default (HPX_WITH_CONTRACTS=OFF).
 /// Enable native contracts with:
 ///     `cmake -DHPX_WITH_CONTRACTS=ON -DHPX_WITH_CXX_STANDARD=26`
-/// Set fallback mode with:
-///     `cmake -DHPX_WITH_CONTRACTS=ON
-///         -DHPX_WITH_CONTRACTS_MODE=ENFORCE|QUICK_ENFORCE|OBSERVE|IGNORE`
+/// Set the fallback mode (ENFORCE, QUICK_ENFORCE, OBSERVE or IGNORE) with:
+///     `cmake -DHPX_WITH_CONTRACTS=ON -DHPX_WITH_CONTRACTS_MODE=OBSERVE`
 
 // Don't report missing #include for HPX_ASSERT macro
 // hpxinspect:noinclude:HPX_ASSERT
