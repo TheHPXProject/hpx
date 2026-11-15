@@ -20,9 +20,9 @@
 
 ///////////////////////////////////////////////////////////////////////////////
 // and_gate hides base_and_gate's lock-free public overloads of get_future()/
-// get_shared_future()/set()/synchronize() (C++ name hiding), so tests against
-// and_gate always need to pass a Lock&. The condition variable used internally
-// to wake up synchronize() waiters only accepts
+// get_shared_future()/set()/synchronize()/next_generation() (C++ name hiding),
+// so tests against and_gate always need to pass a Lock&. The condition variable
+// used internally to wake up synchronize() waiters only accepts
 // std::unique_lock<hpx::spinlock>, so that is the lock type used throughout.
 using lock_type = std::unique_lock<hpx::spinlock>;
 
@@ -554,10 +554,8 @@ void test_synchronize_async_move_assigned_to()
 }
 
 // The next_generation() overload that takes no lock sets the released waiters
-// itself. and_gate inherits that overload, but it does not compile for
-// and_gate: with hpx::no_mutex it passes a std::unique_lock<hpx::no_mutex> to
-// conditional_cv, which accepts only std::unique_lock<hpx::spinlock>. Thus this
-// test uses base_and_gate<hpx::spinlock>, whose synchronize_async() is
+// itself. and_gate hides that overload, since it has no mutex of its own. Thus
+// this test uses base_and_gate<hpx::spinlock>, whose synchronize_async() is
 // protected. Its mutex is private, so the test holds a separate lock for
 // synchronize_async(), which only asserts that a lock is held. The test runs
 // on one thread.
