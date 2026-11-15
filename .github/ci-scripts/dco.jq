@@ -17,7 +17,7 @@
 .[]
 | select((.parents | length) < 2 and .author.type != "Bot")
 | ([.commit.author, .commit.committer]
-   | map(select(.email != null) | [.name // "", .email] | map(ascii_downcase)))
+   | map(select((.email // "") != "") | [.name // "", .email] | map(ascii_downcase)))
   as $identities
 | [.commit.message | split("\n")[]
    | capture("^Signed-off-by: (?<name>.*) <(?<email>.*)>$"; "i")
