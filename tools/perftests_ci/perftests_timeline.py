@@ -151,8 +151,9 @@ def changes(series, position, threshold, window):
 def lasting_steps(medians, threshold, runs):
     # The indices where the level of a series changed for good: the median of
     # the runs points from there on against the median of the runs points
-    # before, by more than threshold, and the largest such change within runs
-    # points on either side (a step is found once, not at its neighbors too)
+    # before, by more than threshold, and the largest such change (on a log
+    # scale) within runs points on either side (a step is found once, not at
+    # its neighbors too)
     count = len(medians)
     score = [0.0] * count
     for i in range(runs, count - runs + 1):
@@ -160,7 +161,7 @@ def lasting_steps(medians, threshold, runs):
         after = statistics.median(medians[i:i + runs])
         score[i] = math.log(after / before) if before > 0 and after > 0 else 0
     found = [i for i in range(runs, count - runs + 1)
-        if abs(score[i]) > math.log1p(threshold) and abs(score[i]) ==
+        if abs(math.expm1(score[i])) > threshold and abs(score[i]) ==
             max(abs(s) for s in score[max(runs, i - runs):i + runs])]
     # A median of runs points still has the new level up to half of them
     # before the step: the step is where the points around it are split best
@@ -192,14 +193,15 @@ def analyze(series, position, threshold, runs):
         steps = lasting_steps([median for _, median, _ in points], threshold,
             runs)
         # measured between the levels of the segments, a step may be smaller
-        steps = [i for i in steps if abs(math.log(step_ratio(points, i, runs,
-            steps))) > math.log1p(threshold)]
+        steps = [i for i in steps
+            if abs(step_ratio(points, i, runs, steps) - 1) > threshold]
         ratios = [step_ratio(points, i, runs, steps) for i in steps]
         up = [ratio > 1 for ratio in ratios]
         reversals = sum(1 for a, b in zip(up, up[1:]) if a != b)
         gross = sum(abs(math.log(ratio)) for ratio in ratios)
-        net = abs(math.log(level(points, len(points) - 1, runs, steps) /
-            level(points, 0, runs, steps)))
+        first = level(points, 0, runs, steps)
+        last = level(points, len(points) - 1, runs, steps)
+        net = abs(math.log(last / first)) if first > 0 and last > 0 else 0
         unstable = reversals >= 2 or gross > 2 * net + 0.1
         result[key] = (points, [] if unstable else steps, unstable)
     return result
@@ -240,8 +242,9 @@ def attribution(analyzed, position, runs, since=None):
             if not before:
                 continue
             first = before[-1]
-        net = (level(points, len(points) - 1, runs, steps) /
-            level(points, first, runs, steps))
+        start = level(points, first, runs, steps)
+        last = level(points, len(points) - 1, runs, steps)
+        net = last / start if start > 0 and last > 0 else 1.0
         found = [(i, step_ratio(points, i, runs, steps), points[i][0],
             points[i][2]) for i in steps if i > first]
         result[key] = (found, net, unstable)
@@ -399,13 +402,14 @@ def plot_steps(ax, attributed, colors, commits, args):
         found, net, unstable = attributed[key]
         if unstable:
             columns.append(("unstable", 1.0, 1.0, colors[key], False))
-        elif found:
+        elif found or abs(net - 1) > args.threshold / 100:
+            # a net change without steps is all 'other' (a gradual change)
             at = 1.0
             for _, ratio, commit, _ in found:
                 columns.append((commit_label(commit, commits), at, at * ratio,
                     colors[key], False))
                 at *= ratio
-            if abs(math.log(net / at)) > math.log(1.02):
+            if not found or abs(math.log(net / at)) > math.log(1.02):
                 columns.append(("other", at, net, colors[key], False))
             columns.append(("net", 1.0, net, colors[key], True))
         else:
@@ -455,9 +459,9 @@ def plot_steps(ax, attributed, colors, commits, args):
                 tick.set_fontweight('bold')
     ax.tick_params(axis='x', length=0)
     ax.set_xlim(-0.6, len(columns) - 0.4)
-    ratio_axis(ax, [c[2] / c[1] for c in columns if c] +
-        [c[2] for c in columns if c and c[4]], vertical=True,
-        size=plt.rcParams['ytick.labelsize'])
+    # the levels the columns reach, so that none is cut off
+    ratio_axis(ax, [value for c in columns if c for value in c[1:3]],
+        vertical=True, size=plt.rcParams['ytick.labelsize'])
     ax.grid(axis='x', visible=False)
 
 
@@ -494,7 +498,7 @@ def plot_overview(attributed, labels, title, path, threshold):
     # from the largest slowdown to the largest speedup
     shown = sorted(((net, labels[key]) for key, (found, net, unstable)
         in attributed.items() if not unstable and
-            abs(math.log(net)) > math.log1p(threshold)), reverse=True)
+            abs(net - 1) > threshold), reverse=True)
     stable = sum(1 for _, _, unstable in attributed.values() if not unstable)
     fig, ax = plt.subplots(figsize=(graph_width, 0.24 * len(shown) + 1.1))
     for y, (net, _) in enumerate(shown):
