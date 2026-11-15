@@ -8,6 +8,7 @@
 set(tests
     execution_agent
     set_thread_affinity
+    set_thread_state_timed_self
     sized_function
     task_size_annotations
     task_size_hint

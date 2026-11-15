@@ -37,9 +37,6 @@
 
 namespace hpx::threads::detail {
 
-    // marks a timer that is not tied to one suspension of its target thread
-    inline constexpr std::int64_t no_suspension_tag = -1;
-
     // Who is responsible for resuming the wake_timer thread: the timer handler
     // or, if the timer was aborted first, the at_timer thread itself.
     enum class wake_state : std::uint8_t
@@ -251,6 +248,19 @@ namespace hpx::threads::detail {
         thread_schedule_hint schedulehint, std::atomic<bool>* started,
         bool retry_on_active, error_code& ec)
     {
+        return set_thread_state_timed(scheduler, abs_time, thrd, newstate,
+            newstate_ex, priority, schedulehint, started, retry_on_active,
+            no_suspension_tag, ec);
+    }
+
+    thread_id_ref_type set_thread_state_timed(
+        policies::scheduler_base* scheduler,
+        hpx::chrono::steady_time_point const& abs_time,
+        thread_id_type const& thrd, thread_schedule_state newstate,
+        thread_restart_state newstate_ex, thread_priority priority,
+        thread_schedule_hint schedulehint, std::atomic<bool>* started,
+        bool retry_on_active, std::int64_t suspension_tag, error_code& ec)
+    {
         if (HPX_UNLIKELY(!thrd))
         {
             HPX_THROWS_IF(ec, hpx::error::null_thread_id,
@@ -259,23 +269,11 @@ namespace hpx::threads::detail {
             return invalid_thread_id;
         }
 
-        // A timer a thread sets on itself belongs to the suspension it is
-        // about to enter: switching from active to suspended increments the
-        // tag of its state.
-        std::int64_t suspension_tag = no_suspension_tag;
-        if (newstate == thread_schedule_state::pending ||
-            newstate == thread_schedule_state::pending_boost)
-        {
-            if (thread_data const* self = get_self_id_data();
-                self != nullptr && self == get_thread_id_data(thrd))
-            {
-                if (thread_state const current = self->get_state();
-                    current.state() == thread_schedule_state::active)
-                {
-                    suspension_tag = current.tag() + 1;
-                }
-            }
-        }
+        // only a timer that makes the thread pending can be tied to one of
+        // its suspensions
+        HPX_ASSERT(suspension_tag == no_suspension_tag ||
+            newstate == thread_schedule_state::pending ||
+            newstate == thread_schedule_state::pending_boost);
 
         // this creates a new thread that creates the timer and handles the
         // requested actions

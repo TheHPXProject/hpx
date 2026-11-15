@@ -15,10 +15,14 @@
 #include <hpx/threading_base/threading_base_fwd.hpp>
 
 #include <atomic>
+#include <cstdint>
 
 #include <hpx/config/warnings_prefix.hpp>
 
 namespace hpx::threads::detail {
+
+    /// Marks a timer that is not tied to one suspension of its target thread.
+    HPX_CXX_CORE_EXPORT inline constexpr std::int64_t no_suspension_tag = -1;
 
     /// Set a timer to set the state of the given \a thread to the given
     /// new value after it expired (at the given time)
@@ -29,6 +33,20 @@ namespace hpx::threads::detail {
         thread_restart_state newstate_ex, thread_priority priority,
         thread_schedule_hint schedulehint, std::atomic<bool>* started,
         bool retry_on_active, hpx::error_code& ec);
+
+    /// Set a timer that sets the state of the given \a thread to the given
+    /// new value after it expired (at the given time), but only while the
+    /// thread is still in the suspension tagged with \a suspension_tag (see
+    /// set_suspended_thread_state). A thread setting such a timer on itself
+    /// has to suspend right after setting it, the tag of that suspension is
+    /// the tag of its current state plus one.
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT thread_id_ref_type
+    set_thread_state_timed(policies::scheduler_base* scheduler,
+        hpx::chrono::steady_time_point const& abs_time,
+        thread_id_type const& thrd, thread_schedule_state newstate,
+        thread_restart_state newstate_ex, thread_priority priority,
+        thread_schedule_hint schedulehint, std::atomic<bool>* started,
+        bool retry_on_active, std::int64_t suspension_tag, hpx::error_code& ec);
 
     HPX_CXX_CORE_EXPORT inline thread_id_ref_type set_thread_state_timed(
         policies::scheduler_base* scheduler,
