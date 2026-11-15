@@ -570,6 +570,11 @@ namespace hpx::lcos::local {
         /// \brief Advance the generational counter of the gate, unblocking any
         ///        waiters whose requested generation has now been reached.
         ///
+        /// Asynchronous waiters (synchronize_async()) are only released, their
+        /// futures do not become ready yet. The caller has to call
+        /// take_released_waiters(l) and call set() on the result after it has
+        /// unlocked \p l.
+        ///
         /// \tparam Lock Type of the lock object used by the caller to
         ///              protect the gate; must already be locked when this
         ///              overload is called.
