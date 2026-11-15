@@ -590,31 +590,47 @@ void test_synchronize_async_next_generation_without_lock()
     f.get();
 }
 
-// Asynchronous waiters move with the gate. The moved-from gate does not
-// break their promises, and the gate they moved to releases them.
+// Asynchronous waiters move with the gate. The destroyed moved-from gate does
+// not break their promises, and the gate they moved to releases them.
 void test_synchronize_async_move()
 {
     hpx::spinlock mtx;
-    lock_type l(mtx);
-
-    hpx::lcos::local::and_gate gate;
-    hpx::future<void> f2 = gate.synchronize_async(2, l);
-    hpx::future<void> f3 = gate.synchronize_async(3, l);
-
-    hpx::lcos::local::and_gate moved(std::move(gate));
-    HPX_TEST(!f2.is_ready());
-
-    moved.next_generation(l);    // generation: 1 -> 2
-    moved.take_released_waiters(l).set();
-    f2.get();
-    HPX_TEST(!f3.is_ready());
+    hpx::future<void> f2;
+    hpx::future<void> f3;
 
     hpx::lcos::local::and_gate target;
-    target = std::move(moved);
+    {
+        hpx::lcos::local::and_gate moved;
+        {
+            hpx::lcos::local::and_gate gate;
+            {
+                lock_type l(mtx);
+                f2 = gate.synchronize_async(2, l);
+                f3 = gate.synchronize_async(3, l);
+            }
+            moved = hpx::lcos::local::and_gate(std::move(gate));
+        }
+        HPX_TEST(!f2.is_ready());
+        HPX_TEST(!f3.is_ready());
+
+        lock_type l(mtx);
+        moved.next_generation(l);    // generation: 1 -> 2
+        auto released = moved.take_released_waiters(l);
+        l.unlock();
+        released.set();
+        f2.get();
+
+        target = std::move(moved);
+    }
     HPX_TEST(!f3.is_ready());
 
+    lock_type l(mtx);
     target.next_generation(l);    // generation: 2 -> 3
-    target.take_released_waiters(l).set();
+    auto released = target.take_released_waiters(l);
+    l.unlock();
+    released.set();
+    HPX_TEST(f3.is_ready());
+    HPX_TEST(!f3.has_exception());
     f3.get();
 }
 
