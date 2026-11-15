@@ -241,7 +241,7 @@ namespace hpx::lcos::local {
         ~base_and_gate()
         {
             delete_async_entries(conditions_);
-            released_waiters(released_).set();
+            released_waiters released(released_);
         }
 
     protected:
