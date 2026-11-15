@@ -841,6 +841,36 @@ namespace hpx::lcos::local {
                 generation_value, l, function_name, ec);
         }
 
+        /// \brief Advance the generational counter of the gate, unblocking any
+        ///        waiters whose requested generation has now been reached.
+        ///
+        /// and_gate has no mutex of its own, so this hides the overload of
+        /// base_and_gate that takes no lock. Asynchronous waiters
+        /// (synchronize_async()) are only released, the caller has to call
+        /// take_released_waiters(l) and call set() on the result after it has
+        /// unlocked \p l.
+        ///
+        /// \tparam Lock Type of the lock object used by the caller to
+        ///              protect the gate.
+        ///
+        /// \param l The lock object that is currently holding the gate's
+        ///          associated (outer) lock.
+        /// \param new_generation The generation value the gate's counter
+        ///                       should be reset to before being advanced; if
+        ///                       not given the gate is simply advanced to the
+        ///                       next generation. The returned generation value
+        ///                       is one beyond this value.
+        /// \param ec Used to hold error information if the operation fails.
+        ///
+        /// \returns The new generation value of the gate.
+        template <typename Lock>
+        std::size_t next_generation(Lock& l,
+            std::size_t const new_generation = static_cast<std::size_t>(-1),
+            error_code& ec = throws)
+        {
+            return this->base_type::next_generation(l, new_generation, ec);
+        }
+
         /// \brief Get a future that becomes ready once the generational
         ///        counter has reached the requested stage.
         ///
