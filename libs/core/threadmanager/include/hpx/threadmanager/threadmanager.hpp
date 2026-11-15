@@ -293,6 +293,8 @@ namespace hpx::threads {
 
     private:
         policies::thread_queue_init_parameters get_init_parameters() const;
+        policies::scheduling_policy_init_parameters
+        get_scheduling_policy_init_parameters() const;
         void create_scheduler_user_defined(
             hpx::resource::scheduler_function const&,
             thread_pool_init_parameters const&,
@@ -303,6 +305,9 @@ namespace hpx::threads {
             thread_pool_init_parameters const&,
             policies::thread_queue_init_parameters const&, std::size_t);
         void create_scheduler_local_priority_fifo_double(
+            thread_pool_init_parameters const&,
+            policies::thread_queue_init_parameters const&, std::size_t);
+        void create_scheduler_local_priority_tuned_fifo(
             thread_pool_init_parameters const&,
             policies::thread_queue_init_parameters const&, std::size_t);
         void create_scheduler_local_priority_lifo(

@@ -15,6 +15,7 @@ set(threading_base_headers
     hpx/threading_base/detail/reset_lco_description.hpp
     hpx/threading_base/detail/get_default_pool.hpp
     hpx/threading_base/detail/get_default_timer_service.hpp
+    hpx/threading_base/detail/idle_callback.hpp
     hpx/threading_base/detail/switch_status.hpp
     hpx/threading_base/detail/task_sampling.hpp
     hpx/threading_base/execution_agent.hpp
@@ -25,6 +26,8 @@ set(threading_base_headers
     hpx/threading_base/scheduler_base.hpp
     hpx/threading_base/scheduler_mode.hpp
     hpx/threading_base/scheduler_state.hpp
+    hpx/threading_base/scheduler_tuning.hpp
+    hpx/threading_base/scheduling_policy.hpp
     hpx/threading_base/scoped_annotation.hpp
     hpx/threading_base/set_thread_affinity.hpp
     hpx/threading_base/set_thread_state.hpp
@@ -86,6 +89,9 @@ set(threading_base_sources
     print.cpp
     register_thread.cpp
     scheduler_base.cpp
+    scheduler_base_tuned.cpp
+    scheduler_tuning.cpp
+    scheduling_policy.cpp
     set_thread_affinity.cpp
     set_thread_state.cpp
     set_thread_state_timed.cpp

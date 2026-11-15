@@ -7,6 +7,7 @@
 
 set(tests
     execution_agent
+    scheduling_policy_idle_step
     set_thread_affinity
     sized_function
     task_size_annotations

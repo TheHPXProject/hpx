@@ -650,7 +650,8 @@ namespace hpx::execution::experimental::detail {
                 hint.hint == -1)
             {
                 // apply hint if none was given
-                hint.schedule_hint(worker_thread + op_state->first_thread);
+                hint.schedule_hint(static_cast<std::int16_t>(
+                    worker_thread + op_state->first_thread));
 
                 auto policy = hpx::execution::experimental::with_hint(
                     op_state->scheduler.policy(), hint);
@@ -726,13 +727,15 @@ namespace hpx::execution::experimental::detail {
                 // One large chunk per worker thread: minimises queue overhead
                 // and maximises locality for memory-bound work.
                 chunk_size = get_bulk_scheduler_chunk_size_chunked(
-                    op_state->num_worker_threads, size);
+                    static_cast<std::uint32_t>(op_state->num_worker_threads),
+                    size);
                 num_chunks = (size + chunk_size - 1) / chunk_size;
             }
             else
             {
                 chunk_size = get_bulk_scheduler_chunk_size(
-                    op_state->num_worker_threads, size);
+                    static_cast<std::uint32_t>(op_state->num_worker_threads),
+                    size);
                 num_chunks = (size + chunk_size - 1) / chunk_size;
             }
 
