@@ -235,6 +235,23 @@ void for_loop_strided_test_induction()
 
     test_for_loop_strided_induction(seq);
     test_for_loop_strided_induction(par);
+
+    // A partition begins at an element offset, while induction counts
+    // visited elements. Check values across several parallel partitions.
+    constexpr std::size_t size = 10007;
+    constexpr std::size_t stride = 3;
+    std::vector<std::size_t> observed(size, size);
+    std::size_t live_out = 0;
+    hpx::experimental::for_loop_strided(par, std::size_t(0), size, stride,
+        hpx::experimental::induction(live_out),
+        [&observed](std::size_t index, std::size_t induction) {
+            observed[index] = induction;
+        });
+    for (std::size_t index = 0; index < size; index += stride)
+    {
+        HPX_TEST_EQ(observed[index], index / stride);
+    }
+    HPX_TEST_EQ(live_out, (size + stride - 1) / stride);
 }
 
 ///////////////////////////////////////////////////////////////////////////////

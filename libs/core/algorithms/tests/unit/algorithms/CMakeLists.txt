@@ -185,6 +185,13 @@ set(sender_tests
     findifnot_sender
     foreach_sender
     foreachn_sender
+    for_loop_induction_sender
+    for_loop_n_sender
+    for_loop_n_strided_sender
+    for_loop_reduction_sender
+    for_loop_sender
+    for_loop_strided_induction_sender
+    for_loop_strided_sender
     generate_sender
     generaten_sender
     inclusive_scan_sender
