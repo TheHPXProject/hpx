@@ -26,6 +26,7 @@
 
 constexpr std::size_t num_tasks = 2000;
 constexpr std::uint64_t task_duration_ns = 20000;
+constexpr std::size_t max_rounds = 10;
 
 std::atomic<std::size_t> num_stolen(0);
 hpx::threads::thread_priority task_priority =
@@ -60,13 +61,21 @@ int hpx_main()
             static_cast<std::int16_t>(home_worker))),
         task_priority);
 
+    // On a loaded machine the other workers may not get to run (or may still
+    // be backing off while idle) during a whole round, so repeat the round a
+    // few times before giving up. When victims answer steal requests with zero
+    // tasks, no round ever has a stolen task.
     std::vector<hpx::future<void>> futures;
     futures.reserve(num_tasks);
-    for (std::size_t i = 0; i != num_tasks; ++i)
+    for (std::size_t round = 0; round != max_rounds && num_stolen == 0; ++round)
     {
-        futures.push_back(hpx::async(exec, &busy_task));
+        futures.clear();
+        for (std::size_t i = 0; i != num_tasks; ++i)
+        {
+            futures.push_back(hpx::async(exec, &busy_task));
+        }
+        hpx::wait_all(futures);
     }
-    hpx::wait_all(futures);
 
     // a lower bound only, to stay robust on slow or oversubscribed machines
     HPX_TEST(num_stolen > 0);
