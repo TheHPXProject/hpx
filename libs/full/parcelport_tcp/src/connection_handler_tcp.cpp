@@ -162,19 +162,24 @@ namespace hpx::parcelset::policies::tcp {
 
     void connection_handler::do_stop()
     {
+        accepted_connections_set connections;
         {
-            // cancel all pending read operations, close those sockets
             std::lock_guard<hpx::spinlock> l(connections_mtx_);
-            for (std::shared_ptr<receiver> const& c : accepted_connections_)
-            {
-                c->shutdown();
-            }
-
-            accepted_connections_.clear();
+            connections.swap(accepted_connections_);
 #if defined(HPX_HOLDON_TO_OUTGOING_CONNECTIONS)
             write_connections_.clear();
 #endif
         }
+
+        // Cancel all pending read operations and close those sockets without
+        // holding connections_mtx_: receiver::shutdown waits for the aborted
+        // read to finish, and that read's completion handler
+        // (handle_read_completion) acquires connections_mtx_.
+        for (std::shared_ptr<receiver> const& c : connections)
+        {
+            c->shutdown();
+        }
+
         if (acceptor_ != nullptr)
         {
             std::error_code ec;
@@ -353,7 +358,7 @@ namespace hpx::parcelset::policies::tcp {
         else
         {
             // remove this connection from the list of known connections
-            std::lock_guard<hpx::spinlock> l(mtx_);
+            std::lock_guard<hpx::spinlock> l(connections_mtx_);
             accepted_connections_.erase(receiver_conn);
         }
     }

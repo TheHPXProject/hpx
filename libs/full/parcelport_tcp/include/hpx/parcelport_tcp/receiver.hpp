@@ -137,20 +137,26 @@ namespace hpx::parcelset::policies::tcp {
 
         void shutdown()
         {
-            std::lock_guard lk(mtx_);
-
-            // gracefully and portably shutdown the socket
-            if (socket_.is_open())
             {
-                // NOLINTBEGIN(bugprone-unused-return-value)
-                std::error_code ec;
-                socket_.shutdown(::asio::ip::tcp::socket::shutdown_both, ec);
+                std::lock_guard lk(mtx_);
 
-                // close the socket to give it back to the OS
-                socket_.close(ec);
-                // NOLINTEND(bugprone-unused-return-value)
+                // gracefully and portably shutdown the socket
+                if (socket_.is_open())
+                {
+                    // NOLINTBEGIN(bugprone-unused-return-value)
+                    std::error_code ec;
+                    socket_.shutdown(
+                        ::asio::ip::tcp::socket::shutdown_both, ec);
+
+                    // close the socket to give it back to the OS
+                    socket_.close(ec);
+                    // NOLINTEND(bugprone-unused-return-value)
+                }
             }
 
+            // Wait without holding mtx_: a read that completed just before the
+            // socket was closed takes mtx_ to issue its next read (and then
+            // sees the closed socket) before it lowers operation_in_flight_.
             hpx::util::yield_while(
                 [this]() { return operation_in_flight_ != 0; },
                 "tcp::receiver::shutdown");
