@@ -142,6 +142,13 @@ namespace hpx::execution::experimental {
             }
         };
 
+        // The receivers below mark the operation as finished before they make
+        // the future ready. Making the future ready runs the continuations
+        // that are attached to it, and a continuation that runs synchronously
+        // may call get() on the future, which runs the loop until the
+        // operation is finished. A waiter that sees the operation finished
+        // still waits in get() until the future is ready. The receivers don't
+        // touch the loop after making the future ready.
         struct run_loop_future_data_base
         {
             bool loop_operation_finished = false;
@@ -167,31 +174,25 @@ namespace hpx::execution::experimental {
             void set_value(U&& u) && noexcept
             {
                 auto data_keepalive = this->base_type::data;
-                auto* const l_data = data;
-                auto& l_loop = loop;
+                loop.complete_operation(data->loop_operation_finished);
                 HPX_MOVE(*static_cast<base_type*>(this))
                     .set_value(HPX_FORWARD(U, u));
-                l_loop.complete_operation(l_data->loop_operation_finished);
             }
 
             template <typename E>
             void set_error(E&& e) && noexcept
             {
                 auto data_keepalive = this->base_type::data;
-                auto* const l_data = data;
-                auto& l_loop = loop;
+                loop.complete_operation(data->loop_operation_finished);
                 HPX_MOVE(*static_cast<base_type*>(this))
                     .set_error(HPX_FORWARD(E, e));
-                l_loop.complete_operation(l_data->loop_operation_finished);
             }
 
             void set_stopped() && noexcept
             {
                 auto data_keepalive = this->base_type::data;
-                auto* const l_data = data;
-                auto& l_loop = loop;
+                loop.complete_operation(data->loop_operation_finished);
                 base_type::set_stopped();
-                l_loop.complete_operation(l_data->loop_operation_finished);
             }
         };
 
@@ -214,30 +215,24 @@ namespace hpx::execution::experimental {
             void set_value() && noexcept
             {
                 auto data_keepalive = this->base_type::data;
-                auto* const l_data = data;
-                auto& l_loop = loop;
+                loop.complete_operation(data->loop_operation_finished);
                 HPX_MOVE(*static_cast<base_type*>(this)).set_value();
-                l_loop.complete_operation(l_data->loop_operation_finished);
             }
 
             template <typename E>
             void set_error(E&& e) && noexcept
             {
                 auto data_keepalive = this->base_type::data;
-                auto* const l_data = data;
-                auto& l_loop = loop;
+                loop.complete_operation(data->loop_operation_finished);
                 HPX_MOVE(*static_cast<base_type*>(this))
                     .set_error(HPX_FORWARD(E, e));
-                l_loop.complete_operation(l_data->loop_operation_finished);
             }
 
             void set_stopped() && noexcept
             {
                 auto data_keepalive = this->base_type::data;
-                auto* const l_data = data;
-                auto& l_loop = loop;
+                loop.complete_operation(data->loop_operation_finished);
                 base_type::set_stopped();
-                l_loop.complete_operation(l_data->loop_operation_finished);
             }
         };
 

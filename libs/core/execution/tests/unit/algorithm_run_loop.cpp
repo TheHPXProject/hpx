@@ -2242,6 +2242,80 @@ void test_run_loop_shared_futures_7891()
     }
 }
 
+// A continuation that runs when a run_loop future becomes ready may call get()
+// on that future, which must not wait for the receiver that is running the
+// continuation. keep_future attaches its continuation without running the loop
+// first, so the continuation runs inside the receiver.
+void test_run_loop_continuation_get()
+{
+    // value
+    {
+        ex::run_loop loop;
+        auto f = ex::make_future(loop.get_scheduler(),
+            ex::just(42) | ex::continues_on(loop.get_scheduler()))
+                     .share();
+
+        int result = 0;
+        ex::start_detached(ex::keep_future(f) |
+            ex::then([&](hpx::shared_future<int> f) { result = f.get(); }));
+
+        HPX_TEST_EQ(f.get(), 42);
+        HPX_TEST_EQ(result, 42);
+    }
+
+    // void
+    {
+        ex::run_loop loop;
+        auto f = ex::make_future(loop.get_scheduler(),
+            ex::just() | ex::continues_on(loop.get_scheduler()))
+                     .share();
+
+        bool called = false;
+        ex::start_detached(
+            ex::keep_future(f) | ex::then([&](hpx::shared_future<void> f) {
+                f.get();
+                called = true;
+            }));
+
+        f.get();
+        HPX_TEST(called);
+    }
+
+    // error
+    {
+        ex::run_loop loop;
+        auto f = ex::make_future(loop.get_scheduler(),
+            ex::just() | ex::continues_on(loop.get_scheduler()) | ex::then([] {
+                throw std::runtime_error("error");
+            })).share();
+
+        bool caught_in_continuation = false;
+        ex::start_detached(
+            ex::keep_future(f) | ex::then([&](hpx::shared_future<void> f) {
+                try
+                {
+                    f.get();
+                }
+                catch (std::runtime_error const&)
+                {
+                    caught_in_continuation = true;
+                }
+            }));
+
+        bool caught_exception = false;
+        try
+        {
+            f.get();
+        }
+        catch (std::runtime_error const&)
+        {
+            caught_exception = true;
+        }
+        HPX_TEST(caught_exception);
+        HPX_TEST(caught_in_continuation);
+    }
+}
+
 void test_run_loop_thread_pool_completion()
 {
     for (int i = 0; i < 500; ++i)
@@ -2299,6 +2373,7 @@ int hpx_main()
     RUN_TEST(test_empty_destruction);
     RUN_TEST(test_throwing_connect);
     RUN_TEST(test_run_loop_shared_futures_7891);
+    RUN_TEST(test_run_loop_continuation_get);
     RUN_TEST(test_run_loop_thread_pool_completion);
 
     return hpx::local::finalize();
