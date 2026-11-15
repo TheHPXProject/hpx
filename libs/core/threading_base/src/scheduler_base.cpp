@@ -148,6 +148,7 @@ namespace hpx::threads::policies {
     // otherwise the next one after it
     bool scheduler_base::wake_one(std::size_t hint)
     {
+        signal_sentinel();
         std::size_t const size = wait_count_data_.size();
         if (hint >= size)
         {
@@ -207,6 +208,7 @@ namespace hpx::threads::policies {
     // claim and wake the given worker if it sleeps
     bool scheduler_base::wake_if_sleeping(std::size_t num_thread)
     {
+        signal_sentinel();
         // No fence between queuing the new thread and reading the sleep mask
         // (see wake_one): if the target announces itself at the same time,
         // this may miss it while the target misses the new thread. The
@@ -223,6 +225,41 @@ namespace hpx::threads::policies {
             return true;
         }
         return false;
+    }
+
+    // The sentinel spins for the period it would have slept. It looks at its
+    // own queues every round, and at the queues it steals from right after a
+    // thread was queued anywhere (sentinel_.new_threads), otherwise every
+    // hpx.idle_backoff_steal_check_interval microseconds, as other spinning
+    // workers do. A thread queued while this worker becomes the sentinel may
+    // not be counted; it is found at the next of these regular looks. Out of
+    // line, so that idle_callback keeps its size.
+    HPX_NOINLINE void scheduler_base::spin_as_sentinel(
+        std::size_t const num_thread, std::uint64_t const period_us)
+    {
+        auto& data = sentinel_.data_;
+        auto const rounds = (std::max) (std::uint64_t(1),
+            static_cast<std::uint64_t>(std::llround(
+                static_cast<double>(period_us) * spin_rounds_per_us_)));
+        std::uint64_t seen = data.new_threads.load(std::memory_order_relaxed);
+        for (std::uint64_t round = 1; round <= rounds; ++round)
+        {
+            detail::spin_round();
+            if (get_queue_length(num_thread) != 0)
+            {
+                break;
+            }
+            std::uint64_t const now =
+                data.new_threads.load(std::memory_order_relaxed);
+            if ((now != seen ||
+                    round % idle_backoff_steal_check_rounds_ == 0) &&
+                has_visible_work(num_thread))
+            {
+                break;
+            }
+            seen = now;
+        }
+        data.worker.store(0, std::memory_order_relaxed);
     }
 #endif
 
@@ -316,6 +353,7 @@ namespace hpx::threads::policies {
         HPX_ASSERT(modes_.size() >= size);
         if (static_cast<std::size_t>(-1) == num_thread)
         {
+            signal_sentinel();
             for (std::size_t i = 0; i != size; ++i)
             {
                 if (modes[i].data_.load(std::memory_order_relaxed) &
@@ -328,6 +366,7 @@ namespace hpx::threads::policies {
         else if (modes_[num_thread].data_.load(std::memory_order_relaxed) &
             policies::scheduler_mode::enable_idle_backoff)
         {
+            signal_sentinel();
             for (std::size_t i = 0; i != size; ++i)
             {
                 wake_up(i);

@@ -462,8 +462,36 @@ namespace hpx::threads::policies {
         // (see idle_callback); they find new work without being woken up
         util::aligned_line_data<std::atomic<std::size_t>> spinning_workers_{0};
 
+        // The sentinel: one idle worker that would go to sleep spins instead,
+        // for as long as it would have slept (see idle_callback). worker is
+        // the number of that worker plus one (0 if there is none),
+        // new_threads counts the threads queued while it spins, so that it
+        // looks at the queues of the others right after one arrives. Both
+        // are on one cache line: a worker that queues a thread reads worker
+        // and, if there is a sentinel, increments new_threads. The sentinel
+        // isn't counted in spinning_workers_, so a worker that queues small
+        // threads for itself still wakes up a sleeper (see
+        // has_spinning_worker).
+        struct idle_sentinel_data
+        {
+            std::atomic<std::size_t> worker{0};
+            std::atomic<std::uint64_t> new_threads{0};
+        };
+        util::aligned_line_data<idle_sentinel_data> sentinel_;
+
+        // tell the sentinel, if there is one, that a thread was queued
+        void signal_sentinel() noexcept
+        {
+            auto& data = sentinel_.data_;
+            if (data.worker.load(std::memory_order_relaxed) != 0)
+            {
+                data.new_threads.fetch_add(1, std::memory_order_relaxed);
+            }
+        }
+
         void notify_worker(std::size_t i);
         bool has_visible_work(std::size_t num_thread) const;
+        void spin_as_sentinel(std::size_t num_thread, std::uint64_t period_us);
 
         // Is an idle worker spinning, so that it will probably find work
         // queued before this call without being woken up? Call it after
