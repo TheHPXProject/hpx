@@ -159,10 +159,6 @@ def plot(benchmark, series, commits, position, args, path):
     # A prefix all lines share is said once, as the title of the legend
     names = sorted(name for name, _, _ in series)
     cut = shared_prefix(names)
-    # Matplotlib before 3.10 leaves a label that starts with '_' out of the
-    # legend, even if it is passed explicitly: keep the whole names then
-    if any(name[cut:].startswith('_') for name in names):
-        cut = 0
     title = names[0][:cut - 3] if cut else None
 
     fig, ax = plt.subplots(figsize=(graph_width, 4))
@@ -241,12 +237,14 @@ def plot(benchmark, series, commits, position, args, path):
     left = ax.get_tightbbox(renderer).x0
     center = ((left + graph.x1) / 2 - graph.x0) / graph.width
     for ncol in (1,) if len(series) < 6 else (2, 1):
-        # the lines are passed, so that Matplotlib 3.10 and newer keep a label
-        # that starts with '_' (older ones drop it anyway, which is why the
-        # prefix isn't cut if that would leave one)
-        legend = ax.legend(lines, [line.get_label() for line in lines],
+        # Matplotlib leaves a label that starts with '_' out of the legend
+        # (before 3.10 even if it is passed explicitly), so the legend is made
+        # with labels that don't, and their texts are set afterwards
+        legend = ax.legend(lines, [f" {line.get_label()}" for line in lines],
             fontsize=7, loc='upper center', bbox_to_anchor=(center, -0.28),
             ncol=ncol, frameon=False, title=title, title_fontsize=7)
+        for text, line in zip(legend.get_texts(), lines):
+            text.set_text(line.get_label())
         if legend.get_window_extent(renderer).width <= graph.x1 - left:
             break
     fig.savefig(path, format='svg', bbox_inches='tight',
