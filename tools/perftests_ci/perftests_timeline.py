@@ -221,9 +221,10 @@ def level(points, index, runs, steps):
 
 
 def step_ratio(points, index, runs, steps):
-    # The change of the level at a step
-    return (level(points, index, runs, steps) /
-        level(points, index - 1, runs, steps))
+    # The change of the level at a step, none (1) if a level isn't positive
+    before = level(points, index - 1, runs, steps)
+    after = level(points, index, runs, steps)
+    return after / before if before > 0 and after > 0 else 1.0
 
 
 def attribution(analyzed, position, runs, since=None):
@@ -612,7 +613,9 @@ def overview(benchmarks, analyzed, commits, ordered, position, args):
     for name, count in releases:
         first = next((i for i, commit in enumerate(ordered)
             if commits[commit][0] >= count), None)
-        if first:
+        # the history may start with the release, but not after it
+        if first is not None and (first or
+                commits[ordered[0]][0] == count):
             release = (name, first)
     if release:
         name, first = release
