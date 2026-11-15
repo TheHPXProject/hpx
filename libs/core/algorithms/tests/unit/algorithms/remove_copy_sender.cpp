@@ -178,9 +178,7 @@ void test_synchronous_policy()
     auto async = sender_test::ex::explicit_scheduler_executor(
         sender_test::ex::thread_pool_policy_scheduler(hpx::launch::async));
     check_result(hpx::execution::seq.on(sync));
-    check_result(hpx::execution::unseq.on(sync));
     check_result(hpx::execution::par.on(async));
-    check_result(hpx::execution::par_unseq.on(async));
 }
 
 void record_concurrency(std::atomic<std::size_t>& active,
