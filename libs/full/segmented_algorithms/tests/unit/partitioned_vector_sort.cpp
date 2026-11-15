@@ -380,7 +380,7 @@ void test_two_run_merge_split(std::vector<hpx::id_type> const& localities)
     std::vector<hpx::id_type> hosts{
         localities[0], localities[localities.size() > 1 ? 1 : 0]};
     hpx::partitioned_vector<int> values(
-        2 * (65536 + 7), 0, hpx::container_layout(2, hosts));
+        std::size_t{2} * (65536 + 7), 0, hpx::container_layout(2, hosts));
     initialize_values(values, [&](std::size_t i) {
         auto const run_size = values.size() / 2;
         if (i < run_size)

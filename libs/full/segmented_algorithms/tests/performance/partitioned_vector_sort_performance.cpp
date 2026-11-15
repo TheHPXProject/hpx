@@ -1,4 +1,4 @@
-//  Copyright (c) 2026 Pratyksh Gupta
+//  Copyright (c) 2026 Divyanshi Talreja
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -13,6 +13,7 @@
 #include <hpx/include/partitioned_vector.hpp>
 #include <hpx/include/partitioned_vector_predef.hpp>
 #include <hpx/modules/program_options.hpp>
+#include <hpx/modules/segmented_algorithms.hpp>
 #include <hpx/modules/testing.hpp>
 
 #include <algorithm>
