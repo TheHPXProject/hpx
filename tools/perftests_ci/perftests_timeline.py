@@ -369,21 +369,21 @@ def plot(benchmark, series, analyzed, commits, position, args, path):
     return moved, numbers, len(nodes) > 1
 
 
-def ratio_axis(ax, ratios, minimum=0.6, vertical=False):
+def ratio_axis(ax, ratios, minimum=0.6, vertical=False, size=label_size):
     # A symmetric axis of ratios on a log2 scale (1x in the middle), the x
-    # axis, or the y axis if vertical
+    # axis, or the y axis if vertical, with labels of the given size
     limit = max([minimum] + [abs(math.log2(r)) + 0.25 for r in ratios])
     ticks = [t for t in (-2, -1, -0.5, 0, 0.5, 1, 2) if abs(t) < limit]
     labels = [f"{2 ** t:.2g}x" for t in ticks]
     if vertical:
         ax.set_ylim(-limit, limit)
         ax.set_yticks(ticks)
-        ax.set_yticklabels(labels, fontsize=label_size)
+        ax.set_yticklabels(labels, fontsize=size)
         ax.axhline(0, color='0.2', linewidth=0.8, zorder=1)
     else:
         ax.set_xlim(-limit, limit)
         ax.set_xticks(ticks)
-        ax.set_xticklabels(labels, fontsize=label_size)
+        ax.set_xticklabels(labels, fontsize=size)
         ax.axvline(0, color='0.2', linewidth=0.8, zorder=1)
 
 
@@ -413,7 +413,7 @@ def plot_steps(ax, attributed, colors, commits, args):
         columns.append(None)
     columns = columns[:-1]
     ax.set_title(f"lasting changes since\nthe first runs (+{args.threshold:g}%"
-        f", {args.runs} runs)", fontsize=7)
+        f", {args.runs} runs)", fontsize=9)
     ax.yaxis.tick_right()
     if not columns:
         ax.set_yticks([])
@@ -445,7 +445,8 @@ def plot_steps(ax, attributed, colors, commits, args):
             alpha=0.55 if label == "other" else 1,
             edgecolor='0.1' if net else 'none', linewidth=0.8, zorder=2)
     ax.set_xticks(range(len(columns)))
-    ax.set_xticklabels(labels, rotation=90, fontsize=6.5)
+    # the sizes of the labels of the graph on the left
+    ax.set_xticklabels(labels, rotation=90, fontsize=label_size)
     for tick, column in zip(ax.get_xticklabels(), columns):
         if column and column[0] != "unstable":
             tick.set_color('tab:red' if column[2] > column[1]
@@ -455,7 +456,8 @@ def plot_steps(ax, attributed, colors, commits, args):
     ax.tick_params(axis='x', length=0)
     ax.set_xlim(-0.6, len(columns) - 0.4)
     ratio_axis(ax, [c[2] / c[1] for c in columns if c] +
-        [c[2] for c in columns if c and c[4]], vertical=True)
+        [c[2] for c in columns if c and c[4]], vertical=True,
+        size=plt.rcParams['ytick.labelsize'])
     ax.grid(axis='x', visible=False)
 
 
