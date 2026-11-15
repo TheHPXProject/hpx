@@ -235,8 +235,10 @@ namespace hpx::threads::policies {
     // not be counted; it is found at the next of these regular looks. Out of
     // line, so that idle_callback keeps its size.
     HPX_NOINLINE void scheduler_base::spin_as_sentinel(
-        std::size_t const num_thread, std::uint64_t const period_us)
+        std::size_t const num_thread, std::uint64_t const period_us,
+        std::uint64_t const steal_check_rounds)
     {
+        HPX_ASSERT(steal_check_rounds != 0);
         auto& data = sentinel_.data_;
         auto const rounds = (std::max) (std::uint64_t(1),
             static_cast<std::uint64_t>(std::llround(
@@ -251,8 +253,7 @@ namespace hpx::threads::policies {
             }
             std::uint64_t const now =
                 data.new_threads.load(std::memory_order_relaxed);
-            if ((now != seen ||
-                    round % idle_backoff_steal_check_rounds_ == 0) &&
+            if ((now != seen || round % steal_check_rounds == 0) &&
                 has_visible_work(num_thread))
             {
                 break;
@@ -289,9 +290,10 @@ namespace hpx::threads::policies {
         step.period = std::chrono::microseconds(std::lround(
             (std::min) (max_idle_backoff_time_, std::pow(2.0, exponent))));
 
+        step.steal_check_rounds = idle_backoff_steal_check_rounds_;
         if (static_cast<double>(step.period.count()) >= min_idle_backoff_time_)
         {
-            return step;    // sleep
+            return step;    // sleep, or spin as the sentinel
         }
 
         step.pauses_per_round = scheduling_policy::calibration_pauses_per_round;
@@ -299,7 +301,6 @@ namespace hpx::threads::policies {
             static_cast<std::uint64_t>(
                 std::llround(static_cast<double>(step.period.count()) *
                     spin_rounds_per_us_)));
-        step.steal_check_rounds = idle_backoff_steal_check_rounds_;
         return step;
     }
 #endif

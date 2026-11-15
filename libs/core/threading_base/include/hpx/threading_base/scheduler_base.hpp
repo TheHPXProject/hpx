@@ -491,7 +491,8 @@ namespace hpx::threads::policies {
 
         void notify_worker(std::size_t i);
         bool has_visible_work(std::size_t num_thread) const;
-        void spin_as_sentinel(std::size_t num_thread, std::uint64_t period_us);
+        void spin_as_sentinel(std::size_t num_thread, std::uint64_t period_us,
+            std::uint64_t steal_check_rounds);
 
         // Is an idle worker spinning, so that it will probably find work
         // queued before this call without being woken up? Call it after

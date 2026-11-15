@@ -132,7 +132,9 @@ namespace hpx::threads::policies {
         /// the pause instructions per spin round
         std::uint32_t pauses_per_round;
 
-        /// look at the queues to steal from every this many spin rounds
+        /// look at the queues to steal from every this many spin rounds (for
+        /// a period to sleep, rounds of calibration_pauses_per_round pauses,
+        /// as spun by a worker that becomes the sentinel instead)
         std::uint64_t steal_check_rounds;
     };
 
@@ -324,7 +326,13 @@ namespace hpx::threads::policies {
             if (static_cast<double>(step.period.count()) >=
                 parameters.get(worker, min_idle_backoff_time_))
             {
-                return step;    // sleep
+                // sleep, or spin rounds of calibration_pauses_per_round
+                // pauses as the sentinel
+                step.steal_check_rounds = (std::max) (std::uint64_t(1),
+                    static_cast<std::uint64_t>(std::llround(
+                        parameters.get(worker, steal_check_interval_) *
+                        spin_rounds_per_us)));
+                return step;
             }
 
             // a round of more pauses lasts longer than the measured one

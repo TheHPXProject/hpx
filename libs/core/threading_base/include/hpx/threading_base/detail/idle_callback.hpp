@@ -172,7 +172,8 @@ namespace hpx::threads::policies {
             {
                 l.unlock();
                 spin_as_sentinel(num_thread,
-                    static_cast<std::uint64_t>(step.period.count()));
+                    static_cast<std::uint64_t>(step.period.count()),
+                    step.steal_check_rounds);
                 return true;
             }
 
