@@ -455,13 +455,12 @@ namespace hpx {
         static decltype(auto) invoke_default(
             ExPolicy&& policy, FwdIter first, FwdIter last, T const& value)
         {
-            using Type = typename std::iterator_traits<FwdIter>::value_type;
-
             // compares the elements with the value as equal_to does, which
-            // gives the worker tasks a size
+            // gives the worker tasks a size; the value is compared as given,
+            // as in the sequential overload and std::remove, not converted to
+            // the type of the elements first
             return hpx::remove_if(HPX_FORWARD(ExPolicy, policy), first, last,
-                hpx::parallel::detail::compare_to<Type>(
-                    static_cast<Type>(value)));
+                hpx::parallel::detail::compare_to<T>(value));
         }
     } remove{};
 }    // namespace hpx
