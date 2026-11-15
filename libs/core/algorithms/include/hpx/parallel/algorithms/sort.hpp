@@ -167,7 +167,7 @@ namespace hpx {
 #include <hpx/parallel/util/compare_projected.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/chunk_size.hpp>
-#include <hpx/parallel/util/detail/handle_local_exceptions.hpp>
+#include <hpx/parallel/util/detail/handle_remote_exceptions.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
 
 #include <algorithm>
@@ -258,16 +258,18 @@ namespace hpx::parallel {
                     hpx::future<RandomIt>&& rightf) -> RandomIt {
                     if (leftf.has_exception() || rightf.has_exception())
                     {
+                        // Recursive children may already hold exception_lists.
+                        // Flatten them before reporting the combined errors.
                         std::list<std::exception_ptr> errors;
                         if (leftf.has_exception())
                         {
-                            util::detail::handle_local_exceptions<
+                            util::detail::handle_remote_exceptions<
                                 ExPolicy>::call(leftf.get_exception_ptr(),
                                 errors);
                         }
                         if (rightf.has_exception())
                         {
-                            util::detail::handle_local_exceptions<
+                            util::detail::handle_remote_exceptions<
                                 ExPolicy>::call(rightf.get_exception_ptr(),
                                 errors);
                         }
