@@ -485,10 +485,55 @@ foreach(lib ${HPX_LIBS})
 endforeach()
 
 if(HPX_WITH_CXX_MODULES)
-  # generate header file that #includes all required standard headers
-  set(cxx_standard_headers)
+  # Read guards from standard_headers.inc
+  file(STRINGS "${HPX_SOURCE_DIR}/cmake/standard_headers.inc" _raw_lines)
+  set(_std_lines)
+  set(_accum)
+  foreach(_line ${_raw_lines})
+    if(NOT _line MATCHES "^[ \t]*//")
+      if(_accum)
+        string(APPEND _accum " ${_line}")
+      else()
+        set(_accum "${_line}")
+      endif()
+      if(_accum MATCHES "\\)")
+        list(APPEND _std_lines "${_accum}")
+        set(_accum)
+      endif()
+    endif()
+  endforeach()
+
+  foreach(_line ${_std_lines})
+    if(_line MATCHES
+       "HPX_STD_HEADER\\([ \t]*\"([^\"]+)\",[ \t]*\"([^\"]*)\",[ \t]*([01])\\)"
+    )
+      set(_hdr "${CMAKE_MATCH_1}")
+      set(_guard "${CMAKE_MATCH_2}")
+      if(_guard)
+        string(REGEX REPLACE "[^a-zA-Z0-9_]" "_" _var_suffix "${_hdr}")
+        set(_std_header_guard_${_var_suffix} "${_guard}")
+      endif()
+    endif()
+  endforeach()
+
+  # generate header file that #includes all required standard headers. Ensure
+  # <version> is included first so feature-test macros are defined for guards.
+  set(cxx_standard_headers "#include <version>\n")
   foreach(std_header ${HPX_STANDARD_HEADERS})
-    set(cxx_standard_headers "${cxx_standard_headers}#include ${std_header}\n")
+    if(NOT std_header STREQUAL "<version>")
+      string(REGEX REPLACE "^<|>$" "" _clean_header "${std_header}")
+      string(REGEX REPLACE "[^a-zA-Z0-9_]" "_" _var_suffix "${_clean_header}")
+      set(_guard_var "_std_header_guard_${_var_suffix}")
+      if(DEFINED ${_guard_var})
+        set(cxx_standard_headers
+            "${cxx_standard_headers}#if ${${_guard_var}}\n# include ${std_header}\n#endif\n"
+        )
+      else()
+        set(cxx_standard_headers
+            "${cxx_standard_headers}#include ${std_header}\n"
+        )
+      endif()
+    endif()
   endforeach()
 
   hpx_configure_if_changed(

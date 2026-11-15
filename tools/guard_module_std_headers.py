@@ -25,51 +25,31 @@ import re
 import sys
 
 
+HEADER_DEF_RE = re.compile(
+    r'HPX_STD_HEADER\(\s*"([^"]+)",\s*"([^"]*)",\s*([01])\)'
+)
+
+
 def load_standard_headers():
-    """Load the single source of truth list of standard library headers."""
+    """Load standard library headers and macro headers from standard_headers.inc."""
     inc_file = os.path.normpath(
         os.path.join(
             os.path.dirname(__file__), "..", "cmake", "standard_headers.inc"
         )
     )
     headers = set()
+    macro_headers = set()
     with open(inc_file, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if line and not line.startswith("//"):
-                for m in re.findall(r'"([a-zA-Z0-9_]+)"', line):
-                    headers.add(m)
-    return headers
+        content = f.read()
+    for m in HEADER_DEF_RE.finditer(content):
+        name, guard, is_macro = m.groups()
+        headers.add(name)
+        if is_macro == "1":
+            macro_headers.add(name)
+    return headers, macro_headers
 
 
-STANDARD_HEADERS = load_standard_headers()
-
-# Standard headers that provide macros (must stay textual in GMF).
-# These are excluded from guarding.
-MACRO_HEADERS = {
-    "cassert",
-    "cctype",
-    "cerrno",
-    "cfenv",
-    "cfloat",
-    "cinttypes",
-    "climits",
-    "clocale",
-    "cmath",
-    "csetjmp",
-    "csignal",
-    "cstdarg",
-    "cstddef",
-    "cstdint",
-    "cstdio",
-    "cstdlib",
-    "cstring",
-    "ctime",
-    "cuchar",
-    "cwchar",
-    "cwctype",
-    "version",
-}
+STANDARD_HEADERS, MACRO_HEADERS = load_standard_headers()
 
 GUARD_OPEN = "#if defined(HPX_HAVE_TEXTUAL_STD_INCLUDES)\n"
 GUARD_CLOSE = "#endif\n"

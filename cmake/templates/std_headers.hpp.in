@@ -13,23 +13,3 @@
 
 // Standard library headers
 @cxx_standard_headers@
-#if defined(HPX_HAVE_CXX17_STD_EXECUTION_POLICES)
-# include <execution>
-#endif
-
-#if defined(HPX_HAVE_CXX20_COROUTINES)
-# if defined(__has_include)
-#  if __has_include(<coroutine>)
-#   include <coroutine>
-#  elif __has_include(<experimental/coroutine>)
-#   include <experimental/coroutine>
-#  endif
-# endif
-#endif
-
-# include <bit>
-# include <source_location>
-
-#if defined(HPX_HAVE_CXX23_STD_GENERATOR)
-# include <generator>
-#endif

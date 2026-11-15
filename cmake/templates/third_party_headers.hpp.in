@@ -18,8 +18,11 @@
 #include <cerrno>
 #include <cfenv>
 #include <cfloat>
+#include <cinttypes>
 #include <climits>
+#include <clocale>
 #include <cmath>
+#include <csetjmp>
 #include <csignal>
 #include <cstdarg>
 #include <cstddef>

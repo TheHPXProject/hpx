@@ -30,49 +30,41 @@ namespace {
         "properties",
     };
 
-    // Sorted list of known standard library headers (without angle brackets).
-    // Central definition in cmake/standard_headers.inc.
-    constexpr std::string_view standard_headers[] = {
-#include "../../cmake/standard_headers.inc"
+    struct std_header
+    {
+        std::string_view name;
+        std::string_view guard;
+        bool macro;
     };
 
-    // Sorted list of macro-providing standard headers that must stay textual
-    // in GMF and must not be flagged if unguarded.
-    constexpr std::string_view macro_headers[] = {
-        "cassert",
-        "cctype",
-        "cerrno",
-        "cfenv",
-        "cfloat",
-        "cinttypes",
-        "climits",
-        "clocale",
-        "cmath",
-        "csetjmp",
-        "csignal",
-        "cstdarg",
-        "cstddef",
-        "cstdint",
-        "cstdio",
-        "cstdlib",
-        "cstring",
-        "ctime",
-        "cuchar",
-        "cwchar",
-        "cwctype",
-        "version",
+    // Central definition in cmake/standard_headers.inc.
+    constexpr std_header standard_headers[] = {
+#define HPX_STD_HEADER(name, guard, macro) std_header{name, guard, macro != 0},
+#include "../../cmake/standard_headers.inc"
+#undef HPX_STD_HEADER
     };
+
+    std_header const* find_standard_header(std::string_view header) noexcept
+    {
+        for (auto const& h : standard_headers)
+        {
+            if (h.name == header)
+            {
+                return &h;
+            }
+        }
+        return nullptr;
+    }
 
     bool is_standard_header(std::string_view header) noexcept
     {
-        return std::binary_search(
-            std::begin(standard_headers), std::end(standard_headers), header);
+        return find_standard_header(header) != nullptr;
     }
 
     bool is_macro_header(std::string_view header) noexcept
     {
-        return std::binary_search(
-            std::begin(macro_headers), std::end(macro_headers), header);
+        auto const* h = find_standard_header(header);
+        return h != nullptr && h->macro;
     }
 
     // Determine whether path belongs to an include directory of a converted
