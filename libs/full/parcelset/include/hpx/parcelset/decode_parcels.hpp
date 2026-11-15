@@ -269,7 +269,7 @@ namespace hpx::parcelset {
             // threads are created then, so the remaining parcels can't be
             // handled anymore. Only a shutdown is expected here, anything else
             // is a real error.
-            if (threads::threadmanager_is(hpx::state::running))
+            if (!hpx::is_stopped_or_shutting_down())
                 throw;
         }
     }
@@ -398,7 +398,7 @@ namespace hpx::parcelset {
                 // anymore. As in handle_received_parcels, only a shutdown is
                 // expected here; reporting it would stop the runtime again
                 // from this thread.
-                if (!threads::threadmanager_is(hpx::state::running))
+                if (hpx::is_stopped_or_shutting_down())
                 {
                     LPT_(debug).format(
                         "decode_message: dropped a parcel received while "
