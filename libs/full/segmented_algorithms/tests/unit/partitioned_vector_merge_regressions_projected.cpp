@@ -13,6 +13,8 @@
 
 #include <hpx/hpx_main.hpp>
 
+#include <vector>
+
 #include "partitioned_vector_merge_regressions.hpp"
 
 HPX_REGISTER_PARTITIONED_VECTOR(merge_regression_value);

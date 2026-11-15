@@ -13,6 +13,11 @@
 
 #include <hpx/hpx_main.hpp>
 
+#include <cstddef>
+#include <iterator>
+#include <memory>
+#include <vector>
+
 #include "partitioned_vector_merge_regressions.hpp"
 
 using namespace merge_regression;

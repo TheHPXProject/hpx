@@ -13,6 +13,9 @@
 
 #include <hpx/hpx_main.hpp>
 
+#include <type_traits>
+#include <vector>
+
 #include "partitioned_vector_merge_regressions.hpp"
 
 HPX_REGISTER_PARTITIONED_VECTOR(regression_left_value);
