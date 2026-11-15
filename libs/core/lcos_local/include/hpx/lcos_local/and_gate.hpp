@@ -206,9 +206,12 @@ namespace hpx::lcos::local {
         {
             if (this != &rhs)
             {
-                // The generation of a released waiter was reached, so its
-                // future becomes ready. It is set when released goes out of
-                // scope, after rhs.mtx_ was unlocked.
+                // The caller of next_generation() has to take the released
+                // waiters, setting them here could run a continuation inline
+                // on a gate that is being assigned to. If one is left, its
+                // generation was reached, so its future becomes ready when
+                // released goes out of scope, after rhs.mtx_ was unlocked.
+                HPX_ASSERT(released_.empty());
                 released_waiters released(released_);
 
                 // The waiters whose generation was not reached get a broken
@@ -235,11 +238,13 @@ namespace hpx::lcos::local {
         }
 
         // The futures of asynchronous waiters whose generation was not
-        // reached report a broken promise. The futures of released waiters
-        // that were not taken yet become ready, since their generation was
-        // reached.
+        // reached report a broken promise. The caller of next_generation()
+        // has to take the released waiters, setting them here could run a
+        // continuation inline on a gate that is being destroyed. If one is
+        // left, its generation was reached, so its future becomes ready.
         ~base_and_gate()
         {
+            HPX_ASSERT(released_.empty());
             delete_async_entries(conditions_);
             released_waiters released(released_);
         }
