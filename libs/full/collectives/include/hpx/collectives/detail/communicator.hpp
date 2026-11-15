@@ -229,10 +229,10 @@ namespace hpx::collectives::detail {
 
                 hpx::future<void> reached =
                     gate_.synchronize_async(generation, l);
+                l.unlock();
+
                 if (!reached.is_ready())
                 {
-                    l.unlock();
-
                     // Run the request on a new thread: running it inline
                     // could complete its generation and run the requests
                     // kept for the next one inline as well, so the stack
@@ -244,6 +244,8 @@ namespace hpx::collectives::detail {
                         }));
                 }
             }
+
+            // f() takes the lock itself, it must not run under the lock.
             return HPX_FORWARD(F, f)();
         }
 
