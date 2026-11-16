@@ -24,9 +24,7 @@
 // #8030: since the peer is this locality, a publication changes its local
 // state before the lifecycle observer runs at all.
 // testing::set_lifecycle_observer_hook_for_testing() holds the observer in
-// that window, before it announces a mirroring, and
-// testing::set_evict_fenced_in_progress_hook_for_testing() runs code after
-// evict_fenced() marked the entry and before it checks the local state again.
+// that window, before it announces a mirroring.
 
 #include <hpx/config.hpp>
 
@@ -138,8 +136,6 @@ namespace {
         ~reset_hook()
         {
             hpx::supervision::testing::set_evict_fenced_hook_for_testing({});
-            hpx::supervision::testing::
-                set_evict_fenced_in_progress_hook_for_testing({});
         }
     };
 
@@ -567,13 +563,13 @@ void test_self_join_publication_before_observer_runs_wins()
     wait_until_evicted(r);
 }
 
-// The peer publishes a newer epoch after evict_fenced() marked its entry and
-// before it checks the local state again. The lifecycle observer that
-// publication notifies waits until evict_fenced() has decided. evict_fenced()
-// sees the newer state and backs off, and the waiting observer then mirrors
-// the notification instead of dropping it, so the peer stays monitored at its
-// newer epoch.
-void test_observer_held_back_by_eviction_mirrors_after_back_off()
+// The peer reported a terminal event, so an evict_peer() for that epoch is
+// queued, and evict_fenced() runs as well. Between evict_fenced()'s terminal
+// check and its removal, the peer starts a newer epoch. Its lifecycle observer
+// announces the mirroring right away, so the queued evict_peer() waits for it
+// and then leaves the entry alone, and evict_fenced() backs off. The peer
+// stays registered and monitored at its newer epoch.
+void test_queued_terminal_eviction_during_evict_fenced_keeps_newer_epoch()
 {
     hpx::id_type const here = hpx::find_here();
     hpx::supervision::registry const r(here);
@@ -581,32 +577,48 @@ void test_observer_held_back_by_eviction_mirrors_after_back_off()
     joined const peer = join(r, here);
     std::uint64_t const generation = peer.generation;
     std::uint64_t const epoch = peer.epoch;
-    fence(here, epoch);
 
-    hold_first_observer hold;
+    // The terminal notification schedules evict_peer(), hold it back.
+    hold_first_evict_peer hold_evict;
+    publish(here, hpx::supervision::event::failed, epoch);
+    hold_evict.wait_until_held();
+
+    hold_first_mirror hold_mirror;
     hpx::future<void> published;
+    std::size_t const waiting = hpx::supervision::testing::
+        evict_peers_waiting_for_mirrors_for_testing();
 
     bool hook_ran = false;
     reset_hook const reset;
-    hpx::supervision::testing::set_evict_fenced_in_progress_hook_for_testing(
-        [&] {
-            hook_ran = true;
-            published = hpx::async([&] {
-                publish(here, hpx::supervision::event::started, epoch + 1);
-            });
-
-            // Let the observer go on to the marked entry, where it waits.
-            hold.wait_until_held();
-            hold.release();
+    hpx::supervision::testing::set_evict_fenced_hook_for_testing([&] {
+        hook_ran = true;
+        published = hpx::async([&] {
+            publish(here, hpx::supervision::event::started, epoch + 1);
         });
+        hold_mirror.wait_until_held();
+
+        // The newer epoch's mirroring is in flight, the queued eviction for
+        // the older one has to wait for it.
+        hold_evict.release();
+        HPX_TEST(wait_for([&] {
+            return hpx::supervision::testing::
+                       evict_peers_waiting_for_mirrors_for_testing() > waiting;
+        }));
+    });
 
     evict_fenced_sync(r, here, generation);
-    hpx::supervision::testing::set_evict_fenced_in_progress_hook_for_testing(
-        {});
+    hpx::supervision::testing::set_evict_fenced_hook_for_testing({});
     HPX_TEST(hook_ran);
 
+    hold_mirror.release();
     published.get();
+    HPX_TEST(wait_for([&] {
+        return hpx::supervision::testing::
+                   evict_peers_waiting_for_mirrors_for_testing() == waiting;
+    }));
 
+    // snapshot_peers() takes the registry's lock, so it sees what the woken
+    // eviction decided.
     auto const peers = snapshot(r);
     HPX_TEST_EQ(peers.size(), static_cast<std::size_t>(1));
     if (!peers.empty())
@@ -634,7 +646,7 @@ int main()
     test_mirror_in_flight_after_terminal_check_backs_off();
     test_terminal_eviction_waits_for_newer_mirror();
     test_self_join_publication_before_observer_runs_wins();
-    test_observer_held_back_by_eviction_mirrors_after_back_off();
+    test_queued_terminal_eviction_during_evict_fenced_keeps_newer_epoch();
 
     return hpx::util::report_errors();
 }

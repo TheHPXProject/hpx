@@ -464,18 +464,15 @@ eviction.
 The shadow can also change before the observer that mirrors a lifecycle
 event runs: a registry that joined its own locality shares the shadow with
 the peer's own lifecycle events, and several registries on one locality
-joining the same peer share it with each other's mirroring. So, before it
-removes the peer, the eviction marks the peer's entry, which makes its
-lifecycle observer wait before mirroring anything, and then checks the shadow
-again. It removes the peer only if the shadow is still exactly the terminal
-state it checked first. A new epoch that changed the shadow before the entry
-was marked is therefore always seen, and the peer stays joined and monitored
-(:hpx-issue:`8030`). A new epoch that changes the shadow only after the second
-check counts as starting after the eviction: its event is not mirrored, and
-the peer has to be joined again. An observer that waited while the eviction
-backed off mirrors its event afterwards as usual. While the entry is marked,
-a local publication for the peer waits for its observer, which takes no
-longer than the eviction's one local query of the shadow.
+joining the same peer share it with each other's mirroring. So, right before
+it removes the peer, the eviction checks the shadow again and removes the peer
+only if the shadow is still exactly the terminal state it checked first. A new
+epoch that changed the shadow before that second check is therefore seen even
+if its event was not mirrored yet, and the peer stays joined and monitored
+(:hpx-issue:`8030`). A new epoch that changes the shadow after the second
+check, and whose event is not being mirrored yet when the peer is removed,
+overlaps the eviction and ends exactly as if it had started right after it:
+its event is not mirrored, and the peer has to be joined again.
 
 What this does and does not cover
 ---------------------------------

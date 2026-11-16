@@ -265,11 +265,11 @@ Registry client
         terminal. Fire-and-forget. If a lifecycle event of the peer is being
         mirrored, or was mirrored, while the call checks the terminal state,
         it does not remove anything; the failure-detection loop calls it again
-        on its next sweep. Before the removal it holds back the peer's
-        lifecycle observer and checks the local state again, so a new epoch
-        that changed the state before then, for instance one a registry that
-        joined its own locality published directly, also keeps the peer, see
-        the manual.
+        on its next sweep. It also checks the local state a second time before
+        the removal, so a new epoch that changed the state before then, for
+        instance one a registry that joined its own locality published
+        directly, keeps the peer even if it was not mirrored yet, see the
+        manual.
 
     .. cpp:function:: hpx::future<bool> register_name()
     .. cpp:function:: bool register_name(hpx::launch::sync_policy, hpx::error_code& ec = hpx::throws)
@@ -388,7 +388,6 @@ unit tests for this module deterministic:
 .. cpp:function:: void hpx::supervision::testing::set_lifecycle_mirror_hook_for_testing(hpx::function<void()> hook)
 .. cpp:function:: void hpx::supervision::testing::set_evict_peer_hook_for_testing(hpx::function<void()> hook)
 .. cpp:function:: void hpx::supervision::testing::set_lifecycle_observer_hook_for_testing(hpx::function<void()> hook)
-.. cpp:function:: void hpx::supervision::testing::set_evict_fenced_in_progress_hook_for_testing(hpx::function<void()> hook)
 .. cpp:function:: std::size_t hpx::supervision::testing::evict_peers_waiting_for_mirrors_for_testing()
 
 See the :ref:`API reference <modules_supervision_dispatch_api>` of this

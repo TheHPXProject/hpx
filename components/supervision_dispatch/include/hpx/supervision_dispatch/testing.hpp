@@ -15,7 +15,6 @@
 /// \page hpx::supervision::testing::set_lifecycle_mirror_hook_for_testing
 /// \page hpx::supervision::testing::set_evict_peer_hook_for_testing
 /// \page hpx::supervision::testing::set_lifecycle_observer_hook_for_testing
-/// \page hpx::supervision::testing::set_evict_fenced_in_progress_hook_for_testing
 /// \page hpx::supervision::testing::evict_peers_waiting_for_mirrors_for_testing
 /// \headerfile hpx/supervision_dispatch.hpp
 
@@ -105,10 +104,10 @@ namespace hpx::supervision::testing {
 
     /// Installs \p hook to be called by registry::evict_fenced() on this
     /// locality after it found the peer's local supervision state terminal
-    /// and before it marks the peer's registry entry for removal, i.e. in the
-    /// window in which a newer lifecycle transition of the peer has to be
-    /// detected (see registry::evict_fenced()). Pass an empty function to
-    /// remove the hook.
+    /// and before it checks that state again and removes the peer's registry
+    /// entry, i.e. in the window in which a newer lifecycle transition of the
+    /// peer has to be detected (see registry::evict_fenced()). Pass an empty
+    /// function to remove the hook.
     /// Not part of the public dispatch API - exists only so tests can force a
     /// lifecycle transition into that window deterministically.
     ///
@@ -150,19 +149,6 @@ namespace hpx::supervision::testing {
     /// \param hook  The function to call, with no lock held.
     HPX_SUPERVISION_DISPATCH_EXPORT void
     set_lifecycle_observer_hook_for_testing(hpx::function<void()> hook);
-
-    /// Installs \p hook to be called by registry::evict_fenced() on this
-    /// locality after it marked the peer's registry entry for removal, which
-    /// holds back the entry's lifecycle observer, and before it checks the
-    /// peer's local supervision state again (see registry::evict_fenced()).
-    /// A local publish_event() for the peer waits for that observer, so the
-    /// hook must not wait for one. Pass an empty function to remove the hook.
-    /// Not part of the public dispatch API - exists only so tests can change
-    /// the local state in that window deterministically.
-    ///
-    /// \param hook  The function to call, with no lock held.
-    HPX_SUPERVISION_DISPATCH_EXPORT void
-    set_evict_fenced_in_progress_hook_for_testing(hpx::function<void()> hook);
 
     /// Returns the number of registry::evict_peer() calls on this locality
     /// currently waiting for the lifecycle notifications being mirrored for
