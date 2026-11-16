@@ -18,7 +18,7 @@ jobs:
     name: Clang
     uses: ./.github/workflows/sharded-build-and-test.yml
     with:
-      container: stellargroup/build_env:23
+      container: stellargroup/build_env:24
       configure: |
         cmake \
             . \
