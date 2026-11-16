@@ -7,7 +7,13 @@
 // A timer a thread sets on itself through the public set_thread_state resumes
 // the thread when it expires, also if the thread changes its state (here by
 // yielding) between setting the timer and suspending.
+//
+// The timer set through set_thread_state is not tied to a suspension: if it
+// is late it resumes whatever suspension of its thread comes next. So each
+// scenario runs on an HPX thread of its own, which a late timer can't reach
+// once it has finished.
 
+#include <hpx/future.hpp>
 #include <hpx/init.hpp>
 #include <hpx/modules/testing.hpp>
 #include <hpx/modules/threading_base.hpp>
@@ -49,13 +55,10 @@ namespace {
         // A timer that fires while its thread is pending doesn't change the
         // thread's state (it is about to run anyway), so the suspension below
         // would never be resumed. That can only have happened if the
-        // deadline has passed by now; then this round is skipped, waiting
-        // for the timer if it fires while this thread is still active
-        // (which is retried until the thread is suspended).
+        // deadline has passed by now; then this round is skipped (a timer
+        // that fires later finds this thread finished).
         if (std::chrono::steady_clock::now() >= deadline.value())
         {
-            hpx::this_thread::suspend(hpx::chrono::steady_time_point(
-                deadline.value() + std::chrono::milliseconds(10)));
             return;
         }
 
@@ -75,11 +78,12 @@ namespace {
 
 int hpx_main()
 {
+    // launch::task: each scenario runs on a new HPX thread, never inline
     for (int i = 0; i != 10; ++i)
     {
-        timer_then_suspend();
-        timer_yield_then_suspend();
-        suspend_until();
+        hpx::async(hpx::launch::task, &timer_then_suspend).get();
+        hpx::async(hpx::launch::task, &timer_yield_then_suspend).get();
+        hpx::async(hpx::launch::task, &suspend_until).get();
     }
 
     return hpx::local::finalize();
