@@ -12,6 +12,7 @@
 #include <hpx/modules/timing.hpp>
 #include <hpx/thread.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
