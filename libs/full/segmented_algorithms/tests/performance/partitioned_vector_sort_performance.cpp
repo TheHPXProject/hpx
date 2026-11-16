@@ -140,7 +140,7 @@ namespace {
         auto first = values.begin();
         for (auto const count : counts)
         {
-            auto const last = first + count;
+            auto const last = first + static_cast<std::ptrdiff_t>(count);
             if (count > 1)
             {
                 sorts.push_back(hpx::sort(
