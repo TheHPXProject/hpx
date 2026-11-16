@@ -548,8 +548,26 @@ namespace hpx::parallel::util::detail {
                         // future
                         handle_local_exceptions::call(items);
                     }
+
+                    // executor parameters with a variable chunk size make the
+                    // executor return one future holding the results of all
+                    // chunks (e.g. hpx::future<std::vector<Result>>), the
+                    // reduction function expects the results themselves
+                    if constexpr (hpx::traits::is_future_v<decayed_items> &&
+                        !std::is_void_v<
+                            hpx::traits::future_traits_t<decayed_items>>)
+                    {
+                        return HPX_INVOKE(f, items.get());
+                    }
+                    else
+                    {
+                        return HPX_INVOKE(f, HPX_FORWARD(Items, items));
+                    }
                 }
-                return HPX_INVOKE(f, HPX_FORWARD(Items, items));
+                else
+                {
+                    return HPX_INVOKE(f, HPX_FORWARD(Items, items));
+                }
             }
         }
 
