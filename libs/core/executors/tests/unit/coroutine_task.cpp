@@ -642,6 +642,70 @@ void test_environment_traits()
     HPX_TEST_EQ(hpx::get<0>(res.value()), 10);
 }
 
+struct custom_receiver_env
+{
+    int val = 12345;
+};
+
+inline constexpr struct test_receiver_tag_t : ex::forwarding_query_t
+{
+    int operator()(custom_receiver_env const& env) const noexcept
+    {
+        return env.val;
+    }
+} test_receiver_tag{};
+
+struct receiver_with_env
+{
+    using receiver_concept = ex::receiver_t;
+    bool* called;
+
+    custom_receiver_env get_env() const noexcept
+    {
+        return custom_receiver_env{777};
+    }
+
+    void set_value(int val) && noexcept
+    {
+        HPX_TEST_EQ(val, 777);
+        *called = true;
+    }
+
+    void set_error(std::exception_ptr) && noexcept
+    {
+        HPX_TEST(false);
+    }
+
+    void set_stopped() && noexcept
+    {
+        HPX_TEST(false);
+    }
+};
+
+ex::task<int, custom_receiver_env> task_observing_env()
+{
+    int const val = co_await ex::read_env(test_receiver_tag);
+    co_return val;
+}
+
+void test_receiver_environment_query()
+{
+    bool called = false;
+    auto t = task_observing_env();
+
+    receiver_with_env rcvr{&called};
+    auto op = ex::connect(HPX_MOVE(t), rcvr);
+
+    // The query originating from the receiver's environment is visible inside
+    // the task through the promise's env_type
+    auto const& promise = op.coro_.promise();
+    auto env = promise.get_env();
+    HPX_TEST_EQ(env.query(test_receiver_tag), 777);
+
+    ex::start(op);
+    HPX_TEST(called);
+}
+
 int hpx_main()
 {
     test_basic_task();
@@ -652,6 +716,7 @@ int hpx_main()
     test_cancellation();
     test_reference_task();
     test_environment_traits();
+    test_receiver_environment_query();
 
     return hpx::local::finalize();
 }

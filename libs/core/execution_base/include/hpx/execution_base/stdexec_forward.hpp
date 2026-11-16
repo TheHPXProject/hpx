@@ -283,6 +283,12 @@ namespace hpx::execution::experimental {
 
     // New exec:: API for transform_completion_signatures (consteval function)
     HPX_CXX_CORE_EXPORT using exec::transform_completion_signatures;
+    HPX_CXX_CORE_EXPORT using exec::concat_completion_signatures;
+
+    template <typename... Sigs>
+    using concat_completion_signatures_t =
+        decltype(exec::concat_completion_signatures(Sigs{}...));
+
     HPX_CXX_CORE_EXPORT using exec::keep_completion;
     HPX_CXX_CORE_EXPORT using exec::ignore_completion;
     HPX_CXX_CORE_EXPORT using exec::transform_arguments;

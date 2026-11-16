@@ -10,6 +10,7 @@
 
 #if defined(HPX_HAVE_CXX20_COROUTINES)
 
+#include <hpx/execution_base/stdexec_forward.hpp>
 #include <hpx/executors/task_scheduler.hpp>
 #include <hpx/modules/execution_base.hpp>
 #include <hpx/modules/synchronization.hpp>
@@ -146,8 +147,26 @@ namespace hpx::execution::experimental {
         ///////////////////////////////////////////////////////////////////////
         // Error extraction and matching helpers for P3552R3 task
         template <typename Sig>
-        using error_variant_t = stdexec::__error_types_t<Sig,
-            stdexec::__q<std::variant>, stdexec::__q1<std::decay_t>>;
+        struct sig_error_type;
+
+        template <typename E>
+        struct sig_error_type<hpx::execution::experimental::set_error_t(E)>
+        {
+            using type = std::decay_t<E>;
+        };
+
+        template <typename Sig>
+        struct error_variant_helper;
+
+        template <typename... Sigs>
+        struct error_variant_helper<
+            hpx::execution::experimental::completion_signatures<Sigs...>>
+        {
+            using type = std::variant<typename sig_error_type<Sigs>::type...>;
+        };
+
+        template <typename Sig>
+        using error_variant_t = typename error_variant_helper<Sig>::type;
 
         template <typename Error, typename ErrorVariant>
         struct count_matching_errors;
@@ -193,10 +212,18 @@ namespace hpx::execution::experimental {
         template <typename Error, typename Sig>
         concept valid_task_error = is_valid_task_error_v<Error, Sig>;
 
+        template <typename ErrorVariant>
+        struct contains_exception_ptr;
+
+        template <typename... Ts>
+        struct contains_exception_ptr<std::variant<Ts...>>
+          : std::disjunction<std::is_same<std::exception_ptr, Ts>...>
+        {
+        };
+
         template <typename Sig>
         inline constexpr bool error_types_contain_exception_ptr_v =
-            stdexec::__mapply<stdexec::__mcontains<std::exception_ptr>,
-                error_variant_t<Sig>>::value;
+            contains_exception_ptr<error_variant_t<Sig>>::value;
 
         struct throw_task_error_fn
         {
@@ -425,7 +452,7 @@ namespace hpx::execution::experimental {
             stop_source_type stop_source_{};
             decltype(stop_source_.get_token()) stop_token_{
                 stop_source_.get_token()};
-            [[no_unique_address]] inner_env_type env_{};
+            std::optional<inner_env_type> env_{};
             std::optional<scheduler_type> scheduler_{};
             std::optional<allocator_type> alloc_{};
             bool has_custom_alloc_{false};
@@ -544,7 +571,7 @@ namespace hpx::execution::experimental {
                 decltype(auto) query(Tag tag) const noexcept(
                     std::is_nothrow_invocable_v<Tag, inner_env_type const&>)
                 {
-                    return tag(promise_->env_);
+                    return tag(*(promise_->env_));
                 }
             };
 
@@ -643,15 +670,13 @@ namespace hpx::execution::experimental {
                                   decltype(hpx::execution::experimental::
                                           get_env(rcvr_))>)
                 {
-                    coro_.promise().env_ =
-                        typename promise_type::inner_env_type(
-                            hpx::execution::experimental::get_env(rcvr_));
+                    coro_.promise().env_.emplace(
+                        hpx::execution::experimental::get_env(rcvr_));
                 }
                 else if constexpr (std::is_default_constructible_v<
                                        typename promise_type::inner_env_type>)
                 {
-                    coro_.promise().env_ =
-                        typename promise_type::inner_env_type{};
+                    coro_.promise().env_.emplace();
                 }
 
                 if constexpr (requires {
@@ -842,19 +867,21 @@ namespace hpx::execution::experimental {
             using error_types = typename promise_type::error_types;
             if constexpr (std::is_void_v<T>)
             {
-                return stdexec::__concat_completion_signatures_t<
-                    hpx::execution::experimental::completion_signatures<
-                        hpx::execution::experimental::set_value_t(),
-                        hpx::execution::experimental::set_stopped_t()>,
-                    error_types>{};
+                return hpx::execution::experimental::
+                    concat_completion_signatures(
+                        hpx::execution::experimental::completion_signatures<
+                            hpx::execution::experimental::set_value_t(),
+                            hpx::execution::experimental::set_stopped_t()>{},
+                        error_types{});
             }
             else
             {
-                return stdexec::__concat_completion_signatures_t<
-                    hpx::execution::experimental::completion_signatures<
-                        hpx::execution::experimental::set_value_t(T),
-                        hpx::execution::experimental::set_stopped_t()>,
-                    error_types>{};
+                return hpx::execution::experimental::
+                    concat_completion_signatures(
+                        hpx::execution::experimental::completion_signatures<
+                            hpx::execution::experimental::set_value_t(T),
+                            hpx::execution::experimental::set_stopped_t()>{},
+                        error_types{});
             }
         }
 
@@ -963,9 +990,13 @@ namespace hpx::execution::experimental {
                                       typename promise_type::inner_env_type,
                                       decltype(parent.promise().get_env())>)
                     {
-                        coro_.promise().env_ =
-                            typename promise_type::inner_env_type(
-                                parent.promise().get_env());
+                        coro_.promise().env_.emplace(
+                            parent.promise().get_env());
+                    }
+                    else if constexpr (std::is_default_constructible_v<
+                                           typename promise_type::inner_env_type>)
+                    {
+                        coro_.promise().env_.emplace();
                     }
 
                     if constexpr (requires {
