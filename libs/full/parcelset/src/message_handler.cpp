@@ -39,10 +39,10 @@ namespace hpx::parcelset {
 
     namespace detail {
 
-        std::vector<hpx::tuple<char const*, char const*>>&
+        std::vector<hpx::tuple<char const*, char const*, bool>>&
         get_message_handler_registrations()
         {
-            static std::vector<hpx::tuple<char const*, char const*>>
+            static std::vector<hpx::tuple<char const*, char const*, bool>>
                 message_handler_registrations;
             return message_handler_registrations;
         }
@@ -62,7 +62,7 @@ namespace hpx {
 
         // store the request for later
         parcelset::detail::get_message_handler_registrations().emplace_back(
-            message_handler_type, action);
+            message_handler_type, action, &ec != &throws);
     }
 
     parcelset::policies::message_handler* create_message_handler(
