@@ -87,26 +87,47 @@ namespace hpx::actions {
                 std::meta::is_explicit_object_parameter(params[0]);
         }
 
+        // Constructors and destructors have no type to compare, the other
+        // checks keep extract from failing.
+        template <typename Fn>
+        consteval bool is_member_function_of_type(std::meta::info const m)
+        {
+            return std::meta::is_function(m) &&
+                !std::meta::is_static_member(m) &&
+                !std::meta::is_constructor(m) && !std::meta::is_destructor(m) &&
+                !std::meta::is_deleted(m) &&
+                std::meta::is_same_type(std::meta::type_of(m), ^^Fn) &&
+                !has_explicit_object_parameter(m);
+        }
+
         // reflect_function does not take a member function pointer, so the
-        // member F points to is looked up in Component. Comparing reflected
-        // values instead of the pointers keeps this a constant expression for
-        // virtual members as well.
+        // member F points to is looked up in Component. Comparing pointers is
+        // not a constant expression if one of them points to a virtual member,
+        // so virtual members are compared as reflected values first.
         template <typename Component, typename Fn, auto F>
         consteval std::meta::info member_function_of()
         {
-            for (std::meta::info const m : std::meta::members_of(
-                     ^^Component, std::meta::access_context::unchecked()))
+            constexpr auto ctx = std::meta::access_context::unchecked();
+            for (std::meta::info const m :
+                std::meta::members_of(^^Component, ctx))
             {
-                // Constructors and destructors have no type to compare, the
-                // other checks keep extract from failing.
-                if (std::meta::is_function(m) &&
-                    !std::meta::is_static_member(m) &&
-                    !std::meta::is_constructor(m) &&
-                    !std::meta::is_destructor(m) && !std::meta::is_deleted(m) &&
-                    std::meta::is_same_type(std::meta::type_of(m), ^^Fn) &&
-                    !has_explicit_object_parameter(m) &&
+                if (std::meta::is_virtual(m) &&
+                    is_member_function_of_type<Fn>(m) &&
                     std::meta::reflect_constant(std::meta::extract<decltype(F)>(
                         m)) == std::meta::reflect_constant(F))
+                {
+                    return m;
+                }
+            }
+
+            // F is not virtual now. A pointer to a consteval member can't be
+            // reflected as a constant, so the others are compared directly.
+            for (std::meta::info const m :
+                std::meta::members_of(^^Component, ctx))
+            {
+                if (!std::meta::is_virtual(m) &&
+                    is_member_function_of_type<Fn>(m) &&
+                    std::meta::extract<decltype(F)>(m) == F)
                 {
                     return m;
                 }

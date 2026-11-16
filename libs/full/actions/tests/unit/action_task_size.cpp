@@ -338,6 +338,14 @@ struct member_server
         return 42;
     }
 
+    // A pointer to a consteval member can't be reflected as a constant, so
+    // the lookup must not try. GCC 16 accepts it either way, this is for the
+    // Clang CI job.
+    consteval int get_consteval() const
+    {
+        return 42;
+    }
+
     [[= hpx::task_size::small_]] int get_small() const
     {
         return 42;
@@ -638,6 +646,11 @@ void test_annotated_actions()
     static_assert(
         action_task_size_v<make_action_t<decltype(&member_server::get_virtual),
             &member_server::get_virtual>> == task_size::medium);
+
+    // get_small is declared after the consteval member get_consteval
+    static_assert(
+        action_task_size_v<make_action_t<decltype(&member_server::get_small),
+            &member_server::get_small>> == task_size::small_);
 
     static_assert(
         action_task_size_v<make_action_t<decltype(&member_server::get_mutable),
