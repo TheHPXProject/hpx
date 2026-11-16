@@ -691,8 +691,8 @@ namespace hpx::execution::experimental {
                             typename promise_type::scheduler_type,
                             decltype(hpx::execution::experimental::
                                     get_scheduler(
-                                        hpx::execution::experimental::
-                                                get_env(rcvr_)))>) )
+                                        hpx::execution::experimental::get_env(
+                                            rcvr_)))>) )
                 {
                     coro_.promise().scheduler_.emplace(
                         hpx::execution::experimental::get_scheduler(
@@ -1005,7 +1005,7 @@ namespace hpx::execution::experimental {
                                   } &&
                         (std::is_convertible_v<
                              decltype(hpx::execution::experimental::
-                                 get_scheduler(parent.promise().get_env())),
+                                     get_scheduler(parent.promise().get_env())),
                              typename promise_type::scheduler_type> ||
                             std::is_constructible_v<
                                 typename promise_type::scheduler_type,
