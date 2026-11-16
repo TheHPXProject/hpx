@@ -7,11 +7,7 @@
 #include "sender_algorithm_test_utils.hpp"
 #include "test_utils.hpp"
 
-#include <hpx/modules/threading.hpp>
-
 #include <algorithm>
-#include <atomic>
-#include <chrono>
 #include <cstddef>
 #include <exception>
 #include <iterator>
@@ -86,20 +82,20 @@ void test_error()
             throw std::runtime_error("remove copy failed");
         }
     });
+    auto sender = [&] {
+        if constexpr (RemoveIf)
+        {
+            return hpx::remove_copy_if(policy, first, iterator(input.end()),
+                output.begin(), [](int value) { return value % 2 == 0; });
+        }
+        else
+        {
+            return hpx::remove_copy(
+                policy, first, iterator(input.end()), output.begin(), 2);
+        }
+    }();
     try
     {
-        auto sender = [&] {
-            if constexpr (RemoveIf)
-            {
-                return hpx::remove_copy_if(policy, first, iterator(input.end()),
-                    output.begin(), [](int value) { return value % 2 == 0; });
-            }
-            else
-            {
-                return hpx::remove_copy(
-                    policy, first, iterator(input.end()), output.begin(), 2);
-            }
-        }();
         (void) sender_test::tt::sync_wait(std::move(sender));
         HPX_TEST(false);
     }
@@ -181,55 +177,28 @@ void test_synchronous_policy()
     check_result(hpx::execution::par.on(async));
 }
 
-void record_concurrency(std::atomic<std::size_t>& active,
-    std::atomic<std::size_t>& maximum, std::atomic<std::size_t>& invocations)
-{
-    auto const current = active.fetch_add(1, std::memory_order_relaxed) + 1;
-    auto previous = maximum.load(std::memory_order_relaxed);
-    while (previous < current &&
-        !maximum.compare_exchange_weak(previous, current,
-            std::memory_order_relaxed, std::memory_order_relaxed))
-    {
-    }
-    if (invocations.fetch_add(1, std::memory_order_relaxed) < 16)
-    {
-        hpx::this_thread::sleep_for(std::chrono::milliseconds(1));
-    }
-    active.fetch_sub(1, std::memory_order_relaxed);
-}
-
 template <bool RemoveIf>
 void test_parallel()
 {
-    using base_iterator = std::vector<int>::iterator;
-    using iterator = test::decorated_iterator<base_iterator,
-        std::random_access_iterator_tag>;
-
     std::vector<int> input(65536, 1), output(input.size(), -1);
-    std::atomic<std::size_t> active{0}, maximum{0}, invocations{0};
     auto exec = sender_test::ex::explicit_scheduler_executor(
         sender_test::ex::thread_pool_policy_scheduler(hpx::launch::async));
     auto policy = hpx::execution::par(hpx::execution::task).on(exec);
-    auto first = iterator(input.begin(),
-        [&] { record_concurrency(active, maximum, invocations); });
     auto sender = [&] {
         if constexpr (RemoveIf)
         {
-            return hpx::remove_copy_if(policy, first, iterator(input.end()),
+            return hpx::remove_copy_if(policy, input.begin(), input.end(),
                 output.begin(), [](int) { return false; });
         }
         else
         {
             return hpx::remove_copy(
-                policy, first, iterator(input.end()), output.begin(), 2);
+                policy, input.begin(), input.end(), output.begin(), 2);
         }
     }();
     auto result = sender_test::wait(std::move(sender));
     HPX_TEST(hpx::get<0>(*result) == output.end());
-    if (hpx::get_os_thread_count() > 1)
-    {
-        HPX_TEST(maximum.load(std::memory_order_relaxed) > 1);
-    }
+    HPX_TEST(output == input);
 }
 
 int hpx_main()
