@@ -829,16 +829,17 @@ This works for the actions of ``HPX_PLAIN_ACTION``,
 ``HPX_DEFINE_PLAIN_ACTION``, ``HPX_DEFINE_COMPONENT_ACTION`` and
 ``HPX_COMPONENT_ACTION``, for ``hpx::async<^^f>`` and the other functions that
 take a reflected function, and for actions made with
-``hpx::actions::make_action_t`` from a function pointer.
+``hpx::actions::make_action_t`` from a function or member function pointer,
+which includes ``hpx::async<&f>`` and ``hpx::async<&C::f>``.
 ``HPX_ACTION_HAS_TASK_SIZE`` and ``hpx::with_task_size`` win over the
 annotation. ``task_size::unknown`` counts as no annotation. Two different
 sizes on one function are a compile-time error when the size of an action that
-binds it is read. Actions made from a member function pointer, for instance
-``make_action_t<decltype(&C::f), &C::f>``, do not read annotations. Give an
-explicit specialization of an annotated function template the same annotation
-as the template. With Clang it also gets the annotation of the template, so a
-different size is a compile-time error. Each source file reads the annotation
-from the declarations it sees, so put it on the declaration in the header.
+binds it is read. An action made from a pointer to a specialization of a member
+function template does not read annotations. Give an explicit specialization of
+an annotated free function template the same annotation as the template. With
+Clang it also gets the annotation of the template, so a different size is a
+compile-time error. Each source file reads the annotation from the declarations
+it sees, so put it on the declaration in the header.
 
 .. _parallel_scheduler:
 
