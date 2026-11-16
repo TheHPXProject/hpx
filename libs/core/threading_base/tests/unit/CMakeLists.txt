@@ -10,6 +10,7 @@ set(tests
     scheduling_policy_idle_step
     set_thread_affinity
     sized_function
+    stack_sized_function
     task_size_annotations
     task_size_hint
     thread_exit_callbacks

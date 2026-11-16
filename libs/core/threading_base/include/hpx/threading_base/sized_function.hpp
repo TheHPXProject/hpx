@@ -12,6 +12,7 @@
 #include <hpx/config.hpp>
 #include <hpx/modules/coroutines.hpp>
 #include <hpx/modules/functional.hpp>
+#include <hpx/modules/thread_support.hpp>
 #include <hpx/modules/tracing.hpp>
 
 #include <cstddef>
@@ -122,6 +123,19 @@ struct hpx::traits::get_task_size<hpx::threads::sized_function<F, Size>,
     }
 };
 
+// The wrapped function keeps its stack size.
+template <typename F, hpx::threads::task_size Size,
+    hpx::threads::thread_stacksize Default>
+struct hpx::traits::get_stack_size<hpx::threads::sized_function<F, Size>,
+    Default> : get_stack_size<F, Default>
+{
+    [[nodiscard]] static constexpr threads::thread_stacksize call(
+        hpx::threads::sized_function<F, Size> const& f) noexcept
+    {
+        return get_stack_size<F, Default>::call(f.f);
+    }
+};
+
 namespace hpx::threads::detail {
 
     // A function that has the size of another function, which may be known
@@ -193,6 +207,19 @@ struct hpx::traits::get_task_size<hpx::threads::detail::size_of_function<F>,
         hpx::threads::detail::size_of_function<F> const& f) noexcept
     {
         return f.size != threads::task_size::unknown ? f.size : Default;
+    }
+};
+
+// The function keeps its own stack size, it does not take the one of the
+// function it has the task size of.
+template <typename F, hpx::threads::thread_stacksize Default>
+struct hpx::traits::get_stack_size<hpx::threads::detail::size_of_function<F>,
+    Default> : get_stack_size<F, Default>
+{
+    [[nodiscard]] static constexpr threads::thread_stacksize call(
+        hpx::threads::detail::size_of_function<F> const& f) noexcept
+    {
+        return get_stack_size<F, Default>::call(f.f);
     }
 };
 
