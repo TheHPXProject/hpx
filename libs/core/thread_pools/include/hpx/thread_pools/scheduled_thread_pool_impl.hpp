@@ -653,6 +653,23 @@ namespace hpx::threads::detail {
             }
         }
 
+        // A thread created from outside the workers of this pool can arrive
+        // while the last worker leaves (see begin_outside_creation); an HPX
+        // thread of this pool keeps its worker in the scheduling loop
+        bool const from_outside =
+            !(threads::get_self_ptr() && hpx::this_thread::get_pool() == this);
+        if (from_outside && !sched_->Scheduler::begin_outside_creation())
+        {
+            HPX_THROWS_IF(ec, hpx::error::invalid_status,
+                "thread_pool<Scheduler>::create_thread",
+                "runtime is being shut down, not creating any new threads");
+            return;
+        }
+        auto const end_outside_creation = hpx::experimental::scope_exit([&] {
+            if (from_outside)
+                sched_->Scheduler::end_outside_creation();
+        });
+
         if (data.schedulehint.runs_as_child_mode() ==
                 hpx::threads::thread_execution_hint::run_as_child &&
             !sched_->Scheduler::supports_direct_execution())
@@ -693,6 +710,23 @@ namespace hpx::threads::detail {
                 return invalid_thread_id;
             }
         }
+
+        // A thread created from outside the workers of this pool can arrive
+        // while the last worker leaves (see begin_outside_creation); an HPX
+        // thread of this pool keeps its worker in the scheduling loop
+        bool const from_outside =
+            !(threads::get_self_ptr() && hpx::this_thread::get_pool() == this);
+        if (from_outside && !sched_->Scheduler::begin_outside_creation())
+        {
+            HPX_THROWS_IF(ec, hpx::error::invalid_status,
+                "thread_pool<Scheduler>::create_work",
+                "runtime is being shut down, not creating any new threads");
+            return invalid_thread_id;
+        }
+        auto const end_outside_creation = hpx::experimental::scope_exit([&] {
+            if (from_outside)
+                sched_->Scheduler::end_outside_creation();
+        });
 
         if (data.schedulehint.runs_as_child_mode() ==
                 hpx::threads::thread_execution_hint::run_as_child &&
