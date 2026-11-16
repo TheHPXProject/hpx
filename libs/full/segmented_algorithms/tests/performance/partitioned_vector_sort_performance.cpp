@@ -19,12 +19,10 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
-#include <functional>
 #include <numeric>
 #include <queue>
 #include <random>
 #include <string>
-#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -73,30 +71,26 @@ namespace {
         return input;
     }
 
-    /// Perform the centralized k-way merge used by the first segmented sort
-    /// implementation after its physical partitions have been sorted.
+    /// Merge sorted physical partitions on the driver using public vector
+    /// operations.
     ///
-    /// \tparam LocalIter The local iterator type of each physical run.
-    /// \param runs The sorted physical runs to gather, merge, and redistribute.
-    template <typename LocalIter>
-    void centralized_kway_merge(
-        hpx::parallel::detail::segmented_sort_block<LocalIter> const& runs)
+    /// \param values The distributed vector containing sorted partitions.
+    /// \param positions Global positions of all values in the vector.
+    /// \param counts The sizes of the physical partitions.
+    void centralized_kway_merge(vector_type& values,
+        std::vector<std::size_t> const& positions,
+        std::vector<std::size_t> const& counts)
     {
-        using value_type = typename std::iterator_traits<LocalIter>::value_type;
-        auto values = hpx::parallel::detail::segmented_sort_fetch_block(
-            hpx::execution::par, runs);
+        auto gathered = values.get_values(hpx::launch::sync, positions);
         std::vector<std::size_t> offsets;
-        std::vector<std::size_t> counts;
-        offsets.reserve(runs.size());
-        counts.reserve(runs.size());
+        offsets.reserve(counts.size());
         std::size_t offset = 0;
-        for (auto const& run : runs)
+        for (auto const count : counts)
         {
             offsets.push_back(offset);
-            auto const count = static_cast<std::size_t>(run.size());
-            counts.push_back(count);
             offset += count;
         }
+        HPX_ASSERT(offset == gathered.size());
 
         struct cursor
         {
@@ -105,7 +99,7 @@ namespace {
         };
 
         auto const compare = [&](cursor const& lhs, cursor const& rhs) {
-            return values[rhs.position] < values[lhs.position];
+            return gathered[rhs.position] < gathered[lhs.position];
         };
         std::priority_queue<cursor, std::vector<cursor>, decltype(compare)>
             heap(compare);
@@ -117,50 +111,48 @@ namespace {
             }
         }
 
-        std::size_t destination = 0;
-        std::vector<value_type> output;
-        output.reserve(counts.front());
+        std::vector<int> output;
+        output.reserve(gathered.size());
         while (!heap.empty())
         {
             auto current = heap.top();
             heap.pop();
-            output.push_back(HPX_MOVE(values[current.position]));
+            output.push_back(HPX_MOVE(gathered[current.position]));
             if (++current.position != current.end)
             {
                 heap.push(current);
             }
-            if (output.size() == counts[destination])
-            {
-                hpx::parallel::detail::segmented_sort_block<LocalIter> block{
-                    runs[destination]};
-                [[maybe_unused]] auto const last =
-                    hpx::parallel::detail::segmented_sort_store_block(
-                        hpx::execution::par, block, output.begin());
-                HPX_ASSERT(last == output.end());
-                output.clear();
-                if (++destination != runs.size())
-                {
-                    output.reserve(counts[destination]);
-                }
-            }
         }
-        HPX_ASSERT(destination == runs.size());
+        HPX_ASSERT(output.size() == positions.size());
+        values.set_values(hpx::launch::sync, positions, output);
     }
 
     /// Run the centralized k-way segmented sort retained as a benchmark.
     ///
     /// \param values The distributed vector to sort.
-    void centralized_kway_sort(vector_type& values)
+    /// \param positions Global positions of all values in the vector.
+    void centralized_kway_sort(
+        vector_type& values, std::vector<std::size_t> const& positions)
     {
-        auto runs = hpx::parallel::detail::segmented_sort_runs(
-            values.begin(), values.end());
-        if (runs.empty())
+        auto const counts = values.get_partition_sizes();
+        std::vector<hpx::future<void>> sorts;
+        sorts.reserve(counts.size());
+        auto first = values.begin();
+        for (auto const count : counts)
         {
-            return;
+            auto const last = first + count;
+            if (count > 1)
+            {
+                sorts.push_back(hpx::sort(
+                    hpx::execution::par(hpx::execution::task), first, last));
+            }
+            first = last;
         }
-        hpx::parallel::detail::segmented_sort_local_runs(hpx::execution::par,
-            runs, std::less<int>{}, hpx::identity_v, std::false_type{});
-        centralized_kway_merge(runs);
+        for (auto& sort : sorts)
+        {
+            sort.get();
+        }
+        centralized_kway_merge(values, positions, counts);
     }
 
     /// Gather, sort, and scatter the full input on the benchmark driver.
@@ -196,7 +188,13 @@ namespace {
         auto const reset = [&]() { set_input(values, positions, input); };
         auto const distribution =
             kind == input_kind::random ? "random" : "reversed";
-        auto const context = std::string(distribution) +
+#if defined(HPX_HAVE_NANOBENCH)
+        // nanobench times the input reset together with the sort.
+        auto const timing_mode = "/includes_reset";
+#else
+        auto const timing_mode = "/sort_only";
+#endif
+        auto const context = std::string(distribution) + timing_mode +
             "/localities=" + std::to_string(localities.size()) +
             "/partitions_per_locality=" +
             std::to_string(partitions_per_locality) +
@@ -210,7 +208,8 @@ namespace {
             reset);
         hpx::util::perftests_report(
             "partitioned_vector_sort", "centralized_kway/" + context,
-            test_count, 0, [&]() { centralized_kway_sort(values); }, reset);
+            test_count, 0, [&]() { centralized_kway_sort(values, positions); },
+            reset);
         hpx::util::perftests_report(
             "partitioned_vector_sort", "gather_sort_scatter/" + context,
             test_count, 0, [&]() { gather_sort_scatter(values, positions); },
