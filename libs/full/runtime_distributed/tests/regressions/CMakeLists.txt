@@ -133,6 +133,39 @@ if(HPX_WITH_NETWORKING)
   )
 
   add_hpx_regression_test(
+    "modules.runtime_distributed" startup_exception_8070_registration_loc0
+    EXECUTABLE startup_exception_8070
+    PSEUDO_DEPS_NAME startup_exception_8070
+    LOCALITIES 2
+    THREADS_PER_LOCALITY 2
+    PARCELPORTS tcp
+    TIMEOUT 60
+    ARGS "--phase=registration" "--failing-locality=0"
+  )
+
+  add_hpx_regression_test(
+    "modules.runtime_distributed" startup_exception_8070_registration_loc1
+    EXECUTABLE startup_exception_8070
+    PSEUDO_DEPS_NAME startup_exception_8070
+    LOCALITIES 2
+    THREADS_PER_LOCALITY 2
+    PARCELPORTS tcp
+    TIMEOUT 60
+    ARGS "--phase=registration" "--failing-locality=1"
+  )
+
+  add_hpx_regression_test(
+    "modules.runtime_distributed" startup_exception_8070_optional_registration
+    EXECUTABLE startup_exception_8070
+    PSEUDO_DEPS_NAME startup_exception_8070
+    LOCALITIES 2
+    THREADS_PER_LOCALITY 2
+    PARCELPORTS tcp
+    TIMEOUT 60
+    ARGS "--phase=optional-registration"
+  )
+
+  add_hpx_regression_test(
     "modules.runtime_distributed" startup_exception_8070_pre_startup_loc0
     EXECUTABLE startup_exception_8070
     PSEUDO_DEPS_NAME startup_exception_8070

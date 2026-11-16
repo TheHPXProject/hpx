@@ -27,7 +27,7 @@ namespace hpx {
 
             // Get access to the registry of registered message handlers
             HPX_CXX_EXPORT HPX_EXPORT
-                std::vector<hpx::tuple<char const*, char const*>>&
+                std::vector<hpx::tuple<char const*, char const*, bool>>&
                 get_message_handler_registrations();
         }    // namespace detail
 
@@ -56,8 +56,9 @@ namespace hpx {
     ///           function doesn't throw but returns the result code using the
     ///           parameter \a ec. Otherwise it throws an instance of
     ///           hpx::exception.
-    HPX_EXPORT void register_message_handler(char const* message_handler_type,
-        char const* action, error_code& ec = throws);
+    HPX_CXX_EXPORT HPX_EXPORT void register_message_handler(
+        char const* message_handler_type, char const* action,
+        error_code& ec = throws);
 
     /// \brief Create an instance of a message handler plugin
     ///
@@ -77,8 +78,8 @@ namespace hpx {
     ///           function doesn't throw but returns the result code using the
     ///           parameter \a ec. Otherwise it throws an instance of
     ///           hpx::exception.
-    HPX_EXPORT parcelset::policies::message_handler* create_message_handler(
-        char const* message_handler_type, char const* action,
+    HPX_CXX_EXPORT HPX_EXPORT parcelset::policies::message_handler*
+    create_message_handler(char const* message_handler_type, char const* action,
         parcelset::parcelport* pp, std::size_t num_messages,
         std::size_t interval, error_code& ec = throws);
 }    // namespace hpx

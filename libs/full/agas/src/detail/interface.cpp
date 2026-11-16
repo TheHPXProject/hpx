@@ -58,11 +58,11 @@ namespace hpx::agas::detail::impl {
     }
 
     ///////////////////////////////////////////////////////////////////////////
-    hpx::id_type unregister_name(std::string const& name, error_code&)
+    hpx::id_type unregister_name(std::string const& name, error_code& ec)
     {
         if (!hpx::is_stopped())
         {
-            return naming::get_agas_client().unregister_name(name);
+            return naming::get_agas_client().unregister_name(name, ec);
         }
         return hpx::invalid_id;
     }

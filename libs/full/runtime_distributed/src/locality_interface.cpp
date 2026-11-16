@@ -92,7 +92,7 @@ namespace hpx::parcelset {
 
             // store the request for later
             get_message_handler_registrations().emplace_back(
-                message_handler_type, action);
+                message_handler_type, action, &ec != &throws);
         }
 
         parcelset::policies::message_handler* create_message_handler(
