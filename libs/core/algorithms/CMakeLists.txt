@@ -25,6 +25,7 @@ set(algorithms_headers
     hpx/parallel/algorithms/detail/advance_to_sentinel.hpp
     hpx/parallel/algorithms/detail/algorithm_value.hpp
     hpx/parallel/algorithms/detail/contains.hpp
+    hpx/parallel/algorithms/detail/copy_if.hpp
     hpx/parallel/algorithms/detail/dispatch.hpp
     hpx/parallel/algorithms/detail/distance.hpp
     hpx/parallel/algorithms/detail/equal.hpp
@@ -236,6 +237,7 @@ if(HPX_WITH_DATAPAR)
       hpx/parallel/datapar.hpp
       hpx/parallel/datapar/adjacent_difference.hpp
       hpx/parallel/datapar/adjacent_find.hpp
+      hpx/parallel/datapar/copy_if.hpp
       hpx/parallel/datapar/equal.hpp
       hpx/parallel/datapar/fill.hpp
       hpx/parallel/datapar/find.hpp
