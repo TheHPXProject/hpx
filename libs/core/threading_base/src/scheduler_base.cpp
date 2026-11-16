@@ -512,12 +512,27 @@ namespace hpx::threads::policies {
         // visible to the last worker; acquire: the last worker synchronizes
         // with all earlier decrements (they form one release sequence), so
         // the thread counts below include that work
-        if (workers_in_loop_.fetch_sub(1, std::memory_order_acq_rel) != 1)
+        std::uint64_t const before =
+            workers_in_loop_.fetch_sub(1, std::memory_order_acq_rel);
+        if ((before & workers_in_loop_mask) != 1)
             return true;
 
         // This is the last worker. All others are idle and have left, so no
-        // HPX thread can schedule new work anymore: whatever is left on any
-        // queue now is left there for good unless this worker runs it.
+        // HPX thread of this pool can schedule new work anymore. A creation
+        // from outside the workers that began before may not have queued its
+        // thread yet: wait for it (it is short, and every later one sees
+        // that no worker is left and gives up). Acquire: synchronizes with
+        // end_outside_creation, so the thread counts below include its
+        // thread. Whatever is left on any queue then is left there for good
+        // unless this worker runs it.
+        if (before >= outside_creation_unit)
+        {
+            hpx::util::yield_while([this]() {
+                return workers_in_loop_.load(std::memory_order_acquire) >=
+                    outside_creation_unit;
+            });
+        }
+
         if (get_thread_count() <= get_background_thread_count())
             return true;
 
@@ -530,6 +545,30 @@ namespace hpx::threads::policies {
     {
         // release: as in leave_scheduling_loop
         workers_in_loop_.fetch_sub(1, std::memory_order_release);
+    }
+
+    bool scheduler_base::begin_outside_creation() noexcept
+    {
+        // The creations and the workers are counted in the same atomic, so
+        // either this comes first and the last worker to leave waits for it,
+        // or the last worker has left before and this gives up
+        std::uint64_t const before = workers_in_loop_.fetch_add(
+            outside_creation_unit, std::memory_order_relaxed);
+        if ((before & workers_in_loop_mask) == 0 &&
+            has_reached_state(hpx::state::stopping))
+        {
+            workers_in_loop_.fetch_sub(
+                outside_creation_unit, std::memory_order_relaxed);
+            return false;
+        }
+        return true;
+    }
+
+    void scheduler_base::end_outside_creation() noexcept
+    {
+        // release: the last worker that waits for this sees the new thread
+        workers_in_loop_.fetch_sub(
+            outside_creation_unit, std::memory_order_release);
     }
 
     void scheduler_base::increment_background_thread_count() noexcept
