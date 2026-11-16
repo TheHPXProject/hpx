@@ -8,10 +8,9 @@
 
 #if defined(HPX_HAVE_CXX20_COROUTINES)
 
-#include <hpx/executors/task.hpp>
-#include <hpx/executors/task_scheduler.hpp>
 #include <hpx/init.hpp>
 #include <hpx/modules/execution.hpp>
+#include <hpx/modules/executors.hpp>
 #include <hpx/modules/testing.hpp>
 
 #include <atomic>
@@ -361,7 +360,6 @@ ex::task<int> nested_outer_just_stopped()
 
 struct wait_for_stop_sender
 {
-    using is_sender = void;
     using sender_concept = ex::sender_t;
 
     using completion_signatures =

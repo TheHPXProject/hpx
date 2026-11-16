@@ -12,6 +12,7 @@
 #if defined(HPX_HAVE_CXX20_COROUTINES)
 
 #include <hpx/modules/execution.hpp>
+#include <hpx/modules/executors.hpp>
 
 template <typename T, typename Context = void>
 using basic_task = hpx::execution::experimental::task<T>;
