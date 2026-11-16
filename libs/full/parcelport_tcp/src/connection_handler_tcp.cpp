@@ -90,6 +90,11 @@ namespace hpx::parcelset::policies::tcp {
         if (nullptr == acceptor_)
             acceptor_ = new tcp::acceptor(io_service);
 
+        {
+            std::lock_guard<hpx::spinlock> l(connections_mtx_);
+            stopping_ = false;
+        }
+
         // initialize network
         std::size_t tried = 0;
         exception_list errors;
@@ -162,26 +167,35 @@ namespace hpx::parcelset::policies::tcp {
 
     void connection_handler::do_stop()
     {
+        // Stop accepting first: handle_accept looks at stopping_ under
+        // connections_mtx_ before it keeps a connection or uses the acceptor,
+        // so no connection is added after the swap below and the acceptor can
+        // be closed and deleted here.
+        accepted_connections_set connections;
         {
-            // cancel all pending read operations, close those sockets
             std::lock_guard<hpx::spinlock> l(connections_mtx_);
-            for (std::shared_ptr<receiver> const& c : accepted_connections_)
-            {
-                c->shutdown();
-            }
-
-            accepted_connections_.clear();
+            stopping_ = true;
+            connections.swap(accepted_connections_);
 #if defined(HPX_HOLDON_TO_OUTGOING_CONNECTIONS)
             write_connections_.clear();
 #endif
+            if (acceptor_ != nullptr)
+            {
+                std::error_code ec;
+                // NOLINTNEXTLINE(bugprone-unused-return-value)
+                acceptor_->close(ec);
+                delete acceptor_;
+                acceptor_ = nullptr;
+            }
         }
-        if (acceptor_ != nullptr)
+
+        // Cancel all pending read operations and close those sockets without
+        // holding connections_mtx_: receiver::shutdown waits for the aborted
+        // read to finish, and that read's completion handler
+        // (handle_read_completion) acquires connections_mtx_.
+        for (std::shared_ptr<receiver> const& c : connections)
         {
-            std::error_code ec;
-            // NOLINTNEXTLINE(bugprone-unused-return-value)
-            acceptor_->close(ec);
-            delete acceptor_;
-            acceptor_ = nullptr;
+            c->shutdown();
         }
     }
 
@@ -327,33 +341,53 @@ namespace hpx::parcelset::policies::tcp {
             // handle this incoming connection
             std::shared_ptr<receiver> c(receiver_conn);
 
-            ::asio::io_context& io_service = io_service_pool_.get_io_service();
-            receiver_conn.reset(new receiver(
-                io_service, get_max_inbound_message_size(), *this));
-            acceptor_->async_accept(receiver_conn->socket(),
-                hpx::bind(&connection_handler::handle_accept, this,
-                    placeholders::_1, receiver_conn));
-
+            bool stopping = false;
             {
-                // keep track of all accepted connections
+                // keep track of all accepted connections, and accept the next
+                // one, unless do_stop has begun (it closes the acceptor and
+                // shuts down the connections it found under this lock)
                 std::lock_guard<hpx::spinlock> l(connections_mtx_);
-                accepted_connections_.insert(c);
+                stopping = stopping_;
+                if (!stopping)
+                {
+                    ::asio::io_context& io_service =
+                        io_service_pool_.get_io_service();
+                    receiver_conn.reset(new receiver(
+                        io_service, get_max_inbound_message_size(), *this));
+                    acceptor_->async_accept(receiver_conn->socket(),
+                        hpx::bind(&connection_handler::handle_accept, this,
+                            placeholders::_1, receiver_conn));
+
+                    accepted_connections_.insert(c);
+                }
             }
 
-            // disable Nagle algorithm, disable lingering on close
+            if (stopping)
+            {
+                // accepted after do_stop took the connections: nothing is
+                // read from it yet, so this only closes the socket
+                c->shutdown();
+                return;
+            }
+
+            // disable Nagle algorithm, disable lingering on close; do_stop may
+            // have closed the socket since it was kept above, so don't throw
+            // NOLINTBEGIN(bugprone-unused-return-value)
             ::asio::ip::tcp::socket& s = c->socket();
-            s.set_option(::asio::ip::tcp::no_delay(true));
-            s.set_option(::asio::socket_base::linger(true, 0));
+            std::error_code ec;
+            s.set_option(::asio::ip::tcp::no_delay(true), ec);
+            s.set_option(::asio::socket_base::linger(true, 0), ec);
+            // NOLINTEND(bugprone-unused-return-value)
 
             // now accept the incoming connection by starting to read from the
-            // socket
+            // socket; a closed socket is reported to handle_read_completion
             c->async_read(hpx::bind(&connection_handler::handle_read_completion,
                 this, placeholders::_1, c));
         }
         else
         {
             // remove this connection from the list of known connections
-            std::lock_guard<hpx::spinlock> l(mtx_);
+            std::lock_guard<hpx::spinlock> l(connections_mtx_);
             accepted_connections_.erase(receiver_conn);
         }
     }
