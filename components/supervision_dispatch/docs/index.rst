@@ -268,8 +268,10 @@ Registry client
         on its next sweep. It also checks the local state a second time before
         the removal, so a new epoch that changed the state before then, for
         instance one a registry that joined its own locality published
-        directly, keeps the peer even if it was not mirrored yet, see the
-        manual.
+        directly, keeps the peer even if it was not mirrored yet. A new epoch
+        that changes the state after that check, and is not being mirrored
+        yet, ends as if it started right after the removal: it is not
+        mirrored, and the peer has to be joined again, see the manual.
 
     .. cpp:function:: hpx::future<bool> register_name()
     .. cpp:function:: bool register_name(hpx::launch::sync_policy, hpx::error_code& ec = hpx::throws)
