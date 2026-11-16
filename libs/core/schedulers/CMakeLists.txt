@@ -10,6 +10,7 @@ set(schedulers_headers
     hpx/schedulers/background_scheduler.hpp
     hpx/schedulers/deadlock_detection.hpp
     hpx/schedulers/local_priority_queue_scheduler.hpp
+    hpx/schedulers/local_priority_tuned_scheduler.hpp
     hpx/schedulers/local_queue_scheduler.hpp
     hpx/schedulers/lockfree_queue_backends.hpp
     hpx/schedulers/macros.hpp

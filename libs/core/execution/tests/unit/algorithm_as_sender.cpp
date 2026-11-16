@@ -118,10 +118,10 @@ int hpx_main()
         check_error_types<hpx::variant<std::exception_ptr>>(s);
         check_sends_stopped<false>(s);
 
-        auto f = [&](int value) {
-            set_value_called = true;
-            HPX_TEST_EQ(value, 42);
-        };
+        // callback_receiver sets set_value_called as its last access to the
+        // operation state; setting it earlier would let the loop below
+        // destroy os while the receiver still uses it
+        auto f = [](int value) { HPX_TEST_EQ(value, 42); };
         // Use connect/start pattern instead of sync_wait to avoid stdexec sync primitives
         // blocking on HPX futures
         auto r = callback_receiver<decltype(f)>{f, set_value_called};

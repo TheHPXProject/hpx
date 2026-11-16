@@ -12,6 +12,7 @@ set(tests
     schedule_last
     schedule_hint_none_stale_queue_6978
     scheduler_mode_overrides
+    scheduler_tuning
     shared_priority_queue_external_cleanup
     steal_pending_early
     steal_staged_early

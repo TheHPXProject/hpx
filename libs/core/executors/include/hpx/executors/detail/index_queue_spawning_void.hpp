@@ -203,11 +203,12 @@ namespace hpx::parallel::execution::detail {
         }
 
         // Finish the work for one worker thread, which has taken done chunks.
-        void finish(std::uint32_t const done) const noexcept
+        void finish(std::uint32_t const done,
+            std::uint32_t const caller_credit) const noexcept
         {
             HPX_TRACING_MARK_EVENT("finish");
 
-            state->finish_chunks(done);
+            state->finish_chunks(done + caller_credit);
 
             // tell the scheduler that this task has finished running
             auto const* thread_data =
@@ -222,7 +223,7 @@ namespace hpx::parallel::execution::detail {
         // Entry point for the worker thread. It will attempt to do its local
         // work, catch any exceptions, and then call set_value or set_exception
         // on the shared state.
-        void operator()() const noexcept
+        void operator()(std::uint32_t const caller_credit = 0) const noexcept
         {
             using hpx::concurrency::detail::queue_end;
 
@@ -251,7 +252,7 @@ namespace hpx::parallel::execution::detail {
                 skip_own_work(done);
             }
 
-            finish(done);
+            finish(done, caller_credit);
         }
 
     private:
@@ -728,6 +729,8 @@ namespace hpx::parallel::execution::detail {
                 this->count_ -= static_cast<long>(num_threads - adopted);
             }
 
+            bool caller_credit_released = false;
+
             // the main thread should have been associated with a queue
             if (main_thread_ok)
             {
@@ -743,7 +746,9 @@ namespace hpx::parallel::execution::detail {
                     // don't execute the task: it has no chunks to count.
                     if (!queues[local_worker_thread].data_.empty())
                     {
-                        local_task();
+                        // Count the caller's credit with the local chunks.
+                        local_task(1);
+                        caller_credit_released = true;
                     }
                 }
                 else
@@ -763,7 +768,10 @@ namespace hpx::parallel::execution::detail {
             }
 
             // release the chunk this thread holds
-            finish_chunks(1);
+            if (!caller_credit_released)
+            {
+                finish_chunks(1);
+            }
         }
 
         std::uint32_t first_thread;

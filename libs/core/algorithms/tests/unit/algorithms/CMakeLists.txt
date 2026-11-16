@@ -185,6 +185,13 @@ set(sender_tests
     findifnot_sender
     foreach_sender
     foreachn_sender
+    for_loop_induction_sender
+    for_loop_n_sender
+    for_loop_n_strided_sender
+    for_loop_reduction_sender
+    for_loop_sender
+    for_loop_strided_induction_sender
+    for_loop_strided_sender
     generate_sender
     generaten_sender
     inclusive_scan_sender
@@ -196,6 +203,7 @@ set(sender_tests
     is_sorted_sender
     is_sorted_until_sender
     lexicographical_compare_sender
+    make_heap_sender
     max_element_sender
     merge_sender
     min_element_sender
@@ -204,7 +212,10 @@ set(sender_tests
     mismatch_binary_sender
     move_sender
     none_of_sender
+    nth_element_extended_sender
     nth_element_sender
+    partial_sort_copy_sender
+    partial_sort_extended_sender
     partial_sort_sender
     partition_copy_sender
     partition_sender
@@ -229,7 +240,9 @@ set(sender_tests
     set_union_sender
     shift_left_sender
     shift_right_sender
+    sort_sender
     stable_partition_sender
+    stable_sort_sender
     starts_with_sender
     swapranges_sender
     transform_exclusive_scan_sender
