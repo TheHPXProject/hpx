@@ -93,7 +93,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: lukka/get-cmake@v4.4.5
+      - uses: lukka/get-cmake@v4.5.0
         if: inputs.get-cmake
 
       - uses: ./.github/actions/setup-vcpkg
@@ -163,7 +163,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: lukka/get-cmake@v4.4.5
+      - uses: lukka/get-cmake@v4.5.0
         if: inputs.get-cmake
 
       - uses: ./.github/actions/setup-vcpkg
@@ -219,7 +219,7 @@ jobs:
       # .github
       - uses: actions/checkout@v7
 
-      - uses: lukka/get-cmake@v4.4.5
+      - uses: lukka/get-cmake@v4.5.0
         if: inputs.get-cmake
 
       - uses: ./.github/actions/setup-vcpkg
