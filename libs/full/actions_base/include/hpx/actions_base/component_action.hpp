@@ -26,6 +26,11 @@
 #include <type_traits>
 #include <utility>
 
+#if defined(HPX_HAVE_CXX26_REFLECTION) &&                                      \
+    defined(HPX_HAVE_CXX26_REFLECTION_ANNOTATIONS)
+#include <meta>
+#endif
+
 #include <hpx/config/warnings_prefix.hpp>
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -69,6 +74,63 @@ namespace hpx::actions {
                 return (component->*f)(HPX_FORWARD(Ts, vs)...);
             }
         }
+
+#if defined(HPX_HAVE_CXX26_REFLECTION) &&                                      \
+    defined(HPX_HAVE_CXX26_REFLECTION_ANNOTATIONS)
+        // A member with an explicit object parameter can have the same type as
+        // a member function, but no member function pointer can be extracted
+        // from it.
+        consteval bool has_explicit_object_parameter(std::meta::info const m)
+        {
+            auto const params = std::meta::parameters_of(m);
+            return !params.empty() &&
+                std::meta::is_explicit_object_parameter(params[0]);
+        }
+
+        // reflect_function does not take a member function pointer, so the
+        // member F points to is looked up in Component. Comparing reflected
+        // values instead of the pointers keeps this a constant expression for
+        // virtual members as well.
+        template <typename Component, typename Fn, auto F>
+        consteval std::meta::info member_function_of()
+        {
+            for (std::meta::info const m : std::meta::members_of(
+                     ^^Component, std::meta::access_context::unchecked()))
+            {
+                // Constructors and destructors have no type to compare, the
+                // other checks keep extract from failing.
+                if (std::meta::is_function(m) &&
+                    !std::meta::is_static_member(m) &&
+                    !std::meta::is_constructor(m) &&
+                    !std::meta::is_destructor(m) && !std::meta::is_deleted(m) &&
+                    std::meta::is_same_type(std::meta::type_of(m), ^^Fn) &&
+                    !has_explicit_object_parameter(m) &&
+                    std::meta::reflect_constant(std::meta::extract<decltype(F)>(
+                        m)) == std::meta::reflect_constant(F))
+                {
+                    return m;
+                }
+            }
+            return {};
+        }
+
+        // Specializations of member function templates are not members of
+        // Component, so they are not found and stay unknown.
+        template <typename Component, typename Fn, auto F>
+        consteval threads::task_size member_function_task_size()
+        {
+            constexpr std::meta::info m =
+                member_function_of<Component, Fn, F>();
+            if constexpr (m == std::meta::info{})
+            {
+                return threads::task_size::unknown;
+            }
+            else
+            {
+                return hpx::traits::detail::annotated_function_task_size<m>();
+            }
+        }
+#endif
     }    // namespace detail
 
     ///////////////////////////////////////////////////////////////////////////
@@ -89,6 +151,16 @@ namespace hpx::actions {
       : basic_action<Component, R(Ps...), Derived>
     {
         using derived_type = Derived;
+
+#if defined(HPX_HAVE_CXX26_REFLECTION) &&                                      \
+    defined(HPX_HAVE_CXX26_REFLECTION_ANNOTATIONS)
+        // The member function can give the action a size with an annotation.
+        // A sized function bound to the action hides this with its own size.
+        static constexpr threads::task_size function_task_size() noexcept
+        {
+            return detail::member_function_task_size<Component, R(Ps...), F>();
+        }
+#endif
 
         static std::string get_action_name(naming::address_type lva)
         {
@@ -119,6 +191,17 @@ namespace hpx::actions {
     {
         using derived_type = Derived;
 
+#if defined(HPX_HAVE_CXX26_REFLECTION) &&                                      \
+    defined(HPX_HAVE_CXX26_REFLECTION_ANNOTATIONS)
+        // The member function can give the action a size with an annotation.
+        // A sized function bound to the action hides this with its own size.
+        static constexpr threads::task_size function_task_size() noexcept
+        {
+            return detail::member_function_task_size<Component, R(Ps...) const,
+                F>();
+        }
+#endif
+
         static std::string get_action_name(naming::address_type lva)
         {
             return detail::make_component_action_name(
@@ -148,6 +231,17 @@ namespace hpx::actions {
     {
         using derived_type = Derived;
 
+#if defined(HPX_HAVE_CXX26_REFLECTION) &&                                      \
+    defined(HPX_HAVE_CXX26_REFLECTION_ANNOTATIONS)
+        // The member function can give the action a size with an annotation.
+        // A sized function bound to the action hides this with its own size.
+        static constexpr threads::task_size function_task_size() noexcept
+        {
+            return detail::member_function_task_size<Component,
+                R(Ps...) noexcept, F>();
+        }
+#endif
+
         static std::string get_action_name(naming::address_type lva)
         {
             return detail::make_component_action_name(
@@ -176,6 +270,17 @@ namespace hpx::actions {
       : basic_action<Component, R(Ps...), Derived>
     {
         using derived_type = Derived;
+
+#if defined(HPX_HAVE_CXX26_REFLECTION) &&                                      \
+    defined(HPX_HAVE_CXX26_REFLECTION_ANNOTATIONS)
+        // The member function can give the action a size with an annotation.
+        // A sized function bound to the action hides this with its own size.
+        static constexpr threads::task_size function_task_size() noexcept
+        {
+            return detail::member_function_task_size<Component,
+                R(Ps...) const noexcept, F>();
+        }
+#endif
 
         static std::string get_action_name(naming::address_type lva)
         {
