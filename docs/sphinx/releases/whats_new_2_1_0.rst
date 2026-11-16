@@ -74,6 +74,15 @@ Breaking changes
   that is visible to their users only (not while compiling the library
   itself), which turns a second registration of these components into a
   compile time error as well.
+- The ``HPX_WITH_DYNAMIC_HPX_MAIN`` CMake option has been removed
+  (:hpx-issue:`8071`, :hpx-pr:`8081`). On Linux and macOS the program's entry
+  point is now always redirected at link time, all other platforms keep
+  renaming ``main()`` with a macro. ``HPX_HAVE_DYNAMIC_HPX_MAIN`` is no longer
+  defined and ``HPX_WITH_DYNAMIC_HPX_MAIN`` is no longer exported to dependent
+  CMake projects. On Linux and macOS, code that includes
+  ``hpx/hpx_main.hpp`` has to link ``HPX::wrap_main`` (or
+  ``HPX::auto_wrap_main``), which was previously avoidable by setting the
+  option to ``OFF``.
 
 Supervision Module
 ==================
