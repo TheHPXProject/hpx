@@ -184,9 +184,10 @@ namespace hpx::parcelset::policies::tcp {
                 // given)
                 if (max_inbound_size_ != 0 && inbound_size > max_inbound_size_)
                 {
-                    // report this problem back to the handler
+                    // report this problem back to the handler, no read follows
                     handler(::asio::error::make_error_code(
                         ::asio::error::operation_not_supported));
+                    --operation_in_flight_;
                     return;
                 }
 
@@ -244,9 +245,12 @@ namespace hpx::parcelset::policies::tcp {
                     {
                         lk.unlock();
 
-                        // report this problem back to the handler
+                        // report this problem back to the handler; no
+                        // operation follows that would lower the count, and
+                        // shutdown waits for it
                         handler(::asio::error::make_error_code(
                             ::asio::error::not_connected));
+                        --operation_in_flight_;
                         return;
                     }
 
@@ -365,9 +369,12 @@ namespace hpx::parcelset::policies::tcp {
                     {
                         lk.unlock();
 
-                        // report this problem back to the handler
+                        // report this problem back to the handler; no
+                        // operation follows that would lower the count, and
+                        // shutdown waits for it
                         handler(::asio::error::make_error_code(
                             ::asio::error::not_connected));
+                        --operation_in_flight_;
                         return;
                     }
 
@@ -431,9 +438,12 @@ namespace hpx::parcelset::policies::tcp {
                     {
                         lk.unlock();
 
-                        // report this problem back to the handler
+                        // report this problem back to the handler; no
+                        // operation follows that would lower the count, and
+                        // shutdown waits for it
                         handler(::asio::error::make_error_code(
                             ::asio::error::not_connected));
+                        --operation_in_flight_;
                         return;
                     }
 
