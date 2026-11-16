@@ -15,6 +15,7 @@
 
 #include <cstddef>
 #include <iterator>
+#include <type_traits>
 #include <vector>
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -212,6 +213,69 @@ void transform_tests(std::vector<hpx::id_type>& localities)
         if (localities.size() > 1)
         {
             check_layout(std::vector<hpx::id_type>(2, localities[1]));
+        }
+    }
+
+    {
+        std::vector<hpx::id_type> output_owners(3, hpx::find_here());
+        auto check_empty_offset_layout =
+            [&](std::vector<hpx::id_type> const& input_owners) {
+                hpx::partitioned_vector<T> v(
+                    8, hpx::explicit_container_layout({3, 0, 5}, input_owners));
+                hpx::partitioned_vector<U> w(8, U(-1),
+                    hpx::explicit_container_layout({2, 0, 6}, output_owners));
+
+                auto it = v.begin();
+                for (std::size_t i = 0; i != v.size(); ++i, ++it)
+                {
+                    *it = T(i + 1);
+                }
+
+                auto first = v.begin() + 1;
+                auto last = v.begin() + 7;
+                auto dest = w.begin() + 1;
+                auto verify_result = [&](auto const& result) {
+                    HPX_TEST(result.in == last);
+                    HPX_TEST(result.out == w.begin() + 7);
+
+                    auto output = w.begin();
+                    for (std::size_t i = 0; i != w.size(); ++i, ++output)
+                    {
+                        U const expected =
+                            i >= 1 && i < 7 ? U(2 * T(i + 1)) : U(-1);
+                        HPX_TEST_EQ(*output, expected);
+                    }
+                };
+
+                auto run = [&](auto const& policy) {
+                    hpx::fill(hpx::execution::seq, w.begin(), w.end(), U(-1));
+                    auto operation =
+                        hpx::transform(policy, first, last, dest, pfo<U>());
+                    auto result = [&]() {
+                        if constexpr (hpx::is_async_execution_policy_v<
+                                          std::decay_t<decltype(policy)>>)
+                        {
+                            return operation.get();
+                        }
+                        else
+                        {
+                            return operation;
+                        }
+                    }();
+                    verify_result(result);
+                };
+
+                run(hpx::execution::seq);
+                run(hpx::execution::par);
+                run(hpx::execution::seq(hpx::execution::task));
+                run(hpx::execution::par(hpx::execution::task));
+            };
+
+        check_empty_offset_layout(output_owners);
+        if (localities.size() > 1)
+        {
+            check_empty_offset_layout(
+                std::vector<hpx::id_type>(3, localities[1]));
         }
     }
 
