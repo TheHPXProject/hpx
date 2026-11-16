@@ -163,6 +163,58 @@ void transform_tests(std::vector<hpx::id_type>& localities)
             hpx::execution::par(hpx::execution::task), v, w, U(1));
     }
 
+    {
+        std::vector<hpx::id_type> output_owners(2, hpx::find_here());
+        auto check_layout = [&](std::vector<hpx::id_type> const& input_owners) {
+            hpx::partitioned_vector<T> v(
+                6, hpx::explicit_container_layout({2, 4}, input_owners));
+            hpx::partitioned_vector<U> w(8, U(-1),
+                hpx::explicit_container_layout({4, 4}, output_owners));
+
+            auto input = v.begin();
+            for (std::size_t i = 0; i != v.size(); ++i, ++input)
+            {
+                *input = T(i + 1);
+            }
+
+            auto verify_result = [&](auto const& result) {
+                HPX_TEST(result.in == v.end());
+                HPX_TEST(result.out == w.begin() + 6);
+                auto output = w.begin();
+                for (std::size_t i = 0; i != v.size(); ++i, ++output)
+                {
+                    HPX_TEST_EQ(*output, U(2 * (i + 1)));
+                }
+                for (; output != w.end(); ++output)
+                {
+                    HPX_TEST_EQ(*output, U(-1));
+                }
+            };
+
+            verify_result(hpx::transform(
+                hpx::execution::seq, v.begin(), v.end(), w.begin(), pfo<U>()));
+            hpx::fill(hpx::execution::seq, w.begin(), w.end(), U(-1));
+            verify_result(hpx::transform(
+                hpx::execution::par, v.begin(), v.end(), w.begin(), pfo<U>()));
+            hpx::fill(hpx::execution::seq, w.begin(), w.end(), U(-1));
+            verify_result(
+                hpx::transform(hpx::execution::seq(hpx::execution::task),
+                    v.begin(), v.end(), w.begin(), pfo<U>())
+                    .get());
+            hpx::fill(hpx::execution::seq, w.begin(), w.end(), U(-1));
+            verify_result(
+                hpx::transform(hpx::execution::par(hpx::execution::task),
+                    v.begin(), v.end(), w.begin(), pfo<U>())
+                    .get());
+        };
+
+        check_layout(output_owners);
+        if (localities.size() > 1)
+        {
+            check_layout(std::vector<hpx::id_type>(2, localities[1]));
+        }
+    }
+
     // subrange regression test in a single segment (sit == send path)
     {
         constexpr std::size_t n = 16;
