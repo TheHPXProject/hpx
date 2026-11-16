@@ -74,7 +74,8 @@ namespace {
             scheduling_policy::calibration_pauses_per_round);
         HPX_TEST_EQ(step.spin_rounds, rounds(1.0, rate));
         HPX_TEST_EQ(step.steal_check_rounds,
-            rounds(parameters.get<float>(0, t.interval), rate));
+            rounds(static_cast<double>(parameters.get<float>(0, t.interval)),
+                rate));
     }
 
     void test_sleep_step()
@@ -93,7 +94,8 @@ namespace {
         HPX_TEST_EQ(step.pauses_per_round,
             scheduling_policy::calibration_pauses_per_round);
         HPX_TEST_EQ(step.steal_check_rounds,
-            rounds(parameters.get<float>(0, t.interval), rate));
+            rounds(static_cast<double>(parameters.get<float>(0, t.interval)),
+                rate));
     }
 
     void test_tuned_pauses()
@@ -109,7 +111,8 @@ namespace {
         parameters.set(
             1, pauses, 4 * scheduling_policy::calibration_pauses_per_round);
         double const rate1 = rate / 4.0;
-        double const interval = parameters.get<float>(1, t.interval);
+        double const interval =
+            static_cast<double>(parameters.get<float>(1, t.interval));
 
         idle_step const spin = t.rules.idle_step_for(1, 4, rate);
         HPX_TEST_EQ(spin.pauses_per_round,
@@ -141,7 +144,8 @@ namespace {
         idle_step const step0 = t.rules.idle_step_for(0, sleep_count, rate);
         idle_step const step1 = t.rules.idle_step_for(1, sleep_count, rate);
         HPX_TEST_EQ(step0.steal_check_rounds,
-            rounds(parameters.get<float>(0, t.interval), rate));
+            rounds(static_cast<double>(parameters.get<float>(0, t.interval)),
+                rate));
         HPX_TEST_EQ(step1.steal_check_rounds, rounds(20.0, rate));
 
         idle_step const spin1 = t.rules.idle_step_for(1, 0, rate);
