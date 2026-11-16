@@ -438,13 +438,15 @@ namespace hpx::execution::experimental {
             {
                 if constexpr (has_allocator_arg<Args...>::value)
                 {
+                    using provided_allocator_type =
+                        decltype(find_allocator<Args...>::get(args...));
+                    static_assert(
+                        std::is_convertible_v<provided_allocator_type,
+                            allocator_type>,
+                        "Provided allocator must be convertible to "
+                        "allocator_type");
                     has_custom_alloc_ = true;
-                    if constexpr (std::is_constructible_v<allocator_type,
-                                      decltype(find_allocator<Args...>::get(
-                                          args...))>)
-                    {
-                        alloc_.emplace(find_allocator<Args...>::get(args...));
-                    }
+                    alloc_.emplace(find_allocator<Args...>::get(args...));
                 }
             }
 
@@ -515,15 +517,11 @@ namespace hpx::execution::experimental {
                     {
                         return *promise_->alloc_;
                     }
-                    if constexpr (std::is_default_constructible_v<
-                                      allocator_type>)
-                    {
-                        return allocator_type{};
-                    }
-                    else
-                    {
-                        std::terminate();
-                    }
+                    static_assert(
+                        std::is_default_constructible_v<allocator_type>,
+                        "allocator_type must be default constructible if no "
+                        "custom allocator is provided");
+                    return allocator_type{};
                 }
 
                 auto query(hpx::execution::experimental::get_scheduler_t)
@@ -660,21 +658,30 @@ namespace hpx::execution::experimental {
                                   hpx::execution::experimental::get_scheduler(
                                       hpx::execution::experimental::get_env(
                                           rcvr_));
-                              })
+                              } &&
+                    (std::is_convertible_v<
+                         decltype(hpx::execution::experimental::get_scheduler(
+                             hpx::execution::experimental::get_env(rcvr_))),
+                         typename promise_type::scheduler_type> ||
+                        std::is_constructible_v<
+                            typename promise_type::scheduler_type,
+                            decltype(hpx::execution::experimental::
+                                    get_scheduler(
+                                        hpx::execution::experimental::get_env(
+                                            rcvr_)))>))
                 {
-                    if constexpr (std::is_constructible_v<
-                                      typename promise_type::scheduler_type,
-                                      decltype(hpx::execution::experimental::
-                                              get_scheduler(
-                                                  hpx::execution::experimental::
-                                                      get_env(rcvr_)))>)
-                    {
-                        coro_.promise().scheduler_ =
-                            typename promise_type::scheduler_type(
-                                hpx::execution::experimental::get_scheduler(
-                                    hpx::execution::experimental::get_env(
-                                        rcvr_)));
-                    }
+                    coro_.promise().scheduler_.emplace(
+                        hpx::execution::experimental::get_scheduler(
+                            hpx::execution::experimental::get_env(rcvr_)));
+                }
+                else
+                {
+                    static_assert(
+                        std::is_default_constructible_v<
+                            typename promise_type::scheduler_type>,
+                        "scheduler_type must be default constructible if "
+                        "receiver provides no valid scheduler");
+                    coro_.promise().scheduler_.emplace();
                 }
             }
 
@@ -965,20 +972,30 @@ namespace hpx::execution::experimental {
                                       hpx::execution::experimental::
                                           get_scheduler(
                                               parent.promise().get_env());
-                                  })
+                                  } &&
+                        (std::is_convertible_v<
+                             decltype(hpx::execution::experimental::
+                                     get_scheduler(
+                                         parent.promise().get_env())),
+                             typename promise_type::scheduler_type> ||
+                            std::is_constructible_v<
+                                typename promise_type::scheduler_type,
+                                decltype(hpx::execution::experimental::
+                                        get_scheduler(
+                                            parent.promise().get_env()))>))
                     {
-                        if constexpr (std::is_constructible_v<
-                                          typename promise_type::scheduler_type,
-                                          decltype(hpx::execution::
-                                                  experimental::get_scheduler(
-                                                      parent.promise()
-                                                          .get_env()))>)
-                        {
-                            coro_.promise().scheduler_ =
-                                typename promise_type::scheduler_type(
-                                    hpx::execution::experimental::get_scheduler(
-                                        parent.promise().get_env()));
-                        }
+                        coro_.promise().scheduler_.emplace(
+                            hpx::execution::experimental::get_scheduler(
+                                parent.promise().get_env()));
+                    }
+                    else
+                    {
+                        static_assert(
+                            std::is_default_constructible_v<
+                                typename promise_type::scheduler_type>,
+                            "scheduler_type must be default constructible if "
+                            "receiver provides no valid scheduler");
+                        coro_.promise().scheduler_.emplace();
                     }
                 }
 
