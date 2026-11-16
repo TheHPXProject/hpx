@@ -219,6 +219,7 @@ set(sender_tests
     partial_sort_sender
     partition_copy_sender
     partition_sender
+    reduce_by_key_sender
     reduce_sender
     remove_sender
     remove_if_sender
@@ -240,6 +241,7 @@ set(sender_tests
     set_union_sender
     shift_left_sender
     shift_right_sender
+    sort_by_key_sender
     sort_sender
     stable_partition_sender
     stable_sort_sender
