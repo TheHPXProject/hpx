@@ -650,6 +650,28 @@ namespace hpx::parallel {
                 std::advance(final_dest, count);
 
                 using hpx::get;
+                using hpx::threads::detail::with_task_size;
+
+                // an iteration of steps 1 and 3 has the size of op called with
+                // the result so far and an element
+                auto const size1 = task_size_of_iteration<value_type const&,
+                    task_size_argument_t<FwdIter1>>(op, initial_first);
+                auto const size3 = task_size_of_iteration<value_type const&,
+                    task_size_argument_t<FwdIter2>>(op, initial_dest);
+
+                auto f1 = [op, last](zip_iterator part_begin,
+                              std::size_t part_size) -> value_type {
+                    value_type part_init = get<0>(*part_begin);
+                    get<1>(*part_begin++) = part_init;
+
+                    auto iters = part_begin.get_iterator_tuple();
+                    if (get<0>(iters) != last)
+                    {
+                        return sequential_inclusive_scan_n(get<0>(iters),
+                            part_size - 1, get<1>(iters), part_init, op);
+                    }
+                    return part_init;
+                };
 
                 auto f3 = [op](zip_iterator part_begin, std::size_t part_size,
                               value_type val) mutable -> void {
@@ -675,21 +697,9 @@ namespace hpx::parallel {
                             }
                             return init;
                         },
-                        [op, last](zip_iterator part_begin,
-                            std::size_t part_size) -> value_type {
-                            value_type part_init = get<0>(*part_begin);
-                            get<1>(*part_begin++) = part_init;
-
-                            auto iters = part_begin.get_iterator_tuple();
-                            if (get<0>(iters) != last)
-                            {
-                                return sequential_inclusive_scan_n(
-                                    get<0>(iters), part_size - 1, get<1>(iters),
-                                    part_init, op);
-                            }
-                            return part_init;
-                        },
-                        HPX_FORWARD(Op, op), HPX_MOVE(f3),
+                        with_task_size(HPX_MOVE(f1), size1),
+                        HPX_FORWARD(Op, op),
+                        with_task_size(HPX_MOVE(f3), size3),
                         [last_iter, final_dest](std::vector<value_type>&&,
                             std::vector<hpx::future<void>>&& data) {
                             util::detail::clear_container(data);
