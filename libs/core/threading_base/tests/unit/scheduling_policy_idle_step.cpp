@@ -74,7 +74,7 @@ namespace {
             scheduling_policy::calibration_pauses_per_round);
         HPX_TEST_EQ(step.spin_rounds, rounds(1.0, rate));
         HPX_TEST_EQ(step.steal_check_rounds,
-            rounds(parameters.get(0, t.interval), rate));
+            rounds(parameters.get<float>(0, t.interval), rate));
     }
 
     void test_sleep_step()
@@ -84,8 +84,8 @@ namespace {
 
         idle_step const step = t.rules.idle_step_for(0, sleep_count, rate);
         HPX_TEST_EQ(step.spin_rounds, std::uint64_t(0));
-        HPX_TEST_EQ(static_cast<double>(step.period.count()),
-            parameters.get(0, t.max_time));
+        HPX_TEST_EQ(static_cast<float>(step.period.count()),
+            parameters.get<float>(0, t.max_time));
 
         // the rounds and the interval to look at the queues to steal from in
         // rounds are given also for a period to sleep, for a worker that
@@ -93,7 +93,7 @@ namespace {
         HPX_TEST_EQ(step.pauses_per_round,
             scheduling_policy::calibration_pauses_per_round);
         HPX_TEST_EQ(step.steal_check_rounds,
-            rounds(parameters.get(0, t.interval), rate));
+            rounds(parameters.get<float>(0, t.interval), rate));
     }
 
     void test_tuned_pauses()
@@ -107,9 +107,9 @@ namespace {
         // a tuner gives worker 1 rounds of 4 times the pauses, which last 4
         // times as long
         parameters.set(
-            1, pauses, 4.0 * scheduling_policy::calibration_pauses_per_round);
+            1, pauses, 4 * scheduling_policy::calibration_pauses_per_round);
         double const rate1 = rate / 4.0;
-        double const interval = parameters.get(1, t.interval);
+        double const interval = parameters.get<float>(1, t.interval);
 
         idle_step const spin = t.rules.idle_step_for(1, 4, rate);
         HPX_TEST_EQ(spin.pauses_per_round,
@@ -136,12 +136,12 @@ namespace {
         auto& parameters = t.rules.parameters();
 
         // a tuner changes the interval of worker 1 only
-        parameters.set(1, t.interval, 20.0);
+        parameters.set(1, t.interval, 20.0f);
 
         idle_step const step0 = t.rules.idle_step_for(0, sleep_count, rate);
         idle_step const step1 = t.rules.idle_step_for(1, sleep_count, rate);
         HPX_TEST_EQ(step0.steal_check_rounds,
-            rounds(parameters.get(0, t.interval), rate));
+            rounds(parameters.get<float>(0, t.interval), rate));
         HPX_TEST_EQ(step1.steal_check_rounds, rounds(20.0, rate));
 
         idle_step const spin1 = t.rules.idle_step_for(1, 0, rate);
@@ -154,7 +154,7 @@ namespace {
         auto& parameters = t.rules.parameters();
 
         // an interval shorter than a round still looks every round
-        parameters.set_all(t.interval, 0.0);
+        parameters.set_all(t.interval, 0.0f);
 
         HPX_TEST_EQ(t.rules.idle_step_for(0, 0, rate).steal_check_rounds,
             std::uint64_t(1));

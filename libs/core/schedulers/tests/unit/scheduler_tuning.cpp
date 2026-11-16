@@ -19,6 +19,7 @@
 
 #include <atomic>
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <string>
 
@@ -37,7 +38,7 @@ struct test_tuner final : policies::scheduler_tuner
             parameters.find("hpx.idle_backoff_steal_check_interval");
         if (id != policies::scheduler_tuning_parameters::npos)
         {
-            parameters.set(0, id, 3.0);
+            parameters.set(0, id, 3.0f);
         }
     }
 };
@@ -72,38 +73,38 @@ int test_configured_values()
     HPX_TEST(parameters.info(spin_time).per_worker);
     for (std::size_t i = 0; i != parameters.num_workers(); ++i)
     {
-        HPX_TEST_EQ(parameters.get(i, spin_time), 37.0);
+        HPX_TEST_EQ(parameters.get<float>(i, spin_time), 37.0f);
     }
 
     // sizes are given by their names (see get_task_size_name)
     std::size_t const max_size =
         parameters.find("hpx.scheduler_policy.wake_one_max_size");
     HPX_TEST_NEQ(max_size, params::npos);
-    HPX_TEST_EQ(parameters.get(max_size),
-        static_cast<double>(hpx::threads::task_size::medium));
+    HPX_TEST_EQ(parameters.get<std::uint32_t>(max_size),
+        static_cast<std::uint32_t>(hpx::threads::task_size::medium));
 
     std::size_t const spins =
         parameters.find("hpx.scheduler_policy.wake_if_nobody_spins");
     HPX_TEST_NEQ(spins, params::npos);
     HPX_TEST(!parameters.info(spins).per_worker);
-    HPX_TEST_EQ(parameters.get(spins), 0.0);
+    HPX_TEST_EQ(parameters.get<std::uint32_t>(spins), 0u);
 
     std::size_t const pauses =
         parameters.find("hpx.idle_backoff_spin_round_pauses");
     HPX_TEST_NEQ(pauses, params::npos);
-    HPX_TEST_EQ(parameters.get(0, pauses), 64.0);
+    HPX_TEST_EQ(parameters.get<std::uint32_t>(0, pauses), 64u);
 
     // the default tuner keeps the configured values
     std::size_t const interval =
         parameters.find("hpx.idle_backoff_steal_check_interval");
     HPX_TEST_NEQ(interval, params::npos);
-    HPX_TEST_EQ(parameters.get(0, interval),
-        double(HPX_IDLE_BACKOFF_STEAL_CHECK_INTERVAL));
+    HPX_TEST_EQ(parameters.get<float>(0, interval),
+        static_cast<float>(HPX_IDLE_BACKOFF_STEAL_CHECK_INTERVAL));
 
     // values are clamped to the range of the setting
-    parameters.set_all(spins, 5.0);
-    HPX_TEST_EQ(parameters.get(spins), 1.0);
-    parameters.set_all(spins, 0.0);
+    parameters.set_all(spins, 5u);
+    HPX_TEST_EQ(parameters.get<std::uint32_t>(spins), 1u);
+    parameters.set_all(spins, 0u);
 
     HPX_TEST_EQ(parameters.find("hpx.no_such_setting"), params::npos);
 #endif
@@ -117,14 +118,39 @@ int test_custom_tuner()
     auto& parameters = get_parameters();
     std::size_t const interval =
         parameters.find("hpx.idle_backoff_steal_check_interval");
-    HPX_TEST_EQ(parameters.get(0, interval), 3.0);
+    HPX_TEST_EQ(parameters.get<float>(0, interval), 3.0f);
     if (parameters.num_workers() > 1)
     {
-        HPX_TEST_EQ(parameters.get(1, interval),
-            double(HPX_IDLE_BACKOFF_STEAL_CHECK_INTERVAL));
+        HPX_TEST_EQ(parameters.get<float>(1, interval),
+            static_cast<float>(HPX_IDLE_BACKOFF_STEAL_CHECK_INTERVAL));
     }
 #endif
     return hpx::local::finalize();
+}
+
+// a setting keeps its value as its type, clamped to its range, per worker
+void test_storage()
+{
+    using policies::tuning_parameter_type;
+
+    policies::scheduler_tuning_parameters parameters(2);
+    std::size_t const count = parameters.add("count", 0u, 100u, true, 7u);
+    std::size_t const time = parameters.add("time", 0.5f, 100.0f, true, 1.5f);
+
+    // the range gives the type, and is of that type
+    HPX_TEST(parameters.info(count).type == tuning_parameter_type::integer);
+    HPX_TEST(parameters.info(time).type == tuning_parameter_type::real);
+    HPX_TEST_EQ(parameters.info(count).max_value.as<std::uint32_t>(), 100u);
+    HPX_TEST_EQ(parameters.info(time).min_value.as<float>(), 0.5f);
+
+    HPX_TEST_EQ(parameters.get<std::uint32_t>(0, count), 7u);
+    HPX_TEST_EQ(parameters.get<float>(0, time), 1.5f);
+
+    parameters.set(1, count, 1000u);
+    HPX_TEST_EQ(parameters.get<std::uint32_t>(1, count), 100u);
+    parameters.set(1, time, 0.25f);
+    HPX_TEST_EQ(parameters.get<float>(1, time), 0.5f);
+    HPX_TEST_EQ(parameters.get<float>(0, time), 1.5f);
 }
 
 void test_registry()
@@ -146,6 +172,7 @@ void test_registry()
 
 int main(int argc, char* argv[])
 {
+    test_storage();
     test_registry();
 
     {
