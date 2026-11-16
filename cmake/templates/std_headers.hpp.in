@@ -9,7 +9,8 @@
 
 #pragma once
 
-#include <hpx/config/third_party_headers.hpp>
-
 // Standard library headers
 @cxx_standard_headers@
+
+// Third-party and macro-providing headers
+#include <hpx/config/third_party_headers.hpp>

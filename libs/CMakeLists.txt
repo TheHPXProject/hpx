@@ -485,35 +485,17 @@ foreach(lib ${HPX_LIBS})
 endforeach()
 
 if(HPX_WITH_CXX_MODULES)
-  # Read guards from standard_headers.inc
-  file(STRINGS "${HPX_SOURCE_DIR}/cmake/standard_headers.inc" _raw_lines)
-  set(_std_lines)
-  set(_accum)
-  foreach(_line ${_raw_lines})
-    if(NOT _line MATCHES "^[ \t]*//")
-      if(_accum)
-        string(APPEND _accum " ${_line}")
-      else()
-        set(_accum "${_line}")
-      endif()
-      if(_accum MATCHES "\\)")
-        list(APPEND _std_lines "${_accum}")
-        set(_accum)
-      endif()
-    endif()
-  endforeach()
+  include(HPX_CollectStdHeaders)
 
-  foreach(_line ${_std_lines})
-    if(_line MATCHES
-       "HPX_STD_HEADER\\([ \t]*\"([^\"]+)\",[ \t]*\"([^\"]*)\",[ \t]*([01])\\)"
+  # Read names, guards, and macro-providing headers from standard_headers.inc
+  hpx_get_standard_headers(_all_std_headers _std_header_guard_ _macro_headers)
+
+  # Generate list of macro-providing headers for third_party_headers.hpp
+  set(cxx_macro_standard_headers)
+  foreach(_macro_hdr ${_macro_headers})
+    set(cxx_macro_standard_headers
+        "${cxx_macro_standard_headers}#include <${_macro_hdr}>\n"
     )
-      set(_hdr "${CMAKE_MATCH_1}")
-      set(_guard "${CMAKE_MATCH_2}")
-      if(_guard)
-        string(REGEX REPLACE "[^a-zA-Z0-9_]" "_" _var_suffix "${_hdr}")
-        set(_std_header_guard_${_var_suffix} "${_guard}")
-      endif()
-    endif()
   endforeach()
 
   # generate header file that #includes all required standard headers. Ensure

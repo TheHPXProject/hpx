@@ -65,9 +65,9 @@ macro(hpx_check_cxx_modules_support)
     endif()
 
     if(HPX_WITH_CXX_MODULE_STD)
-      if(CMAKE_VERSION VERSION_LESS "4.5")
+      if(CMAKE_VERSION VERSION_LESS "3.30")
         hpx_error(
-          "CMake 4.5+ is required for 'import std;' support (HPX_WITH_CXX_MODULE_STD). Current version: ${CMAKE_VERSION}"
+          "CMake 3.30+ is required for 'import std;' support (HPX_WITH_CXX_MODULE_STD). Current version: ${CMAKE_VERSION}"
         )
       endif()
       if(HPX_CXX_STANDARD LESS 23)

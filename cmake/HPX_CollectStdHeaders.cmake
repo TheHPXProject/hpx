@@ -6,33 +6,67 @@
 
 include(HPX_Message)
 
+# Function to parse standard_headers.inc and extract names, guards, and macro
+# headers
+function(hpx_get_standard_headers headers_var guards_prefix macro_headers_var)
+  file(STRINGS "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/standard_headers.inc"
+       _raw_lines
+  )
+  set(_std_lines)
+  set(_accum)
+  foreach(_line ${_raw_lines})
+    if(NOT _line MATCHES "^[ \t]*//")
+      if(_accum)
+        string(APPEND _accum " ${_line}")
+      else()
+        set(_accum "${_line}")
+      endif()
+      if(_accum MATCHES "\\)")
+        list(APPEND _std_lines "${_accum}")
+        set(_accum)
+      endif()
+    endif()
+  endforeach()
+
+  set(_headers)
+  set(_macro_headers)
+  foreach(_line ${_std_lines})
+    if(_line MATCHES
+       "HPX_STD_HEADER\\([ \t]*\"([^\"]+)\",[ \t]*\"([^\"]*)\",[ \t]*([01])\\)"
+    )
+      set(_hdr "${CMAKE_MATCH_1}")
+      set(_guard "${CMAKE_MATCH_2}")
+      set(_is_macro "${CMAKE_MATCH_3}")
+
+      list(APPEND _headers "<${_hdr}>")
+      if(_is_macro EQUAL 1)
+        list(APPEND _macro_headers "${_hdr}")
+      endif()
+      if(_guard AND guards_prefix)
+        string(REGEX REPLACE "[^a-zA-Z0-9_]" "_" _var_suffix "${_hdr}")
+        set(${guards_prefix}${_var_suffix}
+            "${_guard}"
+            PARENT_SCOPE
+        )
+      endif()
+    endif()
+  endforeach()
+
+  set(${headers_var}
+      "${_headers}"
+      PARENT_SCOPE
+  )
+  if(macro_headers_var)
+    set(${macro_headers_var}
+        "${_macro_headers}"
+        PARENT_SCOPE
+    )
+  endif()
+endfunction()
+
 # List of known standard library headers (read from central definition in
 # standard_headers.inc)
-file(STRINGS "${CMAKE_CURRENT_LIST_DIR}/standard_headers.inc" _raw_lines)
-set(_std_lines)
-set(_accum)
-foreach(_line ${_raw_lines})
-  if(NOT _line MATCHES "^[ \t]*//")
-    if(_accum)
-      string(APPEND _accum " ${_line}")
-    else()
-      set(_accum "${_line}")
-    endif()
-    if(_accum MATCHES "\\)")
-      list(APPEND _std_lines "${_accum}")
-      set(_accum)
-    endif()
-  endif()
-endforeach()
-
-set(STANDARD_LIBRARY_HEADERS)
-foreach(_line ${_std_lines})
-  if(_line MATCHES
-     "HPX_STD_HEADER\\([ \t]*\"([^\"]+)\",[ \t]*\"([^\"]*)\",[ \t]*([01])\\)"
-  )
-    list(APPEND STANDARD_LIBRARY_HEADERS "<${CMAKE_MATCH_1}>")
-  endif()
-endforeach()
+hpx_get_standard_headers(STANDARD_LIBRARY_HEADERS "" "")
 
 # Function to extract #includes from a file recursively
 function(hpx_extract_includes_from_file module)

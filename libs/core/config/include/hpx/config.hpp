@@ -32,11 +32,6 @@
 #include <hpx/config/version.hpp>
 #include <hpx/config/weak_symbol.hpp>
 
-#if !defined(HPX_HAVE_TEXTUAL_STD_INCLUDES) &&                                 \
-    (!defined(HPX_COMPILE_BMI) || !defined(HPX_HAVE_CXX_MODULE_STD))
-#define HPX_HAVE_TEXTUAL_STD_INCLUDES
-#endif
-
 #include <hpx/modules/preprocessor.hpp>
 
 #include <cstddef>
