@@ -132,6 +132,19 @@ namespace hpx {
 #else
         strm << ", unknown MPI version";
 #endif
+        // add whether the MPI library can send CUDA device memory, and whether
+        // the parcelports do so (see HPX_WITH_PARCELPORT_CUDA_SUPPORT)
+#if defined(HPX_VERSION_MPI_CUDA_AWARE)
+#if HPX_VERSION_MPI_CUDA_AWARE != 0
+#if defined(HPX_HAVE_PARCELPORT_CUDA_SUPPORT)
+        strm << ", CUDA-aware";
+#else
+        strm << ", CUDA-aware (not used by the parcelport)";
+#endif
+#else
+        strm << ", not CUDA-aware";
+#endif
+#endif
         return strm.str();
     }
 #endif

@@ -51,3 +51,12 @@ add_hpx_module(
 target_include_directories(
   hpx_version PRIVATE $<BUILD_INTERFACE:${HPX_BINARY_DIR}>
 )
+
+# report in the MPI version whether the MPI library is CUDA-aware (checked in
+# hpx_check_mpi_cuda_aware for builds with CUDA)
+if(DEFINED HPX_MPI_CUDA_AWARE)
+  target_compile_definitions(
+    hpx_version
+    PRIVATE HPX_VERSION_MPI_CUDA_AWARE=$<BOOL:${HPX_MPI_CUDA_AWARE}>
+  )
+endif()
