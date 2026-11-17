@@ -873,7 +873,9 @@ distribution policy or a client is never passed to ``f``. With an
 action on that target (see :ref:`action_type_definition`). The action gets its
 size as other actions do, ``task_size_of`` is used for local calls only.
 ``hpx::post<&f>`` with one of these, and either of them with a client, does not
-compile.
+compile. After a launch policy, an ``hpx::id_type`` or a distribution policy
+also makes ``hpx::async<&f>`` call ``f`` as an action. After an executor, every
+argument is passed to ``f``, a remote target too.
 
 .. _parallel_scheduler:
 

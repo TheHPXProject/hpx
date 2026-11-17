@@ -97,11 +97,17 @@ namespace hpx {
 
     /// \brief Runs the function \a F points to asynchronously with the given
     ///        launch policy or executor, as hpx::async(where, F, ts...) does.
+    ///
+    /// A remote target after an executor is passed to F. After a launch
+    /// policy it is not, as without a policy, see
+    /// hpx::async<&func>(policy, target, ...).
     // clang-format off
     HPX_CXX_CORE_EXPORT template <auto F, typename Where, typename... Ts>
         requires(detail::is_function_pointer_v<F> &&
             detail::is_local_scheduling_v<Where> &&
-            detail::is_local_call_v<Ts...> &&
+            // a target after a policy is left to the remote overloads
+            (!traits::is_launch_policy_v<std::decay_t<Where>> ||
+                detail::is_local_call_v<Ts...>) &&
             traits::detail::is_deferred_invocable_v<decltype(F), Ts...>)
     HPX_FORCEINLINE decltype(auto) async(Where&& where, Ts&&... ts)
     // clang-format on
@@ -127,13 +133,13 @@ namespace hpx {
     }
 
     /// \brief Runs the function \a F points to on the given executor without
-    ///        returning a future, as hpx::post(exec, F, ts...) does.
+    ///        returning a future, as hpx::post(exec, F, ts...) does. A remote
+    ///        target after the executor is passed to F.
     // clang-format off
     HPX_CXX_CORE_EXPORT template <auto F, typename Executor, typename... Ts>
         requires(detail::is_function_pointer_v<F> &&
             (traits::is_one_way_executor_v<std::decay_t<Executor>> ||
                 traits::is_two_way_executor_v<std::decay_t<Executor>>) &&
-            detail::is_local_call_v<Ts...> &&
             traits::detail::is_deferred_invocable_v<decltype(F), Ts...>)
     HPX_FORCEINLINE decltype(auto) post(Executor&& exec, Ts&&... ts)
     // clang-format on

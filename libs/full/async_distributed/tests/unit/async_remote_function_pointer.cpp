@@ -10,11 +10,13 @@
 #include <hpx/config.hpp>
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
 
+#include <hpx/execution.hpp>
 #include <hpx/hpx_init.hpp>
 #include <hpx/include/actions.hpp>
 #include <hpx/include/async.hpp>
 #include <hpx/include/components.hpp>
 #include <hpx/include/runtime.hpp>
+#include <hpx/latch.hpp>
 #include <hpx/modules/testing.hpp>
 
 #include <atomic>
@@ -152,6 +154,22 @@ int with_client(counter_client const&)
     return 0;
 }
 
+// After an executor an hpx::id_type is an argument like any other, there is
+// no remote hpx::async<&f>(exec, target, ...). After a launch policy it is the
+// target of the remote hpx::async<&f>(policy, target, ...).
+bool is_here(hpx::id_type const& id)
+{
+    return id == hpx::find_here();
+}
+
+hpx::id_type posted_with;
+
+void post_with(hpx::id_type const& id, hpx::latch* l)
+{
+    posted_with = id;
+    l->count_down(1);
+}
+
 template <auto F, typename... Ts>
 concept can_post_function_pointer =
     requires(Ts&&... ts) { hpx::post<F>(HPX_FORWARD(Ts, ts)...); };
@@ -169,11 +187,33 @@ static_assert(can_async_function_pointer<&with_target, hpx::id_type const&,
     hpx::id_type const&, int>);
 static_assert(can_async_function_pointer<&twice, int>);
 static_assert(can_post_function_pointer<&twice, int>);
+static_assert(can_async_function_pointer<&is_here,
+    hpx::execution::parallel_executor&, hpx::id_type const&>);
+static_assert(can_post_function_pointer<&post_with,
+    hpx::execution::parallel_executor&, hpx::id_type const&, hpx::latch*>);
 
 ///////////////////////////////////////////////////////////////////////////////
 void test_async_function_pointer(hpx::id_type const& target)
 {
     HPX_TEST_EQ(hpx::async<&with_target>(target, target, 5).get(), 5);
+
+    // after an executor, target is passed to the function, which runs here:
+    // is_here(target) is false here for a remote target
+    {
+        hpx::execution::parallel_executor exec;
+        HPX_TEST_EQ(hpx::async<&is_here>(exec, target).get(),
+            target == hpx::find_here());
+
+        hpx::latch l(2);
+        hpx::post<&post_with>(exec, target, &l);
+        l.arrive_and_wait();
+        HPX_TEST_EQ(posted_with, target);
+        posted_with = hpx::invalid_id;
+    }
+
+    // first or after a launch policy, target is where the function runs
+    HPX_TEST(hpx::async<&is_here>(target, target).get());
+    HPX_TEST(hpx::async<&is_here>(hpx::launch::async, target, target).get());
 
     {
         hpx::future<hpx::id_type> f = hpx::async<&where>(target, 42);
