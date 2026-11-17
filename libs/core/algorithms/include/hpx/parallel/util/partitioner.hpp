@@ -554,8 +554,7 @@ namespace hpx::parallel::util::detail {
                     // chunks (e.g. hpx::future<std::vector<Result>>), the
                     // reduction function expects the results themselves
                     if constexpr (hpx::traits::is_future_v<decayed_items> &&
-                        !std::is_void_v<
-                            hpx::traits::future_traits_t<decayed_items>>)
+                        !hpx::traits::is_future_void_v<decayed_items>)
                     {
                         return HPX_INVOKE(f, items.get());
                     }
