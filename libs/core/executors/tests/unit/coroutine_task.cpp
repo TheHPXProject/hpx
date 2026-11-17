@@ -128,6 +128,11 @@ struct test_counting_allocator
     using value_type = T;
     test_alloc_state* state_;
 
+    test_counting_allocator() noexcept
+      : state_(nullptr)
+    {
+    }
+
     explicit test_counting_allocator(test_alloc_state* s) noexcept
       : state_(s)
     {
@@ -157,7 +162,12 @@ struct test_counting_allocator
     }
 };
 
-ex::task<int> coroutine_with_custom_alloc(
+struct custom_alloc_env
+{
+    using allocator_type = test_counting_allocator<std::byte>;
+};
+
+ex::task<int, custom_alloc_env> coroutine_with_custom_alloc(
     std::allocator_arg_t, test_counting_allocator<std::byte>, int val)
 {
     co_return val * 3;
@@ -165,16 +175,11 @@ ex::task<int> coroutine_with_custom_alloc(
 
 struct member_coro_class
 {
-    ex::task<int> member_coroutine_with_alloc(
+    ex::task<int, custom_alloc_env> member_coroutine_with_alloc(
         std::allocator_arg_t, test_counting_allocator<std::byte>, int val)
     {
         co_return val * 4;
     }
-};
-
-struct custom_alloc_env
-{
-    using allocator_type = test_counting_allocator<std::byte>;
 };
 
 ex::task<int, custom_alloc_env> coroutine_checking_allocator(
