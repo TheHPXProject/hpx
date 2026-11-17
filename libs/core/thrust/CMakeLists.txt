@@ -17,6 +17,8 @@ if(HPX_WITH_HIP)
 endif()
 
 set(thrust_headers
+    hpx/thrust/allocator.hpp
+    hpx/thrust/memory.hpp
     hpx/thrust/policy.hpp
     hpx/thrust/thrust_headers.hpp
     hpx/thrust/algorithms.hpp
@@ -32,9 +34,10 @@ set(thrust_headers
 set(thrust_compat_headers)
 # cmake-format: on
 
-# moves thrust::device_vector data through the archives (pinned staging buffers,
+# pools of device and pinned host memory (hpx::thrust::pooled_allocator), moves
+# thrust::device_vector data through the archives (pinned staging buffers,
 # asynchronous copies)
-set(thrust_sources detail/device_staging.cpp)
+set(thrust_sources memory_pool.cpp detail/device_staging.cpp)
 
 include(HPX_AddModule)
 add_hpx_module(
