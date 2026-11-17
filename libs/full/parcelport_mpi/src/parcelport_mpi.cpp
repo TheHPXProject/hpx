@@ -27,9 +27,10 @@
 #include <hpx/parcelport_mpi/receiver.hpp>
 #include <hpx/parcelport_mpi/sender.hpp>
 
-// set by CMake if the MPI library is CUDA-aware (Open MPI's mpi-ext.h)
-#if defined(HPX_PARCELPORT_MPI_HAVE_CUDA_QUERY)
-#include <mpi-ext.h>    // MPIX_Query_cuda_support
+// set by CMake if the MPI library is CUDA-aware; MPIX_Query_cuda_support is
+// declared in Open MPI's mpi-ext.h, in MPICH's mpi.h
+#if defined(HPX_PARCELPORT_MPI_HAVE_CUDA_QUERY) && __has_include(<mpi-ext.h>)
+#include <mpi-ext.h>
 #endif
 
 #include <asio/io_context.hpp>
