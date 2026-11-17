@@ -210,6 +210,51 @@ namespace hpx::parcelset {
     }
 
     ///////////////////////////////////////////////////////////////////////////
+    namespace detail {
+
+        // Parcels are received on the threads of the parcelport, which may
+        // still run after the worker threads have stopped. No new threads are
+        // created then, so the remaining parcels can't be handled anymore.
+        // Only a shutdown is expected here, anything else is a real error.
+        HPX_CXX_EXPORT inline void rethrow_unless_stopping()
+        {
+            if (!hpx::is_stopped_or_shutting_down())
+                throw;
+        }
+
+        HPX_CXX_EXPORT inline void schedule_received_parcel(
+            parcelset::parcel&& p, std::size_t num_thread)
+        {
+            if (p.schedule_action(num_thread))
+            {
+                // route this parcel as the object was migrated
+                agas::route(HPX_MOVE(p),
+                    &parcelset::detail::parcel_route_handler,
+                    threads::thread_priority::normal);
+            }
+        }
+
+        // Schedules the parcel once its arguments are complete: right away,
+        // or after the steps its de-serialization deferred until the
+        // zero-copy chunk data had arrived (e.g. copies to device memory)
+        // have finished, from the thread that finished the last of them.
+        HPX_CXX_EXPORT inline void schedule_received_parcel_when_complete(
+            parcelset::parcel&& p, std::size_t num_thread)
+        {
+            parcelset::parcel const handle = p;
+            handle.on_receive_complete([p = HPX_MOVE(p), num_thread]() mutable {
+                try
+                {
+                    schedule_received_parcel(HPX_MOVE(p), num_thread);
+                }
+                catch (hpx::exception const&)
+                {
+                    rethrow_unless_stopping();
+                }
+            });
+        }
+    }    // namespace detail
+
     HPX_CXX_EXPORT inline void handle_received_parcels(
         std::vector<parcelset::parcel>&& deferred_parcels,
         std::size_t num_thread = -1)
@@ -227,14 +272,8 @@ namespace hpx::parcelset {
                     deferred_parcels[i].parcel_id());
 
                 auto f = [num_thread](parcelset::parcel&& p) {
-                    if (p.schedule_action(num_thread))
-                    {
-                        // route this parcel as the object was
-                        // migrated
-                        agas::route(HPX_MOVE(p),
-                            &parcelset::detail::parcel_route_handler,
-                            threads::thread_priority::normal);
-                    }
+                    detail::schedule_received_parcel_when_complete(
+                        HPX_MOVE(p), num_thread);
                 };
 
                 // schedule all but the first parcel on a new thread.
@@ -254,23 +293,12 @@ namespace hpx::parcelset {
             LPT_(debug).format("handle_received_parcels: received: {}",
                 deferred_parcels[0].parcel_id());
 
-            if (deferred_parcels[0].schedule_action(num_thread))
-            {
-                // route this parcel as the object was migrated
-                agas::route(HPX_MOVE(deferred_parcels[0]),
-                    &parcelset::detail::parcel_route_handler,
-                    threads::thread_priority::normal);
-            }
+            detail::schedule_received_parcel_when_complete(
+                HPX_MOVE(deferred_parcels[0]), num_thread);
         }
         catch (hpx::exception const&)
         {
-            // Parcels are received on the threads of the parcelport, which
-            // may still run after the worker threads have stopped. No new
-            // threads are created then, so the remaining parcels can't be
-            // handled anymore. Only a shutdown is expected here, anything else
-            // is a real error.
-            if (!hpx::is_stopped_or_shutting_down())
-                throw;
+            detail::rethrow_unless_stopping();
         }
     }
 

@@ -236,6 +236,15 @@ namespace hpx::parcelset {
                             split_gids.set_split_gids(HPX_MOVE(split_gids_map));
                         }
 
+                        if (auto const& keep_alive = ps[i].keep_alive();
+                            !keep_alive.empty())
+                        {
+                            archive
+                                .get_extra_data<serialization::detail::
+                                        preprocess_keep_alive>()
+                                .add_buffers(keep_alive);
+                        }
+
                         archive << ps[i];
 
 #if defined(HPX_HAVE_PARCELPORT_COUNTERS) &&                                   \
