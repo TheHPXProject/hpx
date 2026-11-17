@@ -27,6 +27,7 @@
 #include <hpx/parcelset/parcel.hpp>
 #include <hpx/parcelset/parcelhandler.hpp>
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -370,6 +371,18 @@ namespace hpx::parcelset::detail {
         split_gids_ = HPX_MOVE(split_gids);
     }
 
+    parcel::keep_alive_type const& parcel::keep_alive() const
+    {
+        return keep_alive_;
+    }
+
+    void parcel::set_keep_alive(keep_alive_type&& keep_alive)
+    {
+        // a later preprocessing round starts from these buffers and hands
+        // back all of them
+        keep_alive_ = HPX_MOVE(keep_alive);
+    }
+
     std::size_t parcel::num_chunks() const
     {
         return num_chunks_;
@@ -467,6 +480,7 @@ namespace hpx::parcelset::detail {
         {
             // If the object was migrated, just load the action and return.
             action_->load(ar);
+            take_post_receive_actions(ar);
             return true;
         }
 
@@ -475,6 +489,7 @@ namespace hpx::parcelset::detail {
                 serialization::detail::allow_zero_copy_receive>() != nullptr)
         {
             action_->load(ar);
+            take_post_receive_actions(ar);
             return false;
         }
 
@@ -489,6 +504,9 @@ namespace hpx::parcelset::detail {
     {
         // make sure this parcel destination matches the proper locality
         HPX_ASSERT(destination_locality() == data_.addr_.locality_);
+
+        // the arguments must be complete (see on_receive_complete)
+        HPX_ASSERT(post_receive_actions_.empty());
 
         std::pair<naming::address_type, naming::component_type> const p =
             determine_lva();
@@ -521,6 +539,49 @@ namespace hpx::parcelset::detail {
         action_->schedule_thread(
             HPX_MOVE(data_.dest_), p.first, p.second, num_thread);
         return false;
+    }
+
+    void parcel::take_post_receive_actions(serialization::input_archive& ar)
+    {
+        auto* actions = ar.try_get_extra_data<
+            serialization::detail::post_receive_actions>();
+        if (actions && !actions->empty())
+        {
+            HPX_ASSERT(post_receive_actions_.empty());
+            post_receive_actions_ = actions->move_actions();
+        }
+    }
+
+    void parcel::on_receive_complete(hpx::move_only_function<void()> f)
+    {
+        auto actions = HPX_MOVE(post_receive_actions_);
+        post_receive_actions_.clear();
+        if (actions.empty())
+        {
+            f();
+            return;
+        }
+
+        // the last step to finish calls f
+        struct pending_steps
+        {
+            std::atomic<std::size_t> count;
+            hpx::move_only_function<void()> f;
+        };
+
+        auto pending = std::make_shared<pending_steps>();
+        pending->count = actions.size();
+        pending->f = HPX_MOVE(f);
+
+        for (auto& action : actions)
+        {
+            action([pending]() {
+                if (--pending->count == 0)
+                {
+                    pending->f();
+                }
+            });
+        }
     }
 
     void parcel::load_data(serialization::input_archive& ar)

@@ -261,6 +261,14 @@ namespace hpx::serialization {
 #endif
         // NOLINTEND(bugprone-multi-level-implicit-pointer-conversion)
 
+        // data below this size was copied into the archive, larger data may
+        // come in a zero-copy chunk
+        [[nodiscard]] std::size_t get_zero_copy_serialization_threshold()
+            const noexcept
+        {
+            return buffer_->get_zero_copy_serialization_threshold();
+        }
+
         [[nodiscard]] constexpr std::size_t bytes_read() const noexcept
         {
             return current_pos();

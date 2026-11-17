@@ -275,7 +275,8 @@ namespace hpx::parcelset {
             // needs to be kept alive as long as there are futures not ready
             // or GIDs to be split. This is necessary to preserve the identity
             // of the 'this' pointer.
-            detail::parcel_await_apply(HPX_MOVE(p), HPX_MOVE(f), archive_flags_,
+            detail::parcel_await_apply(
+                HPX_MOVE(p), HPX_MOVE(f), archive_flags_,
                 [this, dest](parcel&& p, write_handler_type&& f) {
                     if (connection_handler_traits<
                             ConnectionHandler>::send_immediate_parcels::value &&
@@ -289,7 +290,8 @@ namespace hpx::parcelset {
                         enqueue_parcel(dest, HPX_MOVE(p), HPX_MOVE(f));
                         get_connection_and_send_parcels(dest);
                     }
-                });
+                },
+                this->get_zero_copy_serialization_threshold());
         }
 
         void put_parcels(locality const& dest, std::vector<parcel> parcels,
@@ -333,8 +335,8 @@ namespace hpx::parcelset {
             // needs to be kept alive as long as there are futures not ready
             // or GIDs to be split. This is necessary to preserve the identity
             // of the 'this' pointer.
-            detail::parcels_await_apply(HPX_MOVE(parcels), HPX_MOVE(handlers),
-                archive_flags_,
+            detail::parcels_await_apply(
+                HPX_MOVE(parcels), HPX_MOVE(handlers), archive_flags_,
                 [this, dest](std::vector<parcel>&& parcels,
                     std::vector<write_handler_type>&& handlers) {
                     if (connection_handler_traits<
@@ -350,7 +352,8 @@ namespace hpx::parcelset {
                             dest, HPX_MOVE(parcels), HPX_MOVE(handlers));
                         get_connection_and_send_parcels(dest);
                     }
-                });
+                },
+                this->get_zero_copy_serialization_threshold());
         }
 
         void send_early_parcel(locality const& dest, parcel p) override

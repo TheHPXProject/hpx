@@ -14,6 +14,7 @@
 
 #if defined(HPX_HAVE_NETWORKING)
 #include <hpx/modules/coroutines.hpp>
+#include <hpx/modules/functional.hpp>
 #include <hpx/modules/serialization.hpp>
 #include <hpx/modules/threading_base.hpp>
 
@@ -37,6 +38,7 @@ namespace hpx::parcelset::detail {
     {
         using split_gids_type =
             std::map<naming::gid_type const*, naming::gid_type>;
+        using keep_alive_type = serialization::detail::keep_alive_map;
 
         parcel_base() = default;
 
@@ -87,6 +89,16 @@ namespace hpx::parcelset::detail {
         virtual split_gids_type move_split_gids() const = 0;
         virtual void set_split_gids(split_gids_type&& split_gids) = 0;
 
+        // buffers referenced by zero-copy chunks of this parcel that the
+        // parcel's arguments don't own; kept until the parcel is destroyed
+        virtual keep_alive_type const& keep_alive() const = 0;
+        virtual void set_keep_alive(keep_alive_type&& keep_alive) = 0;
+
+        // Calls f once the parcel is complete after a zero-copy receive:
+        // right away, or when the steps that load() deferred until the
+        // chunk data had arrived have finished (see post_receive_actions).
+        virtual void on_receive_complete(hpx::move_only_function<void()> f) = 0;
+
         virtual std::size_t num_chunks() const = 0;
         virtual std::size_t& num_chunks() = 0;
 
@@ -116,6 +128,7 @@ namespace hpx::parcelset {
     HPX_CXX_EXPORT class HPX_EXPORT parcel
     {
         using split_gids_type = detail::parcel_base::split_gids_type;
+        using keep_alive_type = detail::parcel_base::keep_alive_type;
 
         bool is_valid() const;
 
@@ -172,6 +185,11 @@ namespace hpx::parcelset {
 
         split_gids_type move_split_gids() const;
         void set_split_gids(split_gids_type&& split_gids) const;
+
+        keep_alive_type const& keep_alive() const;
+        void set_keep_alive(keep_alive_type&& keep_alive) const;
+
+        void on_receive_complete(hpx::move_only_function<void()> f) const;
 
         [[nodiscard]] std::size_t num_chunks() const;
         std::size_t& num_chunks();
