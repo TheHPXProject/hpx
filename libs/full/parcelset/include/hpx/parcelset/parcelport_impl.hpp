@@ -109,6 +109,27 @@ namespace hpx::parcelset {
                 HPX_PARCEL_MAX_CONNECTIONS_PER_LOCALITY);
         }
 
+        // A parcelport that can send and receive device memory directly
+        // (e.g. MPI built with CUDA support) says so by providing
+        // connection_handler_traits<>::send_device_memory(ini).
+        template <typename Traits>
+        using send_device_memory_t = decltype(Traits::send_device_memory(
+            std::declval<util::runtime_configuration const&>()));
+
+        static bool send_device_memory(util::runtime_configuration const& ini)
+        {
+            using traits = connection_handler_traits<ConnectionHandler>;
+            if constexpr (hpx::util::is_detected_v<send_device_memory_t,
+                              traits>)
+            {
+                return traits::send_device_memory(ini);
+            }
+            else
+            {
+                return false;
+            }
+        }
+
         static std::size_t zero_copy_serialization_threshold(
             util::runtime_configuration const& ini)
         {
@@ -187,6 +208,15 @@ namespace hpx::parcelset {
             {
                 archive_flags_ = archive_flags_ |
                     serialization::archive_flags::disable_receive_data_chunking;
+            }
+
+            // zero-copy chunks may refer to device memory if the parcelport
+            // moves device memory itself
+            if (this->allow_zero_copy_optimizations() &&
+                send_device_memory(ini) && this->use_device_memory())
+            {
+                archive_flags_ = archive_flags_ |
+                    serialization::archive_flags::enable_device_chunks;
             }
         }
 
