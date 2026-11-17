@@ -7,7 +7,8 @@
 // #8129: hpx::ranges::contains (without an execution policy) and the two-range
 // hpx::ranges::transform (without an execution policy) did not compile when
 // the end of a range was given as a sentinel of a different type than its
-// iterator.
+// iterator. The two-range transform also read a single-pass second range to
+// its end before transforming it.
 
 #include <hpx/algorithm.hpp>
 #include <hpx/execution.hpp>
@@ -18,6 +19,7 @@
 #include <cstddef>
 #include <functional>
 #include <iterator>
+#include <sstream>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -131,9 +133,35 @@ void test_policy(ExPolicy policy, std::vector<int> c, std::vector<int> other)
     });
 }
 
+// a single-pass second range must not be read ahead to find its end
+template <typename Sent>
+void test_single_pass(std::vector<int> c)
+{
+    std::istringstream is("10 20 30");
+    std::vector<int> dest(c.size(), -1);
+    auto const r = hpx::ranges::transform(c.begin(), c.end(),
+        std::istream_iterator<int>(is), Sent{}, dest.begin(), std::plus<>{});
+
+    std::vector<int> const b = {10, 20, 30};
+    std::vector<int> expected(c.size(), -1);
+    auto const exp =
+        std::ranges::transform(c, b, expected.begin(), std::plus<>{});
+
+    HPX_TEST(r.in1 == c.begin() + (exp.in1 - c.begin()));
+    HPX_TEST(r.out == dest.begin() + (exp.out - expected.begin()));
+    HPX_TEST(dest == expected);
+}
+
 int hpx_main()
 {
     using namespace hpx::execution;
+
+    for (auto const& c :
+        std::vector<std::vector<int>>{{}, {1, 2}, {1, 2, 3}, {1, 2, 3, 4}})
+    {
+        test_single_pass<std::istream_iterator<int>>(c);
+        test_single_pass<std::default_sentinel_t>(c);
+    }
 
     std::vector<int> large(10007);
     for (std::size_t i = 0; i != large.size(); ++i)
