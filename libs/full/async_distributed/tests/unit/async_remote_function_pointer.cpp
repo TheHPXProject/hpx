@@ -134,9 +134,47 @@ static_assert(
 static_assert(!can_async_function_pointer<&counter_server::get_ref, hpx::launch,
     hpx::id_type>);
 
+// The local hpx::async<&f>(...) and hpx::post<&f>(...) don't take a call whose
+// first argument is a remote target, even if f could be called with the
+// arguments: such a call stays remote or doesn't compile.
+int twice(int i)
+{
+    return 2 * i;
+}
+
+int with_target(hpx::id_type const&, int i)
+{
+    return i;
+}
+
+int with_client(counter_client const&)
+{
+    return 0;
+}
+
+template <auto F, typename... Ts>
+concept can_post_function_pointer =
+    requires(Ts&&... ts) { hpx::post<F>(HPX_FORWARD(Ts, ts)...); };
+
+static_assert(hpx::traits::is_remote_target_v<hpx::id_type const&>);
+static_assert(
+    hpx::traits::is_remote_target_v<hpx::default_distribution_policy>);
+static_assert(hpx::traits::is_remote_target_v<counter_client>);
+static_assert(!hpx::detail::is_local_call_v<hpx::id_type const&, int>);
+static_assert(!hpx::detail::is_local_call_v<hpx::default_distribution_policy>);
+static_assert(
+    !can_post_function_pointer<&with_target, hpx::id_type const&, int>);
+static_assert(!can_async_function_pointer<&with_client, counter_client>);
+static_assert(can_async_function_pointer<&with_target, hpx::id_type const&,
+    hpx::id_type const&, int>);
+static_assert(can_async_function_pointer<&twice, int>);
+static_assert(can_post_function_pointer<&twice, int>);
+
 ///////////////////////////////////////////////////////////////////////////////
 void test_async_function_pointer(hpx::id_type const& target)
 {
+    HPX_TEST_EQ(hpx::async<&with_target>(target, target, 5).get(), 5);
+
     {
         hpx::future<hpx::id_type> f = hpx::async<&where>(target, 42);
         HPX_TEST_EQ(f.get(), target);
@@ -215,6 +253,9 @@ int hpx_main()
 
     // nothing() ran here only for the local target
     HPX_TEST_EQ(called_nothing.load(), 1);
+
+    // a call without a target still works next to the remote overloads
+    HPX_TEST_EQ(hpx::async<&twice>(21).get(), 42);
 
     return hpx::finalize();
 }
