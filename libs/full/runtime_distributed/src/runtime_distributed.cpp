@@ -1369,6 +1369,13 @@ namespace hpx {
         notifier.add_on_start_thread_callback(
             hpx::bind(&runtime_distributed::init_tss_helper, this, prefix, type,
                 _1, _2, _3, _4, false));
+#if defined(HPX_HAVE_NETWORKING)
+        // lets the parcelports prepare each thread, which may run their
+        // background work
+        notifier.add_on_start_thread_callback(
+            hpx::bind(&parcelset::parcelhandler::on_start_thread,
+                &parcel_handler_, _1, _2, _3, _4));
+#endif
         notifier.add_on_stop_thread_callback(hpx::bind(
             &runtime_distributed::deinit_tss_helper, this, prefix, _1));
         notifier.set_on_error_callback(hpx::bind(
