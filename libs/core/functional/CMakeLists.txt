@@ -60,6 +60,7 @@ set(functional_headers
     hpx/functional/traits/is_action.hpp
     hpx/functional/traits/is_bind_expression.hpp
     hpx/functional/traits/is_placeholder.hpp
+    hpx/functional/traits/is_remote_target.hpp
 )
 set(functional_macro_headers hpx/functional/macros.hpp)
 
