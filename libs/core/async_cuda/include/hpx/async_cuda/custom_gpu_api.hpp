@@ -33,6 +33,7 @@
 #define cudaDeviceProp hipDeviceProp_t
 #define cudaDeviceSynchronize hipDeviceSynchronize
 #define cudaError_t hipError_t
+#define cudaErrorMemoryAllocation hipErrorOutOfMemory
 #define cudaErrorNotReady hipErrorNotReady
 #define cudaEvent_t hipEvent_t
 #define cudaEventCreateWithFlags hipEventCreateWithFlags
@@ -41,6 +42,7 @@
 #define cudaEventQuery hipEventQuery
 #define cudaEventRecord hipEventRecord
 #define cudaFree hipFree
+#define cudaFreeHost hipHostFree
 #define cudaGetDevice hipGetDevice
 #define cudaGetDeviceCount hipGetDeviceCount
 #define cudaGetDeviceProperties hipGetDeviceProperties
@@ -58,7 +60,10 @@
 #define cudaMemcpyHostToDevice hipMemcpyHostToDevice
 #define cudaMemcpyKind hipMemcpyKind
 #define cudaMemGetInfo hipMemGetInfo
+#define cudaMemoryTypeHost hipMemoryTypeHost
 #define cudaMemsetAsync hipMemsetAsync
+#define cudaPointerAttributes hipPointerAttribute_t
+#define cudaPointerGetAttributes hipPointerGetAttributes
 #define cudaSetDevice hipSetDevice
 #define cudaStream_t hipStream_t
 #define cudaStreamAddCallback hipStreamAddCallback
@@ -66,6 +71,8 @@
 #define cudaStreamCreateWithFlags hipStreamCreateWithFlags
 #define cudaStreamDestroy hipStreamDestroy
 #define cudaStreamNonBlocking hipStreamNonBlocking
+#define cudaStreamPerThread hipStreamPerThread
+#define cudaStreamQuery hipStreamQuery
 #define cudaStreamSynchronize hipStreamSynchronize
 #define cudaSuccess hipSuccess
 
