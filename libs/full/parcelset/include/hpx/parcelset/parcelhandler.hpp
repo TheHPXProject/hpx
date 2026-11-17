@@ -82,6 +82,12 @@ namespace hpx::parcelset {
 
         void initialize();
 
+        /// Called on each OS thread the runtime starts, before it runs any
+        /// work; forwards to all parcelports (parcelport::on_start_thread).
+        void on_start_thread(std::size_t local_thread_num,
+            std::size_t global_thread_num, char const* pool_name,
+            char const* postfix) const;
+
         void flush_parcels() const;
 
         /// \brief Stop all parcel ports associated with this parcelhandler
@@ -482,6 +488,11 @@ namespace hpx::parcelset {
         using pports_type =
             std::map<int, std::shared_ptr<parcelport>, std::greater<int>>;
         pports_type pports_;
+
+        // guards the traversal of pports_ in on_start_thread, which runs on
+        // the threads of the parcelports, against the removal of parcelports
+        // that failed to initialize
+        mutable std::mutex pports_mtx_;
 
         std::map<std::string, int> priority_;
 

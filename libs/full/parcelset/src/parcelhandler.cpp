@@ -294,6 +294,21 @@ namespace hpx::parcelset {
         return {};
     }
 
+    void parcelhandler::on_start_thread(std::size_t const local_thread_num,
+        std::size_t const global_thread_num, char const* pool_name,
+        char const* postfix) const
+    {
+        // the parcelports are attached before any of the runtime's threads
+        // start (set_notification_policies), parcelports that fail to
+        // initialize are removed while the threads of others may run
+        std::lock_guard<std::mutex> l(pports_mtx_);
+        for (auto const& pp : pports_)
+        {
+            pp.second->on_start_thread(
+                local_thread_num, global_thread_num, pool_name, postfix);
+        }
+    }
+
     void parcelhandler::initialize()
     {
         exception_list exceptions;
@@ -351,6 +366,9 @@ namespace hpx::parcelset {
                 {
                     std::cerr << "  " << it->second->type() << "\n";
                     it->second->stop();
+
+                    // not while it is stopped, stop() joins its threads
+                    std::lock_guard<std::mutex> l(pports_mtx_);
                     pports_.erase(it);
                 }
             }
