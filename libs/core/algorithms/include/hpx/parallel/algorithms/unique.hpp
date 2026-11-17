@@ -303,11 +303,13 @@ namespace hpx {
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/iterator_support.hpp>
+#include <hpx/modules/threading_base.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/algorithms/detail/advance_and_get_distance.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
+#include <hpx/parallel/algorithms/detail/task_size_argument.hpp>
 #include <hpx/parallel/algorithms/detail/unique.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/clear_container.hpp>
@@ -540,6 +542,11 @@ namespace hpx::parallel {
                 using policy_type = std::decay_t<ExPolicy>;
 #endif
 
+                // an iteration of step 1 has the size of the comparison of two
+                // elements, step 3 only copies the selected elements
+                auto const size1 =
+                    task_size_of_iteration<task_size_argument_t<FwdIter1, Proj>,
+                        task_size_argument_t<FwdIter1, Proj>>(pred, first);
                 auto f1 = [pred = HPX_FORWARD(Pred, pred),
                               proj = HPX_FORWARD(Proj, proj)](
                               zip_iterator part_begin,
@@ -597,8 +604,10 @@ namespace hpx::parallel {
                                 }
                                 return std::optional<std::size_t>(0);
                             },
-                            HPX_MOVE(f1), std::plus<std::size_t>(),
-                            HPX_MOVE(f3), HPX_MOVE(f4)));
+                            hpx::threads::detail::with_task_size(
+                                HPX_MOVE(f1), size1),
+                            std::plus<std::size_t>(), HPX_MOVE(f3),
+                            HPX_MOVE(f4)));
                 }
                 else
                 {
@@ -606,7 +615,8 @@ namespace hpx::parallel {
                         HPX_FORWARD(ExPolicy, policy),
                         zip_iterator(first, flag_begin), scan_count, init,
                         // step 1 performs first part of scan algorithm
-                        HPX_MOVE(f1),
+                        hpx::threads::detail::with_task_size(
+                            HPX_MOVE(f1), size1),
                         // step 2 propagates the partition results from left
                         // to right
                         std::plus<std::size_t>(),
