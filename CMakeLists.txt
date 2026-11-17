@@ -642,12 +642,24 @@ endif()
 set(HPX_WITH_THRUST_DEFAULT OFF)
 if(HPX_WITH_CUDA)
   set(HPX_WITH_THRUST_DEFAULT ON)
+elseif(HPX_WITH_HIP AND NOT DEFINED CACHE{HPX_WITH_THRUST})
+  # rocThrust is a separate ROCm package, ON only if it is installed (looked up
+  # the way HPX_SetupHIP does; not if HPX_WITH_THRUST is given)
+  include(HPX_HIPPrefixPath)
+  set(_hpx_prefix_path ${CMAKE_PREFIX_PATH})
+  hpx_add_hip_prefix_path()
+  find_package(rocthrust CONFIG QUIET)
+  set(CMAKE_PREFIX_PATH ${_hpx_prefix_path})
+  unset(_hpx_prefix_path)
+  if(rocthrust_FOUND)
+    set(HPX_WITH_THRUST_DEFAULT ON)
+  endif()
 endif()
 
 hpx_option(
   HPX_WITH_THRUST
   BOOL
-  "Enable support for NVIDIA Thrust integration (default: ON when CUDA is enabled, OFF otherwise)"
+  "Enable support for Thrust integration (NVIDIA Thrust with CUDA, rocThrust with HIP; default: ON with CUDA, ON with HIP if rocThrust is found, OFF otherwise)"
   ${HPX_WITH_THRUST_DEFAULT}
   ADVANCED
   CATEGORY "Build Targets"
