@@ -95,6 +95,15 @@ namespace hpx::parcelset {
         /// been processed and normal operation is about to start.
         virtual void initialized();
 
+        /// Called on each OS thread the runtime starts (worker, I/O, timer
+        /// and parcel threads) before the thread runs any work, with the
+        /// arguments of callback_notifier::on_start_thread. Parcelports may
+        /// prepare per-thread state of the network library here. Overrides
+        /// should call this base implementation.
+        virtual void on_start_thread(std::size_t local_thread_num,
+            std::size_t global_thread_num, char const* pool_name,
+            char const* postfix);
+
         virtual void flush_parcels() = 0;
 
         /// Stop the parcelport I/O thread pool.

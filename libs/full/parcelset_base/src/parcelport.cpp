@@ -105,6 +105,11 @@ namespace hpx::parcelset {
 
     void parcelport::initialized() {}
 
+    void parcelport::on_start_thread(
+        std::size_t, std::size_t, char const*, char const*)
+    {
+    }
+
     bool parcelport::can_connect(
         locality const&, bool use_alternative_parcelport)
     {
