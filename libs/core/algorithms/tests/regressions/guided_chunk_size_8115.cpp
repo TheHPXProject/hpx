@@ -68,6 +68,31 @@ void test_algorithms(ExPolicy&& policy, vec const& a, vec const& b)
     HPX_TEST(hpx::is_partitioned(policy, pa.begin(), pa.end(), pred));
 }
 
+// the hierarchical spawning parallel_executor returns one future per chunk
+void test_hierarchical_executor(vec const& a, vec const& b)
+{
+    namespace ex = hpx::execution;
+
+    auto const pred = [](int x) { return x % 3 == 0; };
+    auto exec = ex::to_hierarchical_spawning(ex::parallel_executor());
+
+    test_algorithms(
+        ex::par.on(exec).with(ex::experimental::guided_chunk_size(2)), a, b);
+
+    auto policy = ex::par(ex::task).on(exec);
+    HPX_TEST_EQ(hpx::is_partitioned(policy, a.begin(), a.end(), pred).get(),
+        std::is_partitioned(a.begin(), a.end(), pred));
+    HPX_TEST_EQ(hpx::all_of(policy, a.begin(), a.end(), pred).get(),
+        std::all_of(a.begin(), a.end(), pred));
+    HPX_TEST_EQ(hpx::none_of(policy, a.begin(), a.end(), pred).get(),
+        std::none_of(a.begin(), a.end(), pred));
+    HPX_TEST_EQ(hpx::count(policy, a.begin(), a.end(), 3).get(),
+        std::count(a.begin(), a.end(), 3));
+    HPX_TEST_EQ(
+        hpx::transform_reduce(policy, a.begin(), a.end(), b.begin(), 0).get(),
+        std::transform_reduce(a.begin(), a.end(), b.begin(), 0));
+}
+
 int hpx_main()
 {
     namespace ex = hpx::execution;
@@ -88,6 +113,8 @@ int hpx_main()
                 ex::par.with(ex::experimental::guided_chunk_size(chunk_size)),
                 a, b);
         }
+
+        test_hierarchical_executor(a, b);
     }
 
     return hpx::local::finalize();
