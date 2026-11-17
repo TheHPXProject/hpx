@@ -10,117 +10,20 @@
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/runtime_local.hpp>
 #include <hpx/modules/serialization.hpp>
-#include <hpx/modules/synchronization.hpp>
 
+#include <hpx/thrust/memory.hpp>
 #include <hpx/thrust/serialization/detail/device_staging.hpp>
-
-#include <cuda_runtime.h>
 
 #include <array>
 #include <atomic>
 #include <cstddef>
 #include <cstdio>
-#include <map>
 #include <memory>
-#include <mutex>
-#include <tuple>
 #include <utility>
-#include <vector>
 
 namespace hpx::serialization::detail {
 
     namespace {
-
-        // Pinned host memory is expensive to allocate (cudaMallocHost takes
-        // milliseconds for a few MiB), more than a transfer of that size
-        // over the network. Buffers are reused, by power-of-two size class;
-        // at most max_cached bytes are kept for reuse.
-        class pinned_buffer_pool
-        {
-        public:
-            static constexpr std::size_t min_size_class = 4096;
-            static constexpr std::size_t max_cached = std::size_t(256) << 20;
-
-            static pinned_buffer_pool& instance()
-            {
-                static pinned_buffer_pool pool;
-                return pool;
-            }
-
-            pinned_buffer_pool() = default;
-            pinned_buffer_pool(pinned_buffer_pool const&) = delete;
-            pinned_buffer_pool(pinned_buffer_pool&&) = delete;
-            pinned_buffer_pool& operator=(pinned_buffer_pool const&) = delete;
-            pinned_buffer_pool& operator=(pinned_buffer_pool&&) = delete;
-
-            ~pinned_buffer_pool()
-            {
-                // errors are ignored, the CUDA runtime may be gone already
-                for (auto& [size_class, buffers] : free_)
-                {
-                    for (void* p : buffers)
-                    {
-                        cudaFreeHost(p);
-                    }
-                }
-            }
-
-            // returns a buffer of at least 'size' bytes and its size class
-            std::pair<void*, std::size_t> acquire(std::size_t const size)
-            {
-                std::size_t const size_class = size_class_of(size);
-                {
-                    std::lock_guard<hpx::spinlock> l(mtx_);
-                    if (auto it = free_.find(size_class);
-                        it != free_.end() && !it->second.empty())
-                    {
-                        void* p = it->second.back();
-                        it->second.pop_back();
-                        cached_ -= size_class;
-                        return {p, size_class};
-                    }
-                }
-
-                void* p = nullptr;
-                hpx::cuda::experimental::check_cuda_error(
-                    cudaMallocHost(&p, size_class));
-                return {p, size_class};
-            }
-
-            void release(void* p, std::size_t const size_class) noexcept
-            {
-                try
-                {
-                    std::lock_guard<hpx::spinlock> l(mtx_);
-                    if (cached_ + size_class <= max_cached)
-                    {
-                        free_[size_class].push_back(p);
-                        cached_ += size_class;
-                        return;
-                    }
-                }
-                catch (...)
-                {
-                    // could not keep it, free it instead
-                }
-                cudaFreeHost(p);
-            }
-
-        private:
-            static std::size_t size_class_of(std::size_t const size) noexcept
-            {
-                std::size_t size_class = min_size_class;
-                while (size_class < size)
-                {
-                    size_class *= 2;
-                }
-                return size_class;
-            }
-
-            hpx::spinlock mtx_;
-            std::map<std::size_t, std::vector<void*>> free_;
-            std::size_t cached_ = 0;
-        };
 
         // A few CUDA streams for the staging copies, created on first use
         // (on the device current then; one GPU per locality) and kept for
@@ -151,15 +54,17 @@ namespace hpx::serialization::detail {
             return pool.streams_[pool.next_++ % pool.streams_.size()];
         }
 
-        // Pinned host memory from the pool, the staging area between the
-        // network and the device in both directions.
+        // Pinned host memory from the pool (allocating it takes long), the
+        // staging area between the network and the device in both
+        // directions.
         class pinned_host_buffer
         {
         public:
             explicit pinned_host_buffer(std::size_t const size)
+              : data_(hpx::thrust::detail::pool_allocate(
+                    size, hpx::thrust::memory_kind::pinned))
+              , size_(size)
             {
-                std::tie(data_, size_class_) =
-                    pinned_buffer_pool::instance().acquire(size);
             }
 
             pinned_host_buffer(pinned_host_buffer const&) = delete;
@@ -169,7 +74,7 @@ namespace hpx::serialization::detail {
 
             ~pinned_host_buffer()
             {
-                pinned_buffer_pool::instance().release(data_, size_class_);
+                hpx::thrust::detail::pool_deallocate(data_, size_);
             }
 
             [[nodiscard]] void* data() const noexcept
@@ -178,8 +83,8 @@ namespace hpx::serialization::detail {
             }
 
         private:
-            void* data_ = nullptr;
-            std::size_t size_class_ = 0;
+            void* data_;
+            std::size_t size_;
         };
 
         // Pinned host copy of device memory, filled asynchronously on a
@@ -204,7 +109,7 @@ namespace hpx::serialization::detail {
                 catch (...)
                 {
                     // the buffer goes back to the pool, never under a copy
-                    cudaStreamSynchronize(stream_);
+                    (void) cudaStreamSynchronize(stream_);
                     throw;
                 }
             }
@@ -220,7 +125,7 @@ namespace hpx::serialization::detail {
                 // buffer goes back to the pool, never under a copy
                 if (ready_.valid() && !ready_.is_ready())
                 {
-                    cudaStreamSynchronize(stream_);
+                    (void) cudaStreamSynchronize(stream_);
                 }
             }
 
@@ -394,8 +299,14 @@ namespace hpx::serialization::detail {
 
     void warn_if_device_busy() noexcept
     {
+#if defined(HPX_HAVE_HIP)
+        // HIP has no handle for the legacy default stream, it's the null one
+        cudaStream_t const legacy_stream = nullptr;
+#else
+        cudaStream_t const legacy_stream = cudaStreamLegacy;
+#endif
         if (cudaStreamQuery(cudaStreamPerThread) != cudaErrorNotReady &&
-            cudaStreamQuery(cudaStreamLegacy) != cudaErrorNotReady)
+            cudaStreamQuery(legacy_stream) != cudaErrorNotReady)
         {
             return;
         }
