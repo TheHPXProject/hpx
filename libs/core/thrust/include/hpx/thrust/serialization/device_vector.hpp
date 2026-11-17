@@ -10,6 +10,7 @@
 #include <hpx/config.hpp>
 #include <hpx/modules/serialization.hpp>
 
+#include <hpx/thrust/memory.hpp>
 #include <hpx/thrust/serialization/detail/device_staging.hpp>
 
 #include <thrust/copy.h>
@@ -47,9 +48,11 @@ namespace hpx::serialization {
     // default stream is still busy.
     //
     // Data above the zero-copy threshold goes as a zero-copy chunk: of the
-    // device memory itself if the parcelport moves device memory
+    // vector's memory itself if that is pinned host memory (see
+    // hpx::thrust::pooled_allocator) or if the parcelport moves device memory
     // (enable_device_chunks), else of a pinned host copy. Smaller data is
-    // copied into the archive.
+    // copied into the archive. A vector of pinned host memory receives the
+    // data in its own memory too.
 
     HPX_CXX_CORE_EXPORT template <typename T, typename Alloc>
     void serialize(output_archive& ar,
@@ -67,6 +70,33 @@ namespace hpx::serialization {
 
         std::size_t const bytes = size * sizeof(T);
         T const* device_data = ::thrust::raw_pointer_cast(v.data());
+
+        if (hpx::thrust::detail::is_pinned_host_memory(device_data))
+        {
+            // the network reads it in place, the parcel keeps the vector
+            // alive until it has been sent
+#if defined(HPX_DEBUG)
+            if (!ar.is_preprocessing())
+            {
+                detail::warn_if_device_busy();
+            }
+#endif
+            if (bytes >= ar.get_zero_copy_serialization_threshold())
+            {
+                ar << static_cast<std::uint8_t>(
+                    device_data_storage::host_chunk);
+                ar.save_binary_chunk(
+                    detail::fundamental_types::none, device_data, bytes);
+            }
+            else
+            {
+                ar << static_cast<std::uint8_t>(
+                    device_data_storage::in_archive);
+                ar.save_binary(
+                    detail::fundamental_types::none, device_data, bytes);
+            }
+            return;
+        }
 
         // Device memory must never reach save_binary, which copies on the
         // host: an archive without chunks (e.g. with the array optimization
@@ -139,6 +169,22 @@ namespace hpx::serialization {
             storage != device_data_storage::in_archive &&
             !ar.disable_receive_data_chunking() &&
             ar.try_get_extra_data<detail::allow_zero_copy_receive>() != nullptr;
+
+        if (hpx::thrust::detail::is_pinned_host_memory(device_data))
+        {
+            // the network writes to pinned host memory directly
+            if (storage == device_data_storage::in_archive)
+            {
+                ar.load_binary(
+                    detail::fundamental_types::none, device_data, bytes);
+            }
+            else
+            {
+                ar.load_binary_chunk(detail::fundamental_types::none,
+                    device_data, bytes, zero_copy_receive);
+            }
+            return;
+        }
 
         if (zero_copy_receive && storage == device_data_storage::device_chunk)
         {
