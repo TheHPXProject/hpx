@@ -162,7 +162,7 @@ namespace hpx::ranges {
             typename Proj = hpx::identity>
         // clang-format off
             requires(hpx::traits::is_iterator_v<Iterator> &&
-                hpx::traits::is_iterator_v<Iterator> &&
+                std::sentinel_for<Sentinel, Iterator> &&
                 hpx::is_invocable_v<Proj,
                     typename std::iterator_traits<Iterator>::value_type>
             )
@@ -171,9 +171,6 @@ namespace hpx::ranges {
             Iterator first, Sentinel last, T const& val, Proj&& proj = Proj())
         {
             static_assert(std::input_iterator<Iterator>,
-                "Required at least input iterator.");
-
-            static_assert(std::input_iterator<Sentinel>,
                 "Required at least input iterator.");
 
             return hpx::parallel::detail::contains().call(

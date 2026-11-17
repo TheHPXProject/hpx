@@ -801,12 +801,12 @@ namespace hpx::parallel {
             }
 
             // sequential execution with non-trivial projection
-            template <typename ExPolicy, typename InIter1, typename InIter2,
-                typename OutIter, typename F, typename Proj1, typename Proj2>
+            template <typename ExPolicy, typename InIter1, typename Sent1,
+                typename InIter2, typename Sent2, typename OutIter, typename F,
+                typename Proj1, typename Proj2>
             static constexpr util::in_in_out_result<InIter1, InIter2, OutIter>
-            sequential(ExPolicy&&, InIter1 first1, InIter1 last1,
-                InIter2 first2, InIter2 last2, OutIter dest, F&& f,
-                Proj1&& proj1, Proj2&& proj2)
+            sequential(ExPolicy&&, InIter1 first1, Sent1 last1, InIter2 first2,
+                Sent2 last2, OutIter dest, F&& f, Proj1&& proj1, Proj2&& proj2)
             {
                 return util::transform_binary_loop<ExPolicy>(first1, last1,
                     first2, last2, dest,
@@ -815,12 +815,11 @@ namespace hpx::parallel {
             }
 
             // sequential execution without projection
-            template <typename ExPolicy, typename InIter1, typename InIter2,
-                typename OutIter, typename F>
+            template <typename ExPolicy, typename InIter1, typename Sent1,
+                typename InIter2, typename Sent2, typename OutIter, typename F>
             static constexpr util::in_in_out_result<InIter1, InIter2, OutIter>
-            sequential(ExPolicy&&, InIter1 first1, InIter1 last1,
-                InIter2 first2, InIter2 last2, OutIter dest, F&& f,
-                hpx::identity, hpx::identity)
+            sequential(ExPolicy&&, InIter1 first1, Sent1 last1, InIter2 first2,
+                Sent2 last2, OutIter dest, F&& f, hpx::identity, hpx::identity)
             {
                 return util::transform_binary_loop_ind<ExPolicy>(
                     first1, last1, first2, last2, dest, f);

@@ -209,12 +209,12 @@ namespace hpx::parallel::util {
                 return {first1, first2, dest};
             }
 
-            template <typename InIter1B, typename InIter1E, typename InIter2,
-                typename OutIter, typename F>
+            template <typename InIter1B, typename InIter1E, typename InIter2B,
+                typename InIter2E, typename OutIter, typename F>
             HPX_HOST_DEVICE HPX_FORCEINLINE static constexpr util::
-                in_in_out_result<InIter1B, InIter2, OutIter>
-                call(InIter1B first1, InIter1E last1, InIter2 first2,
-                    InIter2 last2, OutIter dest, F&& f)
+                in_in_out_result<InIter1B, InIter2B, OutIter>
+                call(InIter1B first1, InIter1E last1, InIter2B first2,
+                    InIter2E last2, OutIter dest, F&& f)
             {
                 for (/* */; first1 != last1 && first2 != last2;
                     (void) ++first1, ++first2, ++dest)
@@ -339,12 +339,12 @@ namespace hpx::parallel::util {
                 }
             }
 
-            template <typename InIter1B, typename InIter1E, typename InIter2,
-                typename OutIter, typename F>
+            template <typename InIter1B, typename InIter1E, typename InIter2B,
+                typename InIter2E, typename OutIter, typename F>
             HPX_HOST_DEVICE HPX_FORCEINLINE static constexpr util::
-                in_in_out_result<InIter1B, InIter2, OutIter>
-                call(InIter1B start1, InIter1E sent1, InIter2 start2,
-                    InIter2 sent2, OutIter out, F&& f)
+                in_in_out_result<InIter1B, InIter2B, OutIter>
+                call(InIter1B start1, InIter1E sent1, InIter2B start2,
+                    InIter2E sent2, OutIter out, F&& f)
             {
                 if constexpr (std::random_access_iterator<InIter1B>)
                 {
