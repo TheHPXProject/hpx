@@ -146,8 +146,17 @@ namespace hpx::detail {
         for (auto const& t :
             parcelset::detail::get_message_handler_registrations())
         {
-            error_code ec(throwmode::lightweight);
-            rtd.register_message_handler(hpx::get<0>(t), hpx::get<1>(t), ec);
+            if (hpx::get<2>(t))
+            {
+                error_code ec(throwmode::lightweight);
+                rtd.register_message_handler(
+                    hpx::get<0>(t), hpx::get<1>(t), ec);
+            }
+            else
+            {
+                rtd.register_message_handler(
+                    hpx::get<0>(t), hpx::get<1>(t), hpx::throws);
+            }
         }
         lbt_ << "(3rd stage) pre_main: registered message handlers";
     }
@@ -257,41 +266,62 @@ namespace hpx::detail {
             distributed::barrier::synchronize();
             lbt_ << "(2nd stage) pre_main: passed 2nd stage boot barrier";
 
-            // Work on registration requests for message handler plugins
+            auto const num_localities =
+                static_cast<std::size_t>(rt.get_config().get_num_localities());
+            auto const this_locality =
+                static_cast<std::size_t>(hpx::get_locality_id());
+
+            std::exception_ptr registration_exception;
+            try
+            {
+                // Work on registration requests for message handler plugins
 #if defined(HPX_HAVE_NETWORKING)
-            register_message_handlers();
+                register_message_handlers();
 #endif
-            // Register all counter types before the startup functions are being
-            // executed.
-            register_counter_types();
+                // Register all counter types before the startup functions are being
+                // executed.
+                register_counter_types();
+            }
+            catch (...)
+            {
+                registration_exception = std::current_exception();
+            }
 
             // Second stage bootstrap synchronizes performance counter loading
             // across all localities.
             distributed::barrier::synchronize();
             lbt_ << "(3rd stage) pre_main: passed 3rd stage boot barrier";
 
-            std::exception_ptr startup_exception;
-            try
+            bool any_registration_error = (registration_exception != nullptr);
+            if (num_localities > 1)
             {
-                runtime_support::call_startup_functions(find_here(), true);
-                lbt_ << "(3rd stage) pre_main: ran pre-startup functions";
+                any_registration_error = hpx::collectives::all_reduce(
+                    hpx::launch::sync, "/0/hpx/registration_status",
+                    any_registration_error, std::logical_or<bool>{},
+                    hpx::collectives::num_sites_arg(num_localities),
+                    hpx::collectives::this_site_arg(this_locality));
             }
-            catch (...)
+
+            std::exception_ptr startup_exception;
+            if (!any_registration_error)
             {
-                startup_exception = std::current_exception();
+                try
+                {
+                    runtime_support::call_startup_functions(find_here(), true);
+                    lbt_ << "(3rd stage) pre_main: ran pre-startup functions";
+                }
+                catch (...)
+                {
+                    startup_exception = std::current_exception();
+                }
             }
 
             // Third stage separates pre-startup and startup function phase.
             distributed::barrier::synchronize();
             lbt_ << "(4th stage) pre_main: passed 4th stage boot barrier";
 
-            auto const num_localities =
-                static_cast<std::size_t>(rt.get_config().get_num_localities());
-            auto const this_locality =
-                static_cast<std::size_t>(hpx::get_locality_id());
-
             bool any_pre_startup_error = (startup_exception != nullptr);
-            if (num_localities > 1)
+            if (!any_registration_error && num_localities > 1)
             {
                 any_pre_startup_error = hpx::collectives::all_reduce(
                     hpx::launch::sync, "/0/hpx/pre_startup_status",
@@ -300,7 +330,7 @@ namespace hpx::detail {
                     hpx::collectives::this_site_arg(this_locality));
             }
 
-            if (!any_pre_startup_error)
+            if (!any_registration_error && !any_pre_startup_error)
             {
                 try
                 {
@@ -321,7 +351,8 @@ namespace hpx::detail {
             lbt_ << "(5th stage) pre_main: passed 5th stage boot barrier";
 
             bool any_startup_error = (startup_exception != nullptr);
-            if (!any_pre_startup_error && num_localities > 1)
+            if (!any_registration_error && !any_pre_startup_error &&
+                num_localities > 1)
             {
                 any_startup_error = hpx::collectives::all_reduce(
                     hpx::launch::sync, "/0/hpx/startup_status",
@@ -330,6 +361,15 @@ namespace hpx::detail {
                     hpx::collectives::this_site_arg(this_locality));
             }
 
+            if (registration_exception)
+            {
+                std::rethrow_exception(registration_exception);
+            }
+            if (any_registration_error)
+            {
+                HPX_THROW_EXCEPTION(hpx::error::invalid_status, "pre_main",
+                    "a registration function failed on a remote locality");
+            }
             if (startup_exception)
             {
                 std::rethrow_exception(startup_exception);
