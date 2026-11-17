@@ -346,7 +346,10 @@ namespace hpx::parallel::util {
                 call(InIter1B start1, InIter1E sent1, InIter2B start2,
                     InIter2E sent2, OutIter out, F&& f)
             {
-                if constexpr (std::random_access_iterator<InIter1B>)
+                // measuring the second range walks a copy of start2, which
+                // would consume a single-pass input
+                if constexpr (std::random_access_iterator<InIter1B> &&
+                    std::forward_iterator<InIter2B>)
                 {
                     auto end1 = start1;
                     auto const len1 =
