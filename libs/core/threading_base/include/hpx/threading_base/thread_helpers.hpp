@@ -367,7 +367,8 @@ namespace hpx::threads {
     ///                   throw but returns the result code using the
     ///                   parameter \a ec. Otherwise, it throws an instance
     ///                   of hpx#exception.
-    HPX_CORE_EXPORT threads::thread_priority get_thread_priority(
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT threads::thread_priority
+    get_thread_priority(
         thread_id_type const& id, hpx::error_code& ec = hpx::throws) noexcept;
 
     ///////////////////////////////////////////////////////////////////////////

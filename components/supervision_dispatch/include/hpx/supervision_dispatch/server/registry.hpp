@@ -175,13 +175,26 @@ namespace hpx::supervision::server {
         ///     at all, so the tombstone stays in place and the peer has to
         ///     join again to be monitored, as after any other eviction.
         ///
-        /// This assumes that the peer's local supervision state is changed
-        /// only through this registry's mirroring, which holds for a remote
-        /// peer joined by a single registry (discovery never joins the own
-        /// locality). It does not hold for a registry that joined its own
-        /// locality, whose lifecycle events change that state directly, nor
-        /// for several registries on one locality joining the same peer,
-        /// which share that state (see #8030).
+        /// The local state can also change before the lifecycle observer
+        /// runs: a registry that joined its own locality shares that state
+        /// with the peer's own lifecycle events, and several registries on
+        /// one locality joining the same peer share it with each other's
+        /// mirroring. To cover that, the local state is queried a second time
+        /// after the terminal check, and the entry is removed only if it is
+        /// still the state the terminal check saw (same epoch, event sequence
+        /// number, and event). So for every change of the local state whose
+        /// observer has not announced a mirroring by the time the entry is
+        /// removed:
+        ///   - if it happened before the second query, that query sees it,
+        ///     and this call backs off, leaving the entry and its observers in
+        ///     place;
+        ///   - if it happened after the second query, it overlaps this call
+        ///     and is treated as if it happened after the removal: its
+        ///     notification is not mirrored, and the peer has to join again to
+        ///     be monitored. For a registry that joined its own locality, the
+        ///     local state then reflects the peer's newer lifecycle instead of
+        ///     the tombstone, exactly as if the peer had started that
+        ///     lifecycle right after this call returned.
         ///
         /// No lock is held while the local supervision state is queried or
         /// while the observers are unregistered on the peer's locality.

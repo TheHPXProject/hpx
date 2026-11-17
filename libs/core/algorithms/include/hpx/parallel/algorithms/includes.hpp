@@ -160,6 +160,7 @@ namespace hpx {
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/type_support.hpp>
+#include <hpx/parallel/algorithms/detail/advance_to_sentinel.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/upper_lower_bound.hpp>
@@ -299,7 +300,10 @@ namespace hpx::parallel {
 
                 util::cancellation_token<> tok;
 
-                auto f1 = [first1, last1, first2, last2, tok,
+                // last1 may be a sentinel, upper bounds need an iterator
+                Iter1 const end1 = detail::advance_to_sentinel(first1, last1);
+
+                auto f1 = [first1, last1, end1, first2, last2, tok,
                               f = HPX_FORWARD(F, f),
                               proj1 = HPX_FORWARD(Proj1, proj1),
                               proj2 = HPX_FORWARD(Proj2, proj2)](
@@ -340,7 +344,7 @@ namespace hpx::parallel {
                         return false;
                     }
 
-                    Iter1 high = last1;
+                    Iter1 high = end1;
                     if (part_end != last2)
                     {
                         auto&& value1 = HPX_INVOKE(proj2, *part_end);

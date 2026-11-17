@@ -137,20 +137,26 @@ namespace hpx::parcelset::policies::tcp {
 
         void shutdown()
         {
-            std::lock_guard lk(mtx_);
-
-            // gracefully and portably shutdown the socket
-            if (socket_.is_open())
             {
-                // NOLINTBEGIN(bugprone-unused-return-value)
-                std::error_code ec;
-                socket_.shutdown(::asio::ip::tcp::socket::shutdown_both, ec);
+                std::lock_guard lk(mtx_);
 
-                // close the socket to give it back to the OS
-                socket_.close(ec);
-                // NOLINTEND(bugprone-unused-return-value)
+                // gracefully and portably shutdown the socket
+                if (socket_.is_open())
+                {
+                    // NOLINTBEGIN(bugprone-unused-return-value)
+                    std::error_code ec;
+                    socket_.shutdown(
+                        ::asio::ip::tcp::socket::shutdown_both, ec);
+
+                    // close the socket to give it back to the OS
+                    socket_.close(ec);
+                    // NOLINTEND(bugprone-unused-return-value)
+                }
             }
 
+            // Wait without holding mtx_: a read that completed just before the
+            // socket was closed takes mtx_ to issue its next read (and then
+            // sees the closed socket) before it lowers operation_in_flight_.
             hpx::util::yield_while(
                 [this]() { return operation_in_flight_ != 0; },
                 "tcp::receiver::shutdown");
@@ -178,9 +184,10 @@ namespace hpx::parcelset::policies::tcp {
                 // given)
                 if (max_inbound_size_ != 0 && inbound_size > max_inbound_size_)
                 {
-                    // report this problem back to the handler
+                    // report this problem back to the handler, no read follows
                     handler(::asio::error::make_error_code(
                         ::asio::error::operation_not_supported));
+                    --operation_in_flight_;
                     return;
                 }
 
@@ -238,9 +245,12 @@ namespace hpx::parcelset::policies::tcp {
                     {
                         lk.unlock();
 
-                        // report this problem back to the handler
+                        // report this problem back to the handler; no
+                        // operation follows that would lower the count, and
+                        // shutdown waits for it
                         handler(::asio::error::make_error_code(
                             ::asio::error::not_connected));
+                        --operation_in_flight_;
                         return;
                     }
 
@@ -359,9 +369,12 @@ namespace hpx::parcelset::policies::tcp {
                     {
                         lk.unlock();
 
-                        // report this problem back to the handler
+                        // report this problem back to the handler; no
+                        // operation follows that would lower the count, and
+                        // shutdown waits for it
                         handler(::asio::error::make_error_code(
                             ::asio::error::not_connected));
+                        --operation_in_flight_;
                         return;
                     }
 
@@ -425,9 +438,12 @@ namespace hpx::parcelset::policies::tcp {
                     {
                         lk.unlock();
 
-                        // report this problem back to the handler
+                        // report this problem back to the handler; no
+                        // operation follows that would lower the count, and
+                        // shutdown waits for it
                         handler(::asio::error::make_error_code(
                             ::asio::error::not_connected));
+                        --operation_in_flight_;
                         return;
                     }
 

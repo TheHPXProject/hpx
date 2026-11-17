@@ -335,11 +335,70 @@ void test_multiple_readers_all_get_set_error()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// Test 4: the first access throws while the value is moved into the first
+// shared state. The mutex must be left as before the access: it can be
+// destroyed, and the next access gets the value.
+template <typename Access>
+void test_first_access_move_throw(Access access)
+{
+    using mutex_type =
+        hpx::experimental::async_rw_mutex<throwing_on_second_move>;
+
+    // destroy the mutex after the failed access
+    {
+        throwing_on_second_move::move_count.store(-1);
+        mutex_type rwm{throwing_on_second_move{42}};
+
+        throwing_on_second_move::reset();
+
+        bool caught_exception = false;
+        try
+        {
+            [[maybe_unused]] auto s = access(rwm);
+        }
+        catch (std::runtime_error const&)
+        {
+            caught_exception = true;
+        }
+        HPX_TEST(caught_exception);
+    }
+
+    // access the mutex again after the failed access
+    {
+        throwing_on_second_move::move_count.store(-1);
+        mutex_type rwm{throwing_on_second_move{42}};
+
+        throwing_on_second_move::reset();
+
+        bool caught_exception = false;
+        try
+        {
+            [[maybe_unused]] auto s = access(rwm);
+        }
+        catch (std::runtime_error const&)
+        {
+            caught_exception = true;
+        }
+        HPX_TEST(caught_exception);
+
+        // don't throw on the following moves
+        throwing_on_second_move::move_count.store(-1000);
+
+        int value = 0;
+        tt::sync_wait(access(rwm) |
+            ex::then([&value](auto wrapper) { value = wrapper.get().value; }));
+        HPX_TEST_EQ(value, 42);
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
 int hpx_main()
 {
     test_set_error_called_on_move_throw();
     test_multiple_receivers_all_get_set_error();
     test_multiple_readers_all_get_set_error();
+    test_first_access_move_throw([](auto& rwm) { return rwm.read(); });
+    test_first_access_move_throw([](auto& rwm) { return rwm.readwrite(); });
 
     return hpx::local::finalize();
 }

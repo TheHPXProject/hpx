@@ -93,8 +93,10 @@ namespace hpx_startup {
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx::detail {
 
+#if defined(HPX_HAVE_DISTRIBUTED_RUNTIME)
     // forward declarations only
     static void console_print(std::string const&);
+#endif
 
     int init_impl(
         hpx::function<int(hpx::program_options::variables_map&)> const& f,
@@ -391,9 +393,9 @@ namespace hpx::detail {
 }    // namespace hpx::detail
 
 ///////////////////////////////////////////////////////////////////////////////
-#if defined(HPX_HAVE_DYNAMIC_HPX_MAIN) &&                                      \
-    (defined(__linux) || defined(__linux__) || defined(linux) ||               \
-        defined(__APPLE__))
+#if (defined(__linux) || defined(__linux__) || defined(linux) ||               \
+    defined(__APPLE__)) &&                                                     \
+    !defined(__ANDROID__)
 namespace hpx_start {
     // Importing weak symbol from libhpx_wrap.a which may be shadowed by one present in
     // hpx_main.hpp.
@@ -833,9 +835,9 @@ namespace hpx {
             // make sure the runtime system is not active yet
             if (get_runtime_ptr() != nullptr)
             {
-#if defined(HPX_HAVE_DYNAMIC_HPX_MAIN) &&                                      \
-    (defined(__linux) || defined(__linux__) || defined(linux) ||               \
-        defined(__APPLE__))
+#if (defined(__linux) || defined(__linux__) || defined(linux) ||               \
+    defined(__APPLE__)) &&                                                     \
+    !defined(__ANDROID__)
                 // make sure the runtime system is not initialized
                 // after its activation from int main()
                 if (hpx_start::include_libhpx_wrap)

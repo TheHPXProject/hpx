@@ -84,6 +84,9 @@ namespace {
     // See hpx::supervision::testing::set_evict_peer_hook_for_testing().
     testing_hook evict_peer_hook;
 
+    // See hpx::supervision::testing::set_lifecycle_observer_hook_for_testing().
+    testing_hook lifecycle_observer_hook;
+
     // See
     // hpx::supervision::testing::evict_peers_waiting_for_mirrors_for_testing().
     std::atomic<std::size_t> evict_peers_waiting_for_mirrors{0};
@@ -129,6 +132,11 @@ namespace hpx::supervision::testing {
     void set_evict_peer_hook_for_testing(hpx::function<void()> hook)
     {
         evict_peer_hook.set(HPX_MOVE(hook));
+    }
+
+    void set_lifecycle_observer_hook_for_testing(hpx::function<void()> hook)
+    {
+        lifecycle_observer_hook.set(HPX_MOVE(hook));
     }
 
     std::size_t evict_peers_waiting_for_mirrors_for_testing()
@@ -199,6 +207,8 @@ namespace hpx::supervision::server {
             [peer_locality, generation, this, keep_alive = get_id()](
                 hpx::supervision::lifecycle_event_notification const&
                     notification) {
+                lifecycle_observer_hook.run();
+
                 // Announce the mirroring below, unless the entry this observer
                 // was registered for is gone already (see the comment on
                 // register_observers() above).
@@ -730,6 +740,27 @@ namespace hpx::supervision::server {
 
         evict_fenced_hook.run();
 
+        // The mirroring bookkeeping only sees a lifecycle transition once its
+        // observer runs. The local state of a peer this registry does not
+        // exclusively mirror (a registry that joined its own locality, or
+        // several registries on this locality joining the same peer) can
+        // change before that, so check the state again: a transition that
+        // changed it since the check above backs this call off, even if its
+        // observer has not run yet. Every publication applied to the local
+        // state changes its epoch or its event sequence number.
+        {
+            hpx::error_code ec_recheck(hpx::throwmode::lightweight);
+            auto const current_state =
+                hpx::supervision::query_state(peer_locality, ec_recheck);
+            if (ec_recheck || current_state.epoch != state.epoch ||
+                current_state.event_sequence_number !=
+                    state.event_sequence_number ||
+                current_state.last_event != state.last_event)
+            {
+                return;
+            }
+        }
+
         hpx::id_type lifecycle_observer;
         hpx::id_type activity_observer;
 
@@ -740,6 +771,10 @@ namespace hpx::supervision::server {
             // observer receives before cleanup_peer() unregisters it is no
             // longer mirrored (see register_observers()), so the tombstone
             // stays in place and the peer has to join again to be monitored.
+            // That includes a transition that changed the local state after
+            // the second check above, but whose observer had not announced a
+            // mirroring yet: it overlaps this call and is treated as if it
+            // happened after the removal.
             auto const it = find_entry();
             if (it == peers_.end() || it->second.mirrors_in_flight != 0 ||
                 it->second.mirror_sequence != mirror_sequence)

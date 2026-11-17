@@ -114,17 +114,35 @@ namespace hpx::parallel::detail {
                 policy.parameters(), policy.executor(),
                 hpx::chrono::null_duration, (std::min) (len1, len2));
 
-        std::size_t const step = (len1 + cores - 1) / cores;
+        // An empty first range uses one synthetic chunk for the second range.
+        cores = (std::max) (cores, static_cast<std::size_t>(1));
+
+        std::size_t const step = len1 == 0 ? 0 : (len1 + cores - 1) / cores;
 
         std::shared_ptr<buffer_type[]> buffer(
             new buffer_type[combiner(len1, len2)]);
         std::shared_ptr<set_chunk_data[]> chunks(new set_chunk_data[cores]);
 
-        // first step, is applied to all partitions
-        auto f1 = [=](set_chunk_data* curr_chunk,
-                      std::size_t const part_size) mutable -> void {
-            HPX_ASSERT(part_size == 1);
-            HPX_UNUSED(part_size);
+        // first step, is applied to each chunk of sequence 1
+        auto handle_chunk = [=](set_chunk_data* curr_chunk) mutable -> void {
+            // The synthetic chunk applies the set operation to the full
+            // second range when the first range is empty.
+            if (len1 == 0)
+            {
+                if (curr_chunk != chunks.get())
+                {
+                    return;    // only the first chunk does the work
+                }
+
+                curr_chunk->start = combiner(0, 0);
+                auto buffer_dest = buffer.get() + curr_chunk->start;
+                auto op_result = setop(
+                    first1, first1, first2, first2 + len2, buffer_dest, f);
+                curr_chunk->first1 = op_result.in1 - first1;
+                curr_chunk->first2 = op_result.in2 - first2;
+                curr_chunk->len = op_result.out - buffer_dest;
+                return;
+            }
 
             // find start in sequence 1
             std::size_t start1 = (curr_chunk - chunks.get()) * step;
@@ -210,6 +228,17 @@ namespace hpx::parallel::detail {
             curr_chunk->len = op_result.out - buffer_dest;
         };
 
+        // The partitioner applies the chunk size of the given policy to the
+        // array of chunks, so a single partition may hold more than one of
+        // them.
+        auto f1 = [handle_chunk](set_chunk_data* curr_chunk,
+                      std::size_t const part_size) mutable -> void {
+            for (std::size_t i = 0; i != part_size; ++i, ++curr_chunk)
+            {
+                handle_chunk(curr_chunk);
+            }
+        };
+
         // second step, is executed after all partitions are done running
 
         // different versions of clang-format produce different formatting
@@ -239,6 +268,15 @@ namespace hpx::parallel::detail {
                 {
                     first2_pos = (std::max) (first2_pos, curr_chunk->first2);
                 }
+            }
+
+            if (chunk->first1 != set_chunk_data::uninit_first1)
+            {
+                first1_pos = (std::max) (first1_pos, chunk->first1);
+            }
+            if (chunk->first2 != set_chunk_data::uninit_first2)
+            {
+                first2_pos = (std::max) (first2_pos, chunk->first2);
             }
 
             // finally, copy data to destination
@@ -273,8 +311,13 @@ namespace hpx::parallel::detail {
                 parallel::util::
                     foreach_partitioner<hpx::execution::parallel_policy>::call(
                         hpx::execution::par, chunks.get(), cores,
-                        [copy_chunk](set_chunk_data* ch, std::size_t,
-                            std::size_t) { copy_chunk(ch); },
+                        [copy_chunk](set_chunk_data* ch,
+                            std::size_t const part_size, std::size_t) {
+                            for (std::size_t i = 0; i != part_size; ++i, ++ch)
+                            {
+                                copy_chunk(ch);
+                            }
+                        },
                         [](set_chunk_data* last) -> set_chunk_data* {
                             return last;
                         });

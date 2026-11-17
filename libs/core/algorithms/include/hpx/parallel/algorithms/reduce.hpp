@@ -366,6 +366,7 @@ namespace hpx {
 #include <hpx/parallel/algorithms/detail/distance.hpp>
 #include <hpx/parallel/algorithms/detail/reduce.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
+#include <hpx/parallel/algorithms/detail/task_size_argument.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
 #include <hpx/parallel/util/loop.hpp>
@@ -429,15 +430,15 @@ namespace hpx::parallel {
                 if constexpr (std::is_convertible_v<
                                   std::iter_reference_t<FwdIterB>, T>)
                 {
-                    auto f1 = hpx::threads::detail::with_task_size_of<T const&,
-                        std::iter_reference_t<FwdIterB>>(
+                    auto f1 = hpx::threads::detail::with_task_size(
                         [r](FwdIterB part_begin,
                             std::size_t part_size) mutable -> T {
                             T val = *part_begin;
                             return detail::sequential_reduce<ExPolicy>(
                                 ++part_begin, --part_size, HPX_MOVE(val), r);
                         },
-                        r);
+                        task_size_of_iteration<T const&,
+                            std::iter_reference_t<FwdIterB>>(r, first));
 
                     return util::partitioner<ExPolicy, T>::call(
                         HPX_FORWARD(ExPolicy, policy), first,
@@ -455,8 +456,7 @@ namespace hpx::parallel {
                     using single_element = reduce_single_element<FwdIterB>;
                     using part_result = std::variant<T, single_element>;
 
-                    auto f1 = hpx::threads::detail::with_task_size_of<T const&,
-                        std::iter_reference_t<FwdIterB>>(
+                    auto f1 = hpx::threads::detail::with_task_size(
                         [r](FwdIterB part_begin,
                             std::size_t part_size) mutable -> part_result {
                             if (part_size == 1)
@@ -470,7 +470,8 @@ namespace hpx::parallel {
                                 std::next(part_begin, 2), part_size - 2,
                                 HPX_MOVE(val), r);
                         },
-                        r);
+                        task_size_of_iteration<T const&,
+                            std::iter_reference_t<FwdIterB>>(r, first));
 
                     return util::partitioner<ExPolicy, T, part_result>::call(
                         HPX_FORWARD(ExPolicy, policy), first,

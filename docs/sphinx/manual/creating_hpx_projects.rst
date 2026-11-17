@@ -472,9 +472,10 @@ to the section on :ref:`comps`.
 Using |hpx| with Makefile
 =========================
 
-A basic project building with |hpx| is through creating makefiles. The process
-of creating one can get complex depending upon the use of cmake parameter
-``HPX_WITH_HPX_MAIN`` (which defaults to ON).
+A basic project building with |hpx| is through creating makefiles. On Linux and
+macOS, applications that include :hpx-header:`wrap/include,hpx/hpx_main.hpp`
+have to link ``libhpx_wrap.a`` and redirect the program's entry point when
+linking.
 
 How to build |hpx| applications with makefile
 ---------------------------------------------
@@ -508,7 +509,7 @@ Add the following code:
 
    LIBRARY_DIRECTIVES=-L$(HPX_ROOT)/lib $(HPX_ROOT)/lib/libhpx_init.a $(HPX_ROOT)/lib/libhpx.so $(Boost_ROOT)/lib/libboost_atomic-mt.so $(Boost_ROOT)/lib/libboost_filesystem-mt.so $(Boost_ROOT)/lib/libboost_program_options-mt.so $(Boost_ROOT)/lib/libboost_regex-mt.so $(Boost_ROOT)/lib/libboost_system-mt.so -lpthread $(Tcmalloc_ROOT)/libtcmalloc_minimal.so $(Hwloc_ROOT)/libhwloc.so -ldl -lrt
 
-   LINK_FLAGS=$(HPX_ROOT)/lib/libhpx_wrap.a -Wl,-wrap=main  # should be left empty for HPX_WITH_HPX_MAIN=OFF
+   LINK_FLAGS=$(HPX_ROOT)/lib/libhpx_wrap.a -Wl,-wrap=main
 
    hello_world: hello_world.o
       $(CXX) $(CXXFLAGS) -o hello_world hello_world.o $(LIBRARY_DIRECTIVES) $(LINK_FLAGS)
@@ -518,7 +519,10 @@ Add the following code:
 
 .. important::
 
-   ``LINK_FLAGS`` should be left empty if HPX_WITH_HPX_MAIN is set to OFF.
+   The example above is for Linux. On macOS, the shared libraries use the
+   ``.dylib`` suffix, ``-lrt`` has to be removed from ``LIBRARY_DIRECTIVES``
+   and ``-Wl,-wrap=main`` in ``LINK_FLAGS`` has to be replaced with
+   ``-Wl,-e,_initialize_main``, or see :ref:`pkgconfig`.
    Boost in the above example is build with ``--layout=tagged``. Actual Boost
    flags may vary on your build of Boost.
 
@@ -580,7 +584,7 @@ Now, in the directory, create a Makefile. Add the following code:
 
    LIBRARY_DIRECTIVES=-L$(HPX_ROOT)/lib $(HPX_ROOT)/lib/libhpx_init.a $(HPX_ROOT)/lib/libhpx.so $(Boost_ROOT)/lib/libboost_atomic-mt.so $(Boost_ROOT)/lib/libboost_filesystem-mt.so $(Boost_ROOT)/lib/libboost_program_options-mt.so $(Boost_ROOT)/lib/libboost_regex-mt.so $(Boost_ROOT)/lib/libboost_system-mt.so -lpthread $(Tcmalloc_ROOT)/libtcmalloc_minimal.so $(Hwloc_ROOT)/libhwloc.so -ldl -lrt
 
-   LINK_FLAGS=$(HPX_ROOT)/lib/libhpx_wrap.a -Wl,-wrap=main  # should be left empty for HPX_WITH_HPX_MAIN=OFF
+   LINK_FLAGS=$(HPX_ROOT)/lib/libhpx_wrap.a -Wl,-wrap=main
 
    hello_world_client: libhpx_hello_world hello_world_client.o
      $(CXX) $(CXXFLAGS) -o hello_world_client $(LIBRARY_DIRECTIVES) libhpx_hello_world $(LINK_FLAGS)

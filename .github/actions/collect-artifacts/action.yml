@@ -25,9 +25,15 @@ runs:
       run: |
         cd build
         mkdir -p ${{ inputs.job-name }}
-        xsltproc \
-          ../.github/ci-scripts/conv.xsl Testing/$(head -n 1 < Testing/TAG)/Test.xml \
-          > ${{ inputs.job-name }}/Test.xml
+        test_xml="Testing/$(head -n 1 < Testing/TAG)/Test.xml"
+        if command -v xsltproc > /dev/null; then
+          xsltproc ../.github/ci-scripts/conv.xsl "$test_xml" \
+            > ${{ inputs.job-name }}/Test.xml
+        else
+          # the Windows runners have no xsltproc: keep the CTest results
+          echo "::notice::xsltproc not found, keeping the CTest Test.xml"
+          cp "$test_xml" ${{ inputs.job-name }}/Test.xml
+        fi
     
     - name: Move core dumps
       if: failure() && inputs.collect-failure-artifacts == 'true'

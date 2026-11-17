@@ -255,6 +255,17 @@ microseconds, since that reads the queue of every victim. The spin counts
 rounds instead of reading the clock; the number of rounds per microsecond is
 measured once at startup.
 
+One idle worker thread of a pool doesn't sleep: a worker thread that would go
+to sleep becomes the sentinel if no other one is, and spins through its period
+instead. It looks at its own queues in every round, and at the queues it may
+steal from right after new work was created anywhere, otherwise every
+``hpx.idle_backoff_steal_check_interval`` microseconds. New work is then found
+within a round of the spin instead of after a wake up, which takes a few
+microseconds on Linux and a millisecond or more on Windows. The sentinel isn't
+counted as a spinning worker thread when deciding whom to wake up (see
+:ref:`thread_scheduler_wake_up`). It keeps one processing unit busy while the
+pool is idle.
+
 Creating new work wakes the sleeping worker threads; the local priority queue
 scheduler wakes at most one of them for a nano or small task (see
 :ref:`thread_scheduler_wake_up`). A worker thread woken this way may steal once

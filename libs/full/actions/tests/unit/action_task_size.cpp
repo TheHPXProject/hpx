@@ -23,11 +23,13 @@
 #include <hpx/modules/schedulers.hpp>
 #include <hpx/modules/testing.hpp>
 #include <hpx/modules/thread_pools.hpp>
+#include <hpx/modules/threading_base.hpp>
 
 #include <array>
 #include <atomic>
 #include <cstddef>
 #include <memory>
+#include <type_traits>
 #include <utility>
 
 using hpx::threads::task_size;
@@ -109,8 +111,8 @@ struct overriding_action
 {
 };
 HPX_REGISTER_ACTION_DECLARATION(overriding_action, overriding_action)
-HPX_REGISTER_ACTION(overriding_action, overriding_action)
 HPX_ACTION_HAS_TASK_SIZE(overriding_action, task_size::large)
+HPX_REGISTER_ACTION(overriding_action, overriding_action)
 
 // a direct action doesn't create a thread
 HPX_PLAIN_DIRECT_ACTION(medium_function, medium_direct_action)
@@ -125,15 +127,53 @@ struct server : hpx::components::component_base<server>
         return 42;
     }
 
+    // The priority and stack size of the thread the action runs on, to check
+    // that HPX_ACTION_HAS_PRIORITY and HPX_ACTION_USES_LARGE_STACK apply to
+    // component actions as well (#8019).
+    int get_priority() const
+    {
+        return static_cast<int>(
+            hpx::threads::get_thread_priority(hpx::threads::get_self_id()));
+    }
+
+    std::ptrdiff_t get_stacksize() const
+    {
+        return hpx::threads::get_stack_size(hpx::threads::get_self_id());
+    }
+
     HPX_DEFINE_COMPONENT_ACTION(server, get, get_action)
+    HPX_DEFINE_COMPONENT_ACTION(server, get_priority, get_priority_action)
+    HPX_DEFINE_COMPONENT_ACTION(server, get_stacksize, get_stacksize_action)
 };
 
 using server_type = hpx::components::component<server>;
 HPX_REGISTER_COMPONENT(server_type, server)
 
+// The task size, the priority and the stack size of an action are given
+// between its declaration and its registration: the registration uses them
 HPX_REGISTER_ACTION_DECLARATION(server::get_action, server_get_action)
-HPX_REGISTER_ACTION(server::get_action, server_get_action)
 HPX_ACTION_HAS_TASK_SIZE(server::get_action, task_size::large)
+HPX_REGISTER_ACTION(server::get_action, server_get_action)
+
+HPX_REGISTER_ACTION_DECLARATION(
+    server::get_priority_action, server_get_priority_action)
+HPX_ACTION_HAS_PRIORITY(
+    server::get_priority_action, hpx::threads::thread_priority::high)
+HPX_REGISTER_ACTION(server::get_priority_action, server_get_priority_action)
+
+HPX_REGISTER_ACTION_DECLARATION(
+    server::get_stacksize_action, server_get_stacksize_action)
+HPX_ACTION_USES_LARGE_STACK(server::get_stacksize_action)
+HPX_REGISTER_ACTION(server::get_stacksize_action, server_get_stacksize_action)
+
+#if defined(HPX_HAVE_CXX26_REFLECTION)
+HPX_COMPONENT_ACTION(server, get_priority, high_priority_action);
+HPX_ACTION_HAS_PRIORITY(
+    high_priority_action, hpx::threads::thread_priority::high)
+
+HPX_COMPONENT_ACTION(server, get_stacksize, large_stack_action);
+HPX_ACTION_USES_LARGE_STACK(large_stack_action)
+#endif
 
 ///////////////////////////////////////////////////////////////////////////////
 #if defined(HPX_HAVE_CXX26_REFLECTION)
@@ -254,11 +294,21 @@ struct annotated_server : hpx::components::component_base<annotated_server>
         return 42;
     }
 
+    [[= hpx::task_size::small_]] int get_overridden() const
+    {
+        return 42;
+    }
+
     HPX_DEFINE_COMPONENT_ACTION(annotated_server, get, get_action)
 };
 
 // HPX_COMPONENT_ACTION makes a reflect_component_action as well
 HPX_COMPONENT_ACTION(annotated_server, get_large, annotated_get_large_action);
+
+// HPX_ACTION_HAS_TASK_SIZE overrides the annotation
+HPX_COMPONENT_ACTION(
+    annotated_server, get_overridden, annotated_get_overridden_action);
+HPX_ACTION_HAS_TASK_SIZE(annotated_get_overridden_action, task_size::large)
 
 using annotated_server_type = hpx::components::component<annotated_server>;
 HPX_REGISTER_COMPONENT(annotated_server_type, annotated_server)
@@ -266,6 +316,137 @@ HPX_REGISTER_COMPONENT(annotated_server_type, annotated_server)
 HPX_REGISTER_ACTION_DECLARATION(
     annotated_server::get_action, annotated_server_get_action)
 HPX_REGISTER_ACTION(annotated_server::get_action, annotated_server_get_action)
+
+// annotated member functions bound to actions through member function
+// pointers, as make_action_t and hpx::async<&C::f> do
+struct member_base
+{
+    [[= hpx::task_size::medium]] int get_inherited() const
+    {
+        return 42;
+    }
+};
+
+struct member_server
+  : hpx::components::component_base<member_server>
+  , member_base
+{
+    // Comparing a pointer to a virtual member is not a constant expression,
+    // so the lookup of every member declared below passes this one first.
+    [[= hpx::task_size::medium]] virtual int get_virtual() const
+    {
+        return 42;
+    }
+
+    // A pointer to a consteval member can't be reflected as a constant, so
+    // the lookup must not try. GCC 16 accepts it either way, this is for the
+    // Clang CI job.
+    consteval int get_consteval() const
+    {
+        return 42;
+    }
+
+    [[= hpx::task_size::small_]] int get_small() const
+    {
+        return 42;
+    }
+
+    // the same type as get_small, but another size
+    [[= hpx::task_size::large]] int get_large() const
+    {
+        return 42;
+    }
+
+    int get_plain() const
+    {
+        return 42;
+    }
+
+    [[= hpx::task_size::small_]] int get_overload(int) const
+    {
+        return 42;
+    }
+
+    [[= hpx::task_size::large]] int get_overload(double) const
+    {
+        return 42;
+    }
+
+    [[= hpx::task_size::small_]] int get_overridden() const
+    {
+        return 42;
+    }
+
+    // the other three kinds of member function pointer actions
+    [[= hpx::task_size::small_]] int get_mutable()
+    {
+        return 42;
+    }
+
+    [[= hpx::task_size::medium]] int get_noexcept() noexcept
+    {
+        return 42;
+    }
+
+    [[= hpx::task_size::large]] int get_const_noexcept() const noexcept
+    {
+        return 42;
+    }
+};
+
+using member_server_type = hpx::components::component<member_server>;
+HPX_REGISTER_COMPONENT(member_server_type, member_server)
+
+using member_overload_int = int (member_server::*)(int) const;
+using member_overload_double = int (member_server::*)(double) const;
+
+struct member_small_action
+  : hpx::actions::make_action_t<decltype(&member_server::get_small),
+        &member_server::get_small, member_small_action>
+{
+};
+HPX_REGISTER_ACTION_DECLARATION(member_small_action, member_small_action)
+HPX_REGISTER_ACTION(member_small_action, member_small_action)
+
+struct member_plain_action
+  : hpx::actions::make_action_t<decltype(&member_server::get_plain),
+        &member_server::get_plain, member_plain_action>
+{
+};
+HPX_REGISTER_ACTION_DECLARATION(member_plain_action, member_plain_action)
+HPX_REGISTER_ACTION(member_plain_action, member_plain_action)
+
+struct member_overload_int_action
+  : hpx::actions::make_action_t<member_overload_int,
+        static_cast<member_overload_int>(&member_server::get_overload),
+        member_overload_int_action>
+{
+};
+HPX_REGISTER_ACTION_DECLARATION(
+    member_overload_int_action, member_overload_int_action)
+HPX_REGISTER_ACTION(member_overload_int_action, member_overload_int_action)
+
+struct member_overload_double_action
+  : hpx::actions::make_action_t<member_overload_double,
+        static_cast<member_overload_double>(&member_server::get_overload),
+        member_overload_double_action>
+{
+};
+HPX_REGISTER_ACTION_DECLARATION(
+    member_overload_double_action, member_overload_double_action)
+HPX_REGISTER_ACTION(
+    member_overload_double_action, member_overload_double_action)
+
+// HPX_ACTION_HAS_TASK_SIZE overrides the annotation
+struct member_overridden_action
+  : hpx::actions::make_action_t<decltype(&member_server::get_overridden),
+        &member_server::get_overridden, member_overridden_action>
+{
+};
+HPX_REGISTER_ACTION_DECLARATION(
+    member_overridden_action, member_overridden_action)
+HPX_ACTION_HAS_TASK_SIZE(member_overridden_action, task_size::large)
+HPX_REGISTER_ACTION(member_overridden_action, member_overridden_action)
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -301,16 +482,23 @@ void test_plain_actions()
 
 void test_component_actions()
 {
-    // With reflection, HPX_DEFINE_COMPONENT_ACTION derives get_action from a
-    // reflect_component_action that is its own derived_type, so the thread is
-    // sized from that base and HPX_ACTION_HAS_TASK_SIZE is not seen yet. See
-    // #8019.
-#if !defined(HPX_HAVE_CXX26_REFLECTION)
     hpx::id_type const id = hpx::new_<server>(hpx::find_here()).get();
 
     check_sizes(
         [&] { HPX_TEST_EQ(hpx::async<server::get_action>(id).get(), 42); }, 0,
         0, 1);
+
+    // hpx::async with an action object takes the priority and stack size from
+    // the action
+    int const high = static_cast<int>(hpx::threads::thread_priority::high);
+    std::ptrdiff_t const large =
+        hpx::threads::get_stack_size(hpx::threads::thread_stacksize::large);
+
+    HPX_TEST_EQ(hpx::async(server::get_priority_action(), id).get(), high);
+    HPX_TEST_EQ(hpx::async(server::get_stacksize_action(), id).get(), large);
+#if defined(HPX_HAVE_CXX26_REFLECTION)
+    HPX_TEST_EQ(hpx::async(high_priority_action(), id).get(), high);
+    HPX_TEST_EQ(hpx::async(large_stack_action(), id).get(), large);
 #endif
 }
 
@@ -372,6 +560,12 @@ void test_annotated_actions()
             HPX_TEST_EQ(hpx::async<annotated_get_large_action>(id).get(), 42);
         },
         0, 0, 1);
+    check_sizes(
+        [&] {
+            HPX_TEST_EQ(
+                hpx::async<annotated_get_overridden_action>(id).get(), 42);
+        },
+        0, 0, 1);
 
     static_assert(action_task_size_v<reflect_action<^^annotated_medium>> ==
         task_size::medium);
@@ -402,10 +596,79 @@ void test_annotated_actions()
         action_task_size_v<make_action_t<decltype(&annotated_template<double>),
             &annotated_template<double>>> == task_size::medium);
 
-    // an action bound to a member function pointer doesn't read annotations
+    // an action bound to a member function pointer reads the annotation of the
+    // member function
     static_assert(
         action_task_size_v<make_action_t<decltype(&annotated_server::get),
-            &annotated_server::get>> == task_size::unknown);
+            &annotated_server::get>> == task_size::medium);
+
+    hpx::id_type const member_id = hpx::new_<member_server>(here).get();
+    check_sizes(
+        [&] {
+            HPX_TEST_EQ(hpx::async<member_small_action>(member_id).get(), 42);
+        },
+        1, 0, 0);
+#if defined(HPX_HAVE_AUTOMATIC_SERIALIZATION_REGISTRATION) ||                  \
+    !defined(HPX_HAVE_NETWORKING)
+    // hpx::async<&C::f> makes the same action as make_action_t
+    check_sizes(
+        [&] {
+            HPX_TEST_EQ(
+                hpx::async<&member_server::get_large>(member_id).get(), 42);
+        },
+        0, 0, 1);
+#endif
+    check_sizes(
+        [&] {
+            HPX_TEST_EQ(hpx::async<member_plain_action>(member_id).get(), 42);
+        },
+        0, 0, 0);
+    check_sizes(
+        [&] {
+            HPX_TEST_EQ(
+                hpx::async<member_overload_int_action>(member_id, 1).get(), 42);
+        },
+        1, 0, 0);
+    check_sizes(
+        [&] {
+            HPX_TEST_EQ(
+                hpx::async<member_overload_double_action>(member_id, 1.0).get(),
+                42);
+        },
+        0, 0, 1);
+    check_sizes(
+        [&] {
+            HPX_TEST_EQ(
+                hpx::async<member_overridden_action>(member_id).get(), 42);
+        },
+        0, 0, 1);
+
+    static_assert(
+        action_task_size_v<make_action_t<decltype(&member_server::get_virtual),
+            &member_server::get_virtual>> == task_size::medium);
+
+    // get_small is declared after the consteval member get_consteval
+    static_assert(
+        action_task_size_v<make_action_t<decltype(&member_server::get_small),
+            &member_server::get_small>> == task_size::small_);
+
+    static_assert(
+        action_task_size_v<make_action_t<decltype(&member_server::get_mutable),
+            &member_server::get_mutable>> == task_size::small_);
+    static_assert(
+        action_task_size_v<make_action_t<decltype(&member_server::get_noexcept),
+            &member_server::get_noexcept>> == task_size::medium);
+    static_assert(
+        action_task_size_v<
+            make_action_t<decltype(&member_server::get_const_noexcept),
+                &member_server::get_const_noexcept>> == task_size::large);
+
+    // the member is looked up in the class that declares it
+    static_assert(std::is_same_v<decltype(&member_server::get_inherited),
+        int (member_base::*)() const>);
+    static_assert(action_task_size_v<
+                      make_action_t<decltype(&member_server::get_inherited),
+                          &member_server::get_inherited>> == task_size::medium);
 #endif
 }
 

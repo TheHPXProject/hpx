@@ -159,6 +159,30 @@ The shown code defines an action type ``some_global_action`` inside the namespac
    to comprise a globally unique C++ identifier representing the action. This is
    used for serialization purposes.
 
+A global function can also be invoked without defining an action type for it
+by passing a pointer to the function as the template argument of ``hpx::async``::
+
+    namespace app
+    {
+        double square(double d)
+        {
+            return d * d;
+        }
+    }
+
+    hpx::future<double> f = hpx::async<&app::square>(target, 2.0);
+
+This creates the action for ``app::square`` internally. It relies on the action
+being registered automatically, which is the default. If |hpx| was configured
+with ``HPX_WITH_AUTOMATIC_SERIALIZATION_REGISTRATION=OFF``, use
+:c:macro:`HPX_PLAIN_ACTION` instead. The target can be an ``hpx::id_type`` or a
+distribution policy, but not a client.
+
+The action is registered by the executable that instantiates
+``hpx::async<&app::square>``. A locality can only run the action if it was
+registered there too, so this works only if all localities run the same
+executable.
+
 For member functions of objects which have been registered with AGAS
 (e.g., 'components'), a different registration macro
 :c:macro:`HPX_DEFINE_COMPONENT_ACTION` has to be utilized. Any component needs
@@ -207,6 +231,18 @@ functions, they should still be manageable.
 The most important macro invocation is the :c:macro:`HPX_DEFINE_COMPONENT_ACTION` in the header file
 as this defines the action type we need to invoke the member function. For a
 complete example of a simple component action see :download:`component_in_executable.cpp <../../examples/quickstart/component_in_executable.cpp>`.
+
+Member functions of components can also be invoked without defining an action
+type for them, the same way as global functions::
+
+    hpx::future<int> f =
+        hpx::async<&app::some_component::some_member_function>(
+            component_id, std::string("42"));
+
+The component itself still has to be registered using
+:c:macro:`HPX_REGISTER_COMPONENT`, only the action macros are not needed. In
+addition to an ``hpx::id_type`` or a distribution policy, the target can also be
+a client of the component.
 
 .. _reflection_based_component_actions:
 
@@ -994,14 +1030,22 @@ reimplemented:
 * ``begin``, ``cbegin``, ``end``, ``cend``
 * ``size``
 
+``partitioned_vector`` and ``coarray`` for ``double``, ``int``, ``long long``
+and ``std::string`` are predefined by the |hpx| library. Any other element type
+has to be registered with ``HPX_REGISTER_PARTITIONED_VECTOR`` (or
+``HPX_REGISTER_COARRAY``) in exactly one module of the application. The
+predefined types have to be registered only if |hpx| is linked statically;
+registering them again when |hpx| is linked dynamically is a compile time error.
+
 An example of how to use the ``partitioned_vector`` container would be::
 
     #include <hpx/include/partitioned_vector.hpp>
 
-    // The following code generates all necessary boiler plate to enable the
-    // remote creation of 'partitioned_vector' segments
-    //
+    // partitioned_vector<double> is predefined by HPX, it has to be registered
+    // only if HPX is linked statically
+    #if defined(HPX_HAVE_STATIC_LINKING)
     HPX_REGISTER_PARTITIONED_VECTOR(double);
+    #endif
 
     // By default, the number of segments is equal to the current number of
     // localities
@@ -1015,10 +1059,11 @@ with distribution policies would be::
     #include <hpx/include/partitioned_vector.hpp>
     #include <hpx/modules/runtime_distributed.hpp>
 
-    // The following code generates all necessary boiler plate to enable the
-    // remote creation of 'partitioned_vector' segments
-    //
+    // partitioned_vector<double> is predefined by HPX, it has to be registered
+    // only if HPX is linked statically
+    #if defined(HPX_HAVE_STATIC_LINKING)
     HPX_REGISTER_PARTITIONED_VECTOR(double);
+    #endif
 
     std::size_t num_segments = 10;
     std::vector<hpx::id_type> locs = hpx::find_all_localities();
@@ -1039,10 +1084,11 @@ to the segmented container::
 
     #include <hpx/include/partitioned_vector.hpp>
 
-    // The following code generates all necessary boiler plate to enable the
-    // remote creation of 'partitioned_vector' segments
-    //
+    // partitioned_vector<double> is predefined by HPX, it has to be registered
+    // only if HPX is linked statically
+    #if defined(HPX_HAVE_STATIC_LINKING)
     HPX_REGISTER_PARTITIONED_VECTOR(double);
+    #endif
 
     hpx::future<void> fserver = hpx::async(
       [](){
@@ -1129,10 +1175,11 @@ local segment (by providing a per-segment iterator as a parameter)::
 
     #include <hpx/include/partitioned_vector.hpp>
 
-    // The following code generates all necessary boiler plate to enable the
-    // remote creation of 'partitioned_vector' segments
-    //
+    // partitioned_vector<double> is predefined by HPX, it has to be registered
+    // only if HPX is linked statically
+    #if defined(HPX_HAVE_STATIC_LINKING)
     HPX_REGISTER_PARTITIONED_VECTOR(double);
+    #endif
 
     using iterator = hpx::partitioned_vector<T>::iterator;
     using traits   = hpx::traits::segmented_iterator_traits<iterator>;
@@ -1322,10 +1369,11 @@ By default, the ``partitioned_vector`` class integrates 1-D views of its segment
 
     #include <hpx/include/partitioned_vector.hpp>
 
-    // The following code generates all necessary boiler plate to enable the
-    // remote creation of 'partitioned_vector' segments
-    //
+    // partitioned_vector<double> is predefined by HPX, it has to be registered
+    // only if HPX is linked statically
+    #if defined(HPX_HAVE_STATIC_LINKING)
     HPX_REGISTER_PARTITIONED_VECTOR(double);
+    #endif
 
     using iterator = hpx::partitioned_vector<double>::iterator;
     using traits   = hpx::traits::segmented_iterator_traits<iterator>;
@@ -1362,10 +1410,11 @@ Here are some examples of using subscripts in the 2-D view case::
     #include <hpx/components/containers/partitioned_vector/partitioned_vector_view.hpp>
     #include <hpx/include/partitioned_vector.hpp>
 
-    // The following code generates all necessary boiler plate to enable the
-    // remote creation of 'partitioned_vector' segments
-    //
+    // partitioned_vector<double> is predefined by HPX, it has to be registered
+    // only if HPX is linked statically
+    #if defined(HPX_HAVE_STATIC_LINKING)
     HPX_REGISTER_PARTITIONED_VECTOR(double);
+    #endif
 
     using Vec = hpx::partitioned_vector<double>;
     using View_2D = hpx::partitioned_vector_view<double,2>;
@@ -1401,10 +1450,11 @@ Here are some examples of using iterators in the 3-D view case::
     #include <hpx/components/containers/partitioned_vector/partitioned_vector_view.hpp>
     #include <hpx/include/partitioned_vector.hpp>
 
-    // The following code generates all necessary boiler plate to enable the
-    // remote creation of 'partitioned_vector' segments
-    //
+    // partitioned_vector<int> is predefined by HPX, it has to be registered
+    // only if HPX is linked statically
+    #if defined(HPX_HAVE_STATIC_LINKING)
     HPX_REGISTER_PARTITIONED_VECTOR(int);
+    #endif
 
     using Vec = hpx::partitioned_vector<int>;
     using View_3D = hpx::partitioned_vector_view<int,3>;
@@ -1566,10 +1616,11 @@ operations::
     #include <hpx/components/containers/coarray/coarray.hpp>
     #include <hpx/modules/collectives.hpp>
 
-    // The following code generates all necessary boiler plate to enable the
-    // co-creation of 'coarray'
-    //
+    // coarray<double> is predefined by HPX, it has to be registered only if
+    // HPX is linked statically
+    #if defined(HPX_HAVE_STATIC_LINKING)
     HPX_REGISTER_COARRAY(double);
+    #endif
 
     // Parallel section (suppose 'block' an spmd_block instance)
     {
@@ -1634,10 +1685,11 @@ Here is an example of using local subscripts::
     #include <hpx/components/containers/coarray/coarray.hpp>
     #include <hpx/modules/collectives.hpp>
 
-    // The following code generates all necessary boiler plate to enable the
-    // co-creation of 'coarray'
-    //
+    // coarray<double> is predefined by HPX, it has to be registered only if
+    // HPX is linked statically
+    #if defined(HPX_HAVE_STATIC_LINKING)
     HPX_REGISTER_COARRAY(double);
+    #endif
 
     // Parallel section (suppose 'block' an spmd_block instance)
     {
