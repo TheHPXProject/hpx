@@ -2604,6 +2604,28 @@ if((HPX_WITH_NETWORKING AND HPX_WITH_PARCELPORT_MPI)
 )
   hpx_setup_mpi()
 endif()
+
+# parcelports moving CUDA device memory themselves, ON by default if the MPI
+# library is CUDA-aware
+if(HPX_WITH_NETWORKING AND HPX_WITH_CUDA)
+  set(_parcelport_cuda_support_default OFF)
+  if(HPX_WITH_PARCELPORT_MPI)
+    hpx_check_mpi_cuda_aware()
+    if(HPX_MPI_CUDA_AWARE)
+      set(_parcelport_cuda_support_default ON)
+    endif()
+  endif()
+  hpx_option(
+    HPX_WITH_PARCELPORT_CUDA_SUPPORT
+    BOOL
+    "Enable parcelports to send and receive CUDA device memory directly if the network library supports it (CUDA-aware MPI, later NCCL); without it device memory is copied through host memory. Default: ON if the MPI library is CUDA-aware."
+    ${_parcelport_cuda_support_default}
+    CATEGORY "Parcelport"
+  )
+  if(HPX_WITH_PARCELPORT_CUDA_SUPPORT)
+    hpx_add_config_define(HPX_HAVE_PARCELPORT_CUDA_SUPPORT)
+  endif()
+endif()
 if(HPX_WITH_NETWORKING AND HPX_WITH_PARCELPORT_LCI)
   include(HPX_SetupLCI)
   hpx_setup_lci()

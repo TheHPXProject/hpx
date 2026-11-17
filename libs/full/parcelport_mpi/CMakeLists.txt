@@ -42,6 +42,14 @@ add_hpx_module(
   CMAKE_SUBDIRS examples tests
 )
 
+# device memory is sent directly if the MPI library is CUDA-aware (checked in
+# hpx_check_mpi_cuda_aware) and supports it at runtime
+if(HPX_WITH_PARCELPORT_CUDA_SUPPORT AND HPX_MPI_CUDA_AWARE)
+  target_compile_definitions(
+    hpx_parcelport_mpi PRIVATE HPX_PARCELPORT_MPI_HAVE_CUDA_QUERY
+  )
+endif()
+
 set(HPX_STATIC_PARCELPORT_PLUGINS
     ${HPX_STATIC_PARCELPORT_PLUGINS} parcelport_mpi
     CACHE INTERNAL "" FORCE
