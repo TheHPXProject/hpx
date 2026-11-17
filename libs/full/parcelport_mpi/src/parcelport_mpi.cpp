@@ -27,6 +27,11 @@
 #include <hpx/parcelport_mpi/receiver.hpp>
 #include <hpx/parcelport_mpi/sender.hpp>
 
+// set by CMake if the MPI library is CUDA-aware (Open MPI's mpi-ext.h)
+#if defined(HPX_PARCELPORT_MPI_HAVE_CUDA_QUERY)
+#include <mpi-ext.h>    // MPIX_Query_cuda_support
+#endif
+
 #include <asio/io_context.hpp>
 #include <asio/version.hpp>
 #if ASIO_VERSION >= 103400
@@ -70,6 +75,32 @@ namespace hpx::parcelset {
         static constexpr char const* pool_name_postfix() noexcept
         {
             return "-mpi";
+        }
+
+        // Zero-copy chunks may refer to device memory if the MPI library
+        // handles device pointers (CUDA-aware MPI) and
+        // hpx.parcel.mpi.device_memory isn't 0. All localities must use the
+        // same MPI library.
+        static bool send_device_memory(util::runtime_configuration const& ini)
+        {
+            if (hpx::util::get_entry_as<int>(
+                    ini, "hpx.parcel.mpi.device_memory", 1) == 0)
+            {
+                return false;
+            }
+#if defined(HPX_PARCELPORT_MPI_HAVE_CUDA_QUERY)
+            // the query is valid only once MPI is initialized; the MPI
+            // parcelport exists also if MPI isn't enabled
+            int initialized = 0;
+            if (!util::mpi_environment::enabled() ||
+                MPI_Initialized(&initialized) != MPI_SUCCESS || !initialized)
+            {
+                return false;
+            }
+            return MPIX_Query_cuda_support() == 1;
+#else
+            return false;
+#endif
         }
     };
 
@@ -432,7 +463,12 @@ struct hpx::traits::plugin_config_data<
             "sendimm = 0\n"
             "ack_handshake = 0\n"
             "max_header_receives = "
-            "${HPX_HAVE_PARCELPORT_MPI_MAX_HEADER_RECEIVES:0}\n";
+            "${HPX_HAVE_PARCELPORT_MPI_MAX_HEADER_RECEIVES:0}\n"
+
+            // send and receive device memory directly if the MPI library
+            // supports it (CUDA-aware MPI)
+            "device_memory = "
+            "${HPX_HAVE_PARCELPORT_MPI_DEVICE_MEMORY:1}\n";
     }
 };    // namespace hpx::traits
 

@@ -98,8 +98,10 @@ namespace hpx::parcelset {
         /// Called on each OS thread the runtime starts (worker, I/O, timer
         /// and parcel threads) before the thread runs any work, with the
         /// arguments of callback_notifier::on_start_thread. Parcelports may
-        /// prepare per-thread state of the network library here. Overrides
-        /// should call this base implementation.
+        /// prepare per-thread state of the network library here. If the
+        /// parcelport sends device memory (see use_device_memory), this makes
+        /// the device's primary CUDA context current. Overrides should call
+        /// this base implementation.
         virtual void on_start_thread(std::size_t local_thread_num,
             std::size_t global_thread_num, char const* pool_name,
             char const* postfix);
@@ -350,6 +352,14 @@ namespace hpx::parcelset {
             std::error_code const& ec, parcel const& p);
 
     protected:
+        /// Called by a parcelport that hands device memory to its network
+        /// library (zero-copy device chunks). Records the device current on
+        /// the calling thread (the thread creating the runtime; one GPU per
+        /// locality), which on_start_thread makes current on every thread.
+        /// Returns false if no device is usable, device memory is not sent
+        /// directly then.
+        bool use_device_memory();
+
         // mutex for all the member data
         mutable hpx::spinlock mtx_;
 
@@ -395,6 +405,9 @@ namespace hpx::parcelset {
         std::string type_;
 
         std::size_t zero_copy_serialization_threshold_;
+
+        /// the device whose memory is sent directly, -1 if none
+        int device_ = -1;
     };
 }    // namespace hpx::parcelset
 
