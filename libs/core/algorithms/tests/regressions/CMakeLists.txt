@@ -26,6 +26,7 @@ set(tests
     partial_sort_early_return
     prefetching_iterator
     ranges_distinct_sentinel_8003
+    ranges_distinct_sentinel_8129
     reduce_3641
     reduce_with_auto_chunk_size
     reverse_rotate_copy_result
