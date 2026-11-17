@@ -119,6 +119,17 @@ namespace hpx::execution::experimental::detail {
 
         std::size_t const overall_threads =
             hpx::threads::hardware_concurrency();
+        std::size_t const total_threads = rp.get_num_threads();
+        if (first_thread < total_threads)
+        {
+            num_threads =
+                (std::min) (num_threads, total_threads - first_thread);
+        }
+        else
+        {
+            first_thread = total_threads > 0 ? (total_threads - 1) : 0;
+            num_threads = (std::min) (num_threads, static_cast<std::size_t>(1));
+        }
         auto mask = hpx::threads::mask_type();
         hpx::threads::resize(mask, overall_threads);
         for (std::size_t i = 0; i != num_threads; ++i)

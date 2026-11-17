@@ -655,7 +655,9 @@ namespace hpx::execution::experimental {
 
                 auto const* pool =
                     pool_ ? pool_ : threads::detail::get_self_or_default_pool();
-                return pool->get_os_thread_count();
+                auto const pool_threads = pool->get_os_thread_count();
+                return pool_threads > first_core_ ? pool_threads - first_core_ :
+                                                    1;
             }
         }
 

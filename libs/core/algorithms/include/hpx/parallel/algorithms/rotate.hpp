@@ -256,8 +256,8 @@ namespace hpx::parallel {
             }
 
             // cores_right should be at least 1.
-            std::size_t cores_right = (std::max) (static_cast<std::size_t>(1),
-                cores > cores_left ? cores - cores_left : 1);
+            std::size_t cores_right =
+                cores > cores_left ? cores - cores_left : 1;
 
             // invoke the reverse operations on the left and right sections
             // concurrently
