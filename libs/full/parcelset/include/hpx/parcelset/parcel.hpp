@@ -119,6 +119,11 @@ namespace hpx::parcelset::detail {
         split_gids_type move_split_gids() const override;
         void set_split_gids(split_gids_type&& split_gids) override;
 
+        keep_alive_type const& keep_alive() const override;
+        void set_keep_alive(keep_alive_type&& keep_alive) override;
+
+        void on_receive_complete(hpx::move_only_function<void()> f) override;
+
         std::size_t num_chunks() const override;
         std::size_t& num_chunks() override;
 
@@ -152,7 +157,13 @@ namespace hpx::parcelset::detail {
         detail::parcel_data data_;
         std::unique_ptr<actions::base_action> action_;
 
+        // steps load() deferred until the zero-copy chunk data has arrived
+        void take_post_receive_actions(serialization::input_archive& ar);
+
         mutable split_gids_type split_gids_;
+        keep_alive_type keep_alive_;
+        serialization::detail::post_receive_actions::actions_type
+            post_receive_actions_;
         std::size_t size_;
         std::size_t num_chunks_;
     };

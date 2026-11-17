@@ -38,12 +38,26 @@ namespace hpx::parcelset::detail {
     //      need to do another await round for the id splitting
     //  - id_type: we need to await, if and only if, the credit of the
     //      id needs to split.
+    //  - data copied for zero-copy chunks (e.g. the host copy of device
+    //      memory): we need to await the copies that are not done yet.
     static bool preprocess_parcel(parcelset::parcel& p,
         serialization::output_archive& archive,
         serialization::detail::preprocess_container const& data,
         std::size_t overhead)
     {
         archive.reset();
+
+        // The parcel keeps the buffers zero-copy chunks will refer to alive
+        // (serialization creates them only if this exists). Buffers from an
+        // earlier preprocessing of this parcel (e.g. by post() before handing
+        // it to the parcelport) are reused.
+        auto& buffers =
+            archive
+                .get_extra_data<serialization::detail::preprocess_keep_alive>();
+        if (auto const& keep_alive = p.keep_alive(); !keep_alive.empty())
+        {
+            buffers.add_buffers(keep_alive);
+        }
 
         archive << p;
 
@@ -66,6 +80,14 @@ namespace hpx::parcelset::detail {
             p.set_split_gids(split_gids->move_split_gids());
         }
 
+        // buffers created during preprocessing that zero-copy chunks of this
+        // parcel will refer to; the parcel keeps them alive until it has been
+        // sent
+        if (!buffers.empty())
+        {
+            p.set_keep_alive(buffers.move_buffers());
+        }
+
         return true;
     }
 
@@ -77,11 +99,13 @@ namespace hpx::parcelset::detail {
 
         // NOLINTNEXTLINE(bugprone-crtp-constructor-accessibility)
         parcel_await_base(Parcel&& parcel, Handler&& handler,
-            std::uint32_t archive_flags, put_parcel_type pp) noexcept
+            std::uint32_t archive_flags, put_parcel_type pp,
+            std::size_t zero_copy_serialization_threshold) noexcept
           : put_parcel_(HPX_MOVE(pp))
           , parcel_(HPX_MOVE(parcel))
           , handler_(HPX_MOVE(handler))
-          , archive_(data_, archive_flags)
+          , archive_(data_, archive_flags, nullptr, nullptr,
+                zero_copy_serialization_threshold)
           , overhead_(archive_.bytes_written())
         {
         }
@@ -128,8 +152,10 @@ namespace hpx::parcelset::detail {
             write_handler_type, parcel_await>;
 
         parcel_await(parcelset::parcel&& p, write_handler_type&& f,
-            std::uint32_t archive_flags, put_parcel_type pp) noexcept
-          : base_type(HPX_MOVE(p), HPX_MOVE(f), archive_flags, HPX_MOVE(pp))
+            std::uint32_t archive_flags, put_parcel_type pp,
+            std::size_t zero_copy_serialization_threshold) noexcept
+          : base_type(HPX_MOVE(p), HPX_MOVE(f), archive_flags, HPX_MOVE(pp),
+                zero_copy_serialization_threshold)
         {
         }
 
@@ -151,8 +177,10 @@ namespace hpx::parcelset::detail {
 
         parcels_await(std::vector<parcelset::parcel>&& p,
             std::vector<write_handler_type>&& f, std::uint32_t archive_flags,
-            put_parcel_type pp) noexcept
-          : base_type(HPX_MOVE(p), HPX_MOVE(f), archive_flags, HPX_MOVE(pp))
+            put_parcel_type pp,
+            std::size_t zero_copy_serialization_threshold) noexcept
+          : base_type(HPX_MOVE(p), HPX_MOVE(f), archive_flags, HPX_MOVE(pp),
+                zero_copy_serialization_threshold)
           , idx_(0)
         {
         }
@@ -172,12 +200,14 @@ namespace hpx::parcelset::detail {
 
     ///////////////////////////////////////////////////////////////////////////
     void parcel_await_apply(parcelset::parcel&& p, write_handler_type&& f,
-        std::uint32_t archive_flags, put_parcel_type pp)
+        std::uint32_t archive_flags, put_parcel_type pp,
+        std::size_t zero_copy_serialization_threshold)
     {
         // Run the first pass on the stack. Most parcels have no futures to
         // wait for, so they need no heap object.
         serialization::detail::preprocess_container data;
-        serialization::output_archive archive(data, archive_flags);
+        serialization::output_archive archive(data, archive_flags, nullptr,
+            nullptr, zero_copy_serialization_threshold);
         if (preprocess_parcel(p, archive, data, archive.bytes_written()))
         {
             pp(HPX_MOVE(p), HPX_MOVE(f));
@@ -189,8 +219,9 @@ namespace hpx::parcelset::detail {
         // not throw: unwinding would free the extra data while the futures
         // still refer to it.
         auto const ptr = [&]() noexcept {
-            auto await = std::make_shared<parcel_await>(
-                HPX_MOVE(p), HPX_MOVE(f), archive_flags, HPX_MOVE(pp));
+            auto await = std::make_shared<parcel_await>(HPX_MOVE(p),
+                HPX_MOVE(f), archive_flags, HPX_MOVE(pp),
+                zero_copy_serialization_threshold);
             await->archive_.move_extra_data_from(archive);
             return await;
         }();
@@ -199,10 +230,11 @@ namespace hpx::parcelset::detail {
 
     void parcels_await_apply(std::vector<parcelset::parcel>&& p,
         std::vector<write_handler_type>&& f, std::uint32_t archive_flags,
-        put_parcels_type pp)
+        put_parcels_type pp, std::size_t zero_copy_serialization_threshold)
     {
-        auto const ptr = std::make_shared<parcels_await>(
-            HPX_MOVE(p), HPX_MOVE(f), archive_flags, HPX_MOVE(pp));
+        auto const ptr =
+            std::make_shared<parcels_await>(HPX_MOVE(p), HPX_MOVE(f),
+                archive_flags, HPX_MOVE(pp), zero_copy_serialization_threshold);
         ptr->apply();
     }
 }    // namespace hpx::parcelset::detail

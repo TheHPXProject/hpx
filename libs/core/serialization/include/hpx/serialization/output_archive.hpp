@@ -184,6 +184,14 @@ namespace hpx::serialization {
             return buffer_->get_num_chunks();
         }
 
+        // data below this size is copied into the archive, larger data is
+        // referenced by a zero-copy chunk (if chunking is enabled)
+        [[nodiscard]] std::size_t get_zero_copy_serialization_threshold()
+            const noexcept
+        {
+            return buffer_->get_zero_copy_serialization_threshold();
+        }
+
         // this function is needed to avoid a MSVC linker error
         [[nodiscard]] constexpr std::size_t current_pos() const noexcept
         {
