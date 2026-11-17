@@ -270,7 +270,8 @@ namespace hpx {
 }    // namespace hpx
 
 // A call of the loop body of move moves as many elements in the time of its
-// size as memmove does (see transfer_elements_per_call).
+// size as util::move_n does, with any policy: move_n has no datapar loop (see
+// get_transfer_task_size).
 template <typename ExPolicy, typename InIter, typename OutIter>
 struct hpx::parallel::util::detail::elements_per_call<ExPolicy,
     hpx::util::zip_iterator<InIter, OutIter>,
@@ -278,11 +279,12 @@ struct hpx::parallel::util::detail::elements_per_call<ExPolicy,
 {
     [[nodiscard]] static std::size_t call(
         hpx::parallel::detail::move_iteration const&,
-        hpx::threads::task_size const size) noexcept
+        hpx::threads::task_size) noexcept
     {
-        return transfer_elements_per_call<ExPolicy,
+        return get_transfer_task_size<
             hpx::parallel::detail::move_category_t<InIter, OutIter>, InIter,
-            OutIter, hpx::util::zip_iterator<InIter, OutIter>>(size);
+            OutIter>()
+            .elements;
     }
 };
 

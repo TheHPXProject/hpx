@@ -122,6 +122,21 @@ void test_datapar()
     check_only_size(
         [&] { hpx::fill(simd_by_100, v.begin(), v.end(), 3).get(); },
         lanes > 1 ? task_size::small_ : task_size::medium);
+
+    // copy converts ints to doubles in packs only if their packs have the
+    // same width, otherwise one by one in about a nanosecond each
+    std::vector<double> d(10000);
+    constexpr bool same_width =
+        hpx::parallel::util::detail::iterators_datapar_compatible_v<
+            std::vector<int>::iterator, std::vector<double>::iterator>;
+    check_only_size(
+        [&] { hpx::copy(simd_by_100, v.begin(), v.end(), d.begin()).get(); },
+        same_width && lanes > 1 ? task_size::small_ : task_size::medium);
+
+    // move has no datapar loop, it converts one element at a time
+    check_only_size(
+        [&] { hpx::move(simd_by_100, v.begin(), v.end(), d.begin()).get(); },
+        task_size::medium);
 }
 #endif
 

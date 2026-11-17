@@ -74,17 +74,27 @@ namespace hpx::parallel::util::detail {
         }
     }
 
-    // The number of elements a call of a loop body that copies or moves
-    // elements of the zip iterator Iter handles in the time of its size. A
-    // datapar policy copies the elements it puts into packs (see
-    // datapar_copy_n), all other elements are copied as for the other
-    // policies (see get_transfer_task_size).
+    // Whether util::copy_n with the policy ExPolicy copies the elements from
+    // InIter to OutIter in packs. Only the datapar policies do, for
+    // iterators whose elements fit into packs of the same width (see
+    // datapar/elements_per_call.hpp and datapar_copy_n).
+    HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename InIter,
+        typename OutIter, typename Enable = void>
+    struct policy_copies_packs : std::false_type
+    {
+    };
+
+    // The number of elements a call of a loop body that copies elements of
+    // the zip iterator Iter handles in the time of its size. A policy that
+    // copies the elements in packs copies a pack in that time, all other
+    // elements are copied as for the other policies (see
+    // get_transfer_task_size).
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename Category,
         typename InIter, typename OutIter, typename Iter>
     [[nodiscard]] std::size_t transfer_elements_per_call(
         hpx::threads::task_size const size) noexcept
     {
-        if constexpr (hpx::is_vectorpack_execution_policy_v<ExPolicy>)
+        if constexpr (policy_copies_packs<ExPolicy, InIter, OutIter>::value)
         {
             std::size_t const elements =
                 policy_elements_per_call<ExPolicy, Iter>::call(size);
