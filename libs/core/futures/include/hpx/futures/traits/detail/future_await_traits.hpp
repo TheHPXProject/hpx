@@ -166,12 +166,30 @@ namespace hpx::lcos::detail {
             return suspend_never{};
         }
 
-        suspend_if final_suspend() noexcept
+        // Gives up the coroutine's reference count on the shared state only
+        // once the coroutine is suspended: whoever releases the last
+        // reference destroys the coroutine frame right away (see destroy()),
+        // so this must not happen before the coroutine has suspended.
+        struct final_awaiter
         {
-            // This gives up the coroutine's reference count on the shared
-            // state. If this was the last reference count, the coroutine
-            // should not suspend before exiting.
-            return suspend_if{!this->base_type::requires_delete()};
+            static constexpr bool await_ready() noexcept
+            {
+                return false;
+            }
+
+            static bool await_suspend(coroutine_handle<Derived> h) noexcept
+            {
+                // If this was the last reference count, resume the coroutine
+                // to let it exit (which destroys the frame).
+                return !h.promise().requires_delete();
+            }
+
+            static constexpr void await_resume() noexcept {}
+        };
+
+        static constexpr final_awaiter final_suspend() noexcept
+        {
+            return {};
         }
 
         void destroy() noexcept override
