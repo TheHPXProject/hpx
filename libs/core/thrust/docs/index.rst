@@ -92,7 +92,9 @@ as action arguments.
   memory itself, otherwise through pinned host staging buffers with
   asynchronous copies. Smaller data is copied into the archive. The data must
   be complete (the kernels writing it finished) when the vector is
-  serialized.
+  serialized. A ``device_vector`` whose memory is pinned host memory (see
+  below) is sent from and received into its own memory, without staging
+  copies.
 
 Pooled Memory
 =============
