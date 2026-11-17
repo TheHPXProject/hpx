@@ -73,7 +73,7 @@ namespace hpx::threads::detail {
         return {thread_schedule_state::pending, invalid_thread_id};
     }
 
-    bool execute_thread(thread_id_ref_type thrd)
+    bool execute_thread(thread_id_ref_type const& thrd)
     {
         auto* thrdptr = get_thread_id_data(thrd);
         thread_state state = thrdptr->get_state();
@@ -233,7 +233,7 @@ namespace hpx::threads::detail {
 
             auto const hint = thread_schedule_hint(static_cast<std::int16_t>(
                 thrdptr->get_last_worker_thread_num()));
-            scheduler->schedule_thread_last(HPX_MOVE(thrd), hint);
+            scheduler->schedule_thread_last(thrd, hint);
             scheduler->do_some_work(
                 hint.mode() == hpx::threads::thread_schedule_hint_mode::numa ?
                     static_cast<std::size_t>(-1) :

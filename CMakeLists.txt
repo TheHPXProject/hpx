@@ -381,29 +381,27 @@ if(HPX_WITH_PRECOMPILED_HEADERS)
   set_target_properties(hpx_exe_precompiled_headers PROPERTIES FOLDER "Core")
 endif()
 
-# ##############################################################################
-# Dynamic hpx_main
-# ##############################################################################
-
-set(HPX_WITH_DYNAMIC_HPX_MAIN_DEFAULT OFF)
-if("${CMAKE_SYSTEM_NAME}" STREQUAL "Linux" OR APPLE)
-  set(HPX_WITH_DYNAMIC_HPX_MAIN_DEFAULT ON)
-endif()
-
-hpx_option(
-  HPX_WITH_DYNAMIC_HPX_MAIN
-  BOOL
-  "Enable dynamic overload of system ``main()`` (Linux and Apple only, default: ON)"
-  ${HPX_WITH_DYNAMIC_HPX_MAIN_DEFAULT}
-  ADVANCED
-)
-if(HPX_WITH_DYNAMIC_HPX_MAIN)
-  if(NOT HPX_WITH_DYNAMIC_HPX_MAIN_DEFAULT)
-    hpx_error(
-      "HPX_WITH_DYNAMIC_HPX_MAIN was set to ON, but the option is only available on Linux and Apple (this is \"${CMAKE_SYSTEM_NAME}\")."
+if(DEFINED HPX_WITH_DYNAMIC_HPX_MAIN)
+  set(_dynamic_hpx_main_default OFF)
+  if("${CMAKE_SYSTEM_NAME}" STREQUAL "Linux" OR APPLE)
+    set(_dynamic_hpx_main_default ON)
+  endif()
+  # A build directory configured before the option was removed still has the
+  # entries hpx_option() created, only a value other than the default is
+  # reported
+  if(NOT DEFINED HPX_WITH_DYNAMIC_HPX_MAINCategory
+     OR (HPX_WITH_DYNAMIC_HPX_MAIN AND NOT _dynamic_hpx_main_default)
+     OR (NOT HPX_WITH_DYNAMIC_HPX_MAIN AND _dynamic_hpx_main_default)
+  )
+    message(
+      WARNING
+        "HPX_WITH_DYNAMIC_HPX_MAIN has been removed and is ignored. On Linux "
+        "and macOS, code that includes hpx/hpx_main.hpp has to link "
+        "HPX::wrap_main (or HPX::auto_wrap_main)."
     )
   endif()
-  hpx_add_config_define(HPX_HAVE_DYNAMIC_HPX_MAIN)
+  unset(HPX_WITH_DYNAMIC_HPX_MAIN CACHE)
+  unset(HPX_WITH_DYNAMIC_HPX_MAINCategory CACHE)
 endif()
 
 # ##############################################################################
@@ -1267,6 +1265,17 @@ if(HPX_WITH_TRACY)
     hpx_add_config_define(HPX_HAVE_TRACING_CAUSAL_EVENTS)
   endif()
 
+  hpx_option(
+    HPX_WITH_TRACING_MESSAGE_CALLSTACKS
+    BOOL
+    "Record a call stack of up to 10 frames with every message HPX sends to Tracy. Tracy backend only. If Tracy was built with TRACY_NO_CALLSTACK but HPX is not compiled with that define, a Debug Tracy server asserts on these messages and a Release server usually shows them without a call stack. Default: OFF."
+    OFF
+    CATEGORY "Profiling"
+  )
+  if(HPX_WITH_TRACING_MESSAGE_CALLSTACKS)
+    hpx_add_config_define(HPX_HAVE_TRACING_MESSAGE_CALLSTACKS)
+  endif()
+
   # 1-in-N task sampling for the Tracy lifecycle hooks. APEX treats every
   # lifecycle hook as a constexpr no-op and the ITTNotify backend emits every
   # task unconditionally, so sampling is meaningful only for Tracy.
@@ -1722,7 +1731,7 @@ hpx_option(
 hpx_option(
   HPX_WITH_THREAD_DEBUG_INFO
   BOOL
-  "Enable thread debugging information (default: OFF, implicitly enabled in debug builds)"
+  "Enable thread debugging information: thread descriptions, target address, parent reference, phase information and minimal deadlock detection (default: OFF). The APEX, ITTNotify and Tracy backends enable thread descriptions on their own."
   OFF
   CATEGORY "Debugging"
   ADVANCED

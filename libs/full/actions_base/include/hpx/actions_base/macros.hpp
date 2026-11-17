@@ -405,11 +405,16 @@
 
 #if defined(HPX_HAVE_CXX26_REFLECTION)
 /// When C++26 reflection is available, HPX_DEFINE_COMPONENT_ACTION_3 uses
-/// reflect_component_action<^^component::func> instead of make_action_t.
+/// reflect_component_action for ^^component::func instead of make_action_t.
 /// This eliminates the need for HPX_REGISTER_ACTION while keeping the same
-/// user-facing macro syntax.
+/// user-facing macro syntax. The action is passed as Derived, so that its
+/// derived_type is the action and macros like HPX_ACTION_HAS_PRIORITY apply.
 #define HPX_DEFINE_COMPONENT_ACTION_3(component, func, name)                   \
-    struct name : hpx::actions::reflect_component_action<^^component::func>    \
+    struct name                                                                \
+      : hpx::actions::reflect_component_action<^^component::func,              \
+            typename hpx::actions::detail::reflect_component_action_base<      \
+                ^^component::func>::component_type,                            \
+            name>                                                              \
     {                                                                          \
     }; /**/
 #else
@@ -438,7 +443,10 @@
 #if defined(HPX_HAVE_CXX26_REFLECTION)
 #define HPX_DEFINE_COMPONENT_DIRECT_ACTION_3(component, func, name)            \
     struct name                                                                \
-      : hpx::actions::reflect_component_direct_action<^^component::func>       \
+      : hpx::actions::reflect_component_direct_action<^^component::func,       \
+            typename hpx::actions::detail::reflect_component_action_base<      \
+                ^^component::func>::component_type,                            \
+            name>                                                              \
     {                                                                          \
     }; /**/
 #else

@@ -46,6 +46,8 @@ namespace hpx::resource {
             return "local_priority_fifo";
         case resource::scheduling_policy::local_priority_fifo_double:
             return "local_priority_fifo_double";
+        case resource::scheduling_policy::local_priority_tuned_fifo:
+            return "local_priority_tuned_fifo";
         case resource::scheduling_policy::local_priority_lifo:
             return "local_priority_lifo";
 #if defined(HPX_HAVE_WORK_REQUESTING_SCHEDULERS)
@@ -99,6 +101,10 @@ namespace hpx::resource {
         if (0 == std::string("local-priority-lifo").find(scheduler_name))
         {
             return scheduling_policy::local_priority_lifo;
+        }
+        if (0 == std::string("local-priority-tuned-fifo").find(scheduler_name))
+        {
+            return scheduling_policy::local_priority_tuned_fifo;
         }
 #if defined(HPX_HAVE_WORK_REQUESTING_SCHEDULERS)
         if (0 == std::string("local-workrequesting-fifo").find(scheduler_name))

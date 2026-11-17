@@ -130,6 +130,12 @@
         hpx::plugins::parcelport_factory<Parcelport>;                          \
     HPX_DEF_UNIQUE_PLUGIN_NAME(                                                \
         HPX_PP_CAT(pluginname, _plugin_factory_type), pp)                      \
+    template <>                                                                \
+    HPX_ALWAYS_EXPORT char const*                                              \
+    hpx::plugins::get_parcelport_module_name<Parcelport>() noexcept            \
+    {                                                                          \
+        return HPX_PLUGIN_STRING;                                              \
+    }                                                                          \
     template struct hpx::plugins::parcelport_factory<Parcelport>;              \
     HPX_EXPORT hpx::plugins::parcelport_factory_base* HPX_PP_CAT(              \
         pluginname, _factory_init)(                                            \

@@ -36,7 +36,7 @@ endif()
 
 if(HPX_WITH_CXX_MODULES
    AND (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-   AND (MSVC_VERSION LESS_EQUAL 1952)
+   AND (MSVC_VERSION LESS 1944)
 )
   target_compile_definitions(
     cancelable_action_client PRIVATE HPX_HAVE_FORCE_NO_CXX_MODULES

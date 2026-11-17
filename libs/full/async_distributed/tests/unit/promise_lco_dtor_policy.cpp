@@ -18,8 +18,9 @@
 //
 // which cascades into 20+ TU build failures.
 
-#include <hpx/async_distributed/detail/promise_lco.hpp>
-#include <hpx/components_base/traits/managed_component_policies.hpp>
+#include <hpx/config.hpp>
+#include <hpx/modules/async_distributed.hpp>
+#include <hpx/modules/components_base.hpp>
 
 #include <type_traits>
 

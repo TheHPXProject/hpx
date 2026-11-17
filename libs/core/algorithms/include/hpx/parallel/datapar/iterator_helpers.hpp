@@ -16,6 +16,7 @@
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/type_support.hpp>
 
+#include <concepts>
 #include <cstddef>
 #include <iterator>
 #include <memory>
@@ -846,5 +847,42 @@ namespace hpx::parallel::util::detail {
         }
     };
 }    // namespace hpx::parallel::util::detail
+
+namespace hpx::parallel::detail {
+
+    HPX_CXX_CORE_EXPORT template <typename T>
+    inline constexpr bool is_vectorizable_value_type_v =
+        std::is_arithmetic_v<T> && !std::is_same_v<std::remove_cv_t<T>, bool> &&
+        !std::is_same_v<std::remove_cv_t<T>, long double>;
+
+    HPX_CXX_CORE_EXPORT template <typename Mask>
+    inline constexpr bool has_mask_lane_access_v =
+        requires(Mask const& m, std::size_t idx) {
+            { m.get(idx) } -> std::convertible_to<bool>;
+        } || requires(Mask const& m, std::size_t idx) {
+            { m[idx] } -> std::convertible_to<bool>;
+        };
+
+    HPX_CXX_CORE_EXPORT template <typename Mask>
+    HPX_HOST_DEVICE HPX_FORCEINLINE bool mask_lane_is_true(
+        Mask const& msk, std::size_t i) noexcept
+    {
+        if constexpr (requires { msk.get(i); })
+        {
+            return static_cast<bool>(msk.get(i));
+        }
+        else if constexpr (requires { msk[i]; })
+        {
+            return static_cast<bool>(msk[i]);
+        }
+        else
+        {
+            static_assert(sizeof(Mask) == 0,
+                "mask_lane_is_true: unexpected mask type with no lane access");
+            return false;
+        }
+    }
+
+}    // namespace hpx::parallel::detail
 
 #endif

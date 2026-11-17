@@ -46,8 +46,7 @@
 namespace hpx::threads {
 
     namespace detail {
-        static void check_num_high_priority_queues(
-            std::size_t const num_threads,
+        void check_num_high_priority_queues(std::size_t const num_threads,
             std::size_t const num_high_priority_queues)
         {
             if (num_high_priority_queues > num_threads)
@@ -919,6 +918,11 @@ namespace hpx::threads {
 
             case resource::scheduling_policy::local_priority_fifo_double:
                 create_scheduler_local_priority_fifo_double(
+                    thread_pool_init, thread_queue_init, numa_sensitive);
+                break;
+
+            case resource::scheduling_policy::local_priority_tuned_fifo:
+                create_scheduler_local_priority_tuned_fifo(
                     thread_pool_init, thread_queue_init, numa_sensitive);
                 break;
 

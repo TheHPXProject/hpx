@@ -426,9 +426,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy, Iter>
-        invoke_default(ExPolicy&& policy, Iter first, Sent last, Comp comp,
-            Proj proj = Proj{})
+        static decltype(auto) invoke_default(ExPolicy&& policy, Iter first,
+            Sent last, Comp comp, Proj proj = Proj{})
         {
             static_assert(std::random_access_iterator<Iter>,
                 "Requires random access iterator.");
@@ -450,9 +449,7 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
-            std::ranges::iterator_t<Rng>>
-        invoke_default(
+        static decltype(auto) invoke_default(
             ExPolicy&& policy, Rng& rng, Comp comp, Proj proj = Proj{})
         {
             using iterator_type = std::ranges::iterator_t<Rng>;
@@ -478,9 +475,7 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        static typename hpx::parallel::util::detail::algorithm_result<ExPolicy,
-            Iter>::type
-        invoke_default(
+        static decltype(auto) invoke_default(
             ExPolicy&& policy, Iter first, Sent last, Proj proj = Proj{})
         {
             static_assert(std::random_access_iterator<Iter>,
@@ -508,9 +503,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
-            std::ranges::iterator_t<Rng>>
-        invoke_default(ExPolicy&& policy, Rng&& rng, Proj proj = Proj{})
+        static decltype(auto) invoke_default(
+            ExPolicy&& policy, Rng&& rng, Proj proj = Proj{})
         {
             using iterator_type = std::ranges::iterator_t<Rng>;
 

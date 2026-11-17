@@ -660,6 +660,11 @@ namespace hpx::lcos::local {
             hpx::future<T>, std::input_iterator_tag, hpx::future<T>>;
 
     public:
+        // returns the future that increment has stored, dereferencing it is a
+        // nano task
+        static constexpr hpx::threads::task_size dereference_task_size =
+            hpx::threads::task_size::nano;
+
         channel_async_iterator()
           : channel_(nullptr)
           , data_(hpx::future<T>(), false)

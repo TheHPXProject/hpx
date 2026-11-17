@@ -104,6 +104,35 @@ namespace hpx::threads::policies {
     namespace detail {
 
         ////////////////////////////////////////////////////////////////////////
+        HPX_CXX_CORE_EXPORT template <typename IsWorkerActive>
+        std::size_t select_numa_worker(
+            std::vector<std::size_t> const& domain_workers, std::size_t start,
+            IsWorkerActive&&
+                is_active) noexcept(std::is_nothrow_invocable_r_v<bool,
+            IsWorkerActive&, std::size_t>)
+        {
+            std::size_t const num_workers = domain_workers.size();
+            for (std::size_t i = 0; i != num_workers; ++i)
+            {
+                std::size_t const worker =
+                    domain_workers[(start + i) % num_workers];
+                if (is_active(worker))
+                {
+                    return worker;
+                }
+            }
+            return static_cast<std::size_t>(-1);
+        }
+
+        HPX_CXX_CORE_EXPORT inline std::size_t select_numa_worker(
+            std::vector<std::size_t> const& domain_workers,
+            std::size_t start) noexcept
+        {
+            return select_numa_worker(domain_workers, start,
+                [](std::size_t) noexcept { return true; });
+        }
+
+        ////////////////////////////////////////////////////////////////////////
         inline unsigned int random_seed() noexcept
         {
             std::random_device rd;
@@ -456,7 +485,12 @@ namespace hpx::threads::policies {
           , low_priority_queue_(thread_queue_init_)
           , curr_queue_(0)
           , affinity_data_(init.affinity_data_)
+          , num_numa_domains_(get_num_numa_domains())
           , worker_domains_(init.num_queues_)
+          , numa_domain_workers_(num_numa_domains_)
+          , numa_domain_high_priority_workers_(num_numa_domains_)
+          , numa_domain_queue_counters_(num_numa_domains_)
+          , numa_domain_high_priority_queue_counters_(num_numa_domains_)
           , numa_sensitive_(init.numa_sensitive_)
           , num_queues_(init.num_queues_)
           , num_high_priority_queues_(init.num_high_priority_queues_)
@@ -815,9 +849,7 @@ namespace hpx::threads::policies {
             error_code& ec) override
         {
             std::size_t num_thread =
-                data.schedulehint.mode() == thread_schedule_hint_mode::thread ?
-                data.schedulehint.hint :
-                static_cast<std::size_t>(-1);
+                select_worker(data.schedulehint, data.priority);
 
             if (static_cast<std::size_t>(-1) == num_thread)
             {
@@ -1312,12 +1344,9 @@ namespace hpx::threads::policies {
             bool allow_fallback = false,
             thread_priority priority = thread_priority::default_) override
         {
-            auto num_thread = static_cast<std::size_t>(-1);
-            if (schedulehint.mode() == thread_schedule_hint_mode::thread)
-            {
-                num_thread = schedulehint.hint;
-            }
-            else
+            std::size_t num_thread = select_worker(schedulehint, priority);
+            if (schedulehint.mode() != thread_schedule_hint_mode::thread &&
+                schedulehint.mode() != thread_schedule_hint_mode::numa)
             {
                 allow_fallback = false;
             }
@@ -1382,12 +1411,9 @@ namespace hpx::threads::policies {
             bool allow_fallback = false,
             thread_priority priority = thread_priority::default_) override
         {
-            auto num_thread = static_cast<std::size_t>(-1);
-            if (schedulehint.mode() == thread_schedule_hint_mode::thread)
-            {
-                num_thread = schedulehint.hint;
-            }
-            else
+            std::size_t num_thread = select_worker(schedulehint, priority);
+            if (schedulehint.mode() != thread_schedule_hint_mode::thread &&
+                schedulehint.mode() != thread_schedule_hint_mode::numa)
             {
                 allow_fallback = false;
             }
@@ -2259,8 +2285,16 @@ namespace hpx::threads::policies {
                 {
                     std::size_t const global_worker =
                         local_to_global_thread_index(worker);
-                    worker_domains_[worker] = topo.get_numa_node_number(
+                    std::size_t const domain = topo.get_numa_node_number(
                         affinity_data_.get_pu_num(global_worker));
+                    HPX_ASSERT(domain < num_numa_domains_);
+                    worker_domains_[worker] = domain;
+                    numa_domain_workers_[domain].push_back(worker);
+                    if (worker < num_high_priority_queues_)
+                    {
+                        numa_domain_high_priority_workers_[domain].push_back(
+                            worker);
+                    }
                 }
             });
 
@@ -2268,10 +2302,6 @@ namespace hpx::threads::policies {
             if (has_scheduler_mode(
                     policies::scheduler_mode::enable_stealing_numa, num_thread))
             {
-                std::size_t num_domains = topo.get_number_of_numa_nodes();
-                if (num_domains == 0)
-                    num_domains = 1;
-
                 std::size_t const global_thread =
                     local_to_global_thread_index(num_thread);
                 std::size_t const num_pu =
@@ -2285,8 +2315,8 @@ namespace hpx::threads::policies {
                     test(pu_mask, first);
 
                 remote_domains = detail::get_numa_stealing_domains(
-                    numa_sensitive_, worker_domains_[num_thread], num_domains,
-                    is_boundary_worker,
+                    numa_sensitive_, worker_domains_[num_thread],
+                    num_numa_domains_, is_boundary_worker,
                     [&topo](std::size_t from, std::size_t to) {
                         return topo.get_numa_distance(from, to);
                     });
@@ -2361,6 +2391,54 @@ namespace hpx::threads::policies {
         }
 
     protected:
+        static std::size_t get_num_numa_domains()
+        {
+            std::size_t const num_domains =
+                create_topology().get_number_of_numa_nodes();
+            return num_domains == 0 ? 1 : num_domains;
+        }
+
+        std::size_t select_worker(
+            threads::thread_schedule_hint const& schedulehint,
+            thread_priority priority)
+        {
+            if (schedulehint.mode() == thread_schedule_hint_mode::thread)
+            {
+                return static_cast<std::size_t>(schedulehint.hint);
+            }
+
+            if (schedulehint.mode() == thread_schedule_hint_mode::numa)
+            {
+                HPX_ASSERT(schedulehint.hint >= 0);
+                std::size_t const requested_domain =
+                    static_cast<std::size_t>(schedulehint.hint) %
+                    num_numa_domains_;
+                bool const high_priority =
+                    priority == thread_priority::high_recursive ||
+                    priority == thread_priority::high ||
+                    priority == thread_priority::boost;
+
+                auto const& domain_workers = high_priority ?
+                    numa_domain_high_priority_workers_[requested_domain] :
+                    numa_domain_workers_[requested_domain];
+                auto& counter = high_priority ?
+                    numa_domain_high_priority_queue_counters_[requested_domain]
+                        .data_ :
+                    numa_domain_queue_counters_[requested_domain].data_;
+                std::size_t const start =
+                    counter.fetch_add(1, std::memory_order_relaxed);
+                return detail::select_numa_worker(
+                    domain_workers, start, [this](std::size_t worker) noexcept {
+                        return !has_scheduler_mode(
+                                   scheduler_mode::enable_elasticity, worker) ||
+                            get_state(worker).load(std::memory_order_relaxed) <=
+                            hpx::state::suspended;
+                    });
+            }
+
+            return static_cast<std::size_t>(-1);
+        }
+
         std::vector<util::aligned_line_data<scheduler_data>> data_;
         thread_queue_type low_priority_queue_;
 
@@ -2370,8 +2448,16 @@ namespace hpx::threads::policies {
         util::cache_aligned_data_derived<std::atomic<std::size_t>> curr_queue_;
 
         detail::affinity_data const& affinity_data_;
+        std::size_t const num_numa_domains_;
         std::once_flag worker_domains_once_;
         std::vector<std::size_t> worker_domains_;
+        std::vector<std::vector<std::size_t>> numa_domain_workers_;
+        std::vector<std::vector<std::size_t>>
+            numa_domain_high_priority_workers_;
+        std::vector<util::aligned_line_data<std::atomic<std::size_t>>>
+            numa_domain_queue_counters_;
+        std::vector<util::aligned_line_data<std::atomic<std::size_t>>>
+            numa_domain_high_priority_queue_counters_;
         numa_sensitive_mode const numa_sensitive_;
         std::size_t const num_queues_;
         std::size_t const num_high_priority_queues_;

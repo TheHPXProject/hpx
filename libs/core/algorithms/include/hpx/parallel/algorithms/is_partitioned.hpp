@@ -114,9 +114,12 @@ namespace hpx {
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/iterator_support.hpp>
+#include <hpx/modules/threading_base.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
+#include <hpx/parallel/algorithms/detail/find.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
+#include <hpx/parallel/algorithms/detail/task_size_argument.hpp>
 #include <hpx/parallel/util/cancellation_token.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
@@ -127,6 +130,7 @@ namespace hpx {
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <iterator>
 #include <type_traits>
 #include <utility>
@@ -182,9 +186,14 @@ namespace hpx::parallel {
             static constexpr bool sequential(
                 ExPolicy, InIter first, InSent last, Pred&& pred, Proj&& proj)
             {
-                return std::is_partitioned(first, last,
-                    util::invoke_projected<Pred, Proj>(
-                        HPX_FORWARD(Pred, pred), HPX_FORWARD(Proj, proj)));
+                first = detail::sequential_find_if_not<ExPolicy>(
+                    first, last, std::ref(pred), std::ref(proj));
+                if (first != last)
+                {
+                    return detail::sequential_find_if<ExPolicy>(++first, last,
+                               std::ref(pred), std::ref(proj)) == last;
+                }
+                return true;
             }
 
             template <typename ExPolicy, typename Iter_, typename Sent_,
@@ -206,6 +215,11 @@ namespace hpx::parallel {
                         return result::get(true);
                 }
 
+                // an iteration has the size of the predicate called with an
+                // element
+                auto const size =
+                    task_size_of_iteration<task_size_argument_t<Iter_, Proj>>(
+                        pred, first);
                 util::invoke_projected<Pred, Proj> pred_projected(
                     HPX_FORWARD(Pred, pred), HPX_FORWARD(Proj, proj));
                 util::cancellation_token<> tok;
@@ -271,7 +285,9 @@ namespace hpx::parallel {
 
                 return util::partitioner<ExPolicy, bool,
                     intermediate_result_t>::call(HPX_FORWARD(ExPolicy, policy),
-                    first, count, HPX_MOVE(f1), HPX_MOVE(f2));
+                    first, count,
+                    hpx::threads::detail::with_task_size(HPX_MOVE(f1), size),
+                    HPX_MOVE(f2));
             }
         };
         /// \endcond

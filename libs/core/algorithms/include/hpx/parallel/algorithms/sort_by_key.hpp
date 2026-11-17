@@ -138,10 +138,8 @@ namespace hpx::experimental {
 
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename KeyIter,
         typename ValueIter, typename Compare = hpx::parallel::detail::less>
-    hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
-        sort_by_key_result<KeyIter, ValueIter>>
-    sort_by_key(ExPolicy&& policy, KeyIter key_first, KeyIter key_last,
-        ValueIter value_first, Compare comp = Compare())
+    decltype(auto) sort_by_key(ExPolicy&& policy, KeyIter key_first,
+        KeyIter key_last, ValueIter value_first, Compare comp = Compare())
         HPX_PRE(key_first <= key_last)
     {
 #if !defined(HPX_HAVE_TUPLE_RVALUE_SWAP)
@@ -160,7 +158,7 @@ namespace hpx::experimental {
 
         using iterator_type = hpx::util::zip_iterator<KeyIter, ValueIter>;
 
-        return hpx::parallel::detail::get_iter_pair<iterator_type>(
+        return hpx::parallel::detail::get_iter_pair(
             hpx::parallel::detail::sort<iterator_type>().call(
                 HPX_FORWARD(ExPolicy, policy),
                 hpx::util::zip_iterator(key_first, value_first),

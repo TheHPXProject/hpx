@@ -30,7 +30,9 @@ constexpr char const* all_reduce_direct_basename =
     "/test/all_reduce_hierarchical/";
 constexpr char const* all_reduce_direct_local_basename =
     "/test/all_reduce_hierarchical/local/";
-#if defined(HPX_DEBUG)
+// Fewer iterations on Windows as well: each step of a hierarchical collective
+// waits for idle workers to wake up, which takes much longer there
+#if defined(HPX_DEBUG) || defined(HPX_WINDOWS)
 constexpr int ITERATIONS = 50;
 #else
 constexpr int ITERATIONS = 500;

@@ -38,7 +38,7 @@ configure_extra_options+=" -DHPX_WITH_TASK_SIZE_DEFAULT_PARAMETERS=ON"
 # The pwrapi library still needs to be set up properly on rostam
 # configure_extra_options+=" -DHPX_WITH_POWER_COUNTER=ON"
 
-configure_extra_options+=" -DHPX_COROUTINES_WITH_THREAD_SCHEDULE_HINT_RUNS_AS_CHILD=ON"
+configure_extra_options+=" -DHPX_THREAD_SUPPORT_WITH_THREAD_SCHEDULE_HINT_RUNS_AS_CHILD=ON"
 
 # also enable additional handshaking in MPI parcelport
 configure_extra_options+=" -DHPX_WITH_TESTS_COMMAND_LINE=--hpx:ini=hpx.parcel.mpi.ack_handshake!=1"

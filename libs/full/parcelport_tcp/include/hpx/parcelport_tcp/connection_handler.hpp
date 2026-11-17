@@ -121,6 +121,10 @@ namespace hpx::parcelset {
             /// The list of accepted connections
             mutable hpx::spinlock connections_mtx_;
 
+            /// Set by do_stop under connections_mtx_: no connection is
+            /// accepted any more, and the acceptor is closed
+            bool stopping_ = false;
+
             using accepted_connections_set =
                 std::set<std::shared_ptr<receiver>>;
             accepted_connections_set accepted_connections_;

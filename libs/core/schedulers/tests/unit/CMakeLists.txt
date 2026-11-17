@@ -12,6 +12,7 @@ set(tests
     schedule_last
     schedule_hint_none_stale_queue_6978
     scheduler_mode_overrides
+    scheduler_tuning
     shared_priority_queue_external_cleanup
     steal_pending_early
     steal_staged_early
@@ -25,6 +26,7 @@ if(HPX_WITH_WORK_REQUESTING_SCHEDULERS)
     APPEND
     tests
     workrequesting_numa
+    workrequesting_numa_hint
     workrequesting_random_victim
     workrequesting_run_as_child
     workrequesting_steal
@@ -34,6 +36,8 @@ if(HPX_WITH_WORK_REQUESTING_SCHEDULERS)
   )
   set(workrequesting_staged_stealing_PARAMETERS THREADS_PER_LOCALITY 4)
 endif()
+
+set(workrequesting_numa_hint_PARAMETERS THREADS_PER_LOCALITY 4)
 
 set(min_tasks_to_steal_staged_PARAMETERS THREADS_PER_LOCALITY 4)
 set(queue_length_all_threads_PARAMETERS THREADS_PER_LOCALITY 1)

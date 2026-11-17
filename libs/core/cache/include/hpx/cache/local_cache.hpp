@@ -413,12 +413,20 @@ namespace hpx::util::cache {
             update_on_exit update(
                 statistics_, statistics::method::insert_entry);
 
+            // an existing entry is not replaced, check before evicting others
+            if (store_.find(k) != store_.end())
+                return false;
+
             // ask entry if it really wants to be inserted
             if (!insert_policy_(e) || !e.insert())
                 return false;
 
-            // make sure cache doesn't get too large
+            // an entry larger than the whole cache can never be stored
             size_type entry_size = e.get_size();
+            if (0 != max_size_ && entry_size > max_size_)
+                return false;
+
+            // make sure cache doesn't get too large
             if (0 != max_size_ && current_size_ + entry_size > max_size_ &&
                 !free_space(current_size_ - max_size_ + entry_size))
             {

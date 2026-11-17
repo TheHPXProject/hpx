@@ -108,35 +108,40 @@ void test_concurrent_worker(pop_mode m, std::size_t thread_index,
     hpx::concurrency::detail::contiguous_index_queue<>& q,
     std::vector<std::uint32_t>& popped_indices)
 {
-    hpx::optional<std::uint32_t> curr;
     std::mt19937 r(static_cast<unsigned int>(seed + thread_index));
     std::uniform_int_distribution<> d(0, 1);
 
-    // Make sure all threads start roughly at the same time.
+    auto pop = [&]() -> hpx::optional<std::uint32_t> {
+        switch (m)
+        {
+        case pop_mode::left:
+            return q.pop_left();
+        case pop_mode::right:
+            return q.pop_right();
+        case pop_mode::random:
+            return d(r) == 0 ? q.pop_left() : q.pop_right();
+        default:
+            HPX_TEST(false);
+            return {};
+        }
+    };
+
+    // Every thread pops one index before any thread continues. This makes
+    // sure that all threads take part, even if some of them start late (for
+    // instance on an oversubscribed machine).
+    hpx::optional<std::uint32_t> curr = pop();
+    HPX_TEST(curr);
+    if (curr)
+    {
+        popped_indices.push_back(curr.value());
+    }
+
+    // Make sure all threads continue roughly at the same time.
     b->arrive_and_wait();
 
-    switch (m)
+    while ((curr = pop()))
     {
-    case pop_mode::left:
-        while ((curr = q.pop_left()))
-        {
-            popped_indices.push_back(curr.value());
-        }
-        break;
-    case pop_mode::right:
-        while ((curr = q.pop_right()))
-        {
-            popped_indices.push_back(curr.value());
-        }
-        break;
-    case pop_mode::random:
-        while (d(r) == 0 ? (curr = q.pop_left()) : (curr = q.pop_right()))
-        {
-            popped_indices.push_back(curr.value());
-        }
-        break;
-    default:
-        HPX_TEST(false);
+        popped_indices.push_back(curr.value());
     }
 }
 
@@ -194,10 +199,8 @@ void test_concurrent(pop_mode m)
         ++curr_expected;
     }
 
-    // We expect at least two threads to have popped indices concurrently.
-    // There is a small chance of false positives here (resulting from big
-    // delays in starting threads).
-    HPX_TEST_LTE(std::size_t(2), num_nonzero_indices_popped);
+    // Every thread has popped at least one index before the barrier.
+    HPX_TEST_EQ(num_nonzero_indices_popped, num_threads);
 }
 
 int hpx_main(hpx::program_options::variables_map& vm)

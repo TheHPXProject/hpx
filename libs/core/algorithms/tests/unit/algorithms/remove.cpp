@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <iostream>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -34,6 +35,26 @@ void remove_bad_alloc_test()
     test_remove_bad_alloc<std::random_access_iterator_tag>();
 }
 
+// The value is compared with the elements as given, not converted to their
+// type first: no int equals 1.5, so nothing is removed.
+void remove_value_of_other_type_test()
+{
+    std::cout << "--- remove_value_of_other_type_test ---" << std::endl;
+
+    std::vector<int> c{1, 2, 1, 3};
+    auto const seq_end = hpx::remove(c.begin(), c.end(), 1.5);
+    HPX_TEST(seq_end == c.end());
+
+    auto const par_end =
+        hpx::remove(hpx::execution::par, c.begin(), c.end(), 1.5);
+    HPX_TEST(par_end == c.end());
+    HPX_TEST(c == (std::vector<int>{1, 2, 1, 3}));
+
+    auto const removed =
+        hpx::remove(hpx::execution::par, c.begin(), c.end(), 1.0);
+    HPX_TEST_EQ(std::distance(c.begin(), removed), 2);
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 int hpx_main(hpx::program_options::variables_map& vm)
 {
@@ -48,6 +69,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
     remove_test();
     remove_exception_test();
     remove_bad_alloc_test();
+    remove_value_of_other_type_test();
 
     std::cout << "Test Finish!" << std::endl;
 

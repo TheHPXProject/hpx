@@ -1,0 +1,50 @@
+# Copyright (c) 2026 The STE||AR Group
+#
+# SPDX-License-Identifier: BSL-1.0
+# Distributed under the Boost Software License, Version 1.0. (See accompanying
+# file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+
+# Sets up the environment of the Visual Studio developer command prompt (as
+# vcvarsall.bat does) for the following steps of the job, so that the Ninja
+# generator finds the compiler, the linker, and the Windows SDK.
+
+name: 'Set up the MSVC developer environment'
+description: 'Export the environment of vcvarsall.bat to the following steps'
+
+inputs:
+  arch:
+    description: 'Target architecture passed to vcvarsall.bat'
+    required: false
+    default: 'x64'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Export the vcvarsall.bat environment
+      shell: pwsh
+      run: |
+        $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+        $vs = & $vswhere -latest -products * `
+          -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
+          -property installationPath
+        if (-not $vs) { throw "no Visual Studio with the C++ tools found" }
+        $vcvars = Join-Path $vs 'VC\Auxiliary\Build\vcvarsall.bat'
+
+        # the variables before and after running vcvarsall.bat
+        $before = @{}
+        Get-ChildItem env: | ForEach-Object { $before[$_.Name] = $_.Value }
+        $after = cmd /c "`"$vcvars`" ${{ inputs.arch }} >nul && set"
+        if ($LASTEXITCODE -ne 0) { throw "vcvarsall.bat failed" }
+
+        # export the variables vcvarsall.bat added or changed
+        foreach ($line in $after) {
+          if ($line -match '^([^=]+)=(.*)$') {
+            $name = $Matches[1]
+            $value = $Matches[2]
+            if ($before[$name] -ne $value) {
+              "$name=$value" >> $env:GITHUB_ENV
+            }
+          }
+        }
+
+        cmd /c "`"$vcvars`" ${{ inputs.arch }} >nul && where cl && cl 2>&1 | findstr Version"
