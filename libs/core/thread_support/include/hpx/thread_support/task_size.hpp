@@ -261,6 +261,48 @@ namespace hpx::traits {
     inline constexpr threads::task_size get_task_size_v =
         get_task_size<F, Size>::value;
 
+#if defined(HPX_HAVE_CXX26_REFLECTION) &&                                      \
+    defined(HPX_HAVE_CXX26_REFLECTION_ANNOTATIONS)
+    namespace detail {
+
+        // A function pointer given as a template argument leads back to the
+        // function it points to, whose declaration can carry an annotation.
+        HPX_CXX_CORE_EXPORT template <auto F>
+        consteval threads::task_size annotated_function_pointer_task_size()
+        {
+            if constexpr (std::is_pointer_v<decltype(F)> &&
+                std::is_function_v<std::remove_pointer_t<decltype(F)>>)
+            {
+                return annotated_function_task_size<std::meta::reflect_function(
+                    *F)>();
+            }
+            else
+            {
+                return threads::task_size::unknown;
+            }
+        }
+    }    // namespace detail
+#endif
+
+    // The size of a local call of the function F points to, for a function
+    // given as a template argument to hpx::post<&f> or hpx::async<&f>. A
+    // specialization wins over an annotation of the function, as
+    // HPX_ACTION_HAS_TASK_SIZE does for actions.
+    HPX_CXX_CORE_EXPORT template <auto F>
+    struct task_size_of
+    {
+#if defined(HPX_HAVE_CXX26_REFLECTION) &&                                      \
+    defined(HPX_HAVE_CXX26_REFLECTION_ANNOTATIONS)
+        static constexpr threads::task_size value =
+            detail::annotated_function_pointer_task_size<F>();
+#else
+        static constexpr threads::task_size value = threads::task_size::unknown;
+#endif
+    };
+
+    HPX_CXX_CORE_EXPORT template <auto F>
+    inline constexpr threads::task_size task_size_of_v = task_size_of<F>::value;
+
     // The size of a call of f with arguments of the types Args. Unless it is
     // specialized, it is the size of f itself (get_task_size), so that a size
     // given to f (nano_task(f), with_task_size<Size>(f), ...) always wins.
