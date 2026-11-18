@@ -88,13 +88,18 @@ as action arguments.
 * ``host_vector`` and ``universal_vector`` are serialized from their own
   memory, like a ``std::vector`` (zero-copy chunks included).
 * ``device_vector``: data at or above the zero-copy threshold is sent as a
-  zero-copy chunk of the device memory itself if the parcelport moves device
-  memory itself, otherwise through pinned host staging buffers with
-  asynchronous copies. Smaller data is copied into the archive. The data must
-  be complete (the kernels writing it finished) when the vector is
-  serialized. A ``device_vector`` whose memory is pinned host memory (see
-  below) is sent from and received into its own memory, without staging
-  copies.
+  zero-copy chunk of the device memory itself if the parcelport sends device
+  memory (CUDA- or ROCm-aware MPI, see ``HPX_WITH_PARCELPORT_CUDA_SUPPORT``
+  and ``HPX_WITH_PARCELPORT_HIP_SUPPORT``), otherwise through pinned host
+  staging buffers with asynchronous copies. The receiving side decides on its
+  own whether it receives such data directly into device memory, whatever
+  memory it was sent from (for the MPI parcelport see
+  ``hpx.parcel.mpi.send_device_memory`` and
+  ``hpx.parcel.mpi.receive_device_memory``). Smaller data is copied into the
+  archive. The data must be complete (the kernels writing it finished) when
+  the vector is serialized. A ``device_vector`` whose memory is pinned host
+  memory (see below) is sent from and received into its own memory, without
+  staging copies.
 
 Pooled Memory
 =============

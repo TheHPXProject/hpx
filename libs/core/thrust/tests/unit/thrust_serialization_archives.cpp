@@ -212,8 +212,8 @@ namespace test {
         return result;
     }
 
-    received receive(
-        message& m, bool const zero_copy_receive, load_type const& load)
+    received receive(message& m, bool const zero_copy_receive,
+        load_type const& load, bool const device_receive)
     {
         // the receive buffers: zero-copy receive lets load() choose the
         // destinations, otherwise the data has arrived already
@@ -246,6 +246,11 @@ namespace test {
             {
                 archive.get_extra_data<
                     hpx::serialization::detail::allow_zero_copy_receive>();
+                if (device_receive)
+                {
+                    archive.get_extra_data<
+                        hpx::serialization::detail::allow_device_receive>();
+                }
             }
 
             load(archive);

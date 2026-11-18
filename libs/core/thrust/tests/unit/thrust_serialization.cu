@@ -31,6 +31,7 @@
 #include <new>
 #include <optional>
 #include <type_traits>
+#include <utility>
 
 // universal_vector is serialized from its own memory only with allocators of
 // memory the host can access
@@ -76,6 +77,7 @@ namespace {
         bool chunks;
         bool device_chunks;
         bool zero_copy_receive;
+        bool device_receive;    // only with zero_copy_receive
     };
 
     template <typename From, typename To>
@@ -124,20 +126,22 @@ namespace {
         }
 
         To w;
-        test::received const r = test::receive(m, o.zero_copy_receive,
-            [&w](hpx::serialization::input_archive& ar) { ar >> w; });
+        test::received const r = test::receive(
+            m, o.zero_copy_receive,
+            [&w](hpx::serialization::input_archive& ar) { ar >> w; },
+            o.device_receive);
 
         HPX_TEST_EQ(w.size(), size);
         HPX_TEST(::thrust::host_vector<T>(w) == expected);
 
-        // with zero-copy receive the data goes to pinned memory and to device
-        // memory from a device chunk directly, else through a staging buffer
+        // with zero-copy receive the data goes to pinned memory directly, and
+        // to device memory if the parcelport receives into device memory
+        // (whatever memory it was sent from), else through a staging buffer
         // and a step that copies it to the device
         if (o.zero_copy_receive && chunk)
         {
             void const* destination = ::thrust::raw_pointer_cast(w.data());
-            bool const device_chunk = !pinned && o.device_chunks;
-            bool const direct = is_pinned(destination) || device_chunk;
+            bool const direct = is_pinned(destination) || o.device_receive;
 
             HPX_TEST_EQ(r.destinations.size(), std::size_t(1));
             if (!r.destinations.empty())
@@ -160,19 +164,25 @@ namespace {
         {
             for (bool preprocess : {false, true})
             {
-                for (bool zero_copy_receive : {false, true})
+                for (auto const [zero_copy_receive, device_receive] :
+                    {std::pair(false, false), std::pair(true, false),
+                        std::pair(true, true)})
                 {
-                    test_device_vector<From, To>(
-                        size, {preprocess, false, false, zero_copy_receive});
-                    test_device_vector<From, To>(
-                        size, {preprocess, true, false, zero_copy_receive});
-                    test_device_vector<From, To>(
-                        size, {preprocess, true, true, zero_copy_receive});
+                    test_device_vector<From, To>(size,
+                        {preprocess, false, false, zero_copy_receive,
+                            device_receive});
+                    test_device_vector<From, To>(size,
+                        {preprocess, true, false, zero_copy_receive,
+                            device_receive});
+                    test_device_vector<From, To>(size,
+                        {preprocess, true, true, zero_copy_receive,
+                            device_receive});
 
                     // the parcelport sends device memory, but the archive
                     // has no chunks: the data must go through the host
-                    test_device_vector<From, To>(
-                        size, {preprocess, false, true, zero_copy_receive});
+                    test_device_vector<From, To>(size,
+                        {preprocess, false, true, zero_copy_receive,
+                            device_receive});
                 }
             }
         }

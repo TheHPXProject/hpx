@@ -42,7 +42,9 @@ namespace hpx::serialization {
         archive_is_preprocessing = 0x00100000,
         enable_type_checking = 0x00200000,
         // zero-copy chunks may refer to device memory: the parcelport that
-        // sends (and receives) the archive moves device memory itself
+        // sends the archive sends device memory itself (the receiving
+        // locality decides itself where it receives them, see
+        // detail::allow_device_receive)
         enable_device_chunks = 0x00400000,
         all_archive_flags = 0x006fe000    // all of the above
     };
