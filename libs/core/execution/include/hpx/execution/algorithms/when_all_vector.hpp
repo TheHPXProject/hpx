@@ -178,7 +178,8 @@ namespace hpx::when_all_vector_detail {
                         hpx::execution::experimental::set_stopped_t>{},
                     hpx::execution::experimental::completion_signatures<
                         hpx::execution::experimental::set_error_t(
-                            std::exception_ptr)>{}))
+                            std::exception_ptr),
+                        hpx::execution::experimental::set_stopped_t()>{}))
         {
             return {};
         }
@@ -506,9 +507,11 @@ namespace hpx::when_all_vector_detail {
         }
 
         template <typename Receiver>
+            requires std::is_copy_constructible_v<Sender>
         operation_state<Receiver> connect(Receiver&& receiver) &
         {
-            return operation_state<Receiver>(receiver, senders);
+            return operation_state<Receiver>(
+                HPX_FORWARD(Receiver, receiver), senders_type(senders));
         }
     };    // namespace hpx::when_all_vector_detail
 
