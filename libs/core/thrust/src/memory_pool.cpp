@@ -64,18 +64,23 @@ namespace hpx::thrust {
             {
                 return fallback;
             }
-            try
+            // the whole value must be a non-negative number (stoull would
+            // take "1GiB" as 1 and "-1" as the largest value)
+            if (value.find_first_not_of("0123456789") == std::string::npos)
             {
-                return std::stoull(value);
+                try
+                {
+                    return std::stoull(value);
+                }
+                catch (std::exception const&)
+                {
+                    // out of range
+                }
             }
-            catch (std::exception const&)
-            {
-                HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
-                    "hpx::thrust::max_cached_config",
-                    "hpx.thrust.max_cached must be a number of bytes, not "
-                    "'{}'",
-                    value);
-            }
+            HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
+                "hpx::thrust::max_cached_config",
+                "hpx.thrust.max_cached must be a number of bytes, not '{}'",
+                value);
         }
 
         // Memory of one kind (device memory of one device, or pinned host
@@ -107,7 +112,7 @@ namespace hpx::thrust {
             void* allocate(std::size_t const size_class)
             {
                 {
-                    std::lock_guard<hpx::spinlock> l(mtx_);
+                    std::lock_guard<hpx::spinlock_no_backoff> l(mtx_);
                     if (auto it = free_.find(size_class);
                         it != free_.end() && !it->second.empty())
                     {
@@ -140,7 +145,7 @@ namespace hpx::thrust {
             {
                 try
                 {
-                    std::lock_guard<hpx::spinlock> l(mtx_);
+                    std::lock_guard<hpx::spinlock_no_backoff> l(mtx_);
                     if (cached_ + size_class <= max_cached_)
                     {
                         free_[size_class].push_back(p);
@@ -171,7 +176,7 @@ namespace hpx::thrust {
 
                 std::vector<void*> excess;
                 {
-                    std::lock_guard<hpx::spinlock> l(mtx_);
+                    std::lock_guard<hpx::spinlock_no_backoff> l(mtx_);
                     max_cached_ = max_cached;
                     while (cached_ > max_cached_ && !free_.empty())
                     {
@@ -182,7 +187,16 @@ namespace hpx::thrust {
                             free_.erase(it);
                             continue;
                         }
-                        excess.push_back(it->second.back());
+                        try
+                        {
+                            excess.push_back(it->second.back());
+                        }
+                        catch (...)
+                        {
+                            // out of memory: keep the remaining blocks
+                            // cached, they're still owned by the pool
+                            break;
+                        }
                         it->second.pop_back();
                         cached_ -= it->first;
                         if (it->second.empty())
@@ -203,7 +217,7 @@ namespace hpx::thrust {
             {
                 std::map<std::size_t, std::vector<void*>> blocks;
                 {
-                    std::lock_guard<hpx::spinlock> l(mtx_);
+                    std::lock_guard<hpx::spinlock_no_backoff> l(mtx_);
                     std::swap(blocks, free_);
                     cached_ = 0;
                 }
@@ -262,7 +276,11 @@ namespace hpx::thrust {
             std::size_t max_cached_;
             std::atomic<bool> final_;
 
-            hpx::spinlock mtx_;
+            // never suspends the calling HPX thread: the device memory is
+            // allocated on the GPU current on the OS thread, which may be
+            // another one once a suspended HPX thread resumes, and a
+            // suspended thread could be interrupted in noexcept functions
+            hpx::spinlock_no_backoff mtx_;
             std::map<std::size_t, std::vector<void*>> free_;
             std::size_t cached_ = 0;
         };
@@ -338,7 +356,7 @@ namespace hpx::thrust {
                 void* block = p.allocate(size_class);
                 try
                 {
-                    std::lock_guard<hpx::spinlock> l(mtx_);
+                    std::lock_guard<hpx::spinlock_no_backoff> l(mtx_);
                     blocks_.emplace(block, &p);
                 }
                 catch (...)
@@ -351,9 +369,25 @@ namespace hpx::thrust {
 
             void deallocate(void* block, std::size_t const bytes) noexcept
             {
+                // a block allocated before the runtime existed, returned once
+                // it does: the pool keeps it only within the configured limit
+                if (!all_final_.load(std::memory_order_acquire) &&
+                    hpx::get_runtime_ptr() != nullptr)
+                {
+                    try
+                    {
+                        configure_pools();
+                    }
+                    catch (...)
+                    {
+                        // an invalid configuration is reported by the next
+                        // allocation
+                    }
+                }
+
                 pool* p = nullptr;
                 {
-                    std::lock_guard<hpx::spinlock> l(mtx_);
+                    std::lock_guard<hpx::spinlock_no_backoff> l(mtx_);
                     auto const it = blocks_.find(block);
                     if (it == blocks_.end())
                     {
@@ -370,7 +404,7 @@ namespace hpx::thrust {
                 std::vector<pool*> all;
                 try
                 {
-                    std::lock_guard<hpx::spinlock> l(mtx_);
+                    std::lock_guard<hpx::spinlock_no_backoff> l(mtx_);
                     for (auto& p : device_pools_)
                     {
                         if (p)
@@ -436,7 +470,7 @@ namespace hpx::thrust {
             {
                 std::vector<pool*> pending;
                 {
-                    std::lock_guard<hpx::spinlock> l(mtx_);
+                    std::lock_guard<hpx::spinlock_no_backoff> l(mtx_);
                     for (auto& p : device_pools_)
                     {
                         if (p && !p->is_final())
@@ -464,7 +498,7 @@ namespace hpx::thrust {
                     pinned_pool_ :
                     device_pools_.at(static_cast<std::size_t>(device));
                 {
-                    std::lock_guard<hpx::spinlock> l(mtx_);
+                    std::lock_guard<hpx::spinlock_no_backoff> l(mtx_);
                     if (p)
                         return *p;
                 }
@@ -474,7 +508,7 @@ namespace hpx::thrust {
 
                 pool* result = nullptr;
                 {
-                    std::lock_guard<hpx::spinlock> l(mtx_);
+                    std::lock_guard<hpx::spinlock_no_backoff> l(mtx_);
                     if (!p)
                         p = HPX_MOVE(new_pool);
                     result = p.get();
@@ -492,7 +526,11 @@ namespace hpx::thrust {
             std::atomic<int> kind_ = unknown_kind;
             std::atomic<bool> all_final_ = false;
 
-            hpx::spinlock mtx_;
+            // never suspends the calling HPX thread: the device memory is
+            // allocated on the GPU current on the OS thread, which may be
+            // another one once a suspended HPX thread resumes, and a
+            // suspended thread could be interrupted in noexcept functions
+            hpx::spinlock_no_backoff mtx_;
             std::vector<std::unique_ptr<pool>> device_pools_;
             std::unique_ptr<pool> pinned_pool_;
             std::unordered_map<void*, pool*> blocks_;

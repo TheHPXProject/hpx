@@ -10,6 +10,7 @@
 #if defined(HPX_HAVE_NETWORKING)
 #include <hpx/assert.hpp>
 #include <hpx/modules/functional.hpp>
+#include <hpx/modules/futures.hpp>
 #include <hpx/modules/lcos_local.hpp>
 #include <hpx/modules/naming.hpp>
 #include <hpx/modules/parcelset_base.hpp>
@@ -117,12 +118,49 @@ namespace hpx::parcelset::detail {
 
         bool apply_single(parcelset::parcel& p)
         {
-            if (preprocess_parcel(p, archive_, data_, overhead_))
+            bool complete = false;
+            try
+            {
+                complete = preprocess_parcel(p, archive_, data_, overhead_);
+            }
+            catch (...)
+            {
+                wait_for_registered_futures();
+                throw;
+            }
+
+            if (complete)
             {
                 return true;
             }
             wait_for_futures();
             return false;
+        }
+
+        // The serialization failed after it had registered futures (for
+        // instance the copy of device memory an earlier argument started):
+        // they notify the archive once they are ready, so it must not go
+        // away before.
+        void wait_for_registered_futures() noexcept
+        {
+            auto* handle_futures = archive_.try_get_extra_data<
+                serialization::detail::preprocess_futures>();
+            if (handle_futures == nullptr || !handle_futures->has_futures())
+            {
+                return;
+            }
+
+            try
+            {
+                hpx::promise<void> all_ready;
+                hpx::future<void> f = all_ready.get_future();
+                (*handle_futures)([&all_ready]() { all_ready.set_value(); });
+                f.get();
+            }
+            catch (...)
+            {
+                // the error of the serialization is passed on instead
+            }
         }
 
         // run the next pass when the futures found in the last pass are
