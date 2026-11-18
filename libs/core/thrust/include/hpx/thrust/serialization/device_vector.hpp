@@ -50,10 +50,12 @@ namespace hpx::serialization {
     //
     // Data above the zero-copy threshold goes as a zero-copy chunk: of the
     // vector's memory itself if that is pinned host memory (see
-    // hpx::thrust::pooled_allocator) or if the parcelport moves device memory
-    // (enable_device_chunks), else of a pinned host copy. Smaller data is
-    // copied into the archive. A vector of pinned host memory receives the
-    // data in its own memory too.
+    // hpx::thrust::pooled_allocator) or if the parcelport sends device
+    // memory (enable_device_chunks), else of a pinned host copy. Smaller data
+    // is copied into the archive. The receiving side decides itself where
+    // chunks arrive, whatever memory they were sent from: in the vector's
+    // memory if that is pinned host memory or if the parcelport receives into
+    // device memory (allow_device_receive), else in a pinned staging buffer.
     //
     // A chunk of the vector's own memory refers to it until the parcel has
     // been sent, like the zero-copy chunks of any other container (see
@@ -232,9 +234,11 @@ namespace hpx::serialization {
             return;
         }
 
-        if (zero_copy_receive && storage == device_data_storage::device_chunk)
+        if (zero_copy_receive &&
+            ar.try_get_extra_data<detail::allow_device_receive>() != nullptr)
         {
-            // the parcelport moves device memory: it receives into v
+            // the parcelport receives into device memory: it receives into v,
+            // also data sent from host memory
             ar.load_binary_chunk(
                 detail::fundamental_types::none, device_data, bytes, true);
             return;
@@ -242,7 +246,7 @@ namespace hpx::serialization {
 
         if (zero_copy_receive)
         {
-            // The networking layer can't write to device memory: hand it a
+            // The parcelport doesn't receive into device memory: hand it a
             // pinned staging buffer and copy to the device once the data has
             // arrived, before the parcel's action runs.
             void* staging =

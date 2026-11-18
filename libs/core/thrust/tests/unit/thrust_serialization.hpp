@@ -71,5 +71,7 @@ namespace test {
     // De-serializes with load(). With zero-copy receive, load() chooses where
     // the chunk data goes, it's placed there afterwards, and the deferred
     // steps run then; otherwise the data has arrived before load() runs.
-    received receive(message& m, bool zero_copy_receive, load_type const& load);
+    // 'device_receive': the parcelport can receive into device memory.
+    received receive(message& m, bool zero_copy_receive, load_type const& load,
+        bool device_receive = false);
 }    // namespace test

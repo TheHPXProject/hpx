@@ -104,6 +104,7 @@ endif()
 # Default location is $HPX_ROOT/libs/serialization/include
 set(serialization_headers
     hpx/serialization.hpp
+    hpx/serialization/detail/allow_device_receive.hpp
     hpx/serialization/detail/allow_zero_copy_receive.hpp
     hpx/serialization/detail/constructor_selector.hpp
     hpx/serialization/detail/non_default_constructible.hpp
@@ -235,6 +236,7 @@ endif()
 
 # Default location is $HPX_ROOT/libs/serialization/src
 set(serialization_sources
+    detail/allow_device_receive.cpp
     detail/allow_zero_copy_receive.cpp
     detail/pointer.cpp
     detail/polymorphic_id_factory.cpp
@@ -269,6 +271,7 @@ add_hpx_module(
     hpx_type_support
   DEPENDENCIES ${serialization_optional_dependencies}
   ADD_TO_GLOBAL_HEADER
+    hpx/serialization/detail/allow_device_receive.hpp
     hpx/serialization/detail/allow_zero_copy_receive.hpp
     hpx/serialization/detail/polymorphic_id_factory.hpp
     hpx/serialization/detail/polymorphic_intrusive_factory.hpp
