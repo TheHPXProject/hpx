@@ -95,6 +95,50 @@ namespace hpx::threads::detail {
 
             return previous_state;    // done
         }
+
+        // schedule a thread that was just made pending
+        void schedule_pending_thread(thread_id_type const& thrd,
+            thread_priority const priority, thread_schedule_hint schedulehint)
+        {
+            auto* thrd_data = get_thread_id_data(thrd);
+            auto* scheduler = thrd_data->get_scheduler_base();
+            auto const current_priority = thrd_data->get_priority();
+            if (priority == thread_priority::bound)
+            {
+                if (schedulehint.mode() == thread_schedule_hint_mode::thread &&
+                    schedulehint.hint != -1)
+                {
+                    thrd_data->set_last_worker_thread_num(
+                        static_cast<std::uint16_t>(schedulehint.hint));
+                }
+                thrd_data->set_priority(thread_priority::bound);
+                scheduler->schedule_thread(
+                    thrd, schedulehint, false, thread_priority::bound);
+            }
+            else if (current_priority == thread_priority::bound)
+            {
+                schedulehint.mode(thread_schedule_hint_mode::thread);
+                schedulehint.hint = static_cast<std::int16_t>(
+                    thrd_data->get_last_worker_thread_num());
+                scheduler->schedule_thread(
+                    thrd, schedulehint, false, thread_priority::bound);
+            }
+            else
+            {
+                threads::thread_priority p =
+                    (priority == thread_priority::default_ ||
+                        priority == thread_priority::unknown) ?
+                    current_priority :
+                    priority;
+
+                scheduler->schedule_thread(thrd, schedulehint, false, p);
+            }
+
+            scheduler->do_some_work(schedulehint.mode() ==
+                        hpx::threads::thread_schedule_hint_mode::numa ?
+                    static_cast<std::size_t>(-1) :
+                    schedulehint.hint);
+        }
     }    // namespace
 
     ///////////////////////////////////////////////////////////////////////////
@@ -269,49 +313,57 @@ namespace hpx::threads::detail {
             (new_state == thread_schedule_state::pending ||
                 new_state == thread_schedule_state::pending_boost))
         {
-            auto* thrd_data = get_thread_id_data(thrd);
-            auto* scheduler = thrd_data->get_scheduler_base();
-            auto const current_priority = thrd_data->get_priority();
-            if (priority == thread_priority::bound)
-            {
-                if (schedulehint.mode() == thread_schedule_hint_mode::thread &&
-                    schedulehint.hint != -1)
-                {
-                    thrd_data->set_last_worker_thread_num(
-                        static_cast<std::uint16_t>(schedulehint.hint));
-                }
-                thrd_data->set_priority(thread_priority::bound);
-                scheduler->schedule_thread(
-                    thrd, schedulehint, false, thread_priority::bound);
-            }
-            else if (current_priority == thread_priority::bound)
-            {
-                schedulehint.mode(thread_schedule_hint_mode::thread);
-                schedulehint.hint = static_cast<std::int16_t>(
-                    thrd_data->get_last_worker_thread_num());
-                scheduler->schedule_thread(
-                    thrd, schedulehint, false, thread_priority::bound);
-            }
-            else
-            {
-                threads::thread_priority p =
-                    (priority == thread_priority::default_ ||
-                        priority == thread_priority::unknown) ?
-                    current_priority :
-                    priority;
-
-                scheduler->schedule_thread(thrd, schedulehint, false, p);
-            }
-
-            scheduler->do_some_work(schedulehint.mode() ==
-                        hpx::threads::thread_schedule_hint_mode::numa ?
-                    static_cast<std::size_t>(-1) :
-                    schedulehint.hint);
+            schedule_pending_thread(thrd, priority, schedulehint);
         }
 
         if (&ec != &throws)
             ec = make_success_code();
 
         return previous_state;
+    }
+
+    ///////////////////////////////////////////////////////////////////////////
+    bool set_suspended_thread_state(thread_id_type const& thrd,
+        std::int64_t const suspension_tag,
+        thread_schedule_state const new_state,
+        thread_restart_state const new_state_ex, thread_priority const priority,
+        thread_schedule_hint const schedulehint)
+    {
+        HPX_ASSERT(thrd);
+        HPX_ASSERT(new_state == thread_schedule_state::pending ||
+            new_state == thread_schedule_state::pending_boost);
+
+        auto const* thrd_data = get_thread_id_data(thrd);
+        for (std::size_t k = 0;; ++k)
+        {
+            thread_state const current = thrd_data->get_state();
+
+            // the thread has not reached the suspension yet
+            if (current.tag() == suspension_tag - 1 &&
+                current.state() == thread_schedule_state::active)
+            {
+                hpx::execution_base::this_thread::yield_k(
+                    k, "hpx::threads::detail::set_suspended_thread_state");
+                continue;
+            }
+
+            // the suspension has ended already (the thread was woken by
+            // someone else and may by now wait for something else)
+            if (current.tag() != suspension_tag ||
+                current.state() != thread_schedule_state::suspended)
+            {
+                LTM_(info).format("set_suspended_thread_state: suspension has "
+                                  "ended, thread({}), description({})",
+                    thrd, thrd_data->get_description());
+                return false;
+            }
+
+            // the compare-exchange fails if the thread was woken meanwhile
+            if (thrd_data->restore_state(new_state, new_state_ex, current))
+            {
+                schedule_pending_thread(thrd, priority, schedulehint);
+                return true;
+            }
+        }
     }
 }    // namespace hpx::threads::detail

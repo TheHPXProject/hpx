@@ -1,0 +1,153 @@
+# Copyright (c) 2026 The STE||AR Group
+#
+# SPDX-License-Identifier: BSL-1.0
+# Distributed under the Boost Software License, Version 1.0. (See accompanying
+# file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+
+# Reusable workflow: configure HPX and build its libraries in one job, then
+# build and run the tests in a number of parallel shards. Each shard downloads
+# the build directory of the first job, builds the tests of its shard, and
+# runs them (see .github/actions/hpx-build-and-test).
+#
+# The build has to use the Ninja generator.
+#
+# The checks show as '<workflow> / <calling job> / <job>', so the workflow name
+# of a caller should name the platform and the configuration, the name of the
+# calling job the compiler (for instance 'Linux (Debug, all tests) / Clang /
+# libraries').
+
+name: Sharded Build and Test
+
+on:
+  workflow_call:
+    inputs:
+      runs-on:
+        description: "Runner label of all jobs"
+        type: string
+        default: ubuntu-latest
+      container:
+        description: "Container image of all jobs (empty: run on the runner)"
+        type: string
+        default: ""
+      setup:
+        description: "Shell commands run after the checkout in every job, for instance to install dependencies"
+        type: string
+        default: ""
+      configure:
+        description: "Shell commands, run in the workspace, that configure HPX into the directory 'build' with the Ninja generator"
+        type: string
+        required: true
+      configure-timeout-minutes:
+        description: "Timeout of the configure step"
+        type: number
+        default: 30
+      base-targets:
+        description: "Whitespace-separated ninja targets built, in this order, before the tests are split up (the libraries)"
+        type: string
+        required: true
+      shards:
+        description: "Number of test shards"
+        type: number
+        default: 25
+      exclude-files:
+        description: "Whitespace-separated files (relative to the repository) listing tests to leave out (if this and exclude-regex-files are empty: .github/workflows/exclude.targets)"
+        type: string
+        default: ""
+      exclude-regex-files:
+        description: "Whitespace-separated files (relative to the repository) listing regular expressions; tests whose names contain a match are left out (as with ctest --exclude-regex)"
+        type: string
+        default: ""
+      ctest-timeout:
+        description: "CTest timeout per test in seconds"
+        type: string
+        default: "180"
+      artifact-prefix:
+        description: "Name prefix of the build directory artifact"
+        type: string
+        default: hpx-build
+
+jobs:
+  build-libraries:
+    name: libraries
+    runs-on: ${{ inputs.runs-on }}
+    container: ${{ inputs.container }}
+    outputs:
+      test_matrix: ${{ steps.gen_matrix.outputs.matrix }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up
+        if: inputs.setup != ''
+        shell: bash
+        run: ${{ inputs.setup }}
+
+      - name: Configure (Running CMake)
+        shell: bash
+        timeout-minutes: ${{ inputs.configure-timeout-minutes }}
+        run: ${{ inputs.configure }}
+
+      - name: Build ${{ inputs.base-targets }}
+        shell: bash
+        working-directory: build
+        run: |
+          for target in ${{ inputs.base-targets }}; do
+            echo "::group::ninja -k 0 ${target}"
+            ninja -k 0 "${target}"
+            echo "::endgroup::"
+          done
+
+      - name: Generate Test Matrix
+        id: gen_matrix
+        shell: bash
+        working-directory: build
+        run: |
+          declare -a exclude_args=()
+          for file in ${{ inputs.exclude-files }}; do
+            exclude_args+=(--exclude "$GITHUB_WORKSPACE/${file}")
+          done
+          for file in ${{ inputs.exclude-regex-files }}; do
+            exclude_args+=(--exclude-regex "$GITHUB_WORKSPACE/${file}")
+          done
+          ctest -N | python3 ../.github/ci-scripts/generate_test_matrix.py \
+            ${{ inputs.shards }} ${exclude_args[@]+"${exclude_args[@]}"} \
+            > test_matrix.json
+          printf 'matrix=%s\n' "$(cat test_matrix.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Package Build Artifacts
+        shell: bash
+        run: tar -czf build.tar.gz build/
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ inputs.artifact-prefix }}-${{ github.sha }}
+          path: build.tar.gz
+          retention-days: 3
+
+  tests:
+    needs: build-libraries
+    runs-on: ${{ inputs.runs-on }}
+    container: ${{ inputs.container }}
+    name: ${{ matrix.name }} (${{ matrix.count }})
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.build-libraries.outputs.test_matrix) }}
+
+    steps:
+      # The shards compile their tests, so they need the sources, not only
+      # .github
+      - uses: actions/checkout@v7
+
+      - name: Set up
+        if: inputs.setup != ''
+        shell: bash
+        run: ${{ inputs.setup }}
+
+      - uses: ./.github/actions/hpx-build-and-test
+        with:
+          build-artifact-name: ${{ inputs.artifact-prefix }}-${{ github.sha }}
+          build-targets: ${{ matrix.targets }}
+          ctest-regex: ${{ matrix.tests }}
+          ctest-timeout: ${{ inputs.ctest-timeout }}
+          artifact-job-name: ${{ matrix.name }}

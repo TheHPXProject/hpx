@@ -267,6 +267,15 @@ namespace hpx::parallel {
                     first, last, dest, HPX_FORWARD(Op, op));
             }
 
+            template <typename ExPolicy, typename InIter, typename Sent,
+                typename OutIter, typename Op, typename Value>
+            static constexpr OutIter sequential(ExPolicy, InIter first,
+                Sent last, OutIter dest, Op&& op, Value&& previous)
+            {
+                return sequential_adjacent_difference<ExPolicy>(first, last,
+                    dest, HPX_FORWARD(Op, op), HPX_FORWARD(Value, previous));
+            }
+
             template <typename ExPolicy, typename FwdIter1, typename Sent,
                 typename FwdIter2, typename Op>
             static decltype(auto) parallel(ExPolicy&& policy, FwdIter1 first,

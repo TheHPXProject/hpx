@@ -11,11 +11,14 @@
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/execution_base.hpp>
+#include <hpx/modules/functional.hpp>
 #include <hpx/modules/memory.hpp>
 #include <hpx/modules/synchronization.hpp>
 #include <hpx/modules/thread_support.hpp>
 #include <hpx/modules/type_support.hpp>
 
+#include <atomic>
+#include <cstddef>
 #include <exception>
 #include <mutex>
 #include <type_traits>
@@ -288,13 +291,13 @@ namespace hpx::execution::experimental {
 
     private:
         bool stop = false;
+        std::atomic<std::size_t> active_threads{0};
 
         void push_back(run_loop_opstate_base* t)
         {
             auto const local_mtx = mtx;    // keep alive
             std::unique_lock l(local_mtx->mtx_);
 
-            stop = false;
             t->next = &head;
             head.tail = head.tail->next = t;
             cond_var.notify_one(HPX_MOVE(l));
@@ -339,7 +342,7 @@ namespace hpx::execution::experimental {
         // Otherwise, has no effects.
         ~run_loop()
         {
-            if (head.next != &head || !stop)
+            if (head.next != &head || active_threads != 0)
             {
                 std::terminate();
             }
@@ -355,11 +358,62 @@ namespace hpx::execution::experimental {
         {
             // Precondition: state is starting.
             //HPX_ASSERT(head.next != &head || !stop);
+            ++active_threads;
+            auto on_exit =
+                hpx::experimental::scope_exit([this]() { --active_threads; });
+
             for (run_loop_opstate_base* t; (t = pop_front()) != &head; /**/)
             {
                 t->execute();
             }
             HPX_ASSERT(stop);    // Postcondition: state is finishing.
+        }
+
+        /// \brief Internal HPX extension: runs the loop until the predicate is
+        ///        satisfied. Not part of the C++20 [exec.run_loop] specification.
+        template <typename Pred>
+        void run_until(Pred&& condition)
+        {
+            ++active_threads;
+            auto on_exit =
+                hpx::experimental::scope_exit([this]() { --active_threads; });
+
+            auto const local_mtx = mtx;    // keep alive
+            std::unique_lock l(local_mtx->mtx_);
+
+            while (!condition())
+            {
+                while (head.next == &head && !condition())
+                {
+                    cond_var.wait(l);
+                }
+
+                if (condition())
+                {
+                    break;
+                }
+
+                run_loop_opstate_base* const t = head.next;
+                if (head.tail == head.next)
+                {
+                    head.tail = &head;
+                }
+                head.next = head.next->next;
+
+                l.unlock();
+                t->execute();
+                l.lock();
+            }
+        }
+
+        /// \brief Internal HPX extension: safely signals completion of an
+        ///        operation and wakes waiting threads.
+        void complete_operation(bool& flag)
+        {
+            auto const local_mtx = mtx;    // keep alive
+            std::unique_lock l(local_mtx->mtx_);
+            flag = true;
+            cond_var.notify_all(HPX_MOVE(l));
         }
 
         void finish()

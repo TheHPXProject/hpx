@@ -562,8 +562,8 @@ namespace hpx::util::detail {
         /// Remaps the content of the given container with type T, to a
         /// container of the same type which may contain different types.
         template <typename T, typename M>
-        auto remap(strategy_remap_tag, T&& container, M&& mapper,
-            std::enable_if_t<is_effective_v<M, element_of_t<T>>>* = nullptr)
+            requires is_effective_v<M, element_of_t<T>>
+        auto remap(strategy_remap_tag, T&& container, M&& mapper)
             -> decltype(remap_container(container_mapping_tag_of_t<T, M>{},
                 HPX_FORWARD(M, mapper), HPX_FORWARD(T, container)))
         {
@@ -573,8 +573,8 @@ namespace hpx::util::detail {
 
         /// Just call the visitor with the content of the container
         template <typename T, typename M>
-        void remap(strategy_traverse_tag, T&& container, M&& mapper,
-            std::enable_if_t<is_effective_v<M, element_of_t<T>>>* = nullptr)
+            requires is_effective_v<M, element_of_t<T>>
+        void remap(strategy_traverse_tag, T&& container, M&& mapper)
         {
             // CUDA needs std::forward here
             for (auto&& element : std::forward<T>(container))

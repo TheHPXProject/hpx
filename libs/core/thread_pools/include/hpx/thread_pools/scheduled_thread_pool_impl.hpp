@@ -402,23 +402,38 @@ namespace hpx::threads::detail {
     template <typename Scheduler>
     void scheduled_thread_pool<Scheduler>::suspend_internal(error_code& ec)
     {
-        util::yield_while(
-            [this]() {
-                return this->sched_->Scheduler::get_thread_count() >
-                    this->get_background_thread_count();
-            },
-            "scheduled_thread_pool::suspend_internal");
+        auto const has_threads = [this]() {
+            return this->sched_->Scheduler::get_thread_count() >
+                this->get_background_thread_count();
+        };
 
-        for (std::size_t i = 0; i != threads_.size(); ++i)
+        while (true)
         {
-            hpx::state expected = hpx::state::running;
-            sched_->Scheduler::get_state(i).compare_exchange_strong(
-                expected, hpx::state::pre_sleep);
-        }
+            util::yield_while(
+                has_threads, "scheduled_thread_pool::suspend_internal");
 
-        for (std::size_t i = 0; i != threads_.size(); ++i)
-        {
-            suspend_processing_unit_direct(i, ec);
+            for (std::size_t i = 0; i != threads_.size(); ++i)
+            {
+                hpx::state expected = hpx::state::running;
+                sched_->Scheduler::get_state(i).compare_exchange_strong(
+                    expected, hpx::state::pre_sleep);
+            }
+
+            for (std::size_t i = 0; i != threads_.size(); ++i)
+            {
+                suspend_processing_unit_direct(i, ec);
+                if (ec)
+                    return;
+            }
+
+            // no thread can move between queues while all workers sleep, so
+            // this count is exact
+            if (!has_threads())
+                return;
+
+            resume_internal(true, ec);
+            if (ec)
+                return;
         }
     }
 
@@ -639,6 +654,23 @@ namespace hpx::threads::detail {
             }
         }
 
+        // A thread created from outside the workers of this pool can arrive
+        // while the last worker leaves (see begin_outside_creation); an HPX
+        // thread of this pool keeps its worker in the scheduling loop
+        bool const from_outside =
+            !(threads::get_self_ptr() && hpx::this_thread::get_pool() == this);
+        if (from_outside && !sched_->Scheduler::begin_outside_creation())
+        {
+            HPX_THROWS_IF(ec, hpx::error::invalid_status,
+                "thread_pool<Scheduler>::create_thread",
+                "runtime is being shut down, not creating any new threads");
+            return;
+        }
+        auto const end_outside_creation = hpx::experimental::scope_exit([&] {
+            if (from_outside)
+                sched_->Scheduler::end_outside_creation();
+        });
+
         if (data.schedulehint.runs_as_child_mode() ==
                 hpx::threads::thread_execution_hint::run_as_child &&
             !sched_->Scheduler::supports_direct_execution())
@@ -679,6 +711,23 @@ namespace hpx::threads::detail {
                 return invalid_thread_id;
             }
         }
+
+        // A thread created from outside the workers of this pool can arrive
+        // while the last worker leaves (see begin_outside_creation); an HPX
+        // thread of this pool keeps its worker in the scheduling loop
+        bool const from_outside =
+            !(threads::get_self_ptr() && hpx::this_thread::get_pool() == this);
+        if (from_outside && !sched_->Scheduler::begin_outside_creation())
+        {
+            HPX_THROWS_IF(ec, hpx::error::invalid_status,
+                "thread_pool<Scheduler>::create_work",
+                "runtime is being shut down, not creating any new threads");
+            return invalid_thread_id;
+        }
+        auto const end_outside_creation = hpx::experimental::scope_exit([&] {
+            if (from_outside)
+                sched_->Scheduler::end_outside_creation();
+        });
 
         if (data.schedulehint.runs_as_child_mode() ==
                 hpx::threads::thread_execution_hint::run_as_child &&

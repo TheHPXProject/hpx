@@ -120,12 +120,8 @@ namespace hpx::parallel::detail {
             new buffer_type[combiner(len1, len2)]);
         std::shared_ptr<set_chunk_data[]> chunks(new set_chunk_data[cores]);
 
-        // first step, is applied to all partitions
-        auto f1 = [=](set_chunk_data* curr_chunk,
-                      std::size_t const part_size) mutable -> void {
-            HPX_ASSERT(part_size == 1);
-            HPX_UNUSED(part_size);
-
+        // first step, is applied to each chunk of sequence 1
+        auto handle_chunk = [=](set_chunk_data* curr_chunk) mutable -> void {
             // find start in sequence 1
             std::size_t start1 = (curr_chunk - chunks.get()) * step;
             std::size_t end1 =
@@ -136,7 +132,6 @@ namespace hpx::parallel::detail {
                 return;
             }
 
-            bool const first_partition = start1 == 0;
             bool const last_partition = end1 == static_cast<std::size_t>(len1);
 
             auto start_value = HPX_INVOKE(proj1, first1[start1]);
@@ -185,7 +180,7 @@ namespace hpx::parallel::detail {
 
             // find start and end in sequence 2
             std::size_t start2 = 0;
-            if (!first_partition)
+            if (start1 != 0)
             {
                 start2 = detail::lower_bound(
                              first2, first2 + len2, start_value, f, proj2) -
@@ -209,6 +204,17 @@ namespace hpx::parallel::detail {
             curr_chunk->first1 = op_result.in1 - first1;
             curr_chunk->first2 = op_result.in2 - first2;
             curr_chunk->len = op_result.out - buffer_dest;
+        };
+
+        // The partitioner applies the chunk size of the given policy to the
+        // array of chunks, so a single partition may hold more than one of
+        // them.
+        auto f1 = [handle_chunk](set_chunk_data* curr_chunk,
+                      std::size_t const part_size) mutable -> void {
+            for (std::size_t i = 0; i != part_size; ++i, ++curr_chunk)
+            {
+                handle_chunk(curr_chunk);
+            }
         };
 
         // second step, is executed after all partitions are done running
@@ -274,8 +280,13 @@ namespace hpx::parallel::detail {
                 parallel::util::
                     foreach_partitioner<hpx::execution::parallel_policy>::call(
                         hpx::execution::par, chunks.get(), cores,
-                        [copy_chunk](set_chunk_data* ch, std::size_t,
-                            std::size_t) { copy_chunk(ch); },
+                        [copy_chunk](set_chunk_data* ch,
+                            std::size_t const part_size, std::size_t) {
+                            for (std::size_t i = 0; i != part_size; ++i, ++ch)
+                            {
+                                copy_chunk(ch);
+                            }
+                        },
                         [](set_chunk_data* last) -> set_chunk_data* {
                             return last;
                         });

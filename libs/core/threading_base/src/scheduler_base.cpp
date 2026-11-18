@@ -391,83 +391,94 @@ namespace hpx::threads::policies {
         return result;
     }
 
+    bool scheduler_base::worker_matches_pu_mask(std::size_t worker_idx,
+        hpx::threads::mask_cref_type pu_mask) const noexcept
+    {
+        HPX_ASSERT(parent_pool_ != nullptr);
+        auto const worker_mask =
+            parent_pool_->get_used_processing_unit(worker_idx);
+        return threads::bit_and(worker_mask, pu_mask);
+    }
+
+    template <typename F>
+    void scheduler_base::apply_to_matching_modes(
+        hpx::threads::mask_cref_type pu_mask, F&& f) noexcept
+    {
+        if (parent_pool_ != nullptr)
+        {
+            for (std::size_t j = 0; j != modes_.size(); ++j)
+            {
+                if (worker_matches_pu_mask(j, pu_mask))
+                {
+                    f(modes_[j].data_);
+                }
+            }
+        }
+        else
+        {
+            std::size_t const size = hpx::threads::mask_size(pu_mask);
+            for (std::size_t i = 0, j = 0; i != size && j < modes_.size(); ++i)
+            {
+                if (hpx::threads::test(pu_mask, i))
+                {
+                    f(modes_[j++].data_);
+                }
+            }
+        }
+    }
+
     // get/set scheduler mode
     void scheduler_base::set_scheduler_mode(
         scheduler_mode mode, hpx::threads::mask_cref_type pu_mask) noexcept
     {
-        HPX_ASSERT(hpx::threads::count(pu_mask) <= modes_.size());
-
-        // distribute the same value across all cores
-        std::size_t const size = hpx::threads::mask_size(pu_mask);
-        for (std::size_t i = 0, j = 0; i != size; ++i)
-        {
-            if (hpx::threads::test(pu_mask, i))
-            {
-                modes_[j++].data_.store(
-                    adjust_scheduler_mode(mode), std::memory_order_release);
-            }
-        }
+        apply_to_matching_modes(pu_mask, [this, mode](auto& mode_atomic) {
+            mode_atomic.store(
+                adjust_scheduler_mode(mode), std::memory_order_release);
+        });
         do_some_work(static_cast<std::size_t>(-1));
     }
 
     void scheduler_base::add_scheduler_mode(
         scheduler_mode mode, hpx::threads::mask_cref_type pu_mask) noexcept
     {
-        HPX_ASSERT(hpx::threads::count(pu_mask) <= modes_.size());
-
-        // distribute the same value across all cores
-        std::size_t const size = hpx::threads::mask_size(pu_mask);
-        for (std::size_t i = 0, j = 0; i != size; ++i)
-        {
-            if (hpx::threads::test(pu_mask, i))
+        apply_to_matching_modes(pu_mask, [this, mode](auto& mode_atomic) {
+            auto old_mode = mode_atomic.load(std::memory_order_relaxed);
+            while (!mode_atomic.compare_exchange_weak(old_mode,
+                adjust_scheduler_mode(old_mode | mode),
+                std::memory_order_release, std::memory_order_relaxed))
             {
-                auto const old_mode =
-                    modes_[j].data_.load(std::memory_order::relaxed);
-                modes_[j++].data_.store(adjust_scheduler_mode(old_mode | mode),
-                    std::memory_order_release);
             }
-        }
+        });
     }
 
     void scheduler_base::remove_scheduler_mode(
         scheduler_mode mode, hpx::threads::mask_cref_type pu_mask) noexcept
     {
-        HPX_ASSERT(hpx::threads::count(pu_mask) <= modes_.size());
-
-        std::size_t const size = hpx::threads::mask_size(pu_mask);
-        for (std::size_t i = 0, j = 0; i != size; ++i)
-        {
-            if (hpx::threads::test(pu_mask, i))
+        apply_to_matching_modes(pu_mask, [this, mode](auto& mode_atomic) {
+            auto old_mode = mode_atomic.load(std::memory_order_relaxed);
+            while (!mode_atomic.compare_exchange_weak(old_mode,
+                adjust_scheduler_mode(
+                    static_cast<scheduler_mode>(old_mode & ~mode)),
+                std::memory_order_release, std::memory_order_relaxed))
             {
-                auto const old_mode =
-                    modes_[j].data_.load(std::memory_order::relaxed);
-                modes_[j++].data_.store(
-                    adjust_scheduler_mode(
-                        static_cast<scheduler_mode>(old_mode & ~mode)),
-                    std::memory_order_release);
             }
-        }
+        });
     }
 
     void scheduler_base::add_remove_scheduler_mode(scheduler_mode to_add_mode,
         scheduler_mode to_remove_mode,
         hpx::threads::mask_cref_type pu_mask) noexcept
     {
-        HPX_ASSERT(hpx::threads::count(pu_mask) <= modes_.size());
-
-        std::size_t const size = hpx::threads::mask_size(pu_mask);
-        for (std::size_t i = 0, j = 0; i != size; ++i)
-        {
-            if (hpx::threads::test(pu_mask, i))
-            {
-                auto const old_mode =
-                    modes_[j].data_.load(std::memory_order::relaxed);
-                modes_[j++].data_.store(
+        apply_to_matching_modes(
+            pu_mask, [this, to_add_mode, to_remove_mode](auto& mode_atomic) {
+                auto old_mode = mode_atomic.load(std::memory_order_relaxed);
+                while (!mode_atomic.compare_exchange_weak(old_mode,
                     adjust_scheduler_mode(static_cast<scheduler_mode>(
                         (old_mode | to_add_mode) & ~to_remove_mode)),
-                    std::memory_order_release);
-            }
-        }
+                    std::memory_order_release, std::memory_order_relaxed))
+                {
+                }
+            });
     }
 
     void scheduler_base::update_scheduler_mode(scheduler_mode mode, bool set,
@@ -501,12 +512,27 @@ namespace hpx::threads::policies {
         // visible to the last worker; acquire: the last worker synchronizes
         // with all earlier decrements (they form one release sequence), so
         // the thread counts below include that work
-        if (workers_in_loop_.fetch_sub(1, std::memory_order_acq_rel) != 1)
+        std::uint64_t const before =
+            workers_in_loop_.fetch_sub(1, std::memory_order_acq_rel);
+        if ((before & workers_in_loop_mask) != 1)
             return true;
 
         // This is the last worker. All others are idle and have left, so no
-        // HPX thread can schedule new work anymore: whatever is left on any
-        // queue now is left there for good unless this worker runs it.
+        // HPX thread of this pool can schedule new work anymore. A creation
+        // from outside the workers that began before may not have queued its
+        // thread yet: wait for it (it is short, and every later one sees
+        // that no worker is left and gives up). Acquire: synchronizes with
+        // end_outside_creation, so the thread counts below include its
+        // thread. Whatever is left on any queue then is left there for good
+        // unless this worker runs it.
+        if (before >= outside_creation_unit)
+        {
+            hpx::util::yield_while([this]() {
+                return workers_in_loop_.load(std::memory_order_acquire) >=
+                    outside_creation_unit;
+            });
+        }
+
         if (get_thread_count() <= get_background_thread_count())
             return true;
 
@@ -519,6 +545,30 @@ namespace hpx::threads::policies {
     {
         // release: as in leave_scheduling_loop
         workers_in_loop_.fetch_sub(1, std::memory_order_release);
+    }
+
+    bool scheduler_base::begin_outside_creation() noexcept
+    {
+        // The creations and the workers are counted in the same atomic, so
+        // either this comes first and the last worker to leave waits for it,
+        // or the last worker has left before and this gives up
+        std::uint64_t const before = workers_in_loop_.fetch_add(
+            outside_creation_unit, std::memory_order_relaxed);
+        if ((before & workers_in_loop_mask) == 0 &&
+            has_reached_state(hpx::state::stopping))
+        {
+            workers_in_loop_.fetch_sub(
+                outside_creation_unit, std::memory_order_relaxed);
+            return false;
+        }
+        return true;
+    }
+
+    void scheduler_base::end_outside_creation() noexcept
+    {
+        // release: the last worker that waits for this sees the new thread
+        workers_in_loop_.fetch_sub(
+            outside_creation_unit, std::memory_order_release);
     }
 
     void scheduler_base::increment_background_thread_count() noexcept

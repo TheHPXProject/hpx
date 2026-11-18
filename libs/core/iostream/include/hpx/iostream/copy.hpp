@@ -32,7 +32,7 @@
 
 #include <algorithm>
 #include <cstddef>
-#include <iosfwd>
+#include <ios>
 #include <type_traits>
 #include <utility>
 

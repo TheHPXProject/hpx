@@ -21,7 +21,7 @@
 
 #include <cstdint>
 #include <filesystem>
-#include <iosfwd>
+#include <ios>
 #include <memory>
 #include <string>
 

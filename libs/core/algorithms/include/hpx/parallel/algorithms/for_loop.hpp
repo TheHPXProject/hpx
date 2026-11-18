@@ -883,7 +883,10 @@ namespace hpx::parallel {
                 }
 
                 auto pack = hpx::util::make_index_pack_t<sizeof...(Ts)>();
-                detail::init_iteration(args_, pack, part_index, current_thread);
+                auto const stride_size =
+                    static_cast<std::size_t>(parallel::detail::abs(stride_));
+                detail::init_iteration(
+                    args_, pack, part_index / stride_size, current_thread);
 
                 if (stride_ == 1)
                 {

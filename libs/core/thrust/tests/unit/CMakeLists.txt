@@ -8,7 +8,11 @@ if(NOT (HPX_WITH_CUDA AND HPX_WITH_THRUST))
   return()
 endif()
 
-set(tests thrust_policy_test thrust_policy_traits)
+set(tests thrust_policy_traits)
+# stdexec can't be compiled by nvcc with MSVC as the host compiler
+if(NOT (MSVC AND CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA"))
+  list(APPEND tests thrust_policy_test)
+endif()
 set(thrust_policy_traits_PARAMETERS THREADS_PER_LOCALITY 4)
 set(thrust_policy_test_PARAMETERS THREADS_PER_LOCALITY 4)
 set(thrust_policy_test_CUDA ON)

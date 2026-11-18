@@ -45,7 +45,10 @@ endforeach()
 
 if(HPX_WITH_COMPILE_ONLY_TESTS)
   set(compile_tests)
-  if(HPX_WITH_CUDA OR HPX_WITH_HIP)
+  # stdexec can't be compiled by nvcc with MSVC as the host compiler
+  if((HPX_WITH_CUDA OR HPX_WITH_HIP) AND NOT (MSVC AND CMAKE_CUDA_COMPILER_ID
+                                                       STREQUAL "NVIDIA")
+  )
     list(APPEND compile_tests service_executor_cuda)
     set(service_executor_cuda_CUDA ON)
   endif()

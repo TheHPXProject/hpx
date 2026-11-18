@@ -14,6 +14,7 @@
 #include <iterator>
 #include <numeric>
 #include <random>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -22,6 +23,34 @@
 ///////////////////////////////////////////////////////////////////////////
 unsigned int seed = std::random_device{}();
 std::mt19937 gen(seed);
+
+template <typename Iterator>
+struct throwing_sentinel
+{
+    throwing_sentinel() = default;
+
+    explicit throwing_sentinel(Iterator) {}
+
+    friend bool operator==(Iterator const&, throwing_sentinel const&)
+    {
+        throw std::runtime_error("test");
+    }
+
+    friend bool operator==(throwing_sentinel const&, Iterator const&)
+    {
+        throw std::runtime_error("test");
+    }
+
+    friend bool operator!=(Iterator const&, throwing_sentinel const&)
+    {
+        throw std::runtime_error("test");
+    }
+
+    friend bool operator!=(throwing_sentinel const&, Iterator const&)
+    {
+        throw std::runtime_error("test");
+    }
+};
 
 ///////////////////////////////////////////////////////////////////////////
 template <typename IteratorTag>
@@ -92,6 +121,131 @@ void test_make_heap1()
 void make_heap_test1()
 {
     test_make_heap1<std::random_access_iterator_tag>();
+}
+
+///////////////////////////////////////////////////////////////////////////////
+void test_make_heap_sentinel()
+{
+    using iterator = test::test_iterator<std::vector<std::size_t>::iterator,
+        std::random_access_iterator_tag>;
+    using test_vector = test::test_sentinel_container<std::vector<std::size_t>,
+        std::random_access_iterator_tag>;
+
+    for (std::size_t const size :
+        {std::size_t{0}, std::size_t{1}, std::size_t{10007}})
+    {
+        test_vector c(size);
+        std::iota(c.base().begin(), c.base().end(), 0);
+
+        iterator const result = hpx::ranges::make_heap(c);
+
+        HPX_TEST(result == iterator(c.base().end()));
+        HPX_TEST(std::is_heap(c.base().begin(), c.base().end()));
+    }
+}
+
+template <typename ExPolicy>
+void test_make_heap_sentinel(ExPolicy policy)
+{
+    using iterator = test::test_iterator<std::vector<std::size_t>::iterator,
+        std::random_access_iterator_tag>;
+    using test_vector = test::test_sentinel_container<std::vector<std::size_t>,
+        std::random_access_iterator_tag>;
+
+    for (std::size_t const size :
+        {std::size_t{0}, std::size_t{1}, std::size_t{10007}})
+    {
+        test_vector c(size);
+        std::iota(c.base().begin(), c.base().end(), 0);
+
+        iterator const result = hpx::ranges::make_heap(policy, c);
+
+        HPX_TEST(result == iterator(c.base().end()));
+        HPX_TEST(std::is_heap(c.base().begin(), c.base().end()));
+    }
+}
+
+template <typename ExPolicy>
+void test_make_heap_sentinel_async(ExPolicy policy)
+{
+    using iterator = test::test_iterator<std::vector<std::size_t>::iterator,
+        std::random_access_iterator_tag>;
+    using test_vector = test::test_sentinel_container<std::vector<std::size_t>,
+        std::random_access_iterator_tag>;
+
+    for (std::size_t const size :
+        {std::size_t{0}, std::size_t{1}, std::size_t{10007}})
+    {
+        test_vector c(size);
+        std::iota(c.base().begin(), c.base().end(), 0);
+
+        iterator const result = hpx::ranges::make_heap(policy, c).get();
+
+        HPX_TEST(result == iterator(c.base().end()));
+        HPX_TEST(std::is_heap(c.base().begin(), c.base().end()));
+    }
+}
+
+void make_heap_sentinel_test()
+{
+    using namespace hpx::execution;
+
+    test_make_heap_sentinel();
+    test_make_heap_sentinel(seq);
+    test_make_heap_sentinel(par);
+    test_make_heap_sentinel_async(seq(task));
+    test_make_heap_sentinel_async(par(task));
+}
+
+template <typename ExPolicy>
+void test_make_heap_sentinel_exception(ExPolicy policy)
+{
+    using iterator = test::test_iterator<std::vector<std::size_t>::iterator,
+        std::random_access_iterator_tag>;
+
+    std::vector<std::size_t> c(2);
+    bool caught_exception = false;
+    bool returned_from_algorithm = false;
+
+    try
+    {
+        iterator const first(c.begin());
+        throwing_sentinel<iterator> const last(iterator(c.end()));
+
+        if constexpr (hpx::is_async_execution_policy_v<ExPolicy>)
+        {
+            auto result = hpx::ranges::make_heap(policy, first, last);
+            returned_from_algorithm = true;
+            result.get();
+        }
+        else
+        {
+            hpx::ranges::make_heap(policy, first, last);
+        }
+        HPX_TEST(false);
+    }
+    catch (hpx::exception_list const&)
+    {
+        caught_exception = true;
+    }
+    catch (...)
+    {
+        HPX_TEST(false);
+    }
+
+    HPX_TEST(caught_exception);
+    if constexpr (hpx::is_async_execution_policy_v<ExPolicy>)
+    {
+        HPX_TEST(returned_from_algorithm);
+    }
+}
+
+void make_heap_sentinel_exception_test()
+{
+    using namespace hpx::execution;
+
+    test_make_heap_sentinel_exception(par);
+    test_make_heap_sentinel_exception(par(task));
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -426,6 +580,8 @@ int hpx_main(hpx::program_options::variables_map& vm)
     gen.seed(seed);
 
     make_heap_test1();
+    make_heap_sentinel_test();
+    make_heap_sentinel_exception_test();
     make_heap_test2();
     make_heap_exception_test();
     make_heap_bad_alloc_test();

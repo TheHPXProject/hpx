@@ -268,6 +268,16 @@ namespace hpx::threads::policies {
         [[nodiscard]] bool leave_scheduling_loop();
         void abandon_scheduling_loop() noexcept;
 
+        // A thread created from outside the workers (by an OS thread that is
+        // not a worker, such as a parcelport's, or by an HPX thread of
+        // another pool) can arrive while the last worker leaves. The pool
+        // brackets such a creation with these: begin_outside_creation returns
+        // false if the pool is stopping and no worker is left to run the new
+        // thread, and the last worker to leave waits for the creations that
+        // have begun, so that it sees their threads.
+        [[nodiscard]] bool begin_outside_creation() noexcept;
+        void end_outside_creation() noexcept;
+
         // Enumerate all matching threads
         virtual bool enumerate_threads(
             hpx::function<bool(thread_id_type)> const& f,
@@ -407,8 +417,15 @@ namespace hpx::threads::policies {
 
         std::atomic<std::int64_t> background_thread_count_;
 
-        // see leave_scheduling_loop
-        std::atomic<std::int64_t> workers_in_loop_{0};
+        // see leave_scheduling_loop and begin_outside_creation: the workers
+        // in the scheduling loop in the low 32 bits, the creations from
+        // outside the workers that have begun in the high 32 bits, so that
+        // all changes of both are in one modification order
+        static constexpr std::uint64_t outside_creation_unit = std::uint64_t(1)
+            << 32;
+        static constexpr std::uint64_t workers_in_loop_mask =
+            outside_creation_unit - 1;
+        std::atomic<std::uint64_t> workers_in_loop_{0};
 
         std::atomic<polling_function_ptr> polling_function_mpi_;
         std::atomic<polling_function_ptr> polling_function_cuda_;
@@ -438,6 +455,14 @@ namespace hpx::threads::policies {
     protected:
         std::shared_ptr<coroutines::detail::tss_storage> thread_data_;
 #endif
+
+    private:
+        bool worker_matches_pu_mask(std::size_t worker_idx,
+            hpx::threads::mask_cref_type pu_mask) const noexcept;
+
+        template <typename F>
+        void apply_to_matching_modes(
+            hpx::threads::mask_cref_type pu_mask, F&& f) noexcept;
     };
 
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT std::ostream& operator<<(

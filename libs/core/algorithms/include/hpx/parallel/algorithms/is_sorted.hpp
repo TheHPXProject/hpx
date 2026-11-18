@@ -381,8 +381,10 @@ namespace hpx::parallel {
                 difference_type count = detail::distance(first, last);
                 if constexpr (!has_scheduler_executor)
                 {
+                    // an empty or single element range is sorted: return its
+                    // end (last may be a sentinel of a different type)
                     if (count <= 1)
-                        return result::get(HPX_MOVE(last));
+                        return result::get(std::next(first, count));
                 }
 
                 util::invoke_projected<Pred, Proj> pred_projected{

@@ -172,6 +172,12 @@ struct freelist_tester
                     allocated_nodes.push(node);
                     break;
                 }
+
+                // The bounded freelist is empty until a deallocating task
+                // returns a node. HPX threads are not preempted, so let the
+                // deallocating tasks run, otherwise the allocating tasks may
+                // occupy all worker threads and spin forever.
+                hpx::this_thread::yield();
             }
 
             hpx::this_thread::yield();
