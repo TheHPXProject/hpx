@@ -15,7 +15,6 @@
 #include <hpx/parallel/datapar/iterator_helpers.hpp>
 #include <hpx/parallel/datapar/zip_iterator.hpp>
 #include <hpx/parallel/util/detail/elements_per_task_size.hpp>
-#include <hpx/parallel/util/detail/transfer_task_size.hpp>
 
 #include <cstddef>
 #include <iterator>
@@ -53,14 +52,27 @@ namespace hpx::parallel::util::detail {
 
     // A datapar policy copies elements in packs if both iterators can be put
     // into packs and their packs have the same width (see datapar_copy_n);
-    // all other elements are copied one by one.
+    // all other elements are copied one by one. datapar_copy_n always uses
+    // simd_policy, so the packs have the native width, whatever number of
+    // lanes the policy asks for.
     template <typename ExPolicy, typename InIter, typename OutIter>
-    struct policy_copies_packs<ExPolicy, InIter, OutIter,
+    struct copy_pack_size<ExPolicy, InIter, OutIter,
         std::enable_if_t<hpx::is_vectorpack_execution_policy_v<ExPolicy>>>
-      : std::bool_constant<iterators_datapar_compatible_v<InIter, OutIter> &&
-            iterator_datapar_compatible_v<InIter> &&
-            iterator_datapar_compatible_v<OutIter>>
     {
+        static constexpr std::size_t value = [] {
+            if constexpr (iterators_datapar_compatible_v<InIter, OutIter> &&
+                iterator_datapar_compatible_v<InIter> &&
+                iterator_datapar_compatible_v<OutIter>)
+            {
+                using pack_type = hpx::parallel::traits::vector_pack_type_t<
+                    std::iter_value_t<InIter>>;
+                return hpx::parallel::traits::vector_pack_size_v<pack_type>;
+            }
+            else
+            {
+                return std::size_t(1);
+            }
+        }();
     };
 }    // namespace hpx::parallel::util::detail
 

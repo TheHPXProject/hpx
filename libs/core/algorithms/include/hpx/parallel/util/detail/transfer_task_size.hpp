@@ -74,35 +74,24 @@ namespace hpx::parallel::util::detail {
         }
     }
 
-    // Whether util::copy_n with the policy ExPolicy copies the elements from
-    // InIter to OutIter in packs. Only the datapar policies do, for
-    // iterators whose elements fit into packs of the same width (see
-    // datapar/elements_per_call.hpp and datapar_copy_n).
-    HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename InIter,
-        typename OutIter, typename Enable = void>
-    struct policy_copies_packs : std::false_type
-    {
-    };
-
-    // The number of elements a call of a loop body that copies elements of
-    // the zip iterator Iter handles in the time of its size. A policy that
-    // copies the elements in packs copies a pack in that time, all other
-    // elements are copied as for the other policies (see
+    // The number of elements a call of a loop body that copies elements from
+    // InIter to OutIter handles in the time of its size. A policy that copies
+    // the elements in packs copies a pack in that time (see copy_pack_size),
+    // all other elements are copied as for the other policies (see
     // get_transfer_task_size).
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename Category,
-        typename InIter, typename OutIter, typename Iter>
-    [[nodiscard]] std::size_t transfer_elements_per_call(
-        hpx::threads::task_size const size) noexcept
+        typename InIter, typename OutIter>
+    [[nodiscard]] std::size_t transfer_elements_per_call() noexcept
     {
-        if constexpr (policy_copies_packs<ExPolicy, InIter, OutIter>::value)
+        constexpr std::size_t pack_size =
+            copy_pack_size<ExPolicy, InIter, OutIter>::value;
+        if constexpr (pack_size > 1)
         {
-            std::size_t const elements =
-                policy_elements_per_call<ExPolicy, Iter>::call(size);
-            if (elements > 1)
-            {
-                return elements;
-            }
+            return pack_size;
         }
-        return get_transfer_task_size<Category, InIter, OutIter>().elements;
+        else
+        {
+            return get_transfer_task_size<Category, InIter, OutIter>().elements;
+        }
     }
 }    // namespace hpx::parallel::util::detail

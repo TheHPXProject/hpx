@@ -845,11 +845,10 @@ struct hpx::parallel::util::detail::elements_per_call<ExPolicy,
 {
     [[nodiscard]] static std::size_t call(
         hpx::parallel::detail::copy_iteration<P> const&,
-        hpx::threads::task_size const size) noexcept
+        hpx::threads::task_size) noexcept
     {
         return transfer_elements_per_call<ExPolicy,
-            pointer_category_t<InIter, OutIter>, InIter, OutIter,
-            hpx::util::zip_iterator<InIter, OutIter>>(size);
+            pointer_category_t<InIter, OutIter>, InIter, OutIter>();
     }
 };
 

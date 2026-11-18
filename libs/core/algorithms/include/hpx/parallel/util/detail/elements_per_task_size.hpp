@@ -65,6 +65,16 @@ namespace hpx::parallel::util::detail {
         }
     };
 
+    // The number of elements util::copy_n copies from InIter to OutIter in
+    // one step with the policy ExPolicy: the width of the packs it copies
+    // (see datapar/elements_per_call.hpp and datapar_copy_n), or one for
+    // policies that copy the elements one by one.
+    HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename InIter,
+        typename OutIter, typename Enable = void>
+    struct copy_pack_size : std::integral_constant<std::size_t, 1>
+    {
+    };
+
     // The iterator type of the elements the partitioners are given, either
     // as an iterator or as a range.
     HPX_CXX_CORE_EXPORT template <typename IterOrR, typename Enable = void>
