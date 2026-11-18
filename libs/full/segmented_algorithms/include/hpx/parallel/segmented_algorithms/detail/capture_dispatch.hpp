@@ -429,6 +429,62 @@ namespace hpx::parallel::detail {
             act, hpx::colocated(routing_partition_id), HPX_MOVE(ranges));
     }
 
+    HPX_CXX_EXPORT template <typename Value, typename LocalIterator>
+    struct move_transmitter
+    {
+        using indexed_range_type = indexed_partition_range<LocalIterator>;
+        using range_list_type = std::vector<indexed_range_type>;
+        using result_type = collected_partition_values<Value>;
+
+        static result_type send_values(range_list_type ranges)
+        {
+            using iterator_traits =
+                hpx::traits::segmented_local_iterator_traits<LocalIterator>;
+
+            result_type result;
+            result.slices.reserve(ranges.size());
+
+            for (auto& indexed_range : ranges)
+            {
+                auto& range = indexed_range.range;
+                auto raw_first = iterator_traits::local(HPX_MOVE(range.first));
+                auto raw_last = iterator_traits::local(HPX_MOVE(range.last));
+                std::size_t const offset = result.values.size();
+
+                result.values.reserve(result.values.size() +
+                    static_cast<std::size_t>(
+                        std::distance(raw_first, raw_last)));
+                std::move(
+                    raw_first, raw_last, std::back_inserter(result.values));
+
+                result.slices.emplace_back(indexed_range.original_index, offset,
+                    result.values.size() - offset);
+            }
+            return result;
+        }
+    };
+
+    HPX_CXX_EXPORT template <typename Value, typename LocalIterator>
+    struct move_values_action
+      : hpx::actions::make_action<
+            collected_partition_values<Value> (*)(
+                std::vector<indexed_partition_range<LocalIterator>>),
+            &move_transmitter<Value, LocalIterator>::send_values,
+            move_values_action<Value, LocalIterator>>::type
+    {
+    };
+
+    HPX_CXX_EXPORT template <typename Value, typename LocalIterator>
+    hpx::future<collected_partition_values<Value>> capture_move_async(
+        hpx::id_type const& routing_partition_id,
+        std::vector<indexed_partition_range<LocalIterator>> ranges)
+    {
+        move_values_action<Value, LocalIterator> act;
+
+        return hpx::async(
+            act, hpx::colocated(routing_partition_id), HPX_MOVE(ranges));
+    }
+
     // handle the case of different localities
     HPX_CXX_EXPORT template <typename Algo>
     struct captured_comparison
