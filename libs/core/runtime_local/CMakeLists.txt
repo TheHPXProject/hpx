@@ -24,6 +24,7 @@ set(runtime_local_headers
     hpx/runtime_local/os_thread_type.hpp
     hpx/runtime_local/pool_timer.hpp
     hpx/runtime_local/report_error.hpp
+    hpx/runtime_local/result_device.hpp
     hpx/runtime_local/run_as_hpx_thread.hpp
     hpx/runtime_local/run_as_os_thread.hpp
     hpx/runtime_local/runtime_handlers.hpp
@@ -77,6 +78,7 @@ set(runtime_local_sources
     get_locality_name.cpp
     os_thread_type.cpp
     pool_timer.cpp
+    result_device.cpp
     runtime_handlers.cpp
     runtime_local.cpp
     serialize_exception.cpp

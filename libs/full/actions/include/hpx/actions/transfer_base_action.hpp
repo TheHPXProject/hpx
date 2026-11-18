@@ -255,6 +255,24 @@ namespace hpx::actions {
             return traits::action_message_handler<derived_type>::call(loc);
         }
 
+        /// Return the GPU of the target object (see
+        /// hpx::traits::component_target), -1 if it has none.
+        int get_target_device(
+            [[maybe_unused]] naming::address_type lva) const override
+        {
+            using device_trait =
+                traits::detail::component_device<component_type>;
+            if constexpr (device_trait::has_device)
+            {
+                if (lva != nullptr)
+                {
+                    return device_trait::call(
+                        *hpx::get_lva<component_type>::call(lva));
+                }
+            }
+            return -1;
+        }
+
     public:
         /// retrieve the N's argument
         template <std::size_t N>

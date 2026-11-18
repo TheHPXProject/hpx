@@ -47,6 +47,7 @@ set(async_cuda_sources
     cuda_event.cpp
     cuda_exception.cpp
     get_targets.cpp
+    result_device.cpp
 )
 
 if(HPX_WITH_HIP AND TARGET roc::hipblas)
