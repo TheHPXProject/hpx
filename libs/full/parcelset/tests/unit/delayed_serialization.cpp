@@ -398,6 +398,12 @@ namespace {
                 continue;
             }
             HPX_TEST(c.data() != nullptr);
+            if (c.data() == nullptr)
+            {
+                // nowhere to put the data: don't schedule the action with
+                // incomplete arguments
+                return false;
+            }
             std::memcpy(c.data(), m.chunk_data[i].data(), c.size());
             deferred = true;
         }

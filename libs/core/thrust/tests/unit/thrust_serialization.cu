@@ -101,7 +101,7 @@ namespace {
 
         bool const chunk = above && o.chunks && (in_place || host_copy);
         HPX_TEST_EQ(m.sources.size(), std::size_t(chunk ? 1 : 0));
-        if (chunk)
+        if (chunk && !m.sources.empty())
         {
             HPX_TEST_EQ(m.sources[0] == source, in_place);
         }
@@ -193,7 +193,7 @@ namespace {
         HPX_TEST_EQ(m.keep_alive, std::size_t(0));
         bool const chunk = above && chunks;
         HPX_TEST_EQ(m.sources.size(), std::size_t(chunk ? 1 : 0));
-        if (chunk)
+        if (chunk && !m.sources.empty())
         {
             HPX_TEST(m.sources[0] == ::thrust::raw_pointer_cast(v.data()));
         }
