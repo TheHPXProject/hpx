@@ -17,6 +17,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <utility>
 #include <vector>
 
@@ -224,16 +225,37 @@ namespace test {
             std::atomic<std::size_t> pending(steps.size());
             hpx::promise<void> done;
             hpx::future<void> f = done.get_future();
-            for (auto& step : steps)
+
+            // a step that fails to start doesn't call its callback, nor do
+            // the steps after it; the started ones still have to finish
+            // before the error is passed on
+            std::exception_ptr error;
+            for (std::size_t i = 0; i != steps.size(); ++i)
             {
-                step([&pending, &done]() {
-                    if (--pending == 0)
+                try
+                {
+                    steps[i]([&pending, &done]() {
+                        if (--pending == 0)
+                        {
+                            done.set_value();
+                        }
+                    });
+                }
+                catch (...)
+                {
+                    error = std::current_exception();
+                    if ((pending -= steps.size() - i) == 0)
                     {
                         done.set_value();
                     }
-                });
+                    break;
+                }
             }
             f.get();
+            if (error)
+            {
+                std::rethrow_exception(error);
+            }
         }
         return r;
     }
