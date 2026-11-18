@@ -27,9 +27,9 @@
 #include <hpx/parcelport_mpi/receiver.hpp>
 #include <hpx/parcelport_mpi/sender.hpp>
 
-// set by CMake if the MPI library is CUDA-aware; MPIX_Query_cuda_support is
-// declared in Open MPI's mpi-ext.h, in MPICH's mpi.h
-#if defined(HPX_PARCELPORT_MPI_HAVE_CUDA_QUERY) && __has_include(<mpi-ext.h>)
+// set by CMake to the query of a CUDA- or ROCm-aware MPI library (e.g.
+// MPIX_Query_cuda_support), declared in Open MPI's mpi-ext.h, in MPICH's mpi.h
+#if defined(HPX_PARCELPORT_MPI_GPU_QUERY) && __has_include(<mpi-ext.h>)
 #include <mpi-ext.h>
 #endif
 
@@ -79,7 +79,7 @@ namespace hpx::parcelset {
         }
 
         // Zero-copy chunks may refer to device memory if the MPI library
-        // handles device pointers (CUDA-aware MPI) and
+        // handles device pointers (CUDA- or ROCm-aware MPI) and
         // hpx.parcel.mpi.device_memory isn't 0. All localities must use the
         // same MPI library.
         static bool send_device_memory(util::runtime_configuration const& ini)
@@ -89,7 +89,7 @@ namespace hpx::parcelset {
             {
                 return false;
             }
-#if defined(HPX_PARCELPORT_MPI_HAVE_CUDA_QUERY)
+#if defined(HPX_PARCELPORT_MPI_GPU_QUERY)
             // the query is valid only once MPI is initialized; the MPI
             // parcelport exists also if MPI isn't enabled
             int initialized = 0;
@@ -98,7 +98,7 @@ namespace hpx::parcelset {
             {
                 return false;
             }
-            return MPIX_Query_cuda_support() == 1;
+            return HPX_PARCELPORT_MPI_GPU_QUERY() == 1;
 #else
             return false;
 #endif
@@ -467,7 +467,7 @@ struct hpx::traits::plugin_config_data<
             "${HPX_HAVE_PARCELPORT_MPI_MAX_HEADER_RECEIVES:0}\n"
 
             // send and receive device memory directly if the MPI library
-            // supports it (CUDA-aware MPI)
+            // supports it (CUDA- or ROCm-aware MPI)
             "device_memory = "
             "${HPX_HAVE_PARCELPORT_MPI_DEVICE_MEMORY:1}\n";
     }

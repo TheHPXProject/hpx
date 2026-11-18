@@ -17,7 +17,8 @@
 #include <hpx/modules/threading.hpp>
 #include <hpx/modules/tracing.hpp>
 #include <hpx/modules/util.hpp>
-#if defined(HPX_HAVE_PARCELPORT_CUDA_SUPPORT)
+#if defined(HPX_HAVE_PARCELPORT_CUDA_SUPPORT) ||                               \
+    defined(HPX_HAVE_PARCELPORT_HIP_SUPPORT)
 #include <hpx/modules/async_cuda.hpp>
 #endif
 
@@ -108,27 +109,30 @@ namespace hpx::parcelset {
 
     void parcelport::initialized() {}
 
-    // A network library that is handed device memory calls the CUDA driver
-    // API on the thread that calls it, e.g. UCX (CUDA-aware MPI) exports a
-    // dma-buf handle of device memory to register it with the network card,
-    // which fails without a current context. Parcelports are called from
-    // background work, which runs on any of the runtime's threads, so each
-    // of them gets the device's primary context current when it starts.
+    // A network library that is handed device memory calls the CUDA (HIP)
+    // driver API on the thread that calls it, e.g. UCX (CUDA-aware MPI)
+    // exports a dma-buf handle of device memory to register it with the
+    // network card, which fails without a current context. Parcelports are
+    // called from background work, which runs on any of the runtime's
+    // threads, so each of them gets the device's primary context current when
+    // it starts.
     void parcelport::on_start_thread(
         std::size_t, std::size_t, char const*, char const*)
     {
-#if defined(HPX_HAVE_PARCELPORT_CUDA_SUPPORT)
+#if defined(HPX_HAVE_PARCELPORT_CUDA_SUPPORT) ||                               \
+    defined(HPX_HAVE_PARCELPORT_HIP_SUPPORT)
         if (device_ >= 0 && cudaSetDevice(device_) != cudaSuccess)
         {
             // the network calls with device memory will report it
-            cudaGetLastError();
+            (void) cudaGetLastError();
         }
 #endif
     }
 
     bool parcelport::use_device_memory()
     {
-#if defined(HPX_HAVE_PARCELPORT_CUDA_SUPPORT)
+#if defined(HPX_HAVE_PARCELPORT_CUDA_SUPPORT) ||                               \
+    defined(HPX_HAVE_PARCELPORT_HIP_SUPPORT)
         int device = -1;
         if (cudaGetDevice(&device) == cudaSuccess)
         {
@@ -136,7 +140,7 @@ namespace hpx::parcelset {
             return true;
         }
         // no usable device on this locality (e.g. none visible)
-        cudaGetLastError();
+        (void) cudaGetLastError();
 #endif
         return false;
     }

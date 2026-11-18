@@ -100,8 +100,8 @@ namespace hpx::parcelset {
         /// arguments of callback_notifier::on_start_thread. Parcelports may
         /// prepare per-thread state of the network library here. If the
         /// parcelport sends device memory (see use_device_memory), this makes
-        /// the device's primary CUDA context current. Overrides should call
-        /// this base implementation.
+        /// the device's primary CUDA (HIP) context current. Overrides should
+        /// call this base implementation.
         virtual void on_start_thread(std::size_t local_thread_num,
             std::size_t global_thread_num, char const* pool_name,
             char const* postfix);
