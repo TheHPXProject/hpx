@@ -55,7 +55,17 @@ GUARD_OPEN = "#if defined(HPX_HAVE_TEXTUAL_STD_INCLUDES)\n"
 GUARD_CLOSE = "#endif\n"
 
 GUARD_RE = re.compile(
-    r"^\s*#\s*(?:if\s+(?:defined\s*\(\s*HPX_HAVE_TEXTUAL_STD_INCLUDES\s*\)|HPX_HAVE_TEXTUAL_STD_INCLUDES\b|!\s*\(\s*defined\s*\(\s*HPX_COMPILE_BMI\s*\)\s*&&\s*defined\s*\(\s*HPX_HAVE_CXX_MODULE_STD\s*\)\s*\)|!\s*\(\s*defined\s*\(\s*HPX_HAVE_CXX_MODULE_STD\s*\)\s*&&\s*defined\s*\(\s*HPX_COMPILE_BMI\s*\)\s*\)|!defined\s*\(\s*HPX_COMPILE_BMI\s*\)\s*\|\|\s*!defined\s*\(\s*HPX_HAVE_CXX_MODULE_STD\s*\)|!defined\s*\(\s*HPX_HAVE_CXX_MODULE_STD\s*\)\s*\|\|\s*!defined\s*\(\s*HPX_COMPILE_BMI\s*\))|ifdef\s+HPX_HAVE_TEXTUAL_STD_INCLUDES\b)\s*(?:(?://.*|/\*.*?\*/)\s*)*$"
+    r"^\s*#\s*(?:if\s+(?:defined\s*\(\s*HPX_HAVE_TEXTUAL_STD_INCLUDES\s*\)|"
+    r"HPX_HAVE_TEXTUAL_STD_INCLUDES\b|"
+    r"!\s*\(\s*defined\s*\(\s*HPX_COMPILE_BMI\s*\)\s*&&"
+    r"\s*defined\s*\(\s*HPX_HAVE_CXX_MODULE_STD\s*\)\s*\)|"
+    r"!\s*\(\s*defined\s*\(\s*HPX_HAVE_CXX_MODULE_STD\s*\)\s*&&"
+    r"\s*defined\s*\(\s*HPX_COMPILE_BMI\s*\)\s*\)|"
+    r"!defined\s*\(\s*HPX_COMPILE_BMI\s*\)\s*\|\|"
+    r"\s*!defined\s*\(\s*HPX_HAVE_CXX_MODULE_STD\s*\)|"
+    r"!defined\s*\(\s*HPX_HAVE_CXX_MODULE_STD\s*\)\s*\|\|"
+    r"\s*!defined\s*\(\s*HPX_COMPILE_BMI\s*\))|"
+    r"ifdef\s+HPX_HAVE_TEXTUAL_STD_INCLUDES\b)\s*(?:(?://.*|/\*.*?\*/)\s*)*$"
 )
 IF_RE = re.compile(r"^\s*#\s*(if|ifdef|ifndef)\b")
 ELIF_ELSE_RE = re.compile(r"^\s*#\s*(elif|elifdef|elifndef|else)\b")

@@ -6,7 +6,11 @@
 
 #pragma once
 
+#include <hpx/config/defines.hpp>
+
+#if defined(HPX_HAVE_TEXTUAL_STD_INCLUDES)
 #include <bit>
+#endif
 
 ///////////////////////////////////////////////////////////////////////////////
 /// \cond NODETAIL

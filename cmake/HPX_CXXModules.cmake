@@ -108,6 +108,12 @@ function(hpx_configure_module_producer producer)
     target_link_libraries(${_iface} INTERFACE ${producer})
   endif()
 
+  # Ensure the producer itself is scanned for module dependencies. With CMP0155
+  # OLD, CMake treats a target as a module target only if CXX_SCAN_FOR_MODULES
+  # is set on it, which is required for CMake to connect CXX_MODULE_STD
+  # dependencies (like the std module) to the producer target.
+  set_target_properties(${producer} PROPERTIES CXX_SCAN_FOR_MODULES ON)
+
   # Propagate scanning requirement to consumers via the interface target. CMake
   # uses this to enable its native module dependency scanning for any target
   # that links to this interface.

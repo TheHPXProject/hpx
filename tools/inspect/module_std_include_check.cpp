@@ -25,6 +25,7 @@ namespace {
     // List of HPX modules that have been converted to guard standard includes.
     // Modules are added here as their include guards are implemented.
     constexpr char const* const converted_modules[] = {
+        "config",
         "config_registry",
         "preprocessor",
         "properties",
@@ -98,7 +99,17 @@ namespace {
     // (with backwards-compatible logical equivalents).
     // Note: requires full match of the directive condition.
     std::regex const guard_regex(
-        R"(^\s*#\s*(?:if\s+(?:defined\s*\(\s*HPX_HAVE_TEXTUAL_STD_INCLUDES\s*\)|HPX_HAVE_TEXTUAL_STD_INCLUDES\b|!\s*\(\s*defined\s*\(\s*HPX_COMPILE_BMI\s*\)\s*&&\s*defined\s*\(\s*HPX_HAVE_CXX_MODULE_STD\s*\)\s*\)|!\s*\(\s*defined\s*\(\s*HPX_HAVE_CXX_MODULE_STD\s*\)\s*&&\s*defined\s*\(\s*HPX_COMPILE_BMI\s*\)\s*\)|!defined\s*\(\s*HPX_COMPILE_BMI\s*\)\s*\|\|\s*!defined\s*\(\s*HPX_HAVE_CXX_MODULE_STD\s*\)|!defined\s*\(\s*HPX_HAVE_CXX_MODULE_STD\s*\)\s*\|\|\s*!defined\s*\(\s*HPX_COMPILE_BMI\s*\))|ifdef\s+HPX_HAVE_TEXTUAL_STD_INCLUDES\b)\s*$)");
+        R"(^\s*#\s*(?:if\s+(?:defined\s*\(\s*HPX_HAVE_TEXTUAL_STD_INCLUDES\s*\)|)"
+        R"(HPX_HAVE_TEXTUAL_STD_INCLUDES\b|)"
+        R"(!\s*\(\s*defined\s*\(\s*HPX_COMPILE_BMI\s*\)\s*&&)"
+        R"(\s*defined\s*\(\s*HPX_HAVE_CXX_MODULE_STD\s*\)\s*\)|)"
+        R"(!\s*\(\s*defined\s*\(\s*HPX_HAVE_CXX_MODULE_STD\s*\)\s*&&)"
+        R"(\s*defined\s*\(\s*HPX_COMPILE_BMI\s*\)\s*\)|)"
+        R"(!defined\s*\(\s*HPX_COMPILE_BMI\s*\)\s*\|\|)"
+        R"(\s*!defined\s*\(\s*HPX_HAVE_CXX_MODULE_STD\s*\)|)"
+        R"(!defined\s*\(\s*HPX_HAVE_CXX_MODULE_STD\s*\)\s*\|\|)"
+        R"(\s*!defined\s*\(\s*HPX_COMPILE_BMI\s*\))|)"
+        R"(ifdef\s+HPX_HAVE_TEXTUAL_STD_INCLUDES\b)\s*$)");
 
     std::regex const if_regex(R"(^\s*#\s*(if|ifdef|ifndef)\b)");
     std::regex const elif_else_regex(
