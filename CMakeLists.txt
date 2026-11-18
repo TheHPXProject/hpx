@@ -2617,12 +2617,18 @@ if((HPX_WITH_NETWORKING AND HPX_WITH_PARCELPORT_MPI)
   hpx_setup_mpi()
 endif()
 
-# parcelports moving CUDA device memory themselves, ON by default if the MPI
-# library is CUDA-aware
+# parcelports moving GPU device memory themselves, one option per GPU backend,
+# ON by default if the MPI library supports the backend. The results of the
+# checks are defined only if they ran in this configuration (not left over from
+# an earlier one with another backend or without the MPI parcelport).
+foreach(_gpu CUDA HIP)
+  unset(HPX_MPI_${_gpu}_AWARE CACHE)
+  unset(HPX_MPI_${_gpu}_QUERY CACHE)
+endforeach()
 if(HPX_WITH_NETWORKING AND HPX_WITH_CUDA)
   set(_parcelport_cuda_support_default OFF)
   if(HPX_WITH_PARCELPORT_MPI)
-    hpx_check_mpi_cuda_aware()
+    hpx_check_mpi_gpu_aware(CUDA)
     if(HPX_MPI_CUDA_AWARE)
       set(_parcelport_cuda_support_default ON)
     endif()
@@ -2635,7 +2641,40 @@ if(HPX_WITH_NETWORKING AND HPX_WITH_CUDA)
     CATEGORY "Parcelport"
   )
   if(HPX_WITH_PARCELPORT_CUDA_SUPPORT)
+    if(HPX_WITH_PARCELPORT_MPI AND NOT HPX_MPI_CUDA_AWARE)
+      hpx_info(
+        "Warning: HPX_WITH_PARCELPORT_CUDA_SUPPORT is ON, but the MPI"
+        "library is not known to be CUDA-aware: the MPI parcelport copies"
+        "device memory through host memory"
+      )
+    endif()
     hpx_add_config_define(HPX_HAVE_PARCELPORT_CUDA_SUPPORT)
+  endif()
+endif()
+if(HPX_WITH_NETWORKING AND HPX_WITH_HIP)
+  set(_parcelport_hip_support_default OFF)
+  if(HPX_WITH_PARCELPORT_MPI)
+    hpx_check_mpi_gpu_aware(HIP)
+    if(HPX_MPI_HIP_AWARE)
+      set(_parcelport_hip_support_default ON)
+    endif()
+  endif()
+  hpx_option(
+    HPX_WITH_PARCELPORT_HIP_SUPPORT
+    BOOL
+    "Enable parcelports to send and receive HIP device memory directly if the network library supports it (ROCm-aware MPI); without it device memory is copied through host memory. Default: ON if the MPI library is ROCm-aware."
+    ${_parcelport_hip_support_default}
+    CATEGORY "Parcelport"
+  )
+  if(HPX_WITH_PARCELPORT_HIP_SUPPORT)
+    if(HPX_WITH_PARCELPORT_MPI AND NOT HPX_MPI_HIP_AWARE)
+      hpx_info(
+        "Warning: HPX_WITH_PARCELPORT_HIP_SUPPORT is ON, but the MPI"
+        "library is not known to be ROCm-aware: the MPI parcelport copies"
+        "device memory through host memory"
+      )
+    endif()
+    hpx_add_config_define(HPX_HAVE_PARCELPORT_HIP_SUPPORT)
   endif()
 endif()
 if(HPX_WITH_NETWORKING AND HPX_WITH_PARCELPORT_LCI)

@@ -52,11 +52,16 @@ target_include_directories(
   hpx_version PRIVATE $<BUILD_INTERFACE:${HPX_BINARY_DIR}>
 )
 
-# report in the MPI version whether the MPI library is CUDA-aware (checked in
-# hpx_check_mpi_cuda_aware for builds with CUDA)
+# report in the MPI version whether the MPI library supports the GPU backend
+# (checked in hpx_check_mpi_gpu_aware for builds with CUDA or HIP)
 if(DEFINED HPX_MPI_CUDA_AWARE)
   target_compile_definitions(
     hpx_version
     PRIVATE HPX_VERSION_MPI_CUDA_AWARE=$<BOOL:${HPX_MPI_CUDA_AWARE}>
+  )
+endif()
+if(DEFINED HPX_MPI_HIP_AWARE)
+  target_compile_definitions(
+    hpx_version PRIVATE HPX_VERSION_MPI_HIP_AWARE=$<BOOL:${HPX_MPI_HIP_AWARE}>
   )
 endif()
