@@ -167,6 +167,7 @@ set(sender_tests
     all_of_sender
     any_of_sender
     copy_sender
+    copy_if_sender
     copyn_sender
     count_sender
     countif_sender
@@ -222,6 +223,7 @@ set(sender_tests
     reduce_by_key_sender
     reduce_sender
     remove_sender
+    remove_copy_sender
     remove_if_sender
     replace_sender
     replace_if_sender

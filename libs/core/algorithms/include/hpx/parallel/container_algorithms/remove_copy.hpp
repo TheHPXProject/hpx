@@ -674,10 +674,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        static parallel::util::detail::algorithm_result_t<ExPolicy,
-            remove_copy_if_result<I, O>>
-        invoke_default(ExPolicy&& policy, I first, Sent last, O dest, Pred pred,
-            Proj proj = Proj())
+        static decltype(auto) invoke_default(ExPolicy&& policy, I first,
+            Sent last, O dest, Pred pred, Proj proj = Proj())
         {
             static_assert(std::forward_iterator<I>,
                 "Required at least forward iterator.");
@@ -704,9 +702,7 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        static parallel::util::detail::algorithm_result_t<ExPolicy,
-            remove_copy_if_result<std::ranges::iterator_t<Rng>, O>>
-        invoke_default(
+        static decltype(auto) invoke_default(
             ExPolicy&& policy, Rng&& rng, O dest, Pred pred, Proj proj = Proj())
         {
             static_assert(std::forward_iterator<std::ranges::iterator_t<Rng>>,
@@ -783,10 +779,8 @@ namespace hpx::ranges {
                 hpx::parallel::traits::is_projected_v<Proj, I>
             )
         // clang-format on
-        static parallel::util::detail::algorithm_result_t<ExPolicy,
-            remove_copy_result<I, O>>
-        invoke_default(ExPolicy&& policy, I first, Sent last, O dest,
-            T const& value, Proj proj = Proj())
+        static decltype(auto) invoke_default(ExPolicy&& policy, I first,
+            Sent last, O dest, T const& value, Proj proj = Proj())
         {
             static_assert(std::forward_iterator<I>,
                 "Required at least forward iterator.");
@@ -808,10 +802,8 @@ namespace hpx::ranges {
                 hpx::parallel::traits::is_projected_range_v<Proj, Rng>
             )
         // clang-format on
-        static parallel::util::detail::algorithm_result_t<ExPolicy,
-            remove_copy_result<std::ranges::iterator_t<Rng>, O>>
-        invoke_default(ExPolicy&& policy, Rng&& rng, O dest, T const& value,
-            Proj proj = Proj())
+        static decltype(auto) invoke_default(ExPolicy&& policy, Rng&& rng,
+            O dest, T const& value, Proj proj = Proj())
         {
             static_assert(std::forward_iterator<std::ranges::iterator_t<Rng>>,
                 "Required at least forward iterator.");
