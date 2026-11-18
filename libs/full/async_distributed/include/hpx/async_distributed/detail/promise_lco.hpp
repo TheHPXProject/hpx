@@ -14,6 +14,8 @@
 #include <hpx/modules/components_base.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/memory.hpp>
+#include <hpx/modules/runtime_local.hpp>
+#include <hpx/modules/serialization.hpp>
 #include <hpx/modules/thread_support.hpp>
 #include <hpx/modules/type_support.hpp>
 
@@ -51,9 +53,32 @@ namespace hpx::lcos::detail {
         using result_type = base_type::result_type;
 
     public:
+        // Device data in the result is received on the GPU of the default
+        // target (see hpx::detail::result_device); only results with device
+        // data need it.
         explicit promise_lco_base(shared_state_ptr const& shared_state)
           : shared_state_(shared_state)
+          , device_(initial_device())
         {
+        }
+
+    private:
+        static int initial_device() noexcept
+        {
+            if constexpr (traits::has_device_data_v<RemoteResult>)
+            {
+                return hpx::detail::result_device();
+            }
+            else
+            {
+                return -1;
+            }
+        }
+
+    public:
+        [[nodiscard]] int get_receive_device() const noexcept override
+        {
+            return device_;
         }
 
         void set_value(RemoteResult&& result)
@@ -78,6 +103,7 @@ namespace hpx::lcos::detail {
 
     protected:
         shared_state_ptr shared_state_;
+        int device_;
 
     private:
         // intrusive reference counting, noop since we don't require

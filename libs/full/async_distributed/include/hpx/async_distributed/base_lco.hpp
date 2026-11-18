@@ -38,6 +38,13 @@ namespace hpx::lcos {
         /// implementation is a no-op.
         virtual void disconnect(hpx::id_type const&);
 
+        // The GPU device data sent to this LCO is received on, none (-1) by
+        // default (see hpx::traits::detail::component_device below)
+        [[nodiscard]] virtual int get_receive_device() const noexcept
+        {
+            return -1;
+        }
+
         // components must contain a typedef for wrapping_type defining the
         // managed_component type used to encapsulate instances of this
         // component
@@ -117,6 +124,23 @@ namespace hpx::lcos {
         /// \endcond
     };
 }    // namespace hpx::lcos
+
+namespace hpx::traits::detail {
+
+    // LCOs know the GPU only (for instance a promise the one results are
+    // received on, see hpx::detail::result_device), not a target
+    template <typename Component>
+    struct component_device<Component,
+        std::enable_if_t<std::is_base_of_v<hpx::lcos::base_lco, Component>>>
+    {
+        static constexpr bool has_device = true;
+
+        static int call(Component const& component) noexcept
+        {
+            return component.get_receive_device();
+        }
+    };
+}    // namespace hpx::traits::detail
 
 ///////////////////////////////////////////////////////////////////////////////
 template <>

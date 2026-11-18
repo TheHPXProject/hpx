@@ -48,6 +48,7 @@ set(async_cuda_sources
     cuda_exception.cpp
     get_targets.cpp
     hip_warmup.cpp
+    result_device.cpp
 )
 
 if(HPX_WITH_HIP AND TARGET roc::hipblas)
