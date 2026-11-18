@@ -17,6 +17,7 @@ set(synchronization_headers
     hpx/synchronization/counting_semaphore.hpp
     hpx/synchronization/detail/condition_variable.hpp
     hpx/synchronization/detail/counting_semaphore.hpp
+    hpx/synchronization/detail/range_mutex_impl.hpp
     hpx/synchronization/detail/sliding_semaphore.hpp
     hpx/synchronization/event.hpp
     hpx/synchronization/latch.hpp
@@ -25,6 +26,7 @@ set(synchronization_headers
     hpx/synchronization/mutex.hpp
     hpx/synchronization/no_mutex.hpp
     hpx/synchronization/once.hpp
+    hpx/synchronization/range_mutex.hpp
     hpx/synchronization/recursive_mutex.hpp
     hpx/synchronization/shared_mutex.hpp
     hpx/synchronization/sliding_semaphore.hpp
