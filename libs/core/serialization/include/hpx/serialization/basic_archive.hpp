@@ -79,8 +79,9 @@ namespace hpx::serialization {
 
     namespace detail {
 
-        enum class fundamental_types : std::uint8_t
-        {
+        // the type information save_binary, save_binary_chunk, load_binary
+        // and load_binary_chunk take
+        HPX_CXX_CORE_EXPORT enum class fundamental_types : std::uint8_t {
             none = static_cast<std::uint8_t>(~0x0),
             unknown = 0,
             bool_ = 1,
