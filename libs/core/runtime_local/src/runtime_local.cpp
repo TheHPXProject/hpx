@@ -1559,6 +1559,15 @@ namespace hpx {
         if (caught_exception)
         {
             HPX_ASSERT(exception_);
+
+            // An exception from a startup function leaves the runtime
+            // starting: bring it up before finalizing it (as for an aborted
+            // bootstrap above), runtime::start waits for that.
+            if (get_state() < hpx::state::running)
+            {
+                set_state(hpx::state::running);
+            }
+
             report_error(exception_, false);
             finalize(-1.0);    // make sure the application exits
         }
