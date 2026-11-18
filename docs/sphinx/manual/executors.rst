@@ -841,6 +841,42 @@ Clang it also gets the annotation of the template, so a different size is a
 compile-time error. Each source file reads the annotation from the declarations
 it sees, so put it on the declaration in the header.
 
+A plain function can also be passed to ``hpx::async`` and ``hpx::post`` as a
+template argument. It then runs locally, as with ``hpx::async(&f, ...)``, and
+its size comes from ``hpx::traits::task_size_of`` instead of a wrapper:
+
+.. code-block:: c++
+
+   void update_counter(int);
+
+   template <>
+   struct hpx::traits::task_size_of<&update_counter>
+   {
+       static constexpr hpx::task_size value = hpx::task_size::small_;
+   };
+
+   hpx::post<&update_counter>(1);    // runs as a small task
+   hpx::future<void> f = hpx::async<&update_counter>(2);
+
+A launch policy or an executor can come first, as for ``hpx::async``:
+``hpx::async<&f>(hpx::launch::async, ...)``, ``hpx::async<&f>(exec, ...)`` and
+``hpx::post<&f>(exec, ...)``. An overloaded function is picked with
+``static_cast``, for instance ``hpx::async<static_cast<int (*)(int)>(&f)>(1)``.
+If the compiler supports C++26 reflection and annotations, a function that
+``task_size_of`` is not specialized for has the size of its annotation. Put the
+specialization next to the declaration of the function, so that every source
+file that calls it sees it.
+
+A first argument that is a launch policy, an executor, an ``hpx::id_type``, a
+distribution policy or a client is never passed to ``f``. With an
+``hpx::id_type`` or a distribution policy, ``hpx::async<&f>`` calls ``f`` as an
+action on that target (see :ref:`action_type_definition`). The action gets its
+size as other actions do, ``task_size_of`` is used for local calls only.
+``hpx::post<&f>`` with one of these, and either of them with a client, does not
+compile. After a launch policy, an ``hpx::id_type`` or a distribution policy
+also makes ``hpx::async<&f>`` call ``f`` as an action. After an executor, every
+argument is passed to ``f``, a remote target too.
+
 .. _parallel_scheduler:
 
 P2079 parallel scheduler
