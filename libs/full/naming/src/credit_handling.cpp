@@ -25,6 +25,7 @@
 #include <hpx/naming/detail/preprocess_gid_types.hpp>
 #include <hpx/naming/split_gid.hpp>
 
+#include <cstddef>
 #include <cstdint>
 #include <mutex>
 #include <utility>
@@ -501,7 +502,8 @@ namespace hpx::naming {
         // prepare the given id, note: this function modifies the passed id
         void handle_credit_splitting(serialization::output_archive& ar,
             id_type_impl& gid,
-            serialization::detail::preprocess_gid_types& split_gids)
+            serialization::detail::preprocess_gid_types& split_gids,
+            std::size_t const pos)
         {
             auto& handle_futures =
                 ar.get_extra_data<serialization::detail::preprocess_futures>();
@@ -514,16 +516,18 @@ namespace hpx::naming {
             if (result.has_value())
             {
                 handle_futures.decrement_future_count();
-                split_gids.add_gid(gid, result.get_value());
+                split_gids.set_gid(pos, result.get_value());
             }
             else
             {
+                // the split gid is stored in its entry: the id may be gone
+                // by the time the credit has been split
                 auto f = result.get_future().then(hpx::launch::sync,
-                    [&split_gids, &handle_futures, &gid](
+                    [&split_gids, &handle_futures, pos](
                         hpx::future<gid_type>&& gid_future) {
                         HPX_UNUSED(handle_futures);
                         HPX_ASSERT(handle_futures.has_futures());
-                        split_gids.add_gid(gid, gid_future.get());
+                        split_gids.set_gid(pos, gid_future.get());
                     });
 
                 handle_futures.await_future(
@@ -558,10 +562,12 @@ namespace hpx::naming {
             auto& split_gids = ar.get_extra_data<
                 serialization::detail::preprocess_gid_types>();
 
-            if (split_gids.has_gid(id_impl))
+            // the split credits are matched to the ids by their gid
+            auto const [pos, split_already] = split_gids.find_or_add(id_impl);
+            if (split_already)
             {
-                // the gid has been split already, and we don't need to do
-                // anything further
+                // an earlier preprocessing round has split a credit for this
+                // id, and we don't need to do anything further
                 return;
             }
 
@@ -573,7 +579,7 @@ namespace hpx::naming {
                 id_impl.get_management_type());
 
             handle_credit_splitting(
-                ar, const_cast<id_type_impl&>(id_impl), split_gids);
+                ar, const_cast<id_type_impl&>(id_impl), split_gids, pos);
         }
 
         ///////////////////////////////////////////////////////////////////////
@@ -634,17 +640,12 @@ namespace hpx::naming {
             }
             else
             {
+                // a credit preprocessing has split for this id's gid
                 auto& split_gids = ar.get_extra_data<preprocess_gid_types>();
 
-                new_gid = split_gids.get_new_gid(id_impl);
+                new_gid = split_gids.take(id_impl);
                 HPX_ASSERT(new_gid != invalid_gid);
             }
-
-#if defined(HPX_DEBUG)
-            auto const* split_gids =
-                ar.try_get_extra_data<preprocess_gid_types>();
-            HPX_ASSERT(!split_gids || !split_gids->has_gid(id_impl));
-#endif
 
             gid_serialization_data const data{new_gid, type};
             ar << data;
