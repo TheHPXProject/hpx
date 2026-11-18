@@ -163,6 +163,16 @@ int hpx_main(variables_map& vm)
         before.get();
         after.get();
 
+        // The thread may still be pending from the request above (it may not
+        // have run yet). A request for the state a thread is already in does
+        // nothing, so the terminate request would be lost and the thread
+        // would suspend again forever. Wait for it to be suspended first.
+        while (hpx::threads::get_thread_state(thread_id.noref()).state() !=
+            hpx::threads::thread_schedule_state::suspended)
+        {
+            hpx::this_thread::yield();
+        }
+
         set_thread_state(thread_id.noref(),
             hpx::threads::thread_schedule_state::pending,
             hpx::threads::thread_restart_state::terminate);
