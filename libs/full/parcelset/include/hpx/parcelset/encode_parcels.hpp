@@ -228,12 +228,19 @@ namespace hpx::parcelset {
 #endif
                         LPT_(debug) << ps[i];
 
-                        auto split_gids_map = ps[i].move_split_gids();
-                        if (!split_gids_map.empty())
+                        // The split credits of this parcel: also a parcel
+                        // without any returns the credits an earlier parcel
+                        // left unused (e.g. of ids written as back-references
+                        // to an earlier parcel of this message).
+                        auto split_gids = ps[i].move_split_gids();
+                        if (!split_gids.empty() ||
+                            archive.try_get_extra_data<
+                                serialization::detail::preprocess_gid_types>())
                         {
-                            auto& split_gids = archive.get_extra_data<
-                                serialization::detail::preprocess_gid_types>();
-                            split_gids.set_split_gids(HPX_MOVE(split_gids_map));
+                            archive
+                                .get_extra_data<serialization::detail::
+                                        preprocess_gid_types>()
+                                .set_split_gids(HPX_MOVE(split_gids));
                         }
 
                         if (auto const& keep_alive = ps[i].keep_alive();

@@ -25,9 +25,10 @@
 #include <cstddef>
 #include <cstdint>
 #include <iosfwd>
-#include <map>
 #include <memory>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include <hpx/config/warnings_prefix.hpp>
 
@@ -36,8 +37,10 @@ namespace hpx::parcelset::detail {
     // abstract base class for parcels
     HPX_CXX_EXPORT struct parcel_base
     {
+        // the credits split during preprocessing with the gids they were
+        // split from (see preprocess_gid_types)
         using split_gids_type =
-            std::map<naming::gid_type const*, naming::gid_type>;
+            std::vector<std::pair<naming::gid_type, naming::gid_type>>;
         using keep_alive_type = serialization::detail::keep_alive_map;
 
         parcel_base() = default;
