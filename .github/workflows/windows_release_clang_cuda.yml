@@ -1,0 +1,76 @@
+# Copyright (c) 2026 The STE||AR Group
+#
+# SPDX-License-Identifier: BSL-1.0
+# Distributed under the Boost Software License, Version 1.0. (See accompanying
+# file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+
+name: Windows CI (Release, clang, CUDA)
+
+on: [pull_request]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-2022
+
+    steps:
+    - uses: actions/checkout@v7
+    - uses: lukka/get-cmake@v4.5.0
+
+    - name: Install dependencies
+      uses: ./.github/actions/setup-vcpkg
+    # the runner has no GPU, so this job only builds the CUDA code, with clang
+    # as the C++ and CUDA compiler (cmake/toolchains/Windows-Clang-CUDA.cmake);
+    # clang needs the CUDA headers, libraries, libdevice and ptxas, the Thrust
+    # integration needs CUDA 13.1 or newer
+    - name: Install CUDA
+      uses: Jimver/cuda-toolkit@v0.2.36
+      with:
+        cuda: '13.3.1'
+        method: 'network'
+        sub-packages: '["nvcc", "crt", "nvvm", "cudart", "thrust", "cublas", "cublas_dev"]'
+    # the clang of Visual Studio 2022 is too old for CUDA 13: unpack the LLVM
+    # release archive (a .tar.xz) so that bin is directly in LLVM_PATH
+    - name: Install clang
+      shell: bash
+      run: |
+          llvm="$(cygpath -m "$RUNNER_TEMP")/llvm"
+          mkdir -p "$llvm"
+          curl -fsSL https://github.com/llvm/llvm-project/releases/download/llvmorg-22.1.8/clang+llvm-22.1.8-x86_64-pc-windows-msvc.tar.xz               | tar -xJ --strip-components=1 -C "$llvm"
+          "$llvm/bin/clang.exe" --version
+          echo "LLVM_PATH=$llvm" >> "$GITHUB_ENV"
+    # the standard library and the Windows SDK for clang and Ninja
+    - uses: ./.github/actions/msvc-dev-env
+
+    - name: Configure
+      shell: bash
+      run: |
+          cmake . -Bbuild -GNinja \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_TOOLCHAIN_FILE='C:/projects/vcpkg/scripts/buildsystems/vcpkg.cmake' \
+              -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE="$(cygpath -m "$PWD")/cmake/toolchains/Windows-Clang-CUDA.cmake" \
+              -DHPX_CLANG_ROOT="$(cygpath -m "$LLVM_PATH")" \
+              -DCUDAToolkit_ROOT="$(cygpath -m "$CUDA_PATH")" \
+              -DCMAKE_CUDA_ARCHITECTURES=89 \
+              -DHPX_WITH_CUDA=ON \
+              -DHPX_WITH_FETCH_ASIO=ON \
+              -DHPX_WITH_EXAMPLES=OFF \
+              -DHPX_WITH_TESTS=ON \
+              -DHPX_WITH_TESTS_UNIT=ON \
+              -DHPX_WITH_TESTS_BENCHMARKS=ON \
+              -DHPX_WITH_DEPRECATION_WARNINGS=OFF \
+              -DHPX_WITH_CHECK_MODULE_DEPENDENCIES=On
+    # build the CUDA tests (and everything they depend on), including the
+    # stdexec based ones, which nvcc can't compile with an MSVC host compiler
+    - name: Build
+      shell: bash
+      run: |
+          cmake --build build --target \
+              stdexec_cuda_test algorithm_sender_cuda_test \
+              cuda_future_test cuda_multi_device_polling_test \
+              transform_stream_test synchronize_test \
+              cuda_executor_throughput_test \
+              thrust_policy_traits_test thrust_policy_test_test
