@@ -394,7 +394,11 @@ namespace hpx::components::server {
 
     ///////////////////////////////////////////////////////////////////////////
     // Functions wrapped by create_component actions below
-#if defined(__NVCC__)
+    // Stubbed out only in a device compilation pass. nvcc defines __NVCC__ in
+    // its host pass as well: a .cu file creating a component on another
+    // locality instantiated the stub on the target, which silently returned
+    // an invalid id.
+#if defined(HPX_COMPUTE_DEVICE_CODE)
     template <typename Component>
     naming::gid_type runtime_support::create_component()
     {
