@@ -16,6 +16,7 @@
 #include <hpx/parallel/segmented_algorithms/detail/dispatch.hpp>
 
 #include <algorithm>
+#include <cstddef>
 #include <exception>
 #include <iterator>
 #include <list>
