@@ -911,6 +911,9 @@ equivalent CMake variable is ``HPX_WITH_PARCELPORT_MPI`` and has to be set to
    max_background_threads =  ${HPX_PARCEL_MPI_MAX_BACKGROUND_THREADS:$[hpx.parcel.max_background_threads]}
    ack_handshake = 0
    max_header_receives = ${HPX_HAVE_PARCELPORT_MPI_MAX_HEADER_RECEIVES:0}
+   device_memory = ${HPX_HAVE_PARCELPORT_MPI_DEVICE_MEMORY:1}
+   send_device_memory = ${HPX_HAVE_PARCELPORT_MPI_SEND_DEVICE_MEMORY:1}
+   receive_device_memory = ${HPX_HAVE_PARCELPORT_MPI_RECEIVE_DEVICE_MEMORY:1}
 
 .. _ini_hpx_parcel_mpi:
 
@@ -1000,6 +1003,23 @@ equivalent CMake variable is ``HPX_WITH_PARCELPORT_MPI`` and has to be set to
        from ``HPX_HAVE_PARCELPORT_MPI_MAX_HEADER_RECEIVES`` (``0`` if not
        defined). A value of ``0`` automatically sizes the pool based on the
        communicator size: ``min(64, max(16, 2 * communicator_size))``.
+   * * ``hpx.parcel.mpi.device_memory``
+     * This property defines whether the MPI parcelport sends and receives
+       device (GPU) memory directly, if the MPI library supports it (CUDA- or
+       ROCm-aware MPI, see ``HPX_WITH_PARCELPORT_CUDA_SUPPORT`` and
+       ``HPX_WITH_PARCELPORT_HIP_SUPPORT``). Otherwise device data is staged
+       through pinned host memory. The default is ``1``.
+   * * ``hpx.parcel.mpi.send_device_memory``
+     * This property defines whether the MPI parcelport sends device memory
+       directly (if ``hpx.parcel.mpi.device_memory`` allows it). Set it to
+       ``0`` on systems where the network card reads device memory much slower
+       than host memory (e.g. if it is not attached to the same PCIe switch as
+       the GPU): the data is then copied to pinned host memory first. The
+       default is ``1``.
+   * * ``hpx.parcel.mpi.receive_device_memory``
+     * This property defines whether the MPI parcelport receives into device
+       memory directly (if ``hpx.parcel.mpi.device_memory`` allows it),
+       whatever memory the sender sent the data from. The default is ``1``.
 
 The ``hpx.agas`` configuration section
 ......................................

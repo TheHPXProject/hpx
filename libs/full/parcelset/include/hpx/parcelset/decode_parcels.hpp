@@ -528,6 +528,13 @@ namespace hpx::parcelset {
         archive
             .get_extra_data<serialization::detail::allow_zero_copy_receive>();
 
+        // and for receiving zero-copy chunks into device memory directly
+        if (pp.receives_device_memory())
+        {
+            archive
+                .get_extra_data<serialization::detail::allow_device_receive>();
+        }
+
         return decode_message_with_chunks(
             archive, pp, buffer, parcel_count, num_thread);
     }

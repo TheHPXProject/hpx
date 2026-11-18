@@ -109,9 +109,14 @@ namespace hpx::parcelset {
                 HPX_PARCEL_MAX_CONNECTIONS_PER_LOCALITY);
         }
 
-        // A parcelport that can send and receive device memory directly
-        // (e.g. MPI built with CUDA support) says so by providing
-        // connection_handler_traits<>::send_device_memory(ini).
+        // A parcelport that can send device memory directly (e.g. MPI built
+        // with CUDA or ROCm support) says so by providing
+        // connection_handler_traits<>::send_device_memory(ini), one that can
+        // receive into device memory directly by providing
+        // connection_handler_traits<>::receive_device_memory(ini). The two
+        // are separate: on some systems the network card reads device memory
+        // much slower than it writes into it, there staging the data on the
+        // sending side but receiving it directly is faster.
         template <typename Traits>
         using send_device_memory_t = decltype(Traits::send_device_memory(
             std::declval<util::runtime_configuration const&>()));
@@ -123,6 +128,25 @@ namespace hpx::parcelset {
                               traits>)
             {
                 return traits::send_device_memory(ini);
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        template <typename Traits>
+        using receive_device_memory_t = decltype(Traits::receive_device_memory(
+            std::declval<util::runtime_configuration const&>()));
+
+        static bool receive_device_memory(
+            util::runtime_configuration const& ini)
+        {
+            using traits = connection_handler_traits<ConnectionHandler>;
+            if constexpr (hpx::util::is_detected_v<receive_device_memory_t,
+                              traits>)
+            {
+                return traits::receive_device_memory(ini);
             }
             else
             {
@@ -211,13 +235,19 @@ namespace hpx::parcelset {
             }
 
             // zero-copy chunks may refer to device memory if the parcelport
-            // moves device memory itself
+            // sends device memory itself
             if (this->allow_zero_copy_optimizations() &&
                 send_device_memory(ini) && this->use_device_memory())
             {
                 archive_flags_ = archive_flags_ |
                     serialization::archive_flags::enable_device_chunks;
             }
+
+            // zero-copy chunks may be received into device memory if the
+            // parcelport receives device memory itself
+            receive_device_memory_ =
+                this->allow_zero_copy_receive_optimizations() &&
+                receive_device_memory(ini) && this->use_device_memory();
         }
 
         parcelport_impl(parcelport_impl const&) = delete;
@@ -230,6 +260,13 @@ namespace hpx::parcelset {
         ~parcelport_impl() override
         {
             connection_cache_.clear();
+        }
+
+        // whether zero-copy chunks may be received into device memory
+        // directly (see receive_device_memory)
+        [[nodiscard]] constexpr bool receives_device_memory() const noexcept
+        {
+            return receive_device_memory_;
         }
 
         bool can_bootstrap() const override
@@ -1197,6 +1234,7 @@ namespace hpx::parcelset {
         using mutex_type = hpx::spinlock;
 
         int archive_flags_;
+        bool receive_device_memory_ = false;
         hpx::util::atomic_count operations_in_flight_;
 
         std::atomic<std::size_t> num_thread_;
