@@ -364,6 +364,43 @@ namespace hpx::parallel::util::detail {
     }
 
     ///////////////////////////////////////////////////////////////////////
+    // Invoke the reduction function with the results of all (ready) chunks,
+    // held by one future or by one future per chunk.
+    HPX_CXX_CORE_EXPORT template <typename F, typename Items>
+    decltype(auto) invoke_with_results(F& f, Items&& items)
+    {
+        // nested, as the inner traits exist for futures only
+        using items_type = std::decay_t<Items>;
+        if constexpr (hpx::traits::is_future_v<items_type>)
+        {
+            if constexpr (!hpx::traits::is_future_void_v<items_type>)
+            {
+                return HPX_INVOKE(f, items.get());
+            }
+            else
+            {
+                return HPX_INVOKE(f, HPX_FORWARD(Items, items));
+            }
+        }
+        else if constexpr (hpx::traits::is_future_range_v<items_type>)
+        {
+            if constexpr (!hpx::traits::is_future_void_v<
+                              typename items_type::value_type>)
+            {
+                return HPX_INVOKE(f, hpx::unwrap(HPX_FORWARD(Items, items)));
+            }
+            else
+            {
+                return HPX_INVOKE(f, HPX_FORWARD(Items, items));
+            }
+        }
+        else
+        {
+            return HPX_INVOKE(f, HPX_FORWARD(Items, items));
+        }
+    }
+
+    ///////////////////////////////////////////////////////////////////////
     // The static partitioner simply spawns one chunk of iterations for
     // each available core.
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename R,
@@ -548,8 +585,13 @@ namespace hpx::parallel::util::detail {
                         // future
                         handle_local_exceptions::call(items);
                     }
+
+                    return invoke_with_results(f, HPX_FORWARD(Items, items));
                 }
-                return HPX_INVOKE(f, HPX_FORWARD(Items, items));
+                else
+                {
+                    return HPX_INVOKE(f, HPX_FORWARD(Items, items));
+                }
             }
         }
 
@@ -753,17 +795,8 @@ namespace hpx::parallel::util::detail {
 
                     handle_local_exceptions::call(r);
 
-                    if constexpr (hpx::traits::is_future_v<decltype((r))> &&
-                        !std::is_void_v<
-                            hpx::traits::future_traits_t<decltype((r))>>)
-                    {
-                        return hpx::util::void_guard<R>(), f(r.get());
-                    }
-                    else
-                    {
-                        return hpx::util::void_guard<R>(),
-                               f(HPX_FORWARD(decltype(r), r));
-                    }
+                    return hpx::util::void_guard<R>(),
+                           invoke_with_results(f, HPX_FORWARD(decltype(r), r));
                 },
                 HPX_FORWARD(Items, workitems));
 #endif
