@@ -77,6 +77,58 @@ namespace hpx::parallel::detail {
         }
     };
 
+    template <typename InputLocal, typename OutputLocal>
+    struct captured_copy
+      : algorithm<captured_copy<InputLocal, OutputLocal>, std::size_t>
+    {
+        using output_traits =
+            hpx::traits::segmented_local_iterator_traits<OutputLocal>;
+        using raw_output_iterator = typename output_traits::local_raw_iterator;
+        using value_type =
+            typename std::iterator_traits<InputLocal>::value_type;
+
+        captured_copy()
+          : algorithm<captured_copy<InputLocal, OutputLocal>, std::size_t>(
+                "captured_copy")
+        {
+        }
+
+        template <typename ExPolicy>
+        static std::size_t sequential(ExPolicy policy,
+            std::vector<value_type> values, raw_output_iterator dest)
+        {
+            return invoke(
+                HPX_MOVE(policy), values, HPX_MOVE(dest), std::true_type{});
+        }
+
+        template <typename ExPolicy>
+        static std::size_t parallel(ExPolicy policy,
+            std::vector<value_type> values, raw_output_iterator dest)
+        {
+            return invoke(
+                HPX_MOVE(policy), values, HPX_MOVE(dest), std::false_type{});
+        }
+
+    private:
+        template <typename ExPolicy, typename IsSeq>
+        static std::size_t invoke(ExPolicy policy,
+            std::vector<value_type> const& values, raw_output_iterator dest,
+            IsSeq)
+        {
+            using local_result = util::in_out_result<
+                typename std::vector<value_type>::const_iterator,
+                raw_output_iterator>;
+            copy<local_result>{}.call2(policy(hpx::execution::non_task),
+                IsSeq{}, values.begin(), values.end(), HPX_MOVE(dest));
+            return values.size();
+        }
+    };
+
+    template <typename Algo>
+    inline constexpr bool is_move_transfer_v =
+        std::is_base_of_v<move_pair<typename Algo::result_type>,
+            std::decay_t<Algo>>;
+
     // sequential remote implementation
     template <typename Algo, typename ExPolicy, typename SegIter,
         typename SegOutIter>
@@ -157,14 +209,36 @@ namespace hpx::parallel::detail {
                     local_iterator_type>::value_type;
                 std::vector<indexed_partition_range<local_iterator_type>>
                     ranges{{0, {source_id, input, input_chunk_end}}};
-                auto captured = get_capture_result<ExPolicy>(
-                    capture_move_async<value_type, local_iterator_type>(
-                        source_id, HPX_MOVE(ranges)));
-                dispatch(destination_id,
-                    captured_move<local_iterator_type,
-                        local_output_iterator_type>{},
-                    policy, std::true_type(), HPX_MOVE(captured.values),
-                    output);
+                auto captured = [&] {
+                    if constexpr (is_move_transfer_v<Algo>)
+                    {
+                        return get_capture_result<ExPolicy>(
+                            capture_move_async<value_type, local_iterator_type>(
+                                source_id, HPX_MOVE(ranges)));
+                    }
+                    else
+                    {
+                        return get_capture_result<ExPolicy>(
+                            capture_async<value_type, local_iterator_type>(
+                                source_id, HPX_MOVE(ranges)));
+                    }
+                }();
+                if constexpr (is_move_transfer_v<Algo>)
+                {
+                    dispatch(destination_id,
+                        captured_move<local_iterator_type,
+                            local_output_iterator_type>{},
+                        policy, std::true_type(), HPX_MOVE(captured.values),
+                        output);
+                }
+                else
+                {
+                    dispatch(destination_id,
+                        captured_copy<local_iterator_type,
+                            local_output_iterator_type>{},
+                        policy, std::true_type(), HPX_MOVE(captured.values),
+                        output);
+                }
             }
 
             input = input_chunk_end;
@@ -272,18 +346,40 @@ namespace hpx::parallel::detail {
                         local_iterator_type>::value_type;
                     std::vector<indexed_partition_range<local_iterator_type>>
                         ranges{{0, {source_id, input, input_chunk_end}}};
-                    return capture_move_async<value_type, local_iterator_type>(
-                        source_id, HPX_MOVE(ranges))
-                        .then([=](auto ready) mutable {
-                            auto captured =
-                                get_capture_result<ExPolicy>(HPX_MOVE(ready));
+                    auto dispatch_captured = [=](auto ready) mutable {
+                        auto captured =
+                            get_capture_result<ExPolicy>(HPX_MOVE(ready));
+                        if constexpr (is_move_transfer_v<Algo>)
+                        {
                             return dispatch_async(destination_id,
                                 captured_move<local_iterator_type,
                                     local_output_iterator_type>{},
                                 policy, forced_seq(), HPX_MOVE(captured.values),
                                 output)
                                 .then([](auto done) { done.get(); });
-                        });
+                        }
+                        else
+                        {
+                            return dispatch_async(destination_id,
+                                captured_copy<local_iterator_type,
+                                    local_output_iterator_type>{},
+                                policy, forced_seq(), HPX_MOVE(captured.values),
+                                output)
+                                .then([](auto done) { done.get(); });
+                        }
+                    };
+                    if constexpr (is_move_transfer_v<Algo>)
+                    {
+                        return capture_move_async<value_type,
+                            local_iterator_type>(source_id, HPX_MOVE(ranges))
+                            .then(HPX_MOVE(dispatch_captured));
+                    }
+                    else
+                    {
+                        return capture_async<value_type, local_iterator_type>(
+                            source_id, HPX_MOVE(ranges))
+                            .then(HPX_MOVE(dispatch_captured));
+                    }
                 });
             }
 
