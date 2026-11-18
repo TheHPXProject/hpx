@@ -219,6 +219,13 @@ namespace hpx::util {
             "enable = 1",
 #endif
 
+#if defined(HPX_HAVE_HIP)
+            // devices whose HIP runtime kernels are built at startup: none,
+            // current or all (see libs/core/async_cuda/src/hip_warmup.cpp)
+            "[hpx.hip]",
+            "warmup = ${HPX_HIP_WARMUP:current}",
+#endif
+
             "[hpx.stacks]",
             "small_size = ${HPX_SMALL_STACK_SIZE:" HPX_PP_STRINGIZE(
                 HPX_PP_EXPAND(HPX_SMALL_STACK_SIZE)) "}",
