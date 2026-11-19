@@ -28,8 +28,8 @@ namespace hpx::threads::policies {
         infos_.reserve(max_parameters);
     }
 
-    std::size_t scheduler_tuning_parameters::add(
-        tuning_parameter_info const& info, double const value)
+    std::size_t scheduler_tuning_parameters::add_setting(
+        tuning_parameter_info const& info)
     {
         if (infos_.size() == max_parameters)
         {
@@ -47,7 +47,6 @@ namespace hpx::threads::policies {
 
         std::size_t const id = infos_.size();
         infos_.push_back(info);
-        set_all(id, value);
         return id;
     }
 
@@ -61,30 +60,6 @@ namespace hpx::threads::policies {
         return it != infos_.end() ?
             static_cast<std::size_t>(it - infos_.begin()) :
             npos;
-    }
-
-    void scheduler_tuning_parameters::set(std::size_t const worker,
-        std::size_t const id, double const value) noexcept
-    {
-        HPX_ASSERT(worker < values_.size() && id < infos_.size());
-        tuning_parameter_info const& info = infos_[id];
-        HPX_ASSERT(info.per_worker);
-        values_[worker].data_[id].store(
-            std::clamp(value, info.min_value, info.max_value),
-            std::memory_order_relaxed);
-    }
-
-    void scheduler_tuning_parameters::set_all(
-        std::size_t const id, double const value) noexcept
-    {
-        HPX_ASSERT(id < infos_.size());
-        tuning_parameter_info const& info = infos_[id];
-        double const clamped =
-            std::clamp(value, info.min_value, info.max_value);
-        for (auto& values : values_)
-        {
-            values.data_[id].store(clamped, std::memory_order_relaxed);
-        }
     }
 
     scheduler_tuner::~scheduler_tuner() = default;

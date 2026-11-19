@@ -14,10 +14,14 @@
 #include <hpx/assert.hpp>
 #include <hpx/modules/concurrency.hpp>
 #include <hpx/modules/functional.hpp>
+#include <hpx/modules/type_support.hpp>
 
+#include <algorithm>
 #include <array>
 #include <atomic>
+#include <concepts>
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -27,9 +31,61 @@
 
 namespace hpx::threads::policies {
 
+    /// What the value of a setting is. A scheduler reads each setting as
+    /// its type (see scheduler_tuning_parameters::get), so that its
+    /// decisions don't convert values.
+    HPX_CXX_CORE_EXPORT enum class tuning_parameter_type : std::uint8_t {
+        /// a switch, count or size, up to 2^32 - 1, kept as a
+        /// std::uint32_t
+        integer = 0,
+
+        /// a value with a fraction (for instance a time in microseconds),
+        /// kept as a float
+        real = 1
+    };
+
+    /// The types the value of a setting is read and changed as.
+    HPX_CXX_CORE_EXPORT template <typename T>
+    concept tuning_value_type =
+        std::same_as<T, std::uint32_t> || std::same_as<T, float>;
+
+    /// The type of the settings that keep values of the given type.
+    HPX_CXX_CORE_EXPORT template <tuning_value_type T>
+    inline constexpr tuning_parameter_type tuning_parameter_type_of =
+        std::same_as<T, float> ? tuning_parameter_type::real :
+                                 tuning_parameter_type::integer;
+
+    /// A value of a setting of either type, in the one word a setting keeps
+    /// its value in (see scheduler_tuning_parameters).
+    HPX_CXX_CORE_EXPORT class tuning_value
+    {
+    public:
+        constexpr tuning_value() noexcept = default;
+
+        explicit constexpr tuning_value(std::uint32_t const value) noexcept
+          : bits_(value)
+        {
+        }
+
+        explicit constexpr tuning_value(float const value) noexcept
+          : bits_(hpx::bit_cast<std::uint32_t>(value))
+        {
+        }
+
+        /// The value as the type it was made from.
+        template <tuning_value_type T>
+        [[nodiscard]] constexpr T as() const noexcept
+        {
+            return hpx::bit_cast<T>(bits_);
+        }
+
+    private:
+        std::uint32_t bits_ = 0;
+    };
+
     /// Describes a setting a scheduler reads where it makes a decision (for
     /// instance whether to wake up a sleeping worker) and that a tuner may
-    /// change while the scheduler runs.
+    /// change while the scheduler runs (see scheduler_tuning_parameters::add).
     HPX_CXX_CORE_EXPORT struct tuning_parameter_info
     {
         /// The name of the configuration entry the setting is read from (for
@@ -37,15 +93,27 @@ namespace hpx::threads::policies {
         /// identifies it for tuners.
         char const* name;
 
-        /// The range a tuner may move the setting in.
-        double min_value;
-        double max_value;
+        /// The range a tuner may move the setting in, of the type of the
+        /// setting.
+        tuning_value min_value;
+        tuning_value max_value;
 
         /// Whether each worker has its own value (read where that worker
         /// makes a decision), or one value holds for the whole pool (read
         /// where no worker index is known, for instance when a thread is
         /// created from outside the pool).
         bool per_worker;
+
+        /// What its value is.
+        tuning_parameter_type type;
+
+        /// The given value of the type of the setting within its range.
+        template <tuning_value_type T>
+        [[nodiscard]] constexpr T clamped(T const value) const noexcept
+        {
+            HPX_ASSERT(type == tuning_parameter_type_of<T>);
+            return std::clamp(value, min_value.as<T>(), max_value.as<T>());
+        }
     };
 
     /// The current values of the tunable settings of a scheduler, one set
@@ -73,11 +141,24 @@ namespace hpx::threads::policies {
         scheduler_tuning_parameters& operator=(
             scheduler_tuning_parameters&&) = delete;
 
-        /// Register a setting with its initial value (usually the value of
-        /// its configuration entry) for all workers. Returns the index the
+        /// Register the setting with the given name (the name of its
+        /// configuration entry), the range a tuner may move it in, and its
+        /// initial value for all workers (usually the value of its
+        /// configuration entry). The range and the value are of the type of
+        /// the setting (see tuning_parameter_type_of). Returns the index the
         /// scheduler reads it with. Throws if more than max_parameters
         /// settings are registered or if a setting is registered twice.
-        std::size_t add(tuning_parameter_info const& info, double value);
+        template <tuning_value_type T>
+        std::size_t add(char const* name, T const min_value, T const max_value,
+            bool const per_worker, T const value)
+        {
+            HPX_ASSERT(min_value <= max_value);
+            std::size_t const id = add_setting(
+                {name, tuning_value(min_value), tuning_value(max_value),
+                    per_worker, tuning_parameter_type_of<T>});
+            set_all(id, value);
+            return id;
+        }
 
         /// The number of registered settings.
         [[nodiscard]] std::size_t size() const noexcept
@@ -102,37 +183,69 @@ namespace hpx::threads::policies {
         /// The index of the setting with the given name, or npos.
         [[nodiscard]] std::size_t find(std::string_view name) const noexcept;
 
-        /// The current value of the given setting for the given worker.
-        [[nodiscard]] double get(
-            std::size_t worker, std::size_t id) const noexcept
+        /// The current value of the given setting for the given worker, as
+        /// the type of the setting. This is what a scheduler reads where it
+        /// decides.
+        template <tuning_value_type T>
+        [[nodiscard]] T get(std::size_t worker, std::size_t id) const noexcept
         {
-            HPX_ASSERT(worker < values_.size() && id < infos_.size());
-            return values_[worker].data_[id].load(std::memory_order_relaxed);
+            HPX_ASSERT(worker < values_.size() && id < infos_.size() &&
+                infos_[id].type == tuning_parameter_type_of<T>);
+            return values_[worker]
+                .data_[id]
+                .load(std::memory_order_relaxed)
+                .as<T>();
         }
 
         /// The current value of the given setting that holds for the whole
-        /// pool (see tuning_parameter_info::per_worker).
-        [[nodiscard]] double get(std::size_t id) const noexcept
+        /// pool (see tuning_parameter_info::per_worker), as the type of the
+        /// setting.
+        template <tuning_value_type T>
+        [[nodiscard]] T get(std::size_t id) const noexcept
         {
             HPX_ASSERT(id < infos_.size() && !infos_[id].per_worker);
             // set_all keeps the values of all workers equal
-            return values_[0].data_[id].load(std::memory_order_relaxed);
+            return get<T>(0, id);
         }
 
-        /// Change the given setting for the given worker. The value is
-        /// clamped to the range of the setting. Settings that hold for the
-        /// whole pool can only be changed with set_all.
-        void set(std::size_t worker, std::size_t id, double value) noexcept;
+        /// Change the given setting for the given worker, with a value of
+        /// the type of the setting. The value is clamped to the range of the
+        /// setting. Settings that hold for the whole pool can only be
+        /// changed with set_all.
+        template <tuning_value_type T>
+        void set(std::size_t worker, std::size_t id, T value) noexcept
+        {
+            HPX_ASSERT(worker < values_.size() && id < infos_.size() &&
+                infos_[id].per_worker);
+            values_[worker].data_[id].store(
+                tuning_value(infos_[id].clamped(value)),
+                std::memory_order_relaxed);
+        }
 
-        /// Change the given setting for all workers.
-        void set_all(std::size_t id, double value) noexcept;
+        /// Change the given setting for all workers, with a value of the
+        /// type of the setting.
+        template <tuning_value_type T>
+        void set_all(std::size_t id, T value) noexcept
+        {
+            HPX_ASSERT(id < infos_.size());
+            tuning_value const in_range(infos_[id].clamped(value));
+            for (auto& values : values_)
+            {
+                values.data_[id].store(in_range, std::memory_order_relaxed);
+            }
+        }
 
     private:
+        // adds the description of a setting, returns its index
+        std::size_t add_setting(tuning_parameter_info const& info);
+
         std::vector<tuning_parameter_info> infos_;
 
         // the values of a worker are read by that worker where it makes its
         // decisions and written only by a tuner, keep them on their own lines
-        using worker_values = std::array<std::atomic<double>, max_parameters>;
+        using worker_values =
+            std::array<std::atomic<tuning_value>, max_parameters>;
+        static_assert(std::atomic<tuning_value>::is_always_lock_free);
         std::vector<util::aligned_line_data<worker_values>> values_;
     };
 

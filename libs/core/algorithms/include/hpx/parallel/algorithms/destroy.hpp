@@ -161,6 +161,7 @@ namespace hpx {
 #include <hpx/parallel/algorithms/detail/distance.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
+#include <hpx/parallel/util/detail/transfer_task_size.hpp>
 #include <hpx/parallel/util/foreach_partitioner.hpp>
 #include <hpx/parallel/util/loop.hpp>
 
@@ -209,12 +210,14 @@ namespace hpx::parallel {
 
             return util::foreach_partitioner<ExPolicy>::call(
                 HPX_FORWARD(ExPolicy, policy), first, count,
-                [](Iter first, std::size_t count, std::size_t) {
-                    return util::const_loop_n<std::decay_t<ExPolicy>>(
-                        first, count, [](Iter it) -> void {
-                            std::destroy_at(std::addressof(*it));
-                        });
-                },
+                hpx::threads::detail::with_task_size(
+                    [](Iter first, std::size_t count, std::size_t) {
+                        return util::const_loop_n<std::decay_t<ExPolicy>>(
+                            first, count, [](Iter it) -> void {
+                                std::destroy_at(std::addressof(*it));
+                            });
+                    },
+                    util::detail::element_operation_size<Iter>()),
                 hpx::identity_v);
         }
 
