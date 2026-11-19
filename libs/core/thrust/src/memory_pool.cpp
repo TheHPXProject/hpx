@@ -399,25 +399,29 @@ namespace hpx::thrust {
                 p->deallocate(block, size_class_of(bytes));
             }
 
+            // allocates nothing, it runs when memory is short (the number of
+            // device pools is fixed when the pools are created)
             void release() noexcept
             {
-                std::vector<pool*> all;
-                try
+                for (std::size_t i = 0; i != device_pools_.size(); ++i)
+                {
+                    pool* p = nullptr;
+                    {
+                        std::lock_guard<hpx::spinlock_no_backoff> l(mtx_);
+                        p = device_pools_[i].get();
+                    }
+                    if (p != nullptr)
+                    {
+                        p->release();
+                    }
+                }
+
+                pool* p = nullptr;
                 {
                     std::lock_guard<hpx::spinlock_no_backoff> l(mtx_);
-                    for (auto& p : device_pools_)
-                    {
-                        if (p)
-                            all.push_back(p.get());
-                    }
-                    if (pinned_pool_)
-                        all.push_back(pinned_pool_.get());
+                    p = pinned_pool_.get();
                 }
-                catch (...)
-                {
-                    return;
-                }
-                for (pool* p : all)
+                if (p != nullptr)
                 {
                     p->release();
                 }

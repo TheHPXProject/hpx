@@ -22,7 +22,9 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <memory>
+#include <new>
 #include <string>
 #include <vector>
 
@@ -151,11 +153,33 @@ namespace {
             test_round_trip<plain, pooled>(size);
         }
     }
+
+    // element counts whose size in bytes overflows are rejected instead of
+    // wrapping around to a small allocation
+    void test_overflow()
+    {
+        hpx::thrust::pooled_allocator<std::int64_t> alloc;
+        std::size_t const too_many =
+            (std::numeric_limits<std::size_t>::max)() / sizeof(std::int64_t) +
+            1;
+
+        bool caught = false;
+        try
+        {
+            (void) alloc.allocate(too_many);
+        }
+        catch (std::bad_alloc const&)
+        {
+            caught = true;
+        }
+        HPX_TEST(caught);
+    }
 }    // namespace
 
 int hpx_main(hpx::program_options::variables_map&)
 {
     test_memory_kind();
+    test_overflow();
     test_device_work();
     test_reuse();
     test_serialization();

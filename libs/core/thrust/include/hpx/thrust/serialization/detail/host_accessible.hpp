@@ -12,8 +12,18 @@
 #include <thrust/memory.h>
 
 #include <cstddef>
+#include <type_traits>
 
 namespace hpx::serialization::detail {
+
+    // Whether the elements are serialized as one array (zero-copy chunks
+    // included), as std::vector does; others go element by element, with
+    // the construction hooks of types that aren't default constructible.
+    template <typename T>
+    inline constexpr bool host_accessible_as_array =
+        std::is_default_constructible_v<T> &&
+        (hpx::traits::is_bitwise_serializable_v<T> ||
+            !hpx::traits::is_not_bitwise_serializable_v<T>);
 
     // host_vector and universal_vector own host-accessible memory, which
     // lives in the parcel as long as the vector does: serialize it like a
@@ -23,10 +33,20 @@ namespace hpx::serialization::detail {
     {
         std::size_t const size = v.size();
         ar << size;
-        if (size != 0)
+        if (size == 0)
+        {
+            return;
+        }
+
+        using value_type = Vector::value_type;
+        if constexpr (host_accessible_as_array<value_type>)
         {
             ar << hpx::serialization::make_array(
                 ::thrust::raw_pointer_cast(v.data()), size);
+        }
+        else
+        {
+            save_collection(ar, v);
         }
     }
 
@@ -35,11 +55,20 @@ namespace hpx::serialization::detail {
     {
         std::size_t size = 0;
         ar >> size;
-        v.resize(size);
-        if (size != 0)
+
+        using value_type = Vector::value_type;
+        if constexpr (host_accessible_as_array<value_type>)
         {
-            ar >> hpx::serialization::make_array(
-                      ::thrust::raw_pointer_cast(v.data()), size);
+            v.resize(size);
+            if (size != 0)
+            {
+                ar >> hpx::serialization::make_array(
+                          ::thrust::raw_pointer_cast(v.data()), size);
+            }
+        }
+        else
+        {
+            load_collection(ar, v, size);
         }
     }
 }    // namespace hpx::serialization::detail

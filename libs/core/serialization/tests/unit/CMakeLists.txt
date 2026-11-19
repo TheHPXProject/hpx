@@ -20,6 +20,7 @@ set(tests
     serialization_multimap
     serialization_set
     serialization_multiset
+    serialization_post_receive_steps
     serialization_simple
     serialization_size_limits
     serialization_smart_ptr

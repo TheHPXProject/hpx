@@ -164,6 +164,10 @@ namespace hpx::parcelset::detail {
         keep_alive_type keep_alive_;
         serialization::detail::post_receive_actions::actions_type
             post_receive_actions_;
+        // completes after these steps and those of the parcels de-serialized
+        // before this one from the same archive
+        std::shared_ptr<serialization::detail::receive_completion>
+            receive_completion_;
         std::size_t size_;
         std::size_t num_chunks_;
     };

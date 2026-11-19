@@ -22,6 +22,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -92,6 +93,32 @@ namespace hpx::parcelset::detail {
         return true;
     }
 
+    // The serialization failed after it had registered futures (for instance
+    // the copy of device memory an earlier argument started): they notify
+    // the archive once they are ready, so it must not go away before.
+    static void wait_for_registered_futures(
+        serialization::output_archive& archive) noexcept
+    {
+        auto* handle_futures = archive.try_get_extra_data<
+            serialization::detail::preprocess_futures>();
+        if (handle_futures == nullptr || !handle_futures->has_futures())
+        {
+            return;
+        }
+
+        try
+        {
+            hpx::promise<void> all_ready;
+            hpx::future<void> f = all_ready.get_future();
+            (*handle_futures)([&all_ready]() { all_ready.set_value(); });
+            f.get();
+        }
+        catch (...)
+        {
+            // the error of the serialization is passed on instead
+        }
+    }
+
     template <typename Parcel, typename Handler, typename Derived>
     struct parcel_await_base : std::enable_shared_from_this<Derived>
     {
@@ -119,14 +146,21 @@ namespace hpx::parcelset::detail {
         bool apply_single(parcelset::parcel& p)
         {
             bool complete = false;
+            std::exception_ptr error;
             try
             {
                 complete = preprocess_parcel(p, archive_, data_, overhead_);
             }
             catch (...)
             {
-                wait_for_registered_futures();
-                throw;
+                error = std::current_exception();
+            }
+            if (error)
+            {
+                // not inside the handler: waiting may continue on another
+                // OS thread, which doesn't know the handled exception
+                wait_for_registered_futures(archive_);
+                std::rethrow_exception(error);
             }
 
             if (complete)
@@ -135,32 +169,6 @@ namespace hpx::parcelset::detail {
             }
             wait_for_futures();
             return false;
-        }
-
-        // The serialization failed after it had registered futures (for
-        // instance the copy of device memory an earlier argument started):
-        // they notify the archive once they are ready, so it must not go
-        // away before.
-        void wait_for_registered_futures() noexcept
-        {
-            auto* handle_futures = archive_.try_get_extra_data<
-                serialization::detail::preprocess_futures>();
-            if (handle_futures == nullptr || !handle_futures->has_futures())
-            {
-                return;
-            }
-
-            try
-            {
-                hpx::promise<void> all_ready;
-                hpx::future<void> f = all_ready.get_future();
-                (*handle_futures)([&all_ready]() { all_ready.set_value(); });
-                f.get();
-            }
-            catch (...)
-            {
-                // the error of the serialization is passed on instead
-            }
         }
 
         // run the next pass when the futures found in the last pass are
@@ -246,7 +254,24 @@ namespace hpx::parcelset::detail {
         serialization::detail::preprocess_container data;
         serialization::output_archive archive(data, archive_flags, nullptr,
             nullptr, zero_copy_serialization_threshold);
-        if (preprocess_parcel(p, archive, data, archive.bytes_written()))
+        bool complete = false;
+        std::exception_ptr error;
+        try
+        {
+            complete =
+                preprocess_parcel(p, archive, data, archive.bytes_written());
+        }
+        catch (...)
+        {
+            error = std::current_exception();
+        }
+        if (error)
+        {
+            // not inside the handler, see apply_single
+            wait_for_registered_futures(archive);
+            std::rethrow_exception(error);
+        }
+        if (complete)
         {
             pp(HPX_MOVE(p), HPX_MOVE(f));
             return;

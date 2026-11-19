@@ -39,10 +39,20 @@ namespace hpx::serialization::detail {
             {
                 streams()
                 {
-                    for (auto& stream : streams_)
+                    for (std::size_t i = 0; i != streams_.size(); ++i)
                     {
-                        hpx::cuda::experimental::check_cuda_error(
-                            cudaStreamCreate(&stream));
+                        if (cudaError_t const error =
+                                cudaStreamCreate(&streams_[i]);
+                            error != cudaSuccess)
+                        {
+                            // the next call tries again: release the streams
+                            // created so far
+                            for (std::size_t j = 0; j != i; ++j)
+                            {
+                                (void) cudaStreamDestroy(streams_[j]);
+                            }
+                            hpx::cuda::experimental::check_cuda_error(error);
+                        }
                     }
                 }
 

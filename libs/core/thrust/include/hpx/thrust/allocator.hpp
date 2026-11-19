@@ -16,6 +16,7 @@
 #include <thrust/mr/memory_resource.h>
 
 #include <cstddef>
+#include <limits>
 #include <new>
 
 namespace hpx::thrust {
@@ -68,12 +69,25 @@ namespace hpx::thrust {
             using other = pooled_allocator<U>;
         };
 
+        using pointer = base_type::pointer;
+        using size_type = base_type::size_type;
+
         pooled_allocator() = default;
 
         template <typename U>
         HPX_HOST_DEVICE pooled_allocator(pooled_allocator<U> const& other)
           : base_type(other)
         {
+        }
+
+        // thrust computes the number of bytes without checking for overflow
+        pointer allocate(size_type const n)
+        {
+            if (n > (std::numeric_limits<std::size_t>::max)() / sizeof(T))
+            {
+                throw std::bad_alloc();
+            }
+            return base_type::allocate(n);
         }
     };
 
