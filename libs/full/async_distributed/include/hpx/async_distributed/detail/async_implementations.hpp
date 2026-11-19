@@ -403,7 +403,11 @@ namespace hpx::traits {
         static constexpr std::size_t call(
             hpx::detail::action_invoker<Action> const&) noexcept
         {
-            return reinterpret_cast<std::size_t>(&Action::invoker);
+            // Action::invoker is a member function template and cannot be
+            // addressed directly. Action names are always provided by
+            // get_function_annotation, so returning 0 allows compilation
+            // when HPX_WITH_THREAD_DESCRIPTION_FULL=ON without runtime impact.
+            return 0;
         }
     };
 
