@@ -217,6 +217,86 @@ namespace {
         HPX_TEST(second_called);
         HPX_TEST(!completion->error());
     }
+
+    // transfers (e.g. receiving device memory over a device transport) run
+    // before the other steps, which may use their data (e.g. copy it from a
+    // staging buffer)
+    void test_transfers_first()
+    {
+        post_receive_actions actions;
+
+        controlled_step copy;
+        bool copy_started = false;
+        actions.add([&copy_started, action = copy.action()](
+                        post_receive_actions::done_type d) {
+            copy_started = true;
+            action(HPX_MOVE(d));
+        });
+
+        controlled_step transfer1;
+        controlled_step transfer2;
+        actions.add_transfer(transfer1.action());
+        actions.add_transfer(transfer2.action());
+        HPX_TEST(!actions.empty());
+
+        parcel p(actions);
+        HPX_TEST(actions.empty());
+        p.start();
+        HPX_TEST(!copy_started);
+
+        transfer2.finish();
+        HPX_TEST(!copy_started);
+        transfer1.finish();
+        HPX_TEST(copy_started);
+        HPX_TEST(!p.complete);
+
+        copy.finish();
+        HPX_TEST(p.complete);
+    }
+
+    // a parcel with transfers only
+    void test_transfers_only()
+    {
+        post_receive_actions actions;
+
+        controlled_step transfer;
+        actions.add_transfer(transfer.action());
+
+        parcel p(actions);
+        p.start();
+        HPX_TEST(!p.complete);
+        transfer.finish();
+        HPX_TEST(p.complete);
+    }
+
+    // a failed transfer skips the other steps and fails the parcel
+    void test_failed_transfer()
+    {
+        post_receive_actions actions;
+
+        controlled_step copy;
+        bool copy_started = false;
+        actions.add([&copy_started, action = copy.action()](
+                        post_receive_actions::done_type d) {
+            copy_started = true;
+            action(HPX_MOVE(d));
+        });
+
+        controlled_step transfer1;
+        controlled_step transfer2;
+        actions.add_transfer(transfer1.action());
+        actions.add_transfer(transfer2.action());
+
+        parcel p(actions);
+        p.start();
+
+        transfer1.fail();
+        HPX_TEST(!p.complete);
+        transfer2.finish();
+        HPX_TEST(!copy_started);
+        HPX_TEST(p.complete);
+        HPX_TEST(p.failed);
+    }
 }    // namespace
 
 int main()
@@ -226,6 +306,9 @@ int main()
     test_steps_finished_in_order();
     test_failed_step();
     test_throwing_waiter();
+    test_transfers_first();
+    test_transfers_only();
+    test_failed_transfer();
 
     return hpx::util::report_errors();
 }
