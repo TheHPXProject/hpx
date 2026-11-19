@@ -53,15 +53,18 @@ namespace hpx::parcelset::detail {
         // The parcel keeps the buffers zero-copy chunks will refer to alive
         // (serialization creates them only if this exists). Buffers from an
         // earlier preprocessing of this parcel (e.g. by post() before handing
-        // it to the parcelport) are reused. Only the serialization of device
-        // memory (the thrust module) creates such buffers.
+        // it to the parcelport) are reused; the archive keeps those of its
+        // earlier rounds (reset() only starts again at the first object).
+        // Only the serialization of device memory (the thrust module)
+        // creates such buffers.
         serialization::detail::preprocess_keep_alive* buffers = nullptr;
 #if defined(HPX_HAVE_THRUST)
         buffers = &archive.get_extra_data<
             serialization::detail::preprocess_keep_alive>();
-        if (auto const& keep_alive = p.keep_alive(); !keep_alive.empty())
+        if (auto const& keep_alive = p.keep_alive();
+            buffers->empty() && !keep_alive.empty())
         {
-            buffers->add_buffers(keep_alive);
+            buffers->set_buffers(keep_alive);
         }
 #endif
 

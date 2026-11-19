@@ -41,7 +41,9 @@ namespace hpx::parcelset::detail {
         // split from (see preprocess_gid_types)
         using split_gids_type =
             std::vector<std::pair<naming::gid_type, naming::gid_type>>;
-        using keep_alive_type = serialization::detail::keep_alive_map;
+        // the buffers zero-copy chunks refer to, in the order the objects
+        // they were created for are serialized (see preprocess_keep_alive)
+        using keep_alive_type = serialization::detail::keep_alive_list;
 
         parcel_base() = default;
 

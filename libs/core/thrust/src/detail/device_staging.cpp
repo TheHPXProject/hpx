@@ -268,8 +268,8 @@ namespace hpx::serialization::detail {
         }
     }    // namespace
 
-    keep_alive_buffer const* device_host_copy_of(output_archive& ar,
-        void const* key, void const* device_data, std::size_t const bytes)
+    keep_alive_buffer const* device_host_copy_of(
+        output_archive& ar, void const* device_data, std::size_t const bytes)
     {
         if (bytes < ar.get_zero_copy_serialization_threshold())
         {
@@ -278,9 +278,10 @@ namespace hpx::serialization::detail {
 
         if (!ar.is_preprocessing())
         {
-            auto const* keep_alive =
-                ar.try_get_extra_data<preprocess_keep_alive>();
-            return keep_alive ? checked(keep_alive->find(key)) : nullptr;
+            // the copy preprocessing prepared for the object at the same
+            // position
+            auto* keep_alive = ar.try_get_extra_data<preprocess_keep_alive>();
+            return keep_alive ? checked(&keep_alive->get_next(bytes)) : nullptr;
         }
 
         // Only the owner of a preprocessing archive that keeps the buffers
@@ -292,7 +293,7 @@ namespace hpx::serialization::detail {
         {
             return nullptr;
         }
-        if (auto const* buffer = keep_alive->find(key))
+        if (auto const* buffer = keep_alive->next(bytes))
         {
             // an earlier preprocessing round has created it already
             return checked(buffer);
@@ -320,12 +321,13 @@ namespace hpx::serialization::detail {
         }
 
         void const* data = copy->data();
-        keep_alive->add(key, keep_alive_buffer{HPX_MOVE(copy), data, bytes});
+        keep_alive_buffer const& buffer =
+            keep_alive->add(keep_alive_buffer{HPX_MOVE(copy), data, bytes});
         if (pending)
         {
             hpx::lcos::detail::preprocess_future(ar, *pending);
         }
-        return keep_alive->find(key);
+        return &buffer;
     }
 
     void* stage_device_receive(
