@@ -35,6 +35,7 @@
 #include <cstdint>
 #include <cstring>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <system_error>
@@ -150,28 +151,32 @@ struct delayed_data
         keep_alive_buffer const* buffer = nullptr;
         if (bytes >= ar.get_zero_copy_serialization_threshold())
         {
-            // only archives that keep the buffers alive (parcels) have it
+            // only archives that keep the buffers alive (parcels) have it;
+            // the buffers are matched to the objects by position
             auto* keep_alive = ar.try_get_extra_data<preprocess_keep_alive>();
-            if (keep_alive != nullptr)
+            if (keep_alive != nullptr && !ar.is_preprocessing())
             {
-                buffer = keep_alive->find(this);
+                buffer = &keep_alive->get_next(bytes);
             }
-            if (buffer == nullptr && keep_alive != nullptr &&
-                ar.is_preprocessing())
+            else if (keep_alive != nullptr)
             {
-                // the first preprocessing round of this parcel; the parcel
-                // waits for the buffer once it keeps it
-                auto produced = std::make_shared<produced_buffer>(size, first);
-                auto state = hpx::traits::future_access<
-                    hpx::future<void>>::get_shared_state(produced->ready);
-                void const* data = produced->values->data();
-                keep_alive->add(
-                    this, keep_alive_buffer{HPX_MOVE(produced), data, bytes});
-                if (!state->is_ready())
+                buffer = keep_alive->next(bytes);
+                if (buffer == nullptr)
                 {
-                    hpx::lcos::detail::preprocess_future(ar, *state);
+                    // the first preprocessing round of this parcel; the
+                    // parcel waits for the buffer once it keeps it
+                    auto produced =
+                        std::make_shared<produced_buffer>(size, first);
+                    auto state = hpx::traits::future_access<
+                        hpx::future<void>>::get_shared_state(produced->ready);
+                    void const* data = produced->values->data();
+                    buffer = &keep_alive->add(
+                        keep_alive_buffer{HPX_MOVE(produced), data, bytes});
+                    if (!state->is_ready())
+                    {
+                        hpx::lcos::detail::preprocess_future(ar, *state);
+                    }
                 }
-                buffer = keep_alive->find(this);
             }
         }
 
@@ -270,6 +275,72 @@ struct failing_argument
 
 void check_failing(delayed_data const&, failing_argument const&) {}
 HPX_PLAIN_ACTION(check_failing)
+// Two delayed_data serialized one after the other from the same storage, as
+// temporaries a serialize() function creates on the fly: each must get its own
+// buffer although both have the same address.
+struct delayed_pair
+{
+    std::size_t size = 0;
+    int first = 0;
+    int second = 0;
+    delayed_data received_first;
+    delayed_data received_second;
+
+    void save(hpx::serialization::output_archive& ar, unsigned) const
+    {
+        ar << size << first << second;
+
+        std::optional<delayed_data> temporary;
+        temporary.emplace(delayed_data{size, first, {}});
+        ar << *temporary;
+        temporary.emplace(delayed_data{size, second, {}});
+        ar << *temporary;
+    }
+
+    void load(hpx::serialization::input_archive& ar, unsigned)
+    {
+        ar >> size >> first >> second >> received_first >> received_second;
+    }
+
+    HPX_SERIALIZATION_SPLIT_MEMBER()
+};
+
+void check_pair(delayed_pair const& data)
+{
+    if (data.received_first.first == data.first &&
+        data.received_first.values_match() &&
+        data.received_second.first == data.second &&
+        data.received_second.values_match())
+    {
+        ++actions_passed;
+    }
+    ++actions_run;
+}
+HPX_PLAIN_ACTION(check_pair)
+
+// An object shared with other parcels of the same message and one of its own:
+// the parcels after the first one write the shared object as a back-reference.
+struct shared_and_own
+{
+    std::shared_ptr<delayed_data> shared;
+    delayed_data own;
+
+    template <typename Archive>
+    void serialize(Archive& ar, unsigned)
+    {
+        ar & shared & own;
+    }
+};
+
+void check_shared(shared_and_own const& data)
+{
+    if (data.shared && data.shared->values_match() && data.own.values_match())
+    {
+        ++actions_passed;
+    }
+    ++actions_run;
+}
+HPX_PLAIN_ACTION(check_shared)
 
 ///////////////////////////////////////////////////////////////////////////////
 namespace {
@@ -347,20 +418,36 @@ namespace {
         std::vector<std::vector<char>> chunk_data;
     };
 
+    message encode(std::vector<hpx::parcelset::parcel> const& ps,
+        std::uint32_t const flags);
+
     message encode(hpx::parcelset::parcel const& p, std::uint32_t const flags)
     {
+        return encode(std::vector<hpx::parcelset::parcel>{p}, flags);
+    }
+
+    // the parcels of one message, as encode_parcels does it: each parcel goes
+    // into the same archive with its keep-alive buffers
+    message encode(std::vector<hpx::parcelset::parcel> const& ps,
+        std::uint32_t const flags)
+    {
+        using hpx::serialization::detail::preprocess_keep_alive;
+
         message m;
         {
             hpx::serialization::output_archive archive(
                 m.data, flags, &m.chunks);
-            if (auto const& keep_alive = p.keep_alive(); !keep_alive.empty())
+            for (hpx::parcelset::parcel const& p : ps)
             {
-                archive
-                    .get_extra_data<
-                        hpx::serialization::detail::preprocess_keep_alive>()
-                    .add_buffers(keep_alive);
+                if (auto const& keep_alive = p.keep_alive();
+                    !keep_alive.empty() ||
+                    archive.try_get_extra_data<preprocess_keep_alive>())
+                {
+                    archive.get_extra_data<preprocess_keep_alive>().set_buffers(
+                        keep_alive, archive.bytes_written());
+                }
+                archive << p;
             }
-            archive << p;
             archive.flush();
             m.data.resize(archive.bytes_written());
         }
@@ -377,6 +464,36 @@ namespace {
             m.chunk_data.emplace_back(data, data + c.size());
         }
         return m;
+    }
+
+    // Receives the parcels of a message without zero-copy receive and
+    // schedules their actions.
+    void decode_message(message& m, std::size_t const count)
+    {
+        std::vector<serialization_chunk> chunks;
+        for (std::size_t i = 0; i != m.chunks.size(); ++i)
+        {
+            serialization_chunk const& c = m.chunks[i];
+            if (c.type_ == chunk_type::chunk_type_index)
+            {
+                chunks.push_back(c);
+            }
+            else
+            {
+                chunks.push_back(hpx::serialization::create_pointer_chunk(
+                    static_cast<void*>(m.chunk_data[i].data()), c.size()));
+            }
+        }
+
+        hpx::serialization::input_archive archive(
+            m.data, m.data.size(), &chunks);
+        for (std::size_t i = 0; i != count; ++i)
+        {
+            hpx::parcelset::parcel p;
+            bool deferred_schedule = false;
+            HPX_TEST(!p.load_schedule(archive, 0, deferred_schedule));
+            HPX_TEST(!deferred_schedule);
+        }
     }
 
     // Receives the message and schedules the parcel's action once its data
@@ -532,6 +649,71 @@ namespace {
         wait_for_actions(actions_before + 1);
     }
 
+    // Two buffers for objects serialized from the same address, both pending
+    // in the first preprocessing round: each object gets its own buffer (the
+    // buffers are matched by position, not by address).
+    void test_same_address(bool const zero_copy)
+    {
+        std::size_t const actions_before = actions_run;
+        std::size_t const created_before = buffers_created;
+        std::size_t const size = 65536;
+
+        message m;
+        {
+            std::uint32_t const flags = archive_flags(zero_copy);
+            hpx::parcelset::parcel p =
+                preprocess(make_action_parcel<check_pair_action>(&check_pair,
+                               delayed_pair{size, 42, 4242, {}, {}}),
+                    flags, true);
+            HPX_TEST_EQ(buffers_created - created_before, std::size_t(2));
+
+            m = encode(p, flags);
+            HPX_TEST_EQ(buffers_alive.load(), std::size_t(2));
+        }
+        HPX_TEST_EQ(buffers_alive.load(), std::size_t(0));
+
+        HPX_TEST(!decode(m, false));
+        wait_for_actions(actions_before + 1);
+    }
+
+    // Parcels preprocessed separately and sent in one message, all holding
+    // the same object before one of their own of the same size: each parcel
+    // has a buffer for the shared object, but the later parcels write it as a
+    // back-reference to the first one. Their own objects must still get the
+    // buffers created for them, not the one of the shared object.
+    void test_shared_in_message(bool const zero_copy)
+    {
+        std::size_t const actions_before = actions_run;
+        std::size_t const created_before = buffers_created;
+        std::size_t const size = 65536;
+        std::size_t const parcels = 3;
+
+        message m;
+        {
+            std::uint32_t const flags = archive_flags(zero_copy);
+            auto shared =
+                std::make_shared<delayed_data>(delayed_data{size, 7, {}});
+
+            std::vector<hpx::parcelset::parcel> ps;
+            for (std::size_t i = 0; i != parcels; ++i)
+            {
+                ps.push_back(preprocess(
+                    make_action_parcel<check_shared_action>(&check_shared,
+                        shared_and_own{shared,
+                            delayed_data{
+                                size, 100 * static_cast<int>(i + 1), {}}}),
+                    flags, true));
+            }
+            HPX_TEST_EQ(buffers_created - created_before, 2 * parcels);
+
+            m = encode(ps, flags);
+        }
+        HPX_TEST_EQ(buffers_alive.load(), std::size_t(0));
+
+        decode_message(m, parcels);
+        wait_for_actions(actions_before + parcels);
+    }
+
     // without a parcel nothing is preprocessed, the values go inline
     void test_archive(std::size_t const size)
     {
@@ -619,6 +801,10 @@ int hpx_main(hpx::program_options::variables_map&)
         test_parcel(size, false, false);
         test_archive(size);
     }
+    test_same_address(true);
+    test_same_address(false);
+    test_shared_in_message(true);
+    test_shared_in_message(false);
     // the gate's shared state goes away while the runtime is still there
     gate = hpx::shared_future<void>();
     gate_promise.reset();

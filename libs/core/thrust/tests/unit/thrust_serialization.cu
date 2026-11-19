@@ -28,6 +28,7 @@
 
 #include <cstddef>
 #include <new>
+#include <optional>
 #include <type_traits>
 
 // universal_vector is serialized from its own memory only with allocators of
@@ -176,6 +177,42 @@ namespace {
         }
     }
 
+    // Two device vectors with different values serialized from the same
+    // address (temporaries a serialize() function creates on the fly), with
+    // the preprocessing rounds of a parcel: each gets its own host copy (the
+    // copies are matched by position, not by address).
+    template <typename Vector>
+    void test_same_address(bool const chunks)
+    {
+        using T = typename Vector::value_type;
+
+        std::size_t const size = 1 << 16;
+        ::thrust::host_vector<T> const first = values<T>(size);
+        ::thrust::host_vector<T> second(size);
+        for (std::size_t i = 0; i != size; ++i)
+        {
+            second[i] = value_at<T>(i + 1);
+        }
+
+        test::message m = test::send(test::archive_flags(chunks, false), true,
+            [&](hpx::serialization::output_archive& ar) {
+                std::optional<Vector> temporary;
+                temporary.emplace(first);
+                ar << *temporary;
+                temporary.emplace(second);
+                ar << *temporary;
+            });
+        HPX_TEST_EQ(m.keep_alive, std::size_t(2));
+
+        Vector received_first;
+        Vector received_second;
+        test::receive(m, false, [&](hpx::serialization::input_archive& ar) {
+            ar >> received_first >> received_second;
+        });
+        HPX_TEST(::thrust::host_vector<T>(received_first) == first);
+        HPX_TEST(::thrust::host_vector<T>(received_second) == second);
+    }
+
     // host_vector and universal_vector: zero-copy chunks of their own memory
     template <typename Vector>
     void test_host_accessible(
@@ -313,6 +350,9 @@ int hpx_main(hpx::program_options::variables_map&)
     test_device_vectors<pooled, plain>();
     test_device_vectors<::thrust::device_vector<bool>,
         ::thrust::device_vector<bool>>();
+
+    test_same_address<plain>(true);
+    test_same_address<plain>(false);
 
     test_host_accessible<::thrust::host_vector<int>>();
     test_host_accessible<::thrust::universal_vector<int>>();
