@@ -1,4 +1,5 @@
 //  Copyright (c) 2026 Hartmut Kaiser
+//  Copyright (c) 2026 Divyanshi Talreja
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -104,12 +105,77 @@ void test_round(bool notify_all)
     f.get();
 }
 
+void test_timed_round(bool notify_all)
+{
+    mutex_type mtx;
+    condition_variable cv;
+
+    hpx::threads::thread_id_type const waiter = hpx::threads::get_self_id();
+    std::atomic<bool> second_suspended{false};
+    std::atomic<bool> released{false};
+
+    std::unique_lock<mutex_type> l(mtx);
+    hpx::future<void> f = hpx::async([&] {
+        // Race the notification against an actual timed suspension.
+        hpx::this_thread::sleep_for(std::chrono::milliseconds(2));
+        std::unique_lock<mutex_type> nl(mtx);
+        if (notify_all)
+        {
+            cv.notify_all(HPX_MOVE(nl));
+        }
+        else
+        {
+            cv.notify_one(HPX_MOVE(nl));
+        }
+
+        hpx::util::yield_while([&] {
+            return !second_suspended.load() ||
+                hpx::threads::get_thread_state(waiter).state() !=
+                hpx::threads::thread_schedule_state::suspended;
+        });
+        for (std::size_t k = 0; k != 100; ++k)
+        {
+            hpx::this_thread::yield();
+        }
+
+        released = true;
+        hpx::threads::set_thread_state(waiter,
+            hpx::threads::thread_schedule_state::pending,
+            hpx::threads::thread_restart_state::signaled);
+    });
+
+    auto const result = cv.wait_until(
+        l, std::chrono::steady_clock::now() + std::chrono::milliseconds(2));
+    HPX_TEST(result == hpx::threads::thread_restart_state::signaled ||
+        result == hpx::threads::thread_restart_state::timeout);
+    l.unlock();
+
+    second_suspended = true;
+    while (!released.load())
+    {
+        hpx::this_thread::suspend(
+            hpx::threads::thread_schedule_state::suspended);
+        if (!released.load())
+        {
+            ++stray_wakeups;
+        }
+    }
+
+    f.get();
+}
+
 int hpx_main()
 {
     for (std::size_t i = 0; i != 200; ++i)
     {
         test_round(false);
         test_round(true);
+    }
+
+    for (std::size_t i = 0; i != 100; ++i)
+    {
+        test_timed_round(false);
+        test_timed_round(true);
     }
 
     HPX_TEST_EQ(stray_wakeups, static_cast<std::size_t>(0));
