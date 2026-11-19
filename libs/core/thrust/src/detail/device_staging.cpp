@@ -113,6 +113,9 @@ namespace hpx::serialization::detail {
                         cudaMemcpyDeviceToHost, stream_));
                 try
                 {
+                    // the source may be pooled memory, given back (e.g. by a
+                    // temporary vector) before the copy has read it
+                    hpx::thrust::detail::pool_note_read(device_data, stream_);
                     ready_ = hpx::cuda::experimental::detail::
                         get_future_with_callback(stream_);
                 }
@@ -218,8 +221,9 @@ namespace hpx::serialization::detail {
                     [state, staging, done = HPX_MOVE(done)]() {
                         if (state->has_exception())
                         {
-                            // the arguments are incomplete, don't run it
-                            hpx::report_error(state->get_exception_ptr());
+                            // the arguments are incomplete: the parcel
+                            // reports the error instead of running its action
+                            done(state->get_exception_ptr());
                             return;
                         }
                         done();

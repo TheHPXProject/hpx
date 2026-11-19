@@ -24,6 +24,7 @@
 #include <cstdint>
 #include <exception>
 #include <memory>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -97,10 +98,16 @@ namespace hpx::parcelset::detail {
     }
 
     // The serialization failed after it had registered futures (for instance
-    // the copy of device memory an earlier argument started): they notify
-    // the archive once they are ready, so it must not go away before.
-    static void wait_for_registered_futures(
-        serialization::output_archive& archive) noexcept
+    // the copy of device memory an earlier argument started, or a future
+    // argument that isn't ready): they notify the extra data of the archive
+    // once they are ready, so 'owner', which keeps that extra data, is kept
+    // until then. The error is passed on right away: a registered future may
+    // be one the caller makes ready only after the send has returned (one
+    // that never becomes ready keeps the extra data forever). Without an
+    // owner (nullptr) this waits for the futures.
+    template <typename Owner>
+    static void keep_until_registered_futures_are_ready(
+        serialization::output_archive& archive, Owner&& owner) noexcept
     {
         auto* handle_futures = archive.try_get_extra_data<
             serialization::detail::preprocess_futures>();
@@ -109,12 +116,31 @@ namespace hpx::parcelset::detail {
             return;
         }
 
+        if constexpr (!std::is_null_pointer_v<std::decay_t<Owner>>)
+        {
+            try
+            {
+                (*handle_futures)([owner = HPX_FORWARD(Owner, owner)]() {});
+                return;
+            }
+            // NOLINTNEXTLINE(bugprone-empty-catch)
+            catch (...)
+            {
+                // the notification couldn't be attached: wait here instead
+            }
+        }
+
         try
         {
             hpx::promise<void> all_ready;
             hpx::future<void> f = all_ready.get_future();
             (*handle_futures)([&all_ready]() { all_ready.set_value(); });
-            f.get();
+
+            // the waiting thread may be woken before the future is ready
+            while (!f.is_ready())
+            {
+                f.wait();
+            }
         }
         // NOLINTNEXTLINE(bugprone-empty-catch)
         catch (...)
@@ -122,6 +148,20 @@ namespace hpx::parcelset::detail {
             // the error of the serialization is passed on instead
         }
     }
+
+    // The extra data of a preprocessing archive whose serialization failed,
+    // kept until the futures registered with it are ready.
+    struct failed_preprocessing
+    {
+        explicit failed_preprocessing(serialization::output_archive& from)
+          : archive_(data_)
+        {
+            archive_.move_extra_data_from(from);
+        }
+
+        serialization::detail::preprocess_container data_;
+        serialization::output_archive archive_;
+    };
 
     template <typename Parcel, typename Handler, typename Derived>
     struct parcel_await_base : std::enable_shared_from_this<Derived>
@@ -161,9 +201,10 @@ namespace hpx::parcelset::detail {
             }
             if (error)
             {
-                // not inside the handler: waiting may continue on another
-                // OS thread, which doesn't know the handled exception
-                wait_for_registered_futures(archive_);
+                // not inside the handler, see keep_until_registered_futures_
+                // are_ready
+                keep_until_registered_futures_are_ready(
+                    archive_, this->shared_from_this());
                 std::rethrow_exception(error);
             }
 
@@ -271,8 +312,34 @@ namespace hpx::parcelset::detail {
         }
         if (error)
         {
-            // not inside the handler, see apply_single
-            wait_for_registered_futures(archive);
+            // Not inside the handler: waiting (if it is needed) may continue
+            // on another OS thread, which doesn't know the handled exception.
+            // The extra data of the archive goes to the heap if futures still
+            // refer to it.
+            auto* handle_futures = archive.try_get_extra_data<
+                serialization::detail::preprocess_futures>();
+            if (handle_futures != nullptr && handle_futures->has_futures())
+            {
+                std::shared_ptr<failed_preprocessing> failed;
+                try
+                {
+                    failed = std::make_shared<failed_preprocessing>(archive);
+                }
+                // NOLINTNEXTLINE(bugprone-empty-catch)
+                catch (...)
+                {
+                    // the extra data stays here, waiting keeps it
+                }
+                if (failed)
+                {
+                    keep_until_registered_futures_are_ready(
+                        failed->archive_, HPX_MOVE(failed));
+                }
+                else
+                {
+                    keep_until_registered_futures_are_ready(archive, nullptr);
+                }
+            }
             std::rethrow_exception(error);
         }
         if (complete)

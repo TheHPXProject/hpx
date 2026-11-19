@@ -8,6 +8,7 @@
 #pragma once
 
 #include <hpx/config.hpp>
+#include <hpx/modules/errors.hpp>
 #include <hpx/modules/serialization.hpp>
 
 #include <hpx/thrust/memory.hpp>
@@ -53,6 +54,14 @@ namespace hpx::serialization {
     // (enable_device_chunks), else of a pinned host copy. Smaller data is
     // copied into the archive. A vector of pinned host memory receives the
     // data in its own memory too.
+    //
+    // A chunk of the vector's own memory refers to it until the parcel has
+    // been sent, like the zero-copy chunks of any other container (see
+    // output_archive::save_binary_chunk): the vector must live that long.
+    // The arguments of a parcel do; a temporary vector a serialize()
+    // function creates must use memory that isn't pinned (it is sent from a
+    // host copy the parcel keeps) or be kept alive by the object it belongs
+    // to.
 
     HPX_CXX_CORE_EXPORT template <typename T, typename Alloc>
     void serialize(output_archive& ar,
@@ -161,6 +170,14 @@ namespace hpx::serialization {
 
         std::size_t size = 0;
         ar >> size;
+        if (size != 0 && ar.endianess_differs())
+        {
+            // the elements are sent as raw bytes, they can't be converted
+            HPX_THROW_EXCEPTION(hpx::error::serialization_error,
+                "hpx::serialization::serialize(device_vector)",
+                "the elements of a device_vector can't be received from an "
+                "archive with another byte order");
+        }
         v.resize(size);
         if (size == 0)
             return;

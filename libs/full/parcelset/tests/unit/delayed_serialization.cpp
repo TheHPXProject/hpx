@@ -47,6 +47,9 @@ namespace {
     std::atomic<std::size_t> buffers_alive(0);
     std::atomic<std::size_t> steps_run(0);
 
+    // values produced after their buffer was released (must not happen)
+    std::atomic<std::size_t> produced_too_late(0);
+
     // where the last load() put the values (stays valid while its vector
     // lives, also when the vector itself is moved)
     std::atomic<int const*> loaded_values(nullptr);
@@ -77,15 +80,22 @@ namespace {
     struct produced_buffer
     {
         produced_buffer(std::size_t const size, int const first)
-          : values(size)
+          : values(std::make_shared<std::vector<int>>(size))
         {
             ++buffers_created;
             ++buffers_alive;
-            int* data = values.data();
-            ready = gate.then([data, size, first](auto&&) {
-                for (std::size_t i = 0; i != size; ++i)
+            ready = gate.then([weak = std::weak_ptr<std::vector<int>>(values),
+                                  first](auto&&) {
+                // the buffer must still be kept when the values arrive
+                auto const target = weak.lock();
+                if (!target)
                 {
-                    data[i] = first + static_cast<int>(i);
+                    ++produced_too_late;
+                    return;
+                }
+                for (std::size_t i = 0; i != target->size(); ++i)
+                {
+                    (*target)[i] = first + static_cast<int>(i);
                 }
             });
         }
@@ -100,7 +110,7 @@ namespace {
             --buffers_alive;
         }
 
-        std::vector<int> values;
+        std::shared_ptr<std::vector<int>> values;
         hpx::future<void> ready;
     };
 }    // namespace
@@ -154,7 +164,7 @@ struct delayed_data
                 auto produced = std::make_shared<produced_buffer>(size, first);
                 auto state = hpx::traits::future_access<
                     hpx::future<void>>::get_shared_state(produced->ready);
-                void const* data = produced->values.data();
+                void const* data = produced->values->data();
                 keep_alive->add(
                     this, keep_alive_buffer{HPX_MOVE(produced), data, bytes});
                 if (!state->is_ready())
@@ -246,28 +256,14 @@ void check_data(delayed_data const& data)
 }
 HPX_PLAIN_ACTION(check_data)
 
-// set once the sending call has passed on the error, and whether it had
-// before the data it waited for was ready
-std::atomic<bool> send_returned(false);
-std::atomic<bool> returned_before_ready(false);
-
 // An argument that fails to serialize after the one before it has
-// registered data that is still being produced: that data is produced only
-// once the serialization has failed, and as late as possible (a call that
-// doesn't wait for it returns in the meantime).
+// registered data that is still being produced (until the test opens the
+// gate).
 struct failing_argument
 {
     template <typename Archive>
     void serialize(Archive&, unsigned)
     {
-        hpx::post([]() {
-            for (int i = 0; i != 10000 && !send_returned; ++i)
-            {
-                hpx::this_thread::yield();
-            }
-            returned_before_ready = send_returned.load();
-            open_gate();
-        });
         throw std::runtime_error("failing_argument");
     }
 };
@@ -574,8 +570,6 @@ namespace {
         std::size_t const alive_before = buffers_alive;
 
         close_gate();
-        send_returned = false;
-        returned_before_ready = false;
         bool caught = false;
         try
         {
@@ -595,13 +589,21 @@ namespace {
             caught = std::string(e.what()).find("failing_argument") !=
                 std::string::npos;
         }
-        send_returned = true;
-        HPX_TEST(caught);
 
-        // the error was passed on only once the data was ready
-        gate.wait();
-        HPX_TEST(!returned_before_ready);
+        // the error was passed on while the data was still being produced,
+        // its buffer is kept until then
+        HPX_TEST(caught);
+        HPX_TEST(!gate.is_ready());
+        HPX_TEST_EQ(buffers_alive.load(), alive_before + 1);
+
+        // and released once the data is ready
+        open_gate();
+        for (int i = 0; i != 100000 && buffers_alive != alive_before; ++i)
+        {
+            hpx::this_thread::yield();
+        }
         HPX_TEST_EQ(buffers_alive.load(), alive_before);
+        HPX_TEST_EQ(produced_too_late.load(), std::size_t(0));
     }
 }    // namespace
 
@@ -623,6 +625,7 @@ int hpx_main(hpx::program_options::variables_map&)
     step_gate = hpx::shared_future<void>();
     step_gate_promise.reset();
 
+    HPX_TEST_EQ(produced_too_late.load(), std::size_t(0));
     return hpx::finalize();
 }
 
