@@ -46,7 +46,11 @@ namespace hpx::serialization {
         // locality decides itself where it receives them, see
         // detail::allow_device_receive)
         enable_device_chunks = 0x00400000,
-        all_archive_flags = 0x006fe000    // all of the above
+        // the data of zero-copy chunks of device memory is moved by a
+        // detail::device_chunk_transport, the archive carries a marker for
+        // each zero-copy chunk and a descriptor for each of those
+        enable_device_transport = 0x00800000,
+        all_archive_flags = 0x00efe000    // all of the above
     };
 
     HPX_CXX_CORE_EXPORT constexpr archive_flags operator|(
@@ -295,6 +299,14 @@ namespace hpx::serialization {
         {
             return static_cast<bool>(
                 flags_ & archive_flags::enable_device_chunks);
+        }
+
+        // A detail::device_chunk_transport moves the data of the zero-copy
+        // chunks of device memory (an input archive has the sender's flags).
+        [[nodiscard]] constexpr bool enable_device_transport() const noexcept
+        {
+            return static_cast<bool>(
+                flags_ & archive_flags::enable_device_transport);
         }
 
         [[nodiscard]] constexpr std::uint32_t flags() const noexcept
