@@ -164,6 +164,15 @@ namespace hpx::serialization::detail {
         // aren't used anymore.
         void drop_back_reference(void const* object)
         {
+            // an object that is still being serialized is referred to by one
+            // it contains (a cycle): this is its first occurrence, the
+            // buffers that follow belong to it
+            if (std::find(enclosing_.begin(), enclosing_.end(), object) !=
+                enclosing_.end())
+            {
+                return;
+            }
+
             auto const first =
                 buffers_.begin() + static_cast<std::ptrdiff_t>(next_);
             auto last = first;
