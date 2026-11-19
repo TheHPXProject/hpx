@@ -223,7 +223,7 @@ namespace hpx::util {
             std::size_t member_alignment) const;
 
         // makes 't' the current table, with 'member' (in its block) for the
-        // id 'id'
+        // id 'id' (the current table must be the one 't' was prepared for)
         HPX_CORE_EXPORT void install_table(table* t, extra_data_id_type id,
             extra_data_member_base* member) noexcept;
 

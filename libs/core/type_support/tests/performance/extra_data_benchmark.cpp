@@ -13,6 +13,7 @@
 #include <hpx/modules/testing.hpp>
 #include <hpx/modules/type_support.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <utility>
 
@@ -41,7 +42,7 @@ struct hpx::util::extra_data_helper<item<N>>
 namespace {
 
     // the result of the lookups, so they aren't optimized away
-    int sink = 0;
+    std::size_t volatile sink = 0;
 
     template <int... Ns>
     void add_items(
@@ -53,15 +54,18 @@ namespace {
     template <int N>
     void lookups(hpx::util::extra_data const& data, std::size_t const count)
     {
-        int sum = 0;
+        // read for each lookup: the lookups can't be hoisted out of the loop
+        hpx::util::extra_data const* volatile object = &data;
+
+        std::size_t sum = 0;
         for (std::size_t i = 0; i != count; ++i)
         {
-            if (auto const* p = data.try_get<item<N>>())
+            if (auto const* p = object->try_get<item<N>>())
             {
-                sum += p->value;
+                sum += static_cast<std::size_t>(p->value);
             }
         }
-        sink += sum;
+        sink = sink + sum;
     }
 }    // namespace
 
@@ -84,13 +88,16 @@ int hpx_main(hpx::program_options::variables_map& vm)
         repeat, [&] { lookups<8>(data, count); });
 
     // a new object with one type of extra data, as an archive often has
+    std::size_t const objects = (std::max) (count / 100, std::size_t(1));
     hpx::util::perftests_report(
         "hpx::util::extra_data::get", "new object", repeat, [&] {
-            for (std::size_t i = 0; i != count / 100; ++i)
+            std::size_t sum = 0;
+            for (std::size_t i = 0; i != objects; ++i)
             {
                 hpx::util::extra_data fresh;
-                sink += fresh.get<item<0>>().value;
+                sum += static_cast<std::size_t>(fresh.get<item<0>>().value);
             }
+            sink = sink + sum;
         });
 
     hpx::util::perftests_print_times();

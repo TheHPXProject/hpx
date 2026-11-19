@@ -5,6 +5,7 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 #include <hpx/config.hpp>
+#include <hpx/assert.hpp>
 #include <hpx/type_support/extra_data.hpp>
 
 #include <atomic>
@@ -116,6 +117,10 @@ namespace hpx::util {
     void extra_data::install_table(table* t, extra_data_id_type const id,
         extra_data_member_base* member) noexcept
     {
+        // the objects are default constructed, without access to this extra
+        // data: constructing one doesn't create others
+        HPX_ASSERT(t->previous == table_);
+
         member->in_table_block = true;
         t->slots()[id] = member;
         table_ = t;

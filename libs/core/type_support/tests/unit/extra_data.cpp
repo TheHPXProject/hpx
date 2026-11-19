@@ -116,19 +116,18 @@ namespace {
 
     void test_reset()
     {
+        // added in the order of their ids reversed
         extra_data data;
-        data.get<item<0>>().value = 1;
         data.get<item<1>>().value = 2;
+        data.get<item<0>>().value = 1;
 
         reset_items.clear();
         data.reset();
         HPX_TEST_EQ(data.get<item<0>>().value, 0);
         HPX_TEST_EQ(data.get<item<1>>().value, 0);
 
-        // in the reverse order of their ids
-        HPX_TEST_EQ(reset_items.size(), std::size_t(2));
-        HPX_TEST_EQ(reset_items[0], 1);
-        HPX_TEST_EQ(reset_items[1], 0);
+        // in the reverse order of their ids (not of their creation)
+        HPX_TEST(reset_items == std::vector<int>({1, 0}));
     }
 
     void test_move()
@@ -151,8 +150,7 @@ namespace {
         // move assignment destroys the items of the target first
         destroyed.clear();
         data = std::move(moved);
-        HPX_TEST_EQ(destroyed.size(), std::size_t(1));
-        HPX_TEST_EQ(destroyed[0], 2);
+        HPX_TEST(destroyed == std::vector<int>({2}));
         HPX_TEST(data.try_get<item<0>>() == &a);
         HPX_TEST(data.try_get<item<1>>() == &b);
     }
@@ -185,10 +183,7 @@ namespace {
         }
 
         // in the reverse order of their ids
-        HPX_TEST_EQ(destroyed.size(), std::size_t(3));
-        HPX_TEST_EQ(destroyed[0], 2);
-        HPX_TEST_EQ(destroyed[1], 1);
-        HPX_TEST_EQ(destroyed[2], 0);
+        HPX_TEST(destroyed == std::vector<int>({2, 1, 0}));
     }
 }    // namespace
 
