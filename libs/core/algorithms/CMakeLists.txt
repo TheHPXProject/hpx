@@ -245,10 +245,12 @@ if(HPX_WITH_DATAPAR)
       hpx/parallel/datapar/copy_if.hpp
       hpx/parallel/datapar/elements_per_call.hpp
       hpx/parallel/datapar/equal.hpp
+      hpx/parallel/datapar/exclusive_scan.hpp
       hpx/parallel/datapar/fill.hpp
       hpx/parallel/datapar/find.hpp
       hpx/parallel/datapar/generate.hpp
       hpx/parallel/datapar/handle_local_exceptions.hpp
+      hpx/parallel/datapar/inclusive_scan.hpp
       hpx/parallel/datapar/iterator_helpers.hpp
       hpx/parallel/datapar/lexicographical_compare.hpp
       hpx/parallel/datapar/loop.hpp
