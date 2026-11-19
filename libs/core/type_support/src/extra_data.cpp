@@ -10,6 +10,7 @@
 
 #include <atomic>
 #include <cstddef>
+#include <cstring>
 #include <new>
 #include <utility>
 
@@ -37,9 +38,9 @@ namespace hpx::util {
 
         // The smallest number of slots of a table: the ids are assigned when
         // a type is used first, a table created early would otherwise grow
-        // when other types are used later. Covers the types of extra data of
-        // HPX and a few of the application.
-        constexpr std::size_t minimum_table_size = 16;
+        // when other types are used later. Covers the types of extra data
+        // HPX uses at the same time.
+        constexpr std::size_t minimum_table_size = 8;
 
         // the aligned operator new only for over-aligned objects: it can be
         // considerably slower (e.g. with MSVC)
@@ -106,20 +107,17 @@ namespace hpx::util {
         void* block = allocate_block(member_offset + member_size, alignment);
 
         table* t = ::new (block) table{size, alignment, table_};
+        // the objects of the current table, the other slots are empty (all
+        // bits zero is a null pointer on all supported platforms)
         extra_data_member_base** slots = t->slots();
-        std::size_t i = 0;
-        if (table_ != nullptr)
+        std::size_t const copied = table_ != nullptr ? table_->size : 0;
+        if (copied != 0)
         {
-            extra_data_member_base** old_slots = table_->slots();
-            for (/**/; i != table_->size; ++i)
-            {
-                slots[i] = old_slots[i];
-            }
+            std::memcpy(slots, table_->slots(),
+                copied * sizeof(extra_data_member_base*));
         }
-        for (/**/; i != size; ++i)
-        {
-            slots[i] = nullptr;
-        }
+        std::memset(slots + copied, 0,
+            (size - copied) * sizeof(extra_data_member_base*));
 
         return new_table{t, static_cast<char*>(block) + member_offset};
     }
