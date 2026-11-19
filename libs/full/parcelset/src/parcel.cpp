@@ -543,12 +543,16 @@ namespace hpx::parcelset::detail {
 
     void parcel::take_post_receive_actions(serialization::input_archive& ar)
     {
+        // also without steps of its own: the parcel may use data that the
+        // steps of an earlier parcel in the same archive complete
         auto* actions = ar.try_get_extra_data<
             serialization::detail::post_receive_actions>();
-        if (actions && !actions->empty())
+        if (actions != nullptr)
         {
             HPX_ASSERT(post_receive_actions_.empty());
-            post_receive_actions_ = actions->move_actions();
+            auto steps = actions->take_parcel_steps();
+            post_receive_actions_ = HPX_MOVE(steps.actions);
+            receive_completion_ = HPX_MOVE(steps.completion);
         }
     }
 
@@ -556,31 +560,23 @@ namespace hpx::parcelset::detail {
     {
         auto actions = HPX_MOVE(post_receive_actions_);
         post_receive_actions_.clear();
-        if (actions.empty())
+        auto completion = HPX_MOVE(receive_completion_);
+        if (!completion)
         {
+            HPX_ASSERT(actions.empty());
             f();
             return;
         }
 
-        // the last step to finish calls f
-        struct pending_steps
-        {
-            std::atomic<std::size_t> count;
-            hpx::move_only_function<void()> f;
-        };
-
-        auto pending = std::make_shared<pending_steps>();
-        pending->count = actions.size();
-        pending->f = HPX_MOVE(f);
+        // f is called once the steps of this parcel and of the parcels
+        // before it have finished, by the thread that finished the last one
+        auto shared_f =
+            std::make_shared<hpx::move_only_function<void()>>(HPX_MOVE(f));
+        completion->when_done([shared_f]() { (*shared_f)(); });
 
         for (auto& action : actions)
         {
-            action([pending]() {
-                if (--pending->count == 0)
-                {
-                    pending->f();
-                }
-            });
+            action([completion]() { completion->step_done(); });
         }
     }
 
