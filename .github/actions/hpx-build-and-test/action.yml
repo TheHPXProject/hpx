@@ -147,7 +147,15 @@ runs:
           jobs="$(getconf _NPROCESSORS_ONLN)"
         fi
 
-        ninja -j"$jobs" -k 0 "${targets[@]}"
+        # Retry a failed build one compile at a time: with -k 0 everything else
+        # is built already, so this only recompiles the failed objects. This
+        # gets past compilers running out of memory while compiling several
+        # large translation units at once (MSVC C1060); a real compile error
+        # fails again.
+        if ! ninja -j"$jobs" -k 0 "${targets[@]}"; then
+          echo "::warning::Build failed, retrying the failed targets one at a time"
+          ninja -j1 -k 0 "${targets[@]}"
+        fi
 
     - name: Run ctest
       if: inputs.run-tests == 'true'
