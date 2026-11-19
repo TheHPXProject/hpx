@@ -30,6 +30,7 @@
 #include <hpx/parcelset/connection_cache.hpp>
 #include <hpx/parcelset/detail/call_for_each.hpp>
 #include <hpx/parcelset/detail/parcel_await.hpp>
+#include <hpx/parcelset/device_conduit.hpp>
 #include <hpx/parcelset/encode_parcels.hpp>
 
 #include <atomic>
@@ -342,8 +343,11 @@ namespace hpx::parcelset {
             // needs to be kept alive as long as there are futures not ready
             // or GIDs to be split. This is necessary to preserve the identity
             // of the 'this' pointer.
+            // the same flags as for the real serialization (encode_parcels)
+            std::uint32_t const flags = archive_flags_ |
+                detail::device_conduit_flags(p.destination_locality_id());
             detail::parcel_await_apply(
-                HPX_MOVE(p), HPX_MOVE(f), archive_flags_,
+                HPX_MOVE(p), HPX_MOVE(f), flags,
                 [this, dest](parcel&& p, write_handler_type&& f) {
                     if (connection_handler_traits<
                             ConnectionHandler>::send_immediate_parcels::value &&
@@ -402,8 +406,12 @@ namespace hpx::parcelset {
             // needs to be kept alive as long as there are futures not ready
             // or GIDs to be split. This is necessary to preserve the identity
             // of the 'this' pointer.
+            // the same flags as for the real serialization (encode_parcels)
+            std::uint32_t const flags = archive_flags_ |
+                detail::device_conduit_flags(
+                    parcels[0].destination_locality_id());
             detail::parcels_await_apply(
-                HPX_MOVE(parcels), HPX_MOVE(handlers), archive_flags_,
+                HPX_MOVE(parcels), HPX_MOVE(handlers), flags,
                 [this, dest](std::vector<parcel>&& parcels,
                     std::vector<write_handler_type>&& handlers) {
                     if (connection_handler_traits<
