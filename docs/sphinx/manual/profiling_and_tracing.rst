@@ -70,16 +70,15 @@ fiber, so you can follow a task across worker threads.
 Building |hpx| with Tracy
 -------------------------
 
-Configure |hpx| with :option:`HPX_WITH_TRACY`\ ``=ON``. To get readable task
-names, also set ``HPX_WITH_THREAD_DEBUG_INFO=ON`` (see
+Configure |hpx| with :option:`HPX_WITH_TRACY`\ ``=ON``. A Tracy build always
+stores thread descriptions, so task names need no further CMake options (see
 :ref:`tracy_task_names`):
 
 .. code-block:: shell-session
 
    $ cmake -S hpx -B build -G Ninja \
        -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-       -DHPX_WITH_TRACY=ON \
-       -DHPX_WITH_THREAD_DEBUG_INFO=ON
+       -DHPX_WITH_TRACY=ON
    $ cmake --build build
 
 You do not need to install Tracy first. At configure time, CMake downloads the
@@ -141,11 +140,12 @@ need to install first. The release page also has prebuilt profiler binaries.
 Naming your tasks
 -----------------
 
-Tracy labels each task with its |hpx| thread description. |hpx| stores these
-descriptions only when it is built with ``HPX_WITH_THREAD_DEBUG_INFO=ON``.
-Without this option every task is called ``<unknown>``. The option also turns
-on other per-task debug data (target address, parent reference, thread phase),
-which adds work to every task.
+Tracy labels each task with its |hpx| thread description. A Tracy build always
+stores these descriptions, as ITT and APEX builds do, so you do not need
+``HPX_WITH_THREAD_DEBUG_INFO`` for task names. That option adds other per-task
+debug data (target address, parent reference, thread phase) and is needed only
+for those, for example to see the thread phase as the zone value. Storing the
+descriptions adds some work to every task, also when no profiler is connected.
 
 When descriptions are stored, a task gets its name from:
 
@@ -239,8 +239,9 @@ executors, and ``send_parcel`` / ``recv_parcel`` / ``parcel_scheduled`` in the
 parcel layer.
 
 The zones that |hpx| opens do not record call stacks. For task zones the call
-stack would show the same scheduler frames for every task. Messages do record
-call stacks (see `Messages`_).
+stack would show the same scheduler frames for every task. Messages record
+call stacks only if :option:`HPX_WITH_TRACING_MESSAGE_CALLSTACKS` is ``ON``
+(see `Messages`_).
 
 Task fibers
 ~~~~~~~~~~~
@@ -260,10 +261,12 @@ Messages
 
 |hpx| sends short text messages for important events. They appear as marks on
 the timeline and in the *Messages* window of the profiler, where you can search
-them. On platforms where Tracy can collect call stacks, each message also
-records the call stack where it was sent, up to 10 frames deep. In the
-messages, ``<id>`` is the address of the |hpx| thread and ``W<n>`` or ``W#<n>``
-is the number of a worker thread.
+them. With :option:`HPX_WITH_TRACING_MESSAGE_CALLSTACKS` set to ``ON``, each
+message also records the call stack where it was sent, up to 10 frames deep,
+on platforms where Tracy can collect call stacks. The option is ``OFF`` by
+default, because a call stack makes every message slower. In the messages,
+``<id>`` is the address of the |hpx| thread and ``W<n>`` or ``W#<n>`` is the
+number of a worker thread.
 
 .. list-table::
    :header-rows: 1
@@ -423,9 +426,11 @@ Reducing the overhead
 
 When no profiler is connected, most tracing hooks only check whether a
 profiler is connected and return. While a profiler is connected,
-|hpx| sends a few messages for every task, and each message records a call
-stack. For programs with many small tasks this can slow down the run. There are
-two ways to reduce it.
+|hpx| sends a few messages for every task. For programs with many small tasks
+this can slow down the run. If you turned on
+:option:`HPX_WITH_TRACING_MESSAGE_CALLSTACKS`, turn it off again, because a
+call stack makes every message slower. Beyond that, there are two ways to
+reduce the cost.
 
 Event classes can be compiled out one by one:
 :option:`HPX_WITH_TRACING_LIFECYCLE_EVENTS`,
@@ -534,9 +539,9 @@ installation of the ITT API works. |vtune| also ships the ITT API. To use that
 copy, set ``Amplifier_ROOT`` to the folder of the |vtune| installation that
 contains ``include/ittnotify.h``.
 
-The ITT backend always stores thread descriptions, so you do not need
-``HPX_WITH_THREAD_DEBUG_INFO`` to get task names. Name your tasks as described
-in :ref:`tracy_task_names`.
+Like the Tracy backend, the ITT backend always stores thread descriptions, so
+you do not need ``HPX_WITH_THREAD_DEBUG_INFO`` to get task names. Name your
+tasks as described in :ref:`tracy_task_names`.
 
 Enabling the events at runtime
 ------------------------------

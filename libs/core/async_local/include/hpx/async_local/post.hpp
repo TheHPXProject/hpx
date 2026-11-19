@@ -9,3 +9,5 @@
 #include <hpx/config.hpp>
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/executors.hpp>
+
+#include <hpx/async_local/async_function_pointer.hpp>

@@ -8,6 +8,7 @@ set(tests
     boost_iterator_categories
     counting_iterator
     is_iterator
+    iterator_dereference_task_size
     iterator_adaptor
     iterator_facade
     range

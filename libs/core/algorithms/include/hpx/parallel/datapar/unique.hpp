@@ -35,26 +35,6 @@ namespace hpx::parallel::detail {
                 HPX_INVOKE(pred, HPX_INVOKE(proj, v), HPX_INVOKE(proj, v)));
         };
 
-    HPX_CXX_CORE_EXPORT template <typename Mask>
-    HPX_HOST_DEVICE HPX_FORCEINLINE bool mask_lane_is_true(
-        Mask const& msk, std::size_t i) noexcept
-    {
-        if constexpr (requires { msk.get(i); })
-        {
-            return static_cast<bool>(msk.get(i));
-        }
-        else if constexpr (requires { msk[i]; })
-        {
-            return static_cast<bool>(msk[i]);
-        }
-        else
-        {
-            static_assert(sizeof(Mask) == 0,
-                "mask_lane_is_true: unexpected mask type with no lane access");
-            return false;
-        }
-    }
-
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT template <typename ExPolicy>
     struct datapar_unique

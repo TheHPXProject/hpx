@@ -7,8 +7,11 @@
 
 set(tests
     execution_agent
+    scheduling_policy_idle_step
     set_thread_affinity
+    set_thread_state_timed_self
     sized_function
+    stack_sized_function
     task_size_annotations
     task_size_hint
     thread_exit_callbacks

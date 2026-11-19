@@ -6,7 +6,8 @@
 
 #pragma once
 
-#include <cuda_runtime.h>
+#include <hpx/config.hpp>
+#include <hpx/modules/async_cuda.hpp>    // CUDA or HIP runtime
 
 #include <thrust/adjacent_difference.h>
 #include <thrust/copy.h>
@@ -30,7 +31,11 @@
 #include <thrust/set_operations.h>
 #include <thrust/sort.h>
 #include <thrust/swap.h>
+#if defined(HPX_HAVE_HIP)
+#include <thrust/system/hip/execution_policy.h>
+#else
 #include <thrust/system/cuda/execution_policy.h>
+#endif
 #include <thrust/transform.h>
 #include <thrust/transform_reduce.h>
 #include <thrust/transform_scan.h>

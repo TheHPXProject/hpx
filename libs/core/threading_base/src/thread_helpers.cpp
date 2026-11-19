@@ -36,6 +36,7 @@
 
 #include <atomic>
 #include <cstddef>
+#include <cstdint>
 #include <limits>
 #include <memory>
 #include <utility>
@@ -641,12 +642,22 @@ namespace hpx::this_thread {
             hpx::tracing::fiber_suspend_region tracy_suspend(
                 get_suspend_reason(description));
 
+            // The timer belongs to the suspension below, which follows right
+            // after it is set: switching from active to suspended increments
+            // the tag of the thread's state. The timeout then wakes the
+            // thread only while it is still in that suspension.
+            std::int64_t const suspension_tag =
+                thrd_data->get_state().tag() + 1;
+
             std::atomic<bool> timer_started(false);
             threads::thread_id_ref_type const timer_id =
-                threads::set_thread_state(id, abs_time, &timer_started,
+                threads::detail::set_thread_state_timed(
+                    thrd_data->get_scheduler_base(), abs_time, id,
                     threads::thread_schedule_state::pending,
                     threads::thread_restart_state::timeout,
-                    threads::thread_priority::boost, true, ec);
+                    threads::thread_priority::boost,
+                    threads::thread_schedule_hint(), &timer_started, true,
+                    suspension_tag, ec);
             if (ec)
                 return threads::thread_restart_state::unknown;
 

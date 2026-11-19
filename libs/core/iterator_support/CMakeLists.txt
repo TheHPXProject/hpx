@@ -10,6 +10,7 @@ set(iterator_support_headers
     hpx/iterator_support/traits/is_iterator.hpp
     hpx/iterator_support/traits/is_range.hpp
     hpx/iterator_support/traits/is_segmented_iterator.hpp
+    hpx/iterator_support/traits/iterator_dereference_task_size.hpp
     hpx/iterator_support/boost_iterator_categories.hpp
     hpx/iterator_support/counting_iterator.hpp
     hpx/iterator_support/counting_shape.hpp
@@ -47,7 +48,13 @@ add_hpx_module(
   SOURCES ${iterator_support_sources}
   HEADERS ${iterator_support_headers}
   COMPAT_HEADERS ${iterator_support_compat_headers}
-  MODULE_DEPENDENCIES hpx_concepts hpx_config hpx_datastructures hpx_functional
-                      hpx_serialization hpx_type_support
+  MODULE_DEPENDENCIES
+    hpx_concepts
+    hpx_config
+    hpx_datastructures
+    hpx_functional
+    hpx_serialization
+    hpx_thread_support
+    hpx_type_support
   CMAKE_SUBDIRS examples tests
 )

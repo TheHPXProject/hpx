@@ -264,7 +264,7 @@ namespace hpx { namespace collectives {
     ///             operation completes before this function returns.
     ///
     template <typename T, typename F>
-    decltype(auto) exclusive_scan(hpx::launch::sync_policy, communicator comm,
+    std::decay_t<T> exclusive_scan(hpx::launch::sync_policy, communicator comm,
         T&& result, F&& op, generation_arg generation,
         this_site_arg this_site = this_site_arg());
 }}    // namespace hpx::collectives

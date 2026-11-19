@@ -12,6 +12,7 @@
 #include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/iterator_support.hpp>
+#include <hpx/modules/thread_support.hpp>
 #include <hpx/modules/util.hpp>
 
 #include <algorithm>
@@ -93,6 +94,11 @@ namespace hpx::parallel::util::detail {
             chunk_size_iterator_category_t<IterOrR>,
             hpx::tuple<IterOrR, std::size_t>>
     {
+        // A chunk is computed from the current position and the chunk size,
+        // dereferencing the iterator is a nano task.
+        static constexpr hpx::threads::task_size dereference_task_size =
+            hpx::threads::task_size::nano;
+
     private:
         using base_type = hpx::util::iterator_facade<chunk_size_iterator,
             hpx::tuple<IterOrR, std::size_t>,
@@ -334,6 +340,11 @@ namespace hpx::parallel::util::detail {
             chunk_size_iterator_category_t<IterOrR>,
             hpx::tuple<IterOrR, std::size_t, std::size_t>>
     {
+        // A chunk is computed from the current position and the chunk size,
+        // dereferencing the iterator is a nano task.
+        static constexpr hpx::threads::task_size dereference_task_size =
+            hpx::threads::task_size::nano;
+
     private:
         using base_type = hpx::util::iterator_facade<chunk_size_idx_iterator,
             hpx::tuple<IterOrR, std::size_t, std::size_t>,

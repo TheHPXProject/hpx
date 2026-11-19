@@ -125,3 +125,26 @@ if(HPX_WITH_NETWORKING AND HPX_WITH_PARCELPORT_TCP)
     tests.unit.modules.runtime_components.launch_process launched_process_test
   )
 endif()
+
+if(HPX_WITH_COMPILE_ONLY_TESTS)
+  set(compile_tests component_registered_elsewhere)
+
+  if(HPX_WITH_FAIL_COMPILE_TESTS)
+    set(fail_compile_component_registered_elsewhere_FLAGS FAILURE_EXPECTED)
+    set(compile_tests ${compile_tests}
+                      fail_compile_component_registered_elsewhere
+    )
+  endif()
+
+  foreach(compile_test ${compile_tests})
+    set(sources ${compile_test}.cpp)
+
+    source_group("Source Files" FILES ${sources})
+
+    add_hpx_unit_compile_test(
+      "modules.runtime_components" ${compile_test}
+      SOURCES ${sources} ${${compile_test}_FLAGS}
+      FOLDER "Tests/Unit/Modules/Full/Components/CompileOnly"
+    )
+  endforeach()
+endif()

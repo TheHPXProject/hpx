@@ -58,7 +58,10 @@ namespace hpx::agas::server {
 
     void component_namespace::unregister_server_instance(error_code& ec)
     {
-        agas::unregister_name(launch::sync, instance_name_, ec);
+        if (!instance_name_.empty())
+        {
+            agas::unregister_name(launch::sync, instance_name_, ec);
+        }
         this->base_type::finalize();
     }
 

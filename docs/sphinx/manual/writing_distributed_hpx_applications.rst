@@ -1030,14 +1030,22 @@ reimplemented:
 * ``begin``, ``cbegin``, ``end``, ``cend``
 * ``size``
 
+``partitioned_vector`` and ``coarray`` for ``double``, ``int``, ``long long``
+and ``std::string`` are predefined by the |hpx| library. Any other element type
+has to be registered with ``HPX_REGISTER_PARTITIONED_VECTOR`` (or
+``HPX_REGISTER_COARRAY``) in exactly one module of the application. The
+predefined types have to be registered only if |hpx| is linked statically;
+registering them again when |hpx| is linked dynamically is a compile time error.
+
 An example of how to use the ``partitioned_vector`` container would be::
 
     #include <hpx/include/partitioned_vector.hpp>
 
-    // The following code generates all necessary boiler plate to enable the
-    // remote creation of 'partitioned_vector' segments
-    //
+    // partitioned_vector<double> is predefined by HPX, it has to be registered
+    // only if HPX is linked statically
+    #if defined(HPX_HAVE_STATIC_LINKING)
     HPX_REGISTER_PARTITIONED_VECTOR(double);
+    #endif
 
     // By default, the number of segments is equal to the current number of
     // localities
@@ -1051,10 +1059,11 @@ with distribution policies would be::
     #include <hpx/include/partitioned_vector.hpp>
     #include <hpx/modules/runtime_distributed.hpp>
 
-    // The following code generates all necessary boiler plate to enable the
-    // remote creation of 'partitioned_vector' segments
-    //
+    // partitioned_vector<double> is predefined by HPX, it has to be registered
+    // only if HPX is linked statically
+    #if defined(HPX_HAVE_STATIC_LINKING)
     HPX_REGISTER_PARTITIONED_VECTOR(double);
+    #endif
 
     std::size_t num_segments = 10;
     std::vector<hpx::id_type> locs = hpx::find_all_localities();
@@ -1075,10 +1084,11 @@ to the segmented container::
 
     #include <hpx/include/partitioned_vector.hpp>
 
-    // The following code generates all necessary boiler plate to enable the
-    // remote creation of 'partitioned_vector' segments
-    //
+    // partitioned_vector<double> is predefined by HPX, it has to be registered
+    // only if HPX is linked statically
+    #if defined(HPX_HAVE_STATIC_LINKING)
     HPX_REGISTER_PARTITIONED_VECTOR(double);
+    #endif
 
     hpx::future<void> fserver = hpx::async(
       [](){
@@ -1165,10 +1175,11 @@ local segment (by providing a per-segment iterator as a parameter)::
 
     #include <hpx/include/partitioned_vector.hpp>
 
-    // The following code generates all necessary boiler plate to enable the
-    // remote creation of 'partitioned_vector' segments
-    //
+    // partitioned_vector<double> is predefined by HPX, it has to be registered
+    // only if HPX is linked statically
+    #if defined(HPX_HAVE_STATIC_LINKING)
     HPX_REGISTER_PARTITIONED_VECTOR(double);
+    #endif
 
     using iterator = hpx::partitioned_vector<T>::iterator;
     using traits   = hpx::traits::segmented_iterator_traits<iterator>;
@@ -1358,10 +1369,11 @@ By default, the ``partitioned_vector`` class integrates 1-D views of its segment
 
     #include <hpx/include/partitioned_vector.hpp>
 
-    // The following code generates all necessary boiler plate to enable the
-    // remote creation of 'partitioned_vector' segments
-    //
+    // partitioned_vector<double> is predefined by HPX, it has to be registered
+    // only if HPX is linked statically
+    #if defined(HPX_HAVE_STATIC_LINKING)
     HPX_REGISTER_PARTITIONED_VECTOR(double);
+    #endif
 
     using iterator = hpx::partitioned_vector<double>::iterator;
     using traits   = hpx::traits::segmented_iterator_traits<iterator>;
@@ -1398,10 +1410,11 @@ Here are some examples of using subscripts in the 2-D view case::
     #include <hpx/components/containers/partitioned_vector/partitioned_vector_view.hpp>
     #include <hpx/include/partitioned_vector.hpp>
 
-    // The following code generates all necessary boiler plate to enable the
-    // remote creation of 'partitioned_vector' segments
-    //
+    // partitioned_vector<double> is predefined by HPX, it has to be registered
+    // only if HPX is linked statically
+    #if defined(HPX_HAVE_STATIC_LINKING)
     HPX_REGISTER_PARTITIONED_VECTOR(double);
+    #endif
 
     using Vec = hpx::partitioned_vector<double>;
     using View_2D = hpx::partitioned_vector_view<double,2>;
@@ -1437,10 +1450,11 @@ Here are some examples of using iterators in the 3-D view case::
     #include <hpx/components/containers/partitioned_vector/partitioned_vector_view.hpp>
     #include <hpx/include/partitioned_vector.hpp>
 
-    // The following code generates all necessary boiler plate to enable the
-    // remote creation of 'partitioned_vector' segments
-    //
+    // partitioned_vector<int> is predefined by HPX, it has to be registered
+    // only if HPX is linked statically
+    #if defined(HPX_HAVE_STATIC_LINKING)
     HPX_REGISTER_PARTITIONED_VECTOR(int);
+    #endif
 
     using Vec = hpx::partitioned_vector<int>;
     using View_3D = hpx::partitioned_vector_view<int,3>;
@@ -1602,10 +1616,11 @@ operations::
     #include <hpx/components/containers/coarray/coarray.hpp>
     #include <hpx/modules/collectives.hpp>
 
-    // The following code generates all necessary boiler plate to enable the
-    // co-creation of 'coarray'
-    //
+    // coarray<double> is predefined by HPX, it has to be registered only if
+    // HPX is linked statically
+    #if defined(HPX_HAVE_STATIC_LINKING)
     HPX_REGISTER_COARRAY(double);
+    #endif
 
     // Parallel section (suppose 'block' an spmd_block instance)
     {
@@ -1670,10 +1685,11 @@ Here is an example of using local subscripts::
     #include <hpx/components/containers/coarray/coarray.hpp>
     #include <hpx/modules/collectives.hpp>
 
-    // The following code generates all necessary boiler plate to enable the
-    // co-creation of 'coarray'
-    //
+    // coarray<double> is predefined by HPX, it has to be registered only if
+    // HPX is linked statically
+    #if defined(HPX_HAVE_STATIC_LINKING)
     HPX_REGISTER_COARRAY(double);
+    #endif
 
     // Parallel section (suppose 'block' an spmd_block instance)
     {

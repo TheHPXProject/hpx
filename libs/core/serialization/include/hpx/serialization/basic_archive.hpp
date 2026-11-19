@@ -335,6 +335,13 @@ namespace hpx::serialization {
             return extra_data_.try_get<T>();
         }
 
+        /// Take over the extra data of another archive. The data items are
+        /// allocated separately, so they keep their addresses.
+        void move_extra_data_from(basic_archive& rhs) noexcept
+        {
+            extra_data_ = HPX_MOVE(rhs.extra_data_);
+        }
+
     protected:
         std::uint32_t flags_;
         std::size_t size_;

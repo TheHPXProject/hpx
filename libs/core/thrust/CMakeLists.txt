@@ -4,11 +4,17 @@
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-if(NOT (HPX_WITH_CUDA AND HPX_WITH_THRUST))
+if(NOT ((HPX_WITH_CUDA OR HPX_WITH_HIP) AND HPX_WITH_THRUST))
   return()
 endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+
+# with HIP, Thrust is rocThrust (found in HPX_SetupHIP)
+set(thrust_dependencies)
+if(HPX_WITH_HIP)
+  set(thrust_dependencies roc::rocthrust)
+endif()
 
 set(thrust_headers
     hpx/thrust/policy.hpp hpx/thrust/thrust_headers.hpp
@@ -30,6 +36,7 @@ add_hpx_module(
   HEADERS ${thrust_headers}
   EXCLUDE_FROM_GLOBAL_HEADER "hpx/thrust/thrust_headers.hpp"
   COMPAT_HEADERS ${thrust_compat_headers}
+  DEPENDENCIES ${thrust_dependencies}
   MODULE_DEPENDENCIES
     hpx_algorithms
     hpx_async_cuda

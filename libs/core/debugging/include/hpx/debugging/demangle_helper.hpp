@@ -97,6 +97,7 @@ namespace hpx::util::debug {
         return "void";
     }
 
+#if !defined(DOXYGEN)
     HPX_CXX_CORE_EXPORT template <typename T, typename... Args>
         requires(sizeof...(Args) != 0)
     std::string print_type(char const* delim = "")
@@ -104,4 +105,5 @@ namespace hpx::util::debug {
         std::string const temp = type_id<T>();
         return temp + delim + print_type<Args...>(delim);
     }
+#endif
 }    // namespace hpx::util::debug

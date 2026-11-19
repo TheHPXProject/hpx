@@ -306,12 +306,11 @@ namespace hpx {
             is_component_member_function_v<decltype(F)>;
 
         // clients refer to components, thus they can't be the target of plain
-        // actions
+        // actions. The local hpx::async<&f> uses the same is_remote_target.
         template <auto F, typename Target>
         inline constexpr bool is_action_function_target_v =
-            std::is_same_v<Target, hpx::id_type> ||
-            hpx::traits::is_distribution_policy_v<Target> ||
-            (hpx::traits::is_client_v<Target> &&
+            hpx::traits::is_remote_target_v<Target> &&
+            (!hpx::traits::is_client_v<Target> ||
                 is_component_member_function_v<decltype(F)>);
     }    // namespace detail
     /// \endcond

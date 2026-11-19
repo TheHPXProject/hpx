@@ -281,7 +281,10 @@ namespace hpx::threads::policies {
             std::uint16_t num_thread_;
             // preserve queue precedence when stored priority differs
             bool from_high_priority_queue_;
-            hpx::detail::small_vector<thread_id_ref_type, 1> tasks_;
+
+            static constexpr std::size_t max_inline_tasks = 32;
+            hpx::detail::small_vector<thread_id_ref_type, max_inline_tasks>
+                tasks_;
         };
 
         using workrequesting_task_channel =
@@ -1015,20 +1018,19 @@ namespace hpx::threads::policies {
             return false;
         }
 
-        // decline_or_forward_one_steal_requests is only called when a worker
-        // has nothing else to do but to relay steal requests, which means the
-        // worker is idle.
-        void decline_or_forward_one_steal_requests(scheduler_data& d) noexcept
+        // decline_or_forward_all_steal_requests is called when a worker
+        // is idle, or when stealing is disabled, to relay steal requests.
+        void decline_or_forward_all_steal_requests(scheduler_data& d) noexcept
         {
-            if (!d.requests_->is_empty())
+            steal_request req;
+            while (try_receiving_steal_request(d, req))
             {
-                steal_request req;
-                if (try_receiving_steal_request(d, req))
-                {
 #if defined(HPX_HAVE_WORKREQUESTING_STEAL_STATISTICS)
-                    ++d.steal_requests_received_;
+                ++d.steal_requests_received_;
 #endif
-                    decline_or_forward_steal_request(d, req);
+                if (decline_or_forward_steal_request(d, req))
+                {
+                    break;
                 }
             }
         }
@@ -1263,7 +1265,7 @@ namespace hpx::threads::policies {
             }
             else
             {
-                decline_or_forward_one_steal_requests(d);
+                decline_or_forward_all_steal_requests(d);
             }
         }
 
@@ -1312,7 +1314,7 @@ namespace hpx::threads::policies {
                     }
                     else
                     {
-                        decline_or_forward_one_steal_requests(d);
+                        decline_or_forward_all_steal_requests(d);
                     }
                 }
 
@@ -2171,7 +2173,7 @@ namespace hpx::threads::policies {
                     return false;
                 }
 
-                decline_or_forward_one_steal_requests(d);
+                decline_or_forward_all_steal_requests(d);
                 return true;
             }
 
@@ -2215,7 +2217,7 @@ namespace hpx::threads::policies {
             // pending steal requests, if there are any
             if (HPX_UNLIKELY(!d.requests_->is_empty()))
             {
-                decline_or_forward_one_steal_requests(d);
+                decline_or_forward_all_steal_requests(d);
             }
 
 #ifdef HPX_HAVE_THREAD_MINIMAL_DEADLOCK_DETECTION

@@ -80,8 +80,7 @@ namespace hpx { namespace ranges {
     /// \a inclusive_scan includes the ith input element in the ith sum.
     ///
     template <typename InIter, typename Sent, typename OutIter,
-        typename Op = std::plus<typename
-        std::iterator_traits<InIter>::value_type>>
+        typename Op = std::plus<>>
     inclusive_scan_result<InIter, OutIter>
     inclusive_scan(InIter first, Sent last, OutIter dest, Op&& op);
 
@@ -164,8 +163,7 @@ namespace hpx { namespace ranges {
     /// \a inclusive_scan includes the ith input element in the ith sum.
     ///
     template <typename ExPolicy, typename FwdIter1, typename Sent,
-        typename FwdIter2, typename Op = std::plus<typename
-        std::iterator_traits<FwdIter1>::value_type>>
+        typename FwdIter2, typename Op = std::plus<>>
     typename parallel::util::detail::algorithm_result<ExPolicy,
         inclusive_scan_result<FwdIter1, FwdIter2>>::type
     inclusive_scan(ExPolicy&& policy, FwdIter1 first, Sent last,
@@ -230,7 +228,7 @@ namespace hpx { namespace ranges {
     /// \a inclusive_scan includes the ith input element in the ith sum.
     ///
     template <typename Rng, typename O,
-        typename Op = std::plus<typename hpx::traits::range_traits<Rng>::value_type>>
+        typename Op = std::plus<>>
     inclusive_scan_result<std::ranges::iterator_t<Rng>, O>
     inclusive_scan(Rng&& rng, O dest, Op&& op);
 
@@ -312,7 +310,7 @@ namespace hpx { namespace ranges {
     /// \a inclusive_scan includes the ith input element in the ith sum.
     ///
     template <typename ExPolicy, typename Rng,  typename O,
-        typename Op = std::plus<typename hpx::traits::range_traits<Rng>::value_type>>
+        typename Op = std::plus<>>
     typename parallel::util::detail::algorithm_result<ExPolicy,
         inclusive_scan_result<std::ranges::iterator_t<Rng>, O>>
     inclusive_scan(ExPolicy&& policy, Rng&& rng, O dest, Op&& op);
@@ -712,10 +710,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        static typename parallel::util::detail::algorithm_result<ExPolicy,
-            inclusive_scan_result<FwdIter1, FwdIter2>>::type
-        invoke_default(ExPolicy&& policy, FwdIter1 first, Sent last,
-            FwdIter2 dest, Op op = Op())
+        static decltype(auto) invoke_default(ExPolicy&& policy, FwdIter1 first,
+            Sent last, FwdIter2 dest, Op op = Op())
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Requires at least forward iterator.");
@@ -767,9 +763,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        static parallel::util::detail::algorithm_result_t<ExPolicy,
-            inclusive_scan_result<std::ranges::iterator_t<Rng>, O>>
-        invoke_default(ExPolicy&& policy, Rng&& rng, O dest, Op op = Op())
+        static decltype(auto) invoke_default(
+            ExPolicy&& policy, Rng&& rng, O dest, Op op = Op())
         {
             using iterator_type =
                 typename hpx::traits::range_traits<Rng>::iterator_type;
@@ -829,10 +824,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        static parallel::util::detail::algorithm_result_t<ExPolicy,
-            inclusive_scan_result<FwdIter1, FwdIter2>>
-        invoke_default(ExPolicy&& policy, FwdIter1 first, Sent last,
-            FwdIter2 dest, Op op, T init)
+        static decltype(auto) invoke_default(ExPolicy&& policy, FwdIter1 first,
+            Sent last, FwdIter2 dest, Op op, T init)
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Requires at least forward iterator.");
@@ -888,9 +881,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        static parallel::util::detail::algorithm_result_t<ExPolicy,
-            inclusive_scan_result<std::ranges::iterator_t<Rng>, O>>
-        invoke_default(ExPolicy&& policy, Rng&& rng, O dest, Op op, T init)
+        static decltype(auto) invoke_default(
+            ExPolicy&& policy, Rng&& rng, O dest, Op op, T init)
         {
             using iterator_type =
                 typename hpx::traits::range_traits<Rng>::iterator_type;

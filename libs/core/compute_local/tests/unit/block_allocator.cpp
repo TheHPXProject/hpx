@@ -11,6 +11,8 @@
 #include <atomic>
 #include <cstddef>
 #include <iostream>
+#include <limits>
+#include <new>
 #include <random>
 #include <string>
 #include <vector>
@@ -71,6 +73,13 @@ struct test
     }
 };
 
+struct alignas(64) over_aligned_test
+{
+    int a;
+    double b;
+    char pad[48];
+};
+
 ///////////////////////////////////////////////////////////////////////////////
 int hpx_main(hpx::program_options::variables_map& vm)
 {
@@ -95,6 +104,46 @@ int hpx_main(hpx::program_options::variables_map& vm)
     }
 
     test_bulk_allocator<int>(0);
+
+    {
+        hpx::compute::host::block_allocator<int> alloc;
+        constexpr std::size_t expected_max =
+            (std::numeric_limits<std::size_t>::max)() / sizeof(int);
+        HPX_TEST_EQ(alloc.max_size(), expected_max);
+
+        bool caught = false;
+        try
+        {
+            alloc.allocate(alloc.max_size() + 1);
+        }
+        catch (std::bad_array_new_length const&)
+        {
+            caught = true;
+        }
+        HPX_TEST(caught);
+    }
+
+    {
+        std::size_t count = dis(gen);
+        test_bulk_allocator<over_aligned_test>(count);
+
+        hpx::compute::host::block_allocator<over_aligned_test> alloc;
+        constexpr std::size_t expected_max =
+            (std::numeric_limits<std::size_t>::max)() /
+            sizeof(over_aligned_test);
+        HPX_TEST_EQ(alloc.max_size(), expected_max);
+
+        bool caught = false;
+        try
+        {
+            alloc.allocate(alloc.max_size() + 1);
+        }
+        catch (std::bad_array_new_length const&)
+        {
+            caught = true;
+        }
+        HPX_TEST(caught);
+    }
 
     return hpx::finalize();
 }

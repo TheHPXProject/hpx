@@ -18,6 +18,8 @@
 #   host compiler
 # * HPX_StdexecNvccDiagnostics.patch: nonvirtual diagnostics for nvcc's
 #   host-side HPX sender chains
+# * HPX_StdexecNvccStructuredBindingSize.patch: GCC 16's
+#   __builtin_structured_binding_size, which nvcc reports but can't parse
 # * HPX_StdexecCudaStdAtomic.patch: opt-out of CUDA's atomics for builds without
 #   CUDA and for SYCL builds
 

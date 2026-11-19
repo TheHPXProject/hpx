@@ -219,11 +219,13 @@ namespace hpx {
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/iterator_support.hpp>
+#include <hpx/modules/threading_base.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
 #include <hpx/parallel/algorithms/detail/find.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
+#include <hpx/parallel/algorithms/detail/task_size_argument.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
 #include <hpx/parallel/util/loop.hpp>
@@ -305,6 +307,11 @@ namespace hpx::parallel {
 
                 using hpx::get;
 
+                // an iteration has the size of the predicate called with an
+                // element
+                auto const size =
+                    task_size_of_iteration<task_size_argument_t<Iter, Proj>>(
+                        pred, first);
                 // Note: replacing the invoke() with HPX_INVOKE()
                 // below makes gcc generate errors
                 auto f1 = [pred = HPX_FORWARD(Pred, pred),
@@ -357,7 +364,8 @@ namespace hpx::parallel {
 
                 return util::partitioner<ExPolicy, Iter, void>::call(
                     HPX_FORWARD(ExPolicy, policy),
-                    zip_iterator(first, flags.get()), count, HPX_MOVE(f1),
+                    zip_iterator(first, flags.get()), count,
+                    hpx::threads::detail::with_task_size(HPX_MOVE(f1), size),
                     HPX_MOVE(f2));
             }
         };
@@ -447,12 +455,12 @@ namespace hpx {
         static decltype(auto) invoke_default(
             ExPolicy&& policy, FwdIter first, FwdIter last, T const& value)
         {
-            using Type = typename std::iterator_traits<FwdIter>::value_type;
-
+            // compares the elements with the value as equal_to does, which
+            // gives the worker tasks a size; the value is compared as given,
+            // as in the sequential overload and std::remove, not converted to
+            // the type of the elements first
             return hpx::remove_if(HPX_FORWARD(ExPolicy, policy), first, last,
-                [value](Type const& a) -> bool {
-                    return static_cast<Type>(value) == a;
-                });
+                hpx::parallel::detail::compare_to<T>(value));
         }
     } remove{};
 }    // namespace hpx

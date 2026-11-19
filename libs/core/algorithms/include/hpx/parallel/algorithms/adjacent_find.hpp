@@ -127,6 +127,7 @@ namespace hpx {
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/iterator_support.hpp>
+#include <hpx/modules/threading_base.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/algorithms/adjacent_find.hpp>
 #include <hpx/parallel/algorithms/detail/adjacent_find.hpp>
@@ -134,6 +135,7 @@ namespace hpx {
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
+#include <hpx/parallel/algorithms/detail/task_size_argument.hpp>
 #include <hpx/parallel/util/adapt_placement_mode.hpp>
 #include <hpx/parallel/util/cancellation_token.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
@@ -212,6 +214,11 @@ namespace hpx::parallel {
                 }
                 util::cancellation_token<difference_type> tok(count);
 
+                // an iteration has the size of the predicate called with two
+                // adjacent elements
+                auto const size =
+                    task_size_of_iteration<task_size_argument_t<FwdIter, Proj>,
+                        task_size_argument_t<FwdIter, Proj>>(pred, first);
                 util::invoke_projected<Pred, Proj> pred_projected{
                     HPX_FORWARD(Pred, pred), HPX_FORWARD(Proj, proj)};
 
@@ -246,7 +253,8 @@ namespace hpx::parallel {
                 return partitioner_type::call_with_index(
                     HPX_FORWARD(decltype(policy), policy),
                     hpx::util::zip_iterator(first, next), count - 1, 1,
-                    HPX_MOVE(f1), HPX_MOVE(f2));
+                    hpx::threads::detail::with_task_size(HPX_MOVE(f1), size),
+                    HPX_MOVE(f2));
             }
         };
         /// \endcond

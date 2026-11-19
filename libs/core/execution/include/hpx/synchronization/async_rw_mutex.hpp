@@ -645,7 +645,7 @@ namespace hpx::experimental {
                 }
                 else
                 {
-                    state->set_value(HPX_MOVE(value));
+                    move_value_to_first_state();
                 }
             }
             return {prev_state, state};
@@ -667,13 +667,33 @@ namespace hpx::experimental {
             }
             else
             {
-                state->set_value(HPX_MOVE(value));
+                move_value_to_first_state();
             }
             prev_access = detail::async_rw_mutex_access_type::readwrite;
             return {HPX_MOVE(prev_state), state};
         }
 
     private:
+        // The first access moves the value into its shared state. If that
+        // throws, the state is dropped (with the exception, as a shared state
+        // must hold a value or an exception when it is destroyed) and the
+        // mutex is left as before the access, so that it can be destroyed or
+        // accessed again.
+        void move_value_to_first_state()
+        {
+            try
+            {
+                state->set_value(HPX_MOVE(value));
+            }
+            catch (...)
+            {
+                state->set_error(std::current_exception());
+                state.reset();
+                prev_access = detail::async_rw_mutex_access_type::readwrite;
+                throw;
+            }
+        }
+
         using shared_state_type =
             detail::async_rw_mutex_shared_state<value_type>;
         using shared_state_ptr_type = std::shared_ptr<shared_state_type>;

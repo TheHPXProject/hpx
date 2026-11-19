@@ -12,6 +12,7 @@
 
 #include <hpx/config.hpp>
 #include <hpx/modules/allocator_support.hpp>
+#include <hpx/modules/functional.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/memory.hpp>
 #include <hpx/modules/thread_support.hpp>
@@ -22,6 +23,7 @@
 #include <cstdint>
 #include <functional>
 #include <iosfwd>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -49,7 +51,7 @@ namespace hpx {
         std::ostream& os, id_type const& id);
 
     ///////////////////////////////////////////////////////////////////////////
-    // the local gid is actually just a wrapper around the real thing
+    /// Represents the globally unique identifier of an HPX component.
     HPX_CXX_EXPORT struct id_type
     {
     private:
@@ -448,6 +450,12 @@ namespace hpx::traits {
     struct promise_local_result<std::vector<naming::gid_type>>
     {
         using type = std::vector<hpx::id_type>;
+    };
+
+    // hpx::async<&f>(id, ...) runs f on id, as an action, and not locally
+    template <>
+    struct is_remote_target<hpx::id_type> : std::true_type
+    {
     };
 }    // namespace hpx::traits
 

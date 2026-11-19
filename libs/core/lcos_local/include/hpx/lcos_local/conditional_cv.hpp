@@ -30,8 +30,18 @@ namespace hpx::lcos::local {
         template <typename Condition, typename Lock>
         void wait(Condition&& func, Lock& l)
         {
+            HPX_ASSERT(!wait_active_);
+            wait_active_ = true;
+            wait_guard guard{*this};
             cond_.assign(HPX_FORWARD(Condition, func));
-            cv_.wait(l);
+            // set() notifies all waiters once the condition holds, but a
+            // waiter can wake after another waiter made it false again (or
+            // spuriously, from a wakeup recorded by agent::resume); loop
+            // until the stored condition actually holds
+            while (!cond_())
+            {
+                cv_.wait(l);
+            }
         }
 
         // Trigger this object.
@@ -49,7 +59,19 @@ namespace hpx::lcos::local {
         }
 
     private:
+        struct wait_guard
+        {
+            conditional_cv& owner;
+
+            ~wait_guard()
+            {
+                owner.cond_.reset();
+                owner.wait_active_ = false;
+            }
+        };
+
         detail::condition_variable cv_;
         hpx::move_only_function<bool()> cond_;
+        bool wait_active_ = false;
     };
 }    // namespace hpx::lcos::local

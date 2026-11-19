@@ -41,6 +41,48 @@ Breaking changes
   ``hpx/functional/traits/get_task_size.hpp`` directly has to include
   ``hpx/modules/thread_support.hpp`` instead; ``hpx/functional.hpp`` and
   ``hpx/modules/functional.hpp`` still provide them.
+- The thread enumerations (``hpx::threads::thread_schedule_state``,
+  ``thread_restart_state``, ``thread_priority``, ``thread_stacksize``, the
+  scheduling hints and ``thread_schedule_hint``) moved from the ``coroutines``
+  module to the ``thread_support`` module. Their names are unchanged.
+  ``hpx::threads::thread_state`` stays in ``coroutines``. Code that included
+  ``hpx/coroutines/thread_enums.hpp`` directly for the enumerations has to
+  include ``hpx/modules/thread_support.hpp`` instead.
+- The CMake option ``HPX_COROUTINES_WITH_THREAD_SCHEDULE_HINT_RUNS_AS_CHILD``
+  is now ``HPX_THREAD_SUPPORT_WITH_THREAD_SCHEDULE_HINT_RUNS_AS_CHILD``, and the
+  macro it defines is now
+  ``HPX_THREAD_SUPPORT_HAVE_THREAD_SCHEDULE_HINT_RUNS_AS_CHILD``. The old option
+  name is still accepted with a deprecation warning.
+- A component type has to be registered in exactly one module. Registering a
+  component that a library already registers and has marked as such is now a
+  compile time error (:hpx-issue:`8075`). Before, this went unnoticed on Linux
+  and failed only at run time on Windows with ``duplicate_component_id``. In
+  particular, ``partitioned_vector`` and ``coarray`` for ``double``, ``int``,
+  ``long long`` and ``std::string`` are predefined by the
+  ``partitioned_vector`` library when |hpx| is linked dynamically, and
+  applications that register one of these types unconditionally no longer
+  compile. Register them only if |hpx| is linked statically:
+
+  .. code-block:: c++
+
+     #if defined(HPX_HAVE_STATIC_LINKING)
+     HPX_REGISTER_PARTITIONED_VECTOR(double);
+     #endif
+
+  Libraries that register components on behalf of their users can mark them
+  with ``HPX_COMPONENT_REGISTERED_ELSEWHERE`` in the part of their headers
+  that is visible to their users only (not while compiling the library
+  itself), which turns a second registration of these components into a
+  compile time error as well.
+- The ``HPX_WITH_DYNAMIC_HPX_MAIN`` CMake option has been removed
+  (:hpx-issue:`8071`, :hpx-pr:`8081`). On Linux and macOS the program's entry
+  point is now always redirected at link time, all other platforms keep
+  renaming ``main()`` with a macro. ``HPX_HAVE_DYNAMIC_HPX_MAIN`` is no longer
+  defined and ``HPX_WITH_DYNAMIC_HPX_MAIN`` is no longer exported to dependent
+  CMake projects. On Linux and macOS, code that includes
+  ``hpx/hpx_main.hpp`` has to link ``HPX::wrap_main`` (or
+  ``HPX::auto_wrap_main``), which was previously avoidable by setting the
+  option to ``OFF``.
 
 Supervision Module
 ==================
@@ -51,4 +93,7 @@ Supervision Module
   new epoch while it was being removed, which left the peer unmonitored, and
   the eviction a terminal lifecycle notification schedules no longer removes
   a peer that started a newer epoch meanwhile (:hpx-issue:`7924`,
-  :hpx-pr:`8027`).
+  :hpx-pr:`8027`). The removal now also keeps a peer whose new epoch changed
+  its local state before the registry was notified of it, as for a registry
+  that joined its own locality, as long as that happened before the removal's
+  final check of the local state (:hpx-issue:`8030`).

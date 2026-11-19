@@ -303,11 +303,13 @@ namespace hpx {
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/iterator_support.hpp>
+#include <hpx/modules/threading_base.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/algorithms/detail/advance_and_get_distance.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
+#include <hpx/parallel/algorithms/detail/task_size_argument.hpp>
 #include <hpx/parallel/algorithms/detail/unique.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/clear_container.hpp>
@@ -321,6 +323,7 @@ namespace hpx {
 #include <cstddef>
 #include <iterator>
 #include <memory>
+#include <optional>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -481,10 +484,8 @@ namespace hpx::parallel {
 
             template <typename ExPolicy, typename FwdIter1, typename Sent,
                 typename FwdIter2, typename Pred, typename Proj>
-            static typename util::detail::algorithm_result<ExPolicy,
-                unique_copy_result<FwdIter1, FwdIter2>>::type
-            parallel(ExPolicy&& policy, FwdIter1 first, Sent last,
-                FwdIter2 dest, Pred&& pred, Proj&& proj)
+            static decltype(auto) parallel(ExPolicy&& policy, FwdIter1 first,
+                Sent last, FwdIter2 dest, Pred&& pred, Proj&& proj)
             {
                 using zip_iterator = hpx::util::zip_iterator<FwdIter1, bool*>;
                 using algorithm_result =
@@ -497,22 +498,35 @@ namespace hpx::parallel {
                 difference_type count =
                     detail::advance_and_get_distance(last_iter, last);
 
-                if (count == 0)
-                    return algorithm_result::get(
-                        unique_copy_result<FwdIter1, FwdIter2>{
-                            HPX_MOVE(first), HPX_MOVE(dest)});
-
-                *dest++ = *first;
-
-                if (count == 1)
+                FwdIter2 output_first = dest;
+                if constexpr (!hpx::execution_policy_has_scheduler_executor_v<
+                                  ExPolicy>)
                 {
-                    return algorithm_result::get(unique_copy_result<FwdIter1,
-                        FwdIter2>{
-                        // NOLINTNEXTLINE(bugprone-macro-repeated-side-effects)
-                        HPX_MOVE(++first), HPX_MOVE(dest)});
+                    if (count == 0)
+                        return algorithm_result::get(
+                            unique_copy_result<FwdIter1, FwdIter2>{
+                                HPX_MOVE(first), HPX_MOVE(dest)});
+
+                    *dest++ = *first;
+
+                    if (count == 1)
+                    {
+                        return algorithm_result::get(unique_copy_result<
+                            FwdIter1, FwdIter2>{
+                            // NOLINTNEXTLINE(bugprone-macro-repeated-side-effects)
+                            HPX_MOVE(++first), HPX_MOVE(dest)});
+                    }
+                }
+                else if (count != 0)
+                {
+                    ++dest;
                 }
 
-                std::shared_ptr<bool[]> flags(new bool[count - 1]);
+                std::size_t const scan_count =
+                    count > 0 ? static_cast<std::size_t>(count - 1) : 0;
+                // The scan advances the flag iterator before using it.
+                // Keep a padding element at index zero.
+                std::shared_ptr<bool[]> flags(new bool[scan_count + 1]);
 
                 std::size_t init = 0;
 
@@ -528,6 +542,11 @@ namespace hpx::parallel {
                 using policy_type = std::decay_t<ExPolicy>;
 #endif
 
+                // an iteration of step 1 has the size of the comparison of two
+                // elements, step 3 only copies the selected elements
+                auto const size1 =
+                    task_size_of_iteration<task_size_argument_t<FwdIter1, Proj>,
+                        task_size_argument_t<FwdIter1, Proj>>(pred, first);
                 auto f1 = [pred = HPX_FORWARD(Pred, pred),
                               proj = HPX_FORWARD(Proj, proj)](
                               zip_iterator part_begin,
@@ -570,18 +589,42 @@ namespace hpx::parallel {
                         HPX_MOVE(last_iter), HPX_MOVE(dest)};
                 };
 
-                return scan_partitioner_type::call(
-                    HPX_FORWARD(ExPolicy, policy),
-                    zip_iterator(first, flags.get() - 1), count - 1, init,
-                    // step 1 performs first part of scan algorithm
-                    HPX_MOVE(f1),
-                    // step 2 propagates the partition results from left
-                    // to right
-                    std::plus<std::size_t>(),
-                    // step 3 runs final accumulation on each partition
-                    HPX_MOVE(f3),
-                    // step 4 use this return value
-                    HPX_MOVE(f4));
+                auto flag_begin = flags.get();
+                if constexpr (hpx::execution_policy_has_scheduler_executor_v<
+                                  ExPolicy>)
+                {
+                    return algorithm_result::get(
+                        scan_partitioner_type::call_with_initializer(
+                            HPX_FORWARD(ExPolicy, policy),
+                            zip_iterator(first, flag_begin), scan_count,
+                            [first, output_first, count]() mutable {
+                                if (count != 0)
+                                {
+                                    *output_first = *first;
+                                }
+                                return std::optional<std::size_t>(0);
+                            },
+                            hpx::threads::detail::with_task_size(
+                                HPX_MOVE(f1), size1),
+                            std::plus<std::size_t>(), HPX_MOVE(f3),
+                            HPX_MOVE(f4)));
+                }
+                else
+                {
+                    return algorithm_result::get(scan_partitioner_type::call(
+                        HPX_FORWARD(ExPolicy, policy),
+                        zip_iterator(first, flag_begin), scan_count, init,
+                        // step 1 performs first part of scan algorithm
+                        hpx::threads::detail::with_task_size(
+                            HPX_MOVE(f1), size1),
+                        // step 2 propagates the partition results from left
+                        // to right
+                        std::plus<std::size_t>(),
+                        // step 3 runs final accumulation on each partition
+                        HPX_MOVE(f3),
+                        // step 4 use this return value
+                        HPX_MOVE(f4)));
+                }
             }
         };
         /// \endcond
@@ -688,9 +731,8 @@ namespace hpx {
                 >
             )
         // clang-format on
-        static parallel::util::detail::algorithm_result_t<ExPolicy, FwdIter2>
-        invoke_default(ExPolicy&& policy, FwdIter1 first, FwdIter1 last,
-            FwdIter2 dest, Pred pred = Pred())
+        static decltype(auto) invoke_default(ExPolicy&& policy, FwdIter1 first,
+            FwdIter1 last, FwdIter2 dest, Pred pred = Pred())
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Requires at least forward iterator.");
@@ -698,7 +740,7 @@ namespace hpx {
             using result_type =
                 parallel::util::in_out_result<FwdIter1, FwdIter2>;
 
-            return parallel::util::get_second_element<FwdIter1, FwdIter2>(
+            return parallel::util::get_second_element(
                 hpx::parallel::detail::unique_copy<result_type>().call(
                     HPX_FORWARD(ExPolicy, policy), first, last, dest,
                     HPX_MOVE(pred), hpx::identity_v));

@@ -16,6 +16,7 @@ set(tests
     for_loop_2281
     for_loop_5735
     for_loop_with_auto_chunk_size
+    guided_chunk_size_8115
     includes_chunk_boundary
     includes_empty_ranges
     is_sorted_until_chunk_boundary
@@ -26,9 +27,11 @@ set(tests
     partial_sort_early_return
     prefetching_iterator
     ranges_distinct_sentinel_8003
+    ranges_distinct_sentinel_8129
     reduce_3641
     reduce_with_auto_chunk_size
     reverse_rotate_copy_result
+    rotate_7861
     scan_different_inits
     scan_non_commutative
     scan_shortlength
@@ -49,10 +52,14 @@ if(HPX_WITH_DATAPAR)
   list(APPEND tests counting_iterator_datapar for_each_datapar)
 endif()
 
+set(rotate_7861_PARAMETERS THREADS_PER_LOCALITY 2)
+
 foreach(test ${tests})
   set(sources ${test}.cpp)
 
-  set(${test}_PARAMETERS THREADS_PER_LOCALITY 4)
+  if(NOT DEFINED ${test}_PARAMETERS)
+    set(${test}_PARAMETERS THREADS_PER_LOCALITY 4)
+  endif()
 
   source_group("Source Files" FILES ${sources})
 

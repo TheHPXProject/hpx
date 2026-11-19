@@ -1,0 +1,27 @@
+nvcc with a GCC 16 host compiler and __builtin_structured_binding_size.
+
+GCC 16 provides __builtin_structured_binding_size, and nvcc (13.4) reports it
+through __has_builtin as well, but its front end can't parse the builtin's type
+argument: every CUDA translation unit including stdexec fails with "type name
+is not allowed" and "identifier __builtin_structured_binding_size is
+undefined". Under nvcc stdexec uses its library fallback instead.
+
+Copyright (c) 2026 Hartmut Kaiser
+
+SPDX-License-Identifier: BSL-1.0
+Distributed under the Boost Software License, Version 1.0. (See accompanying
+file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+
+diff --git a/include/stdexec/__detail/__structured_binding_size.hpp b/include/stdexec/__detail/__structured_binding_size.hpp
+index 33a57eb5..7e79d7ab 100644
+--- a/include/stdexec/__detail/__structured_binding_size.hpp
++++ b/include/stdexec/__detail/__structured_binding_size.hpp
+@@ -48,7 +48,7 @@ namespace STDEXEC
+   template <class _Ty>
+   inline constexpr int __structured_binding_size_v = -1;
+ 
+-#  if STDEXEC_HAS_BUILTIN(__builtin_structured_binding_size)
++#  if STDEXEC_HAS_BUILTIN(__builtin_structured_binding_size) && !defined(__NVCC__)
+   template <class _Ty>
+     requires(__builtin_structured_binding_size(_Ty) >= 0U)
+   inline constexpr int __structured_binding_size_v<_Ty> = __builtin_structured_binding_size(_Ty);

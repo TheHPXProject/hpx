@@ -11,8 +11,9 @@
 thrust
 ======
 
-The thrust module integrates |hpx| parallel algorithms with NVIDIA Thrust, 
-enabling GPU acceleration using familiar |hpx| algorithm syntax.
+The thrust module integrates |hpx| parallel algorithms with NVIDIA Thrust
+(CUDA) or rocThrust (HIP), enabling GPU acceleration using familiar |hpx|
+algorithm syntax.
 
 Execution Policies
 ==================
@@ -78,12 +79,12 @@ Asynchronous Execution with Futures
 Build Requirements
 ==================
 
-* CUDA Toolkit 12.4.0+
-* |hpx| with ``HPX_WITH_CUDA=ON``
-* Enable with: ``cmake -DHPX_WITH_CUDA=ON ...``
+* CUDA Toolkit 12.4.0+ with ``HPX_WITH_CUDA=ON``, or
+* ROCm with rocThrust and ``HPX_WITH_HIP=ON``
+* ``HPX_WITH_THRUST`` (ON by default with CUDA or HIP)
 
 See Also
 ========
 
-* :ref:`modules_async_cuda` - CUDA integration
+* :ref:`modules_async_cuda` - CUDA and HIP integration
 * :ref:`modules_execution` - |hpx| execution policies

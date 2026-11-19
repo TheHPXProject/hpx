@@ -14,6 +14,7 @@
 #include <hpx/iterator_support/iterator_range.hpp>
 #include <hpx/iterator_support/range.hpp>
 #include <hpx/iterator_support/traits/is_range.hpp>
+#include <hpx/modules/thread_support.hpp>
 #include <hpx/modules/type_support.hpp>
 
 #include <cstddef>
@@ -102,6 +103,10 @@ namespace hpx::util {
         friend class iterator_core_access;
 
     public:
+        // returns its counter, dereferencing it is a nano task
+        static constexpr hpx::threads::task_size dereference_task_size =
+            hpx::threads::task_size::nano;
+
         counting_iterator() = default;
         ~counting_iterator() = default;
         counting_iterator(counting_iterator&& rhs) = default;
@@ -136,6 +141,10 @@ namespace hpx::util {
 
     public:
         using use_brackets_proxy = std::false_type;
+
+        // returns its counter, dereferencing it is a nano task
+        static constexpr hpx::threads::task_size dereference_task_size =
+            hpx::threads::task_size::nano;
 
         counting_iterator() = default;
         ~counting_iterator() = default;

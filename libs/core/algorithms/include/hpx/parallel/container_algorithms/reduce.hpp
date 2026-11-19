@@ -759,7 +759,7 @@ namespace hpx::ranges {
 
             return hpx::parallel::detail::reduce<T>().call(
                 HPX_FORWARD(ExPolicy, policy), first, last, HPX_MOVE(init),
-                std::plus<T>{});
+                std::plus<>{});
         }
 
         template <typename ExPolicy, typename Rng,
@@ -782,7 +782,7 @@ namespace hpx::ranges {
 
             return hpx::parallel::detail::reduce<T>().call(
                 HPX_FORWARD(ExPolicy, policy), hpx::util::begin(rng),
-                hpx::util::end(rng), HPX_MOVE(init), std::plus<T>{});
+                hpx::util::end(rng), HPX_MOVE(init), std::plus<>{});
         }
 
         template <typename ExPolicy, typename FwdIter, typename Sent>
@@ -804,7 +804,7 @@ namespace hpx::ranges {
 
             return hpx::parallel::detail::reduce<value_type>().call(
                 HPX_FORWARD(ExPolicy, policy), first, last, value_type{},
-                std::plus<value_type>{});
+                std::plus<>{});
         }
 
         template <typename ExPolicy, typename Rng>
@@ -829,7 +829,7 @@ namespace hpx::ranges {
 
             return hpx::parallel::detail::reduce<value_type>().call(
                 HPX_FORWARD(ExPolicy, policy), hpx::util::begin(rng),
-                hpx::util::end(rng), value_type{}, std::plus<value_type>{});
+                hpx::util::end(rng), value_type{}, std::plus<>{});
         }
 
         ////////////////////////////////////////////////////////////////////////
@@ -871,7 +871,7 @@ namespace hpx::ranges {
                 "Requires at least input iterator.");
 
             return hpx::parallel::detail::reduce<T>().call(hpx::execution::seq,
-                first, last, HPX_MOVE(init), std::plus<T>{});
+                first, last, HPX_MOVE(init), std::plus<>{});
         }
 
         template <typename Rng,
@@ -887,7 +887,7 @@ namespace hpx::ranges {
 
             return hpx::parallel::detail::reduce<T>().call(hpx::execution::seq,
                 hpx::util::begin(rng), hpx::util::end(rng), HPX_MOVE(init),
-                std::plus<T>{});
+                std::plus<>{});
         }
 
         template <typename FwdIter, typename Sent>
@@ -902,8 +902,7 @@ namespace hpx::ranges {
                 typename std::iterator_traits<FwdIter>::value_type;
 
             return hpx::parallel::detail::reduce<value_type>().call(
-                hpx::execution::seq, first, last, value_type{},
-                std::plus<value_type>{});
+                hpx::execution::seq, first, last, value_type{}, std::plus<>{});
         }
 
         template <typename Rng>
@@ -922,7 +921,7 @@ namespace hpx::ranges {
 
             return hpx::parallel::detail::reduce<value_type>().call(
                 hpx::execution::seq, hpx::util::begin(rng), hpx::util::end(rng),
-                value_type{}, std::plus<value_type>{});
+                value_type{}, std::plus<>{});
         }
     } reduce{};
 }    // namespace hpx::ranges

@@ -14,7 +14,9 @@
 #include <hpx/modules/tracing.hpp>
 #include <hpx/threading_base/create_thread.hpp>
 #include <hpx/threading_base/detail/get_default_timer_service.hpp>
+#include <hpx/threading_base/set_thread_state.hpp>
 #include <hpx/threading_base/set_thread_state_timed.hpp>
+#include <hpx/threading_base/thread_data.hpp>
 #include <hpx/threading_base/threading_base_fwd.hpp>
 #ifdef HPX_HAVE_MODULE_LIKWID
 #include <hpx/modules/likwid.hpp>
@@ -96,7 +98,8 @@ namespace hpx::threads::detail {
         std::chrono::steady_clock::time_point const& abs_time,
         thread_id_ref_type const& thrd, thread_schedule_state newstate,
         thread_restart_state newstate_ex, thread_priority priority,
-        std::atomic<bool>* started, bool retry_on_active)
+        std::atomic<bool>* started, bool retry_on_active,
+        std::int64_t suspension_tag)
     {
         if (HPX_UNLIKELY(!thrd))
         {
@@ -217,6 +220,15 @@ namespace hpx::threads::detail {
             // wake_timer is pending by now, so the cancel handler is a no-op
             t.cancel();
         }
+        else if (suspension_tag != no_suspension_tag)
+        {
+            // The target may have been woken by someone else (and then
+            // aborted this timer) after the timer fired: only wake it if it
+            // is still in the suspension this timer was set for, otherwise
+            // it would resume whatever it waits for by now.
+            set_suspended_thread_state(
+                thrd.noref(), suspension_tag, newstate, newstate_ex, priority);
+        }
         else
         {
             detail::set_thread_state(
@@ -236,6 +248,19 @@ namespace hpx::threads::detail {
         thread_schedule_hint schedulehint, std::atomic<bool>* started,
         bool retry_on_active, error_code& ec)
     {
+        return set_thread_state_timed(scheduler, abs_time, thrd, newstate,
+            newstate_ex, priority, schedulehint, started, retry_on_active,
+            no_suspension_tag, ec);
+    }
+
+    thread_id_ref_type set_thread_state_timed(
+        policies::scheduler_base* scheduler,
+        hpx::chrono::steady_time_point const& abs_time,
+        thread_id_type const& thrd, thread_schedule_state newstate,
+        thread_restart_state newstate_ex, thread_priority priority,
+        thread_schedule_hint schedulehint, std::atomic<bool>* started,
+        bool retry_on_active, std::int64_t suspension_tag, error_code& ec)
+    {
         if (HPX_UNLIKELY(!thrd))
         {
             HPX_THROWS_IF(ec, hpx::error::null_thread_id,
@@ -244,12 +269,18 @@ namespace hpx::threads::detail {
             return invalid_thread_id;
         }
 
+        // only a timer that makes the thread pending can be tied to one of
+        // its suspensions
+        HPX_ASSERT(suspension_tag == no_suspension_tag ||
+            newstate == thread_schedule_state::pending ||
+            newstate == thread_schedule_state::pending_boost);
+
         // this creates a new thread that creates the timer and handles the
         // requested actions
         thread_init_data data(
             hpx::bind(&at_timer, scheduler, abs_time.value(),
                 thread_id_ref_type(thrd), newstate, newstate_ex, priority,
-                started, retry_on_active),
+                started, retry_on_active, suspension_tag),
             "at_timer (expire at)", priority, schedulehint,
             thread_stacksize::small_, thread_schedule_state::pending, true);
 
