@@ -375,6 +375,24 @@ void check_moved_first(hpx::future<std::shared_ptr<delayed_data>> pending,
 }
 HPX_PLAIN_ACTION(check_moved_first)
 
+// A parent whose child refers back to it before an object of its own: the
+// back-reference is part of a cycle, the buffer after it belongs to the child.
+// (Only sent: a cycle of tracked pointers can't be loaded.)
+struct cycle_node
+{
+    std::shared_ptr<cycle_node> other;
+    delayed_data data;
+
+    template <typename Archive>
+    void serialize(Archive& ar, unsigned)
+    {
+        ar & other & data;
+    }
+};
+
+void check_cycle(std::shared_ptr<cycle_node> const&) {}
+HPX_PLAIN_ACTION(check_cycle)
+
 ///////////////////////////////////////////////////////////////////////////////
 namespace {
 
@@ -818,6 +836,42 @@ namespace {
         wait_for_actions(actions_before + 1);
     }
 
+    // A back-reference in a cycle (the child refers to its parent, which is
+    // still being serialized) leaves the buffer of the child's object that
+    // follows it in place in the later preprocessing rounds: it is created
+    // once and used by the real pass.
+    void test_cycle()
+    {
+        std::size_t const created_before = buffers_created;
+        std::size_t const size = 65536;
+
+        auto parent = std::make_shared<cycle_node>();
+        auto child = std::make_shared<cycle_node>();
+        parent->other = child;
+        child->other = parent;
+        child->data = delayed_data{size, 33, {}};
+
+        {
+            std::uint32_t const flags = archive_flags(true);
+            hpx::parcelset::parcel p = preprocess(
+                make_action_parcel<check_cycle_action>(&check_cycle, parent),
+                flags, true);
+            HPX_TEST_EQ(buffers_created - created_before, std::size_t(1));
+            HPX_TEST_EQ(p.keep_alive().size(), std::size_t(1));
+
+            // the real pass finds the buffer where the child's object is
+            message const m = encode(p, flags);
+            HPX_TEST_EQ(std::count_if(m.chunks.begin(), m.chunks.end(),
+                            [](serialization_chunk const& c) {
+                                return c.type_ != chunk_type::chunk_type_index;
+                            }),
+                std::ptrdiff_t(1));
+        }
+        HPX_TEST_EQ(buffers_alive.load(), std::size_t(0));
+
+        child->other.reset();
+    }
+
     // without a parcel nothing is preprocessed, the values go inline
     void test_archive(std::size_t const size)
     {
@@ -913,6 +967,7 @@ int hpx_main(hpx::program_options::variables_map&)
     test_pending_future(false);
     test_moved_into_future(true);
     test_moved_into_future(false);
+    test_cycle();
     // the gate's shared state goes away while the runtime is still there
     gate = hpx::shared_future<void>();
     gate_promise.reset();
