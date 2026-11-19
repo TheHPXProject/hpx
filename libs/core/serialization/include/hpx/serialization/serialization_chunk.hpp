@@ -34,11 +34,24 @@ namespace hpx::serialization {
         chunk_type_pointer = 2
     };
 
+    /// The memory a pointer chunk refers to. Parcelports and the transports
+    /// below them must not read or write device memory from the host: they
+    /// either hand it to a network library that handles device pointers or
+    /// stage it through host memory. The sender marks the chunks of device
+    /// memory it hands over, the receiving side the chunks it receives into
+    /// device memory (see allow_device_receive). Only the local side's memory
+    /// is recorded, it is not sent.
+    HPX_CXX_CORE_EXPORT enum class chunk_memory : std::uint8_t {
+        host = 0,
+        device = 1
+    };
+
     HPX_CXX_CORE_EXPORT struct serialization_chunk
     {
         chunk_data data_;     // index or pointer
         std::size_t size_;    // size of serialization_chunk starting pos_
         chunk_type type_;     // chunk_type
+        chunk_memory memory_ = chunk_memory::host;    // pointer chunks only
 
         /// Active union member depends on \a type_: use this for both
         /// pointer kinds (mutable storage is returned as \c void const*).
@@ -64,6 +77,12 @@ namespace hpx::serialization {
         {
             return size_;
         }
+
+        /// Whether the chunk refers to device memory.
+        [[nodiscard]] constexpr bool is_device_memory() const noexcept
+        {
+            return memory_ == chunk_memory::device;
+        }
     };
 
     ///////////////////////////////////////////////////////////////////////
@@ -78,20 +97,22 @@ namespace hpx::serialization {
     /// Zero-copy chunk referring to immutable caller-owned memory (save path).
     /// Parcelports must treat this like \c chunk_type_pointer for transmission.
     HPX_CXX_CORE_EXPORT [[nodiscard]] constexpr serialization_chunk
-    create_const_pointer_chunk(void const* pos, std::size_t size) noexcept
+    create_const_pointer_chunk(void const* pos, std::size_t size,
+        chunk_memory memory = chunk_memory::host) noexcept
     {
         serialization_chunk retval = {
-            {0}, size, chunk_type::chunk_type_const_pointer};
+            {0}, size, chunk_type::chunk_type_const_pointer, memory};
         retval.data_.cpos_ = pos;
         return retval;
     }
 
     /// Zero-copy chunk referring to mutable memory (typically receive path).
     HPX_CXX_CORE_EXPORT [[nodiscard]] constexpr serialization_chunk
-    create_pointer_chunk(void* pos, std::size_t size) noexcept
+    create_pointer_chunk(void* pos, std::size_t size,
+        chunk_memory memory = chunk_memory::host) noexcept
     {
         serialization_chunk retval = {
-            {0}, size, chunk_type::chunk_type_pointer};
+            {0}, size, chunk_type::chunk_type_pointer, memory};
         retval.data_.pos_ = pos;
         return retval;
     }

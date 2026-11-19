@@ -139,8 +139,8 @@ namespace hpx::serialization {
             }
 #endif
             ar << static_cast<std::uint8_t>(device_data_storage::device_chunk);
-            ar.save_binary_chunk(
-                detail::fundamental_types::none, device_data, bytes);
+            ar.save_binary_chunk(detail::fundamental_types::none, device_data,
+                bytes, chunk_memory::device);
             return;
         }
 
@@ -239,8 +239,8 @@ namespace hpx::serialization {
         {
             // the parcelport receives into device memory: it receives into v,
             // also data sent from host memory
-            ar.load_binary_chunk(
-                detail::fundamental_types::none, device_data, bytes, true);
+            ar.load_binary_chunk(detail::fundamental_types::none, device_data,
+                bytes, true, chunk_memory::device);
             return;
         }
 
