@@ -482,16 +482,9 @@ function(add_hpx_module libname modulename)
     )
   endif()
 
-  # All core modules depend on the config registry. We exclude the base modules
-  # (config, preprocessor, config_registry) to avoid circular dependencies. The
-  # registry is the sink for module-specific configurations; fundamental modules
-  # must not depend on it to ensure they remain at the bottom of the dependency
-  # graph.
-  if("${libname}" STREQUAL "core"
-     AND NOT
-         ("${modulename}" STREQUAL "config_registry"
-          OR "${modulename}" STREQUAL "config"
-          OR "${modulename}" STREQUAL "preprocessor")
+  # All core modules depend on the config registry
+  if("${libname}" STREQUAL "core" AND NOT "${modulename}" STREQUAL
+                                      "config_registry"
   )
     target_link_libraries(hpx_${modulename} PUBLIC hpx_config_registry)
   endif()

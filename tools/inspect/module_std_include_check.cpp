@@ -26,7 +26,6 @@ namespace {
     // Modules are added here as their include guards are implemented.
     constexpr char const* const converted_modules[] = {
         "config",
-        "config_registry",
         "preprocessor",
         "properties",
     };
