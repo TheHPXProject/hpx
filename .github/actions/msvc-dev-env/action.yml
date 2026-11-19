@@ -69,17 +69,17 @@ runs:
             return @{ reason = "Visual Studio '$release' has no known release history" }
           }
           $history = "https://learn.microsoft.com/en-us/visualstudio/releases/$year/release-history"
-          # bounded: the build goes on with a warning if the page isn't
-          # read in time (from PowerShell 7.4 -TimeoutSec limits only the
-          # connection)
-          $timeout = @{ TimeoutSec = 60 }
-          if ((Get-Command Invoke-WebRequest).Parameters.ContainsKey('OperationTimeoutSeconds')) {
-            $timeout.OperationTimeoutSeconds = 60
-          }
+          # bounded: the build goes on with a warning if the page isn't read
+          # within 60 seconds (the timeout of HttpClient covers the whole
+          # request, Invoke-WebRequest limits only the waits between reads)
+          $client = [System.Net.Http.HttpClient]::new()
+          $client.Timeout = [TimeSpan]::FromSeconds(60)
           try {
-            $page = (Invoke-WebRequest -UseBasicParsing @timeout $history).Content
+            $page = $client.GetStringAsync($history).GetAwaiter().GetResult()
           } catch {
             return @{ reason = "$history can't be read: $_" }
+          } finally {
+            $client.Dispose()
           }
           # the row of the release, of the Stable (2026) or Current (2022)
           # channel the runner images use if there are several (e.g. LTSC);
