@@ -107,7 +107,7 @@ namespace hpx::parcelset::detail {
     // owner (nullptr) this waits for the futures.
     template <typename Owner>
     static void keep_until_registered_futures_are_ready(
-        serialization::output_archive& archive, Owner&& owner) noexcept
+        serialization::output_archive& archive, Owner const& owner) noexcept
     {
         auto* handle_futures = archive.try_get_extra_data<
             serialization::detail::preprocess_futures>();
@@ -120,7 +120,9 @@ namespace hpx::parcelset::detail {
         {
             try
             {
-                (*handle_futures)([owner = HPX_FORWARD(Owner, owner)]() {});
+                // a copy: if attaching it throws, the caller still holds
+                // the owner (and the extra data the wait below uses)
+                (*handle_futures)([owner]() {});
                 return;
             }
             // NOLINTNEXTLINE(bugprone-empty-catch)
@@ -333,7 +335,7 @@ namespace hpx::parcelset::detail {
                 if (failed)
                 {
                     keep_until_registered_futures_are_ready(
-                        failed->archive_, HPX_MOVE(failed));
+                        failed->archive_, failed);
                 }
                 else
                 {

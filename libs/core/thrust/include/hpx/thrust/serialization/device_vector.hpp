@@ -58,10 +58,11 @@ namespace hpx::serialization {
     // A chunk of the vector's own memory refers to it until the parcel has
     // been sent, like the zero-copy chunks of any other container (see
     // output_archive::save_binary_chunk): the vector must live that long.
-    // The arguments of a parcel do; a temporary vector a serialize()
-    // function creates must use memory that isn't pinned (it is sent from a
-    // host copy the parcel keeps) or be kept alive by the object it belongs
-    // to.
+    // The arguments of a parcel do. A temporary vector a serialize()
+    // function creates needs an owner that keeps it alive until then
+    // whenever the chunk refers to its memory: if that is pinned, or if it
+    // is device memory and the parcelport moves device memory. Only a
+    // temporary sent from a host copy (which the parcel keeps) needs none.
 
     HPX_CXX_CORE_EXPORT template <typename T, typename Alloc>
     void serialize(output_archive& ar,

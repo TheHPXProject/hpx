@@ -237,12 +237,14 @@ namespace hpx::cuda::experimental {
                     }
 
                     // No new HPX threads anymore (shutdown): an OS thread
-                    // runs it, never this one (it must not call CUDA).
+                    // runs it, never this one (it must not call CUDA). An
+                    // exception goes to the run_on_completed error handler,
+                    // as for any other continuation.
                     try
                     {
                         std::thread([shared_f]() {
                             auto local = HPX_MOVE(*shared_f);
-                            local();
+                            base_type::run_on_completed(HPX_MOVE(local));
                         }).detach();
                         return;
                     }
