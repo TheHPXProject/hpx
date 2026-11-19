@@ -5,7 +5,7 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 // A thread repeatedly yielding with pending_boost must not starve normal work
-// on the same worker. The timeout makes the regression fail without hanging.
+// on the same worker. The bounded yield count prevents the test from hanging.
 
 #include <hpx/future.hpp>
 #include <hpx/init.hpp>
@@ -13,7 +13,7 @@
 #include <hpx/modules/testing.hpp>
 
 #include <atomic>
-#include <chrono>
+#include <cstddef>
 #include <string>
 #include <vector>
 
@@ -24,10 +24,8 @@ int hpx_main()
         normal_task_ran.store(true, std::memory_order_relaxed);
     });
 
-    auto const deadline =
-        std::chrono::steady_clock::now() + std::chrono::milliseconds(500);
-    while (!normal_task_ran.load(std::memory_order_relaxed) &&
-        std::chrono::steady_clock::now() < deadline)
+    for (std::size_t i = 0;
+        i != 64 && !normal_task_ran.load(std::memory_order_relaxed); ++i)
     {
         hpx::execution_base::this_thread::yield_k(17);
     }
