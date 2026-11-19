@@ -83,6 +83,10 @@ namespace hpx::parcelset {
         /// only.
         [[nodiscard]] virtual bool drain(
             std::chrono::steady_clock::duration timeout) noexcept = 0;
+
+        /// Makes progress (called with the parcelports' background work),
+        /// returns whether it did anything.
+        virtual bool background_work() = 0;
     };
 }    // namespace hpx::parcelset
 

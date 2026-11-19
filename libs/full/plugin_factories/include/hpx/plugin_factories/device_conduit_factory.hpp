@@ -55,7 +55,13 @@ namespace hpx::plugins {
             return Conduit::name_impl();
         }
 
-        void get_plugin_info(std::vector<std::string>&) override {}
+        void get_plugin_info(std::vector<std::string>& fillini) override
+        {
+            if constexpr (requires { Conduit::config_defaults(fillini); })
+            {
+                Conduit::config_defaults(fillini);
+            }
+        }
 
         [[nodiscard]] std::unique_ptr<parcelset::device_conduit> create(
             util::runtime_configuration const& cfg) override
