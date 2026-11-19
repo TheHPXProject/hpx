@@ -41,6 +41,10 @@ on:
         description: "Set up the MSVC developer environment (.github/actions/msvc-dev-env) in every job, needed for building with Ninja on Windows"
         type: boolean
         default: false
+      match-msvc-toolset:
+        description: "With msvc-dev-env, let the jobs after the first one use the MSVC toolset of the first one, and install it if their runner image has another one (a C++20 modules build: module interfaces can only be used by the compiler that wrote them)"
+        type: boolean
+        default: false
       setup:
         description: "Shell commands run after the checkout in every job, for instance to install dependencies"
         type: string
@@ -89,6 +93,8 @@ jobs:
     container: ${{ inputs.container }}
     outputs:
       test_matrix: ${{ steps.gen_matrix.outputs.matrix }}
+      msvc-toolset: ${{ steps.msvc.outputs.toolset }}
+      vs-version: ${{ steps.msvc.outputs.vs-version }}
 
     steps:
       - uses: actions/checkout@v7
@@ -99,8 +105,13 @@ jobs:
       - uses: ./.github/actions/setup-vcpkg
         if: inputs.vcpkg
 
+      # the toolset the later jobs use with match-msvc-toolset; warns if they
+      # couldn't install it
       - uses: ./.github/actions/msvc-dev-env
+        id: msvc
         if: inputs.msvc-dev-env
+        with:
+          check-install: ${{ inputs.match-msvc-toolset }}
 
       - name: Set up
         if: inputs.setup != ''
@@ -182,8 +193,12 @@ jobs:
           find /c/projects/vcpkg/installed -type f \
             -exec touch -t 200001010000 {} +
 
+      # the toolset of the build archive, see the tests job
       - uses: ./.github/actions/msvc-dev-env
         if: inputs.msvc-dev-env
+        with:
+          toolset: ${{ inputs.match-msvc-toolset && needs.build-libraries.outputs.msvc-toolset || '' }}
+          vs-version: ${{ inputs.match-msvc-toolset && needs.build-libraries.outputs.vs-version || '' }}
 
       - name: Set up
         if: inputs.setup != ''
@@ -245,8 +260,15 @@ jobs:
           find /c/projects/vcpkg/installed -type f \
             -exec touch -t 200001010000 {} +
 
+      # The runner image can have another MSVC toolset than the one of the
+      # first job while GitHub rolls out a new image: a modules build needs
+      # the toolset of the build archive (match-msvc-toolset), else the
+      # toolset of this runner takes its place (see hpx-build-and-test).
       - uses: ./.github/actions/msvc-dev-env
         if: inputs.msvc-dev-env
+        with:
+          toolset: ${{ inputs.match-msvc-toolset && needs.build-libraries.outputs.msvc-toolset || '' }}
+          vs-version: ${{ inputs.match-msvc-toolset && needs.build-libraries.outputs.vs-version || '' }}
 
       - name: Set up
         if: inputs.setup != ''
