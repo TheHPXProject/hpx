@@ -182,7 +182,7 @@ namespace hpx::threads::policies {
         // create a new thread and schedule it if the initial state is equal to
         // pending
         void create_thread(thread_init_data& data, thread_id_ref_type* id,
-            bool const caller_owns_holder, error_code& ec)
+            std::size_t const caller_thread_num, error_code& ec)
         {
             // thread has not been created yet
             if (id)
@@ -198,7 +198,8 @@ namespace hpx::threads::policies {
             if (data.run_now)
             {
                 threads::thread_id_ref_type tid;
-                holder_->create_thread_object(tid, data, caller_owns_holder);
+                holder_->create_thread_object(
+                    tid, data, caller_thread_num == holder_->thread_num_);
                 holder_->add_to_thread_map(tid.noref());
 
                 // push the new thread in the pending queue thread

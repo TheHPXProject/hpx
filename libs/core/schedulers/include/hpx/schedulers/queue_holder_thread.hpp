@@ -193,13 +193,13 @@ namespace hpx::threads::policies {
                 debug::dec<>(std::get<1>(rollover_counters_.data_)));
             thread_map_count_.data_ = 0;
             terminated_items_count_.data_ = 0;
-            if (bp_queue_)
+            if (owns_bp_queue())
                 bp_queue_->set_holder(this);
-            if (hp_queue_)
+            if (owns_hp_queue())
                 hp_queue_->set_holder(this);
-            if (np_queue_)
+            if (owns_np_queue())
                 np_queue_->set_holder(this);
-            if (lp_queue_)
+            if (owns_lp_queue())
                 lp_queue_->set_holder(this);
         }
 
@@ -446,16 +446,14 @@ namespace hpx::threads::policies {
                 tq_deb.debug(debug::str<>("create_thread "),
                     queue_data_print(this), "thread_priority::normal",
                     "run_now ", data.run_now);
-                return np_queue_->create_thread(
-                    data, tid, thread_num == thread_num_, ec);
+                return np_queue_->create_thread(data, tid, thread_num, ec);
             }
             else if (bp_queue_ && (data.priority == thread_priority::bound))
             {
                 tq_deb.debug(debug::str<>("create_thread "),
                     queue_data_print(this), "thread_priority::bound",
                     "run_now ", data.run_now);
-                return bp_queue_->create_thread(
-                    data, tid, thread_num == thread_num_, ec);
+                return bp_queue_->create_thread(data, tid, thread_num, ec);
             }
             else if (hp_queue_ &&
                 (data.priority == thread_priority::high ||
@@ -470,16 +468,14 @@ namespace hpx::threads::policies {
                 tq_deb.debug(debug::str<>("create_thread "),
                     queue_data_print(this), "thread_priority::high", "run_now ",
                     data.run_now);
-                return hp_queue_->create_thread(
-                    data, tid, thread_num == thread_num_, ec);
+                return hp_queue_->create_thread(data, tid, thread_num, ec);
             }
             else if (lp_queue_ && (data.priority == thread_priority::low))
             {
                 tq_deb.debug(debug::str<>("create_thread "),
                     queue_data_print(this), "thread_priority::low", "run_now ",
                     data.run_now);
-                return lp_queue_->create_thread(
-                    data, tid, thread_num == thread_num_, ec);
+                return lp_queue_->create_thread(data, tid, thread_num, ec);
             }
 
             tq_deb.error(debug::str<>("create_thread "), "priority?");
@@ -602,25 +598,36 @@ namespace hpx::threads::policies {
             std::ptrdiff_t const stacksize =
                 get_thread_id_data(tid)->get_stack_size();
 
+            auto const cache_or_destroy = [&](thread_heap_type& heap) {
+                if (heap.size() < parameters_.cached_threads_count_)
+                {
+                    heap.push_front(tid);
+                }
+                else
+                {
+                    deallocate(get_thread_id_data(tid));
+                }
+            };
+
             if (stacksize == parameters_.small_stacksize_)
             {
-                thread_heap_small_.push_front(tid);
+                cache_or_destroy(thread_heap_small_);
             }
             else if (stacksize == parameters_.medium_stacksize_)
             {
-                thread_heap_medium_.push_front(tid);
+                cache_or_destroy(thread_heap_medium_);
             }
             else if (stacksize == parameters_.large_stacksize_)
             {
-                thread_heap_large_.push_front(tid);
+                cache_or_destroy(thread_heap_large_);
             }
             else if (stacksize == parameters_.huge_stacksize_)
             {
-                thread_heap_huge_.push_front(tid);
+                cache_or_destroy(thread_heap_huge_);
             }
             else if (stacksize == parameters_.nostack_stacksize_)
             {
-                thread_heap_nostack_.push_front(tid);
+                cache_or_destroy(thread_heap_nostack_);
             }
             else
             {
