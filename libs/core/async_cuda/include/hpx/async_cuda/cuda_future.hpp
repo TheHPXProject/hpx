@@ -27,7 +27,9 @@
 #include <hpx/modules/threading_base.hpp>
 
 #include <memory>
+#include <new>
 #include <string>
+#include <thread>
 #include <type_traits>
 #include <utility>
 
@@ -193,8 +195,8 @@ namespace hpx::cuda::experimental {
                 }
 
                 // allocated here, so a failure reaches the caller; shared, so
-                // it can still run in stream_callback if no HPX thread can be
-                // created (nothing may throw into the CUDA runtime)
+                // it can still be handed to another thread if no HPX thread
+                // can be created (nothing may throw into the CUDA runtime)
                 auto shared_f = std::make_shared<callback_type>(HPX_MOVE(f));
 
                 base_type::set_on_completed([shared_f]() {
@@ -229,11 +231,31 @@ namespace hpx::cuda::experimental {
                     {
                         // not registered either
                     }
-                    if (!registered)
+                    if (registered)
                     {
-                        // no new HPX threads anymore (shutdown): run it here
-                        (*shared_f)();
+                        return;
                     }
+
+                    // No new HPX threads anymore (shutdown): an OS thread
+                    // runs it, never this one (it must not call CUDA).
+                    try
+                    {
+                        std::thread([shared_f]() {
+                            auto local = HPX_MOVE(*shared_f);
+                            local();
+                        }).detach();
+                        return;
+                    }
+                    // NOLINTNEXTLINE(bugprone-empty-catch)
+                    catch (...)
+                    {
+                    }
+
+                    // Not even that: the continuation is kept, it never runs
+                    // (its captures must not be destroyed on this thread).
+                    // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
+                    [[maybe_unused]] auto* kept = new (std::nothrow)
+                        std::shared_ptr<callback_type>(shared_f);
                 });
             }
 

@@ -18,6 +18,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <exception>
+#include <mutex>
 #include <utility>
 #include <vector>
 
@@ -228,13 +229,25 @@ namespace test {
 
             // a step that fails to start doesn't call its callback, nor do
             // the steps after it; the started ones still have to finish
-            // before the error is passed on
+            // before the error is passed on, as the error of a step that
+            // fails later
             std::exception_ptr error;
+            std::mutex step_mtx;
+            std::exception_ptr step_error;
             for (std::size_t i = 0; i != steps.size(); ++i)
             {
                 try
                 {
-                    steps[i]([&pending, &done]() {
+                    steps[i]([&pending, &done, &step_mtx, &step_error](
+                                 std::exception_ptr e) {
+                        if (e)
+                        {
+                            std::lock_guard<std::mutex> l(step_mtx);
+                            if (!step_error)
+                            {
+                                step_error = HPX_MOVE(e);
+                            }
+                        }
                         if (--pending == 0)
                         {
                             done.set_value();
@@ -255,6 +268,10 @@ namespace test {
             if (error)
             {
                 std::rethrow_exception(error);
+            }
+            if (step_error)
+            {
+                std::rethrow_exception(step_error);
             }
         }
         return r;

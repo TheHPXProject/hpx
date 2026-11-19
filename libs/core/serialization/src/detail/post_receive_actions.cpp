@@ -10,6 +10,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -50,17 +51,24 @@ namespace hpx::serialization::detail {
             std::make_shared<receive_completion>(steps + (previous ? 1 : 0));
         if (previous)
         {
-            // counts as one more step
-            previous->when_done([result]() { result->step_done(); });
+            // counts as one more step, which fails if the previous parcel's
+            // steps did (it is called by 'previous')
+            previous->when_done([result, prev = previous.get()]() {
+                result->step_done(prev->error());
+            });
         }
         return result;
     }
 
-    void receive_completion::step_done()
+    void receive_completion::step_done(std::exception_ptr error)
     {
         std::vector<std::function<void()>> waiters;
         {
             std::lock_guard<std::mutex> l(mtx_);
+            if (error && !error_)
+            {
+                error_ = HPX_MOVE(error);
+            }
             if (--pending_ != 0)
             {
                 return;
@@ -68,10 +76,34 @@ namespace hpx::serialization::detail {
             done_ = true;
             waiters.swap(waiters_);
         }
+
+        // all waiters run (e.g. those releasing the parcels after this one),
+        // also if one of them throws
+        std::exception_ptr first;
         for (auto& f : waiters)
         {
-            f();
+            try
+            {
+                f();
+            }
+            catch (...)
+            {
+                if (!first)
+                {
+                    first = std::current_exception();
+                }
+            }
         }
+        if (first)
+        {
+            std::rethrow_exception(first);
+        }
+    }
+
+    std::exception_ptr receive_completion::error()
+    {
+        std::lock_guard<std::mutex> l(mtx_);
+        return error_;
     }
 
     void receive_completion::when_done(std::function<void()> f)

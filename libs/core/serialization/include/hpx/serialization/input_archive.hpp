@@ -298,6 +298,31 @@ namespace hpx::serialization {
             size_ += buffer_->load_binary(expected, address, count);
         }
 
+        /// Reads \a count bytes written by save_binary_chunk into the memory
+        /// at \a address.
+        ///
+        /// With \a allow_zero_copy_receive (and an archive whose chunks the
+        /// networking layer fills in after de-serialization, see
+        /// serialization::detail::allow_zero_copy_receive), nothing is copied
+        /// here: the chunk is pointed at \a address, and the networking layer
+        /// places the data there only after this function (and the load()
+        /// that calls it) has returned. The memory at \a address must stay
+        /// valid until then and must not be read before. A load() that uses
+        /// the data (or that can't receive it into its final place, e.g.
+        /// device memory) receives it into a staging buffer instead and
+        /// registers the step that completes the object with
+        /// serialization::detail::post_receive_actions: a parcel runs these
+        /// steps once its data has arrived, and its action only after the
+        /// last of them has finished. Without \a allow_zero_copy_receive (and
+        /// for data below the zero-copy threshold, which isn't sent as a
+        /// chunk) the data is complete when this function returns.
+        ///
+        /// \param expected The type of the data, checked by archives with
+        ///                 type checking.
+        /// \param address  Where the data goes.
+        /// \param count    The number of bytes.
+        /// \param allow_zero_copy_receive Whether the data may arrive at
+        ///                 \a address after this function has returned.
         void load_binary_chunk(detail::fundamental_types expected,
             void* address, std::size_t const count,
             bool const allow_zero_copy_receive)
