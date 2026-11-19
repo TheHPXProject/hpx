@@ -383,21 +383,26 @@ namespace hpx::serialization {
             preprocess_keep_alive* keep_alive_;
         };
 
-        // The real pass: the object at 'object', written at 'pos', is written
-        // as a back-reference. If an earlier parcel of the same message has
-        // written it, the keep-alive buffers of the objects it contains are
-        // not sent.
+        // The object at 'object', written at 'pos', is written as a
+        // back-reference. Preprocessing drops the keep-alive buffers an
+        // earlier round has created for the objects it contains here. In the
+        // real pass, if an earlier parcel of the same message has written it,
+        // these buffers are not sent.
         template <typename Archive>
         void skip_keep_alive_of_back_reference(
             Archive const& ar, std::uint64_t const pos, void const* object)
         {
-            if (ar.is_preprocessing())
+            auto* keep_alive =
+                ar.template try_get_extra_data<preprocess_keep_alive>();
+            if (keep_alive == nullptr)
             {
                 return;
             }
-            auto* keep_alive =
-                ar.template try_get_extra_data<preprocess_keep_alive>();
-            if (keep_alive != nullptr && pos < keep_alive->parcel_start())
+            if (ar.is_preprocessing())
+            {
+                keep_alive->drop_back_reference(object);
+            }
+            else if (pos < keep_alive->parcel_start())
             {
                 keep_alive->skip_back_reference(object);
             }

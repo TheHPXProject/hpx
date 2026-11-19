@@ -342,6 +342,39 @@ void check_shared(shared_and_own const& data)
 }
 HPX_PLAIN_ACTION(check_shared)
 
+// An object in a future that isn't ready when the parcel is preprocessed
+// first, before another one of the same size: the buffer of the second one is
+// created first, the one of the first is created only in the next round.
+void check_future_first(
+    hpx::future<delayed_data> pending, delayed_data const& second)
+{
+    delayed_data const first = pending.get();
+    if (first.first == 11 && first.values_match() && second.first == 22 &&
+        second.values_match())
+    {
+        ++actions_passed;
+    }
+    ++actions_run;
+}
+HPX_PLAIN_ACTION(check_future_first)
+
+// An object shared by the value of a future that isn't ready when the parcel
+// is preprocessed first and the argument after it, followed by another object
+// of the same size: in the next round the shared object is written first in
+// the future's value, and the argument after it is a back-reference.
+void check_moved_first(hpx::future<std::shared_ptr<delayed_data>> pending,
+    std::shared_ptr<delayed_data> const& shared, delayed_data const& other)
+{
+    std::shared_ptr<delayed_data> const first = pending.get();
+    if (first == shared && first && first->first == 11 &&
+        first->values_match() && other.first == 22 && other.values_match())
+    {
+        ++actions_passed;
+    }
+    ++actions_run;
+}
+HPX_PLAIN_ACTION(check_moved_first)
+
 ///////////////////////////////////////////////////////////////////////////////
 namespace {
 
@@ -387,11 +420,10 @@ namespace {
     // what parcelset::detail::parcel_await_apply hands to the parcelport
     // 'pending': the parcel waits for produced data, which stays pending
     // until the gate is opened
-    hpx::parcelset::parcel preprocess(hpx::parcelset::parcel&& p,
-        std::uint32_t const flags, bool const pending)
+    hpx::parcelset::parcel preprocess_with_closed_gate(
+        hpx::parcelset::parcel&& p, std::uint32_t const flags,
+        bool const pending)
     {
-        close_gate();
-
         hpx::promise<hpx::parcelset::parcel> promise;
         hpx::future<hpx::parcelset::parcel> f = promise.get_future();
         hpx::parcelset::detail::parcel_await_apply(
@@ -407,6 +439,13 @@ namespace {
 
         open_gate();
         return f.get();
+    }
+
+    hpx::parcelset::parcel preprocess(hpx::parcelset::parcel&& p,
+        std::uint32_t const flags, bool const pending)
+    {
+        close_gate();
+        return preprocess_with_closed_gate(HPX_MOVE(p), flags, pending);
     }
 
     // what a parcelport sends: the archive and the contents of its zero-copy
@@ -714,6 +753,71 @@ namespace {
         wait_for_actions(actions_before + parcels);
     }
 
+    // A future argument that is ready only after the first preprocessing
+    // round holds an object of the same size as the argument after it: its
+    // buffer, created in the second round, goes before the one created for
+    // that argument in the first round.
+    void test_pending_future(bool const zero_copy)
+    {
+        std::size_t const actions_before = actions_run;
+        std::size_t const created_before = buffers_created;
+        std::size_t const size = 65536;
+
+        message m;
+        {
+            std::uint32_t const flags = archive_flags(zero_copy);
+            close_gate();
+            hpx::future<delayed_data> pending = gate.then(
+                [size](auto&&) { return delayed_data{size, 11, {}}; });
+            hpx::parcelset::parcel p = preprocess_with_closed_gate(
+                make_action_parcel<check_future_first_action>(
+                    &check_future_first, HPX_MOVE(pending),
+                    delayed_data{size, 22, {}}),
+                flags, true);
+            HPX_TEST_EQ(buffers_created - created_before, std::size_t(2));
+
+            m = encode(p, flags);
+        }
+        HPX_TEST_EQ(buffers_alive.load(), std::size_t(0));
+
+        HPX_TEST(!decode(m, false));
+        wait_for_actions(actions_before + 1);
+    }
+
+    // The first occurrence of a shared object moves into the value of a
+    // future that is ready only after the first preprocessing round: the
+    // buffer the first round created at its former position isn't used, the
+    // object after it still gets its own.
+    void test_moved_into_future(bool const zero_copy)
+    {
+        std::size_t const actions_before = actions_run;
+        std::size_t const created_before = buffers_created;
+        std::size_t const size = 65536;
+
+        message m;
+        {
+            std::uint32_t const flags = archive_flags(zero_copy);
+            auto shared =
+                std::make_shared<delayed_data>(delayed_data{size, 11, {}});
+            close_gate();
+            hpx::future<std::shared_ptr<delayed_data>> pending =
+                gate.then([shared](auto&&) { return shared; });
+            hpx::parcelset::parcel p = preprocess_with_closed_gate(
+                make_action_parcel<check_moved_first_action>(&check_moved_first,
+                    HPX_MOVE(pending), shared, delayed_data{size, 22, {}}),
+                flags, true);
+            // the shared object's buffer of the first round is dropped
+            HPX_TEST_EQ(buffers_created - created_before, std::size_t(3));
+            HPX_TEST_EQ(p.keep_alive().size(), std::size_t(2));
+
+            m = encode(p, flags);
+        }
+        HPX_TEST_EQ(buffers_alive.load(), std::size_t(0));
+
+        HPX_TEST(!decode(m, false));
+        wait_for_actions(actions_before + 1);
+    }
+
     // without a parcel nothing is preprocessed, the values go inline
     void test_archive(std::size_t const size)
     {
@@ -805,6 +909,10 @@ int hpx_main(hpx::program_options::variables_map&)
     test_same_address(false);
     test_shared_in_message(true);
     test_shared_in_message(false);
+    test_pending_future(true);
+    test_pending_future(false);
+    test_moved_into_future(true);
+    test_moved_into_future(false);
     // the gate's shared state goes away while the runtime is still there
     gate = hpx::shared_future<void>();
     gate_promise.reset();
