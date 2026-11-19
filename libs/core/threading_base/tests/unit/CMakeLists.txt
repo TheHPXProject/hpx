@@ -11,6 +11,7 @@ set(tests
     set_thread_state_timed_self
     sized_function
     task_size_hint
+    thread_description_address
     thread_exit_callbacks
     thread_data_is_background
 )
