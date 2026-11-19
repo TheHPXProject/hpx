@@ -49,10 +49,10 @@ namespace test {
 
         // the preprocessing passes, until nothing is left to wait for;
         // returns the buffers the zero-copy chunks will refer to
-        hpx::serialization::detail::keep_alive_map preprocess(
+        hpx::serialization::detail::keep_alive_list preprocess(
             std::uint32_t const flags, save_type const& save)
         {
-            hpx::serialization::detail::keep_alive_map buffers;
+            hpx::serialization::detail::keep_alive_list buffers;
             while (true)
             {
                 hpx::serialization::detail::preprocess_container data;
@@ -64,7 +64,7 @@ namespace test {
                     hpx::serialization::detail::preprocess_keep_alive>();
                 if (!buffers.empty())
                 {
-                    keep_alive.add_buffers(buffers);
+                    keep_alive.set_buffers(buffers);
                 }
 
                 save(archive);
@@ -100,7 +100,7 @@ namespace test {
     message send(
         std::uint32_t const flags, bool const preprocess, save_type const& save)
     {
-        hpx::serialization::detail::keep_alive_map buffers;
+        hpx::serialization::detail::keep_alive_list buffers;
         if (preprocess)
         {
             buffers = test::preprocess(flags, save);
@@ -116,7 +116,7 @@ namespace test {
                 archive
                     .get_extra_data<
                         hpx::serialization::detail::preprocess_keep_alive>()
-                    .add_buffers(buffers);
+                    .set_buffers(buffers);
             }
             save(archive);
             archive.flush();

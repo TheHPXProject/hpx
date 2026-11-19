@@ -129,8 +129,14 @@ namespace hpx::serialization {
             return;
         }
 
-        if (auto const* buffer =
-                detail::device_host_copy_of(ar, &v, device_data, bytes))
+        // A host copy prepared during preprocessing, for the archives that
+        // don't take device memory. These must ask for the copy in both
+        // passes or in neither: the copies are matched by the order of the
+        // requests. (An archive taking device memory with chunking disabled
+        // in the real pass copies the bytes into the archive below.)
+        if (auto const* buffer = !ar.enable_device_chunks() ?
+                detail::device_host_copy_of(ar, device_data, bytes) :
+                nullptr)
         {
             ar << static_cast<std::uint8_t>(device_data_storage::host_chunk);
             ar.save_binary_chunk(
