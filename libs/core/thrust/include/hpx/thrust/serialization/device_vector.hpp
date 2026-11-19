@@ -213,6 +213,20 @@ namespace hpx::serialization {
         std::size_t const bytes = size * sizeof(T);
         T* device_data = ::thrust::raw_pointer_cast(v.data());
 
+        // A device conduit moves the data (see device_chunk_transport): it
+        // arrives in the vector's own memory, device or pinned host memory,
+        // before the parcel's action runs, whatever the parcelport can do.
+        if (storage != device_data_storage::in_archive &&
+            ar.next_chunk_from_transport())
+        {
+            ar.load_binary_chunk(detail::fundamental_types::none, device_data,
+                bytes, true,
+                hpx::thrust::detail::is_pinned_host_memory(device_data) ?
+                    chunk_memory::host :
+                    chunk_memory::device);
+            return;
+        }
+
         // Zero-copy receive: the networking layer places the data at the
         // address handed over here only after this function returns. A
         // filter (e.g. decompression) writes all data on the host instead.

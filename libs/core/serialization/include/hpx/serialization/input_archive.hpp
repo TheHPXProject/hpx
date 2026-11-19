@@ -24,6 +24,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <memory>
 #include <type_traits>
 #include <vector>
@@ -371,6 +372,29 @@ namespace hpx::serialization {
             }
         }
 
+        /// Whether the data of the next zero-copy chunk arrives through the
+        /// archive's device transport (see
+        /// detail::device_chunk_transport): then it is received into the
+        /// memory handed to load_binary_chunk, device or host memory, after
+        /// the de-serialization (as with zero-copy receive), also if the
+        /// parcelport doesn't receive zero-copy chunks. An object asks this
+        /// before choosing where its data goes, it then calls
+        /// load_binary_chunk with allow_zero_copy_receive.
+        [[nodiscard]] bool next_chunk_from_transport()
+        {
+            if (!enable_device_transport())
+            {
+                return false;
+            }
+            if (next_marker_ < 0)
+            {
+                std::uint8_t marker = 0;
+                load(marker);
+                next_marker_ = marker;
+            }
+            return next_marker_ == 1;
+        }
+
     private:
         // The counterpart of output_archive::save_with_device_transport:
         // reads the marker of the chunk and, if the sender's transport moves
@@ -384,7 +408,16 @@ namespace hpx::serialization {
             bool const allow_zero_copy_receive)
         {
             std::uint8_t use_transport = 0;
-            load(use_transport);
+            if (next_marker_ >= 0)
+            {
+                // read by next_chunk_from_transport
+                use_transport = static_cast<std::uint8_t>(next_marker_);
+                next_marker_ = -1;
+            }
+            else
+            {
+                load(use_transport);
+            }
             if (use_transport == 0)
             {
                 return false;
@@ -420,13 +453,20 @@ namespace hpx::serialization {
             get_extra_data<detail::post_receive_actions>().add_transfer(
                 [transport = transport->transport, descriptor, address, count](
                     detail::post_receive_actions::done_type done) {
-                    transport->recv(descriptor, address, count, HPX_MOVE(done));
+                    transport->recv(descriptor, address, count,
+                        [done = HPX_MOVE(done)](std::exception_ptr error) {
+                            done(HPX_MOVE(error));
+                        });
                 });
             return true;
         }
 
         std::unique_ptr<erased_input_container> buffer_;
         bool filtered_ = false;
+
+        // the marker of the next chunk if next_chunk_from_transport has read
+        // it, else -1
+        int next_marker_ = -1;
     };
 }    // namespace hpx::serialization
 
