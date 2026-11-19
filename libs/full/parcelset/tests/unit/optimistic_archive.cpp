@@ -14,6 +14,7 @@
 #include <hpx/hpx.hpp>
 #include <hpx/hpx_init.hpp>
 #include <hpx/include/components.hpp>
+#include <hpx/modules/lcos_local.hpp>
 #include <hpx/modules/naming.hpp>
 #include <hpx/modules/serialization.hpp>
 #include <hpx/modules/testing.hpp>
@@ -46,6 +47,11 @@ bool stops_in(hpx::serialization::output_archive& ar, T& t)
     }
     catch (hpx::serialization::await_required const&)
     {
+        // nothing waits for a future or splits a credit after the stop
+        using hpx::serialization::detail::preprocess_futures;
+        using hpx::serialization::detail::preprocess_gid_types;
+        HPX_TEST(ar.try_get_extra_data<preprocess_futures>() == nullptr);
+        HPX_TEST(ar.try_get_extra_data<preprocess_gid_types>() == nullptr);
         return true;
     }
     ar.flush();
