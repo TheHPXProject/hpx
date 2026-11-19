@@ -31,8 +31,77 @@ namespace hpx::util {
 
 namespace hpx::serialization::detail {
 
+    namespace {
+
+        // Runs 'actions' and calls 'done' once all of them have finished,
+        // with the first error if one failed.
+        void run_all(post_receive_actions::actions_type& actions,
+            post_receive_actions::done_type done)
+        {
+            if (actions.empty())
+            {
+                done();
+                return;
+            }
+
+            struct state
+            {
+                std::mutex mtx;
+                std::size_t pending;
+                std::exception_ptr error;
+                post_receive_actions::done_type done;
+            };
+            auto s = std::make_shared<state>();
+            s->pending = actions.size();
+            s->done = HPX_MOVE(done);
+
+            for (auto& action : actions)
+            {
+                action([s](std::exception_ptr error) {
+                    std::exception_ptr first;
+                    {
+                        std::lock_guard<std::mutex> l(s->mtx);
+                        if (error && !s->error)
+                        {
+                            s->error = HPX_MOVE(error);
+                        }
+                        if (--s->pending != 0)
+                        {
+                            return;
+                        }
+                        first = s->error;
+                    }
+                    s->done(HPX_MOVE(first));
+                });
+            }
+        }
+    }    // namespace
+
     post_receive_actions::parcel_steps post_receive_actions::take_parcel_steps()
     {
+        if (!transfers_.empty())
+        {
+            // one step: the transfers, then the other steps
+            auto transfers =
+                std::make_shared<actions_type>(HPX_MOVE(transfers_));
+            auto actions = std::make_shared<actions_type>(HPX_MOVE(actions_));
+            transfers_.clear();
+            actions_.clear();
+            actions_.push_back([transfers, actions](done_type done) {
+                run_all(*transfers,
+                    [actions, done = HPX_MOVE(done)](
+                        std::exception_ptr error) mutable {
+                        // the data is incomplete if a transfer failed
+                        if (error)
+                        {
+                            done(HPX_MOVE(error));
+                            return;
+                        }
+                        run_all(*actions, HPX_MOVE(done));
+                    });
+            });
+        }
+
         if (actions_.empty())
         {
             // only the steps of earlier parcels, if any

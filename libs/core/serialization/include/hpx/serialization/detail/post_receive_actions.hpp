@@ -110,9 +110,18 @@ namespace hpx::serialization::detail {
             actions_.push_back(HPX_MOVE(f));
         }
 
+        // A step that moves data into the parcel's memory (e.g. receiving a
+        // chunk of device memory over a device_chunk_transport): the steps
+        // added with add() start once all of these have finished, they may
+        // use the data (e.g. copy it from a staging buffer).
+        void add_transfer(action_type f)
+        {
+            transfers_.push_back(HPX_MOVE(f));
+        }
+
         [[nodiscard]] bool empty() const noexcept
         {
-            return actions_.empty();
+            return actions_.empty() && transfers_.empty();
         }
 
         // hand the actions to the parcel that was just de-serialized
@@ -139,11 +148,13 @@ namespace hpx::serialization::detail {
         void reset() noexcept
         {
             actions_.clear();
+            transfers_.clear();
             last_.reset();
         }
 
     private:
         actions_type actions_;
+        actions_type transfers_;
         std::shared_ptr<receive_completion> last_;
     };
 }    // namespace hpx::serialization::detail
