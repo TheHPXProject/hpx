@@ -46,6 +46,10 @@ set(device_conduit_export_declarations)
 set(device_conduit_init_definitions)
 
 foreach(conduit ${HPX_STATIC_DEVICE_CONDUIT_PLUGINS})
+  set(parcelport_module_dependencies ${parcelport_module_dependencies}
+                                     hpx_device_conduit_${conduit}
+  )
+
   set(device_conduit_export_declarations
       "${device_conduit_export_declarations}HPX_EXPORT hpx::plugins::device_conduit_factory_base *\n"
   )
