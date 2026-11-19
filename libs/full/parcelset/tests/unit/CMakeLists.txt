@@ -103,3 +103,14 @@ if(HPX_WITH_ITTNOTIFY AND HPX_WITH_PARCEL_PROFILING)
          --hpx:ini=hpx.trace_depth=0
   )
 endif()
+
+# the same test with the UCX device conduit
+if(HPX_WITH_DEVICE_CONDUIT_UCX)
+  add_hpx_unit_test(
+    "modules.parcelset" device_conduit_ucx
+    EXECUTABLE device_conduit
+    PSEUDO_DEPS_NAME device_conduit ${device_conduit_PARAMETERS}
+    RUN_SERIAL
+    ARGS --hpx:ini=hpx.parcel.device_conduit=ucx
+  )
+endif()
