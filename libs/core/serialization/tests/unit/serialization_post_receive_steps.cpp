@@ -15,8 +15,10 @@
 #include <hpx/modules/testing.hpp>
 
 #include <cstddef>
+#include <exception>
 #include <functional>
 #include <memory>
+#include <stdexcept>
 #include <utility>
 #include <vector>
 
@@ -43,6 +45,12 @@ namespace {
             HPX_TEST(static_cast<bool>(*done));
             (*done)();
         }
+
+        void fail() const
+        {
+            HPX_TEST(static_cast<bool>(*done));
+            (*done)(std::make_exception_ptr(std::runtime_error("step")));
+        }
     };
 
     // what the parcel does with its steps (see parcel::on_receive_complete)
@@ -61,15 +69,21 @@ namespace {
                 complete = true;
                 return;
             }
-            steps.completion->when_done([this]() { complete = true; });
+            steps.completion->when_done([this]() {
+                complete = true;
+                failed = static_cast<bool>(steps.completion->error());
+            });
             for (auto& action : steps.actions)
             {
-                action([c = steps.completion]() { c->step_done(); });
+                action([c = steps.completion](std::exception_ptr error) {
+                    c->step_done(HPX_MOVE(error));
+                });
             }
         }
 
         post_receive_actions::parcel_steps steps;
         bool complete = false;
+        bool failed = false;
     };
 
     void test_no_steps()
@@ -156,6 +170,53 @@ namespace {
         s2.finish();
         HPX_TEST(p2.complete);
     }
+
+    // A failed step completes its parcel with the error, and the parcels
+    // after it (which may use the same objects) as well.
+    void test_failed_step()
+    {
+        post_receive_actions actions;
+        controlled_step s1;
+        actions.add(s1.action());
+        parcel p1(actions);
+        controlled_step s2;
+        actions.add(s2.action());
+        parcel p2(actions);
+
+        p1.start();
+        p2.start();
+        s2.finish();
+        HPX_TEST(!p2.complete);
+
+        s1.fail();
+        HPX_TEST(p1.complete);
+        HPX_TEST(p1.failed);
+        HPX_TEST(p2.complete);
+        HPX_TEST(p2.failed);
+    }
+
+    // All waiters run when the last step finishes, also if one throws; the
+    // exception is passed on afterwards.
+    void test_throwing_waiter()
+    {
+        auto completion = receive_completion::create(nullptr, 1);
+        bool second_called = false;
+        completion->when_done([]() { throw std::runtime_error("waiter"); });
+        completion->when_done([&second_called]() { second_called = true; });
+
+        bool caught = false;
+        try
+        {
+            completion->step_done();
+        }
+        catch (std::runtime_error const&)
+        {
+            caught = true;
+        }
+        HPX_TEST(caught);
+        HPX_TEST(second_called);
+        HPX_TEST(!completion->error());
+    }
 }    // namespace
 
 int main()
@@ -163,6 +224,8 @@ int main()
     test_no_steps();
     test_shared_steps();
     test_steps_finished_in_order();
+    test_failed_step();
+    test_throwing_waiter();
 
     return hpx::util::report_errors();
 }

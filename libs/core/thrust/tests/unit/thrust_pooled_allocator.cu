@@ -99,7 +99,9 @@ namespace {
 
     void test_reuse()
     {
-        // memory of the same size class comes back from the pool
+        // memory of the same size class comes back from the pool (main sets
+        // a cache limit of 16 MiB), starting with an empty cache
+        hpx::thrust::release_cached_memory();
         void* first = nullptr;
         {
             hpx::thrust::device_vector<char> v(std::size_t(1) << 20);
@@ -176,8 +178,12 @@ namespace {
     }
 }    // namespace
 
+// the memory kind of the first runtime (see hpx_main_restarted)
+hpx::thrust::memory_kind first_kind = hpx::thrust::memory_kind::device;
+
 int hpx_main(hpx::program_options::variables_map&)
 {
+    first_kind = hpx::thrust::default_memory_kind();
     test_memory_kind();
     test_overflow();
     test_device_work();
@@ -186,8 +192,39 @@ int hpx_main(hpx::program_options::variables_map&)
     return hpx::local::finalize();
 }
 
+// A runtime started later in the same process uses its own configuration,
+// here the other kind of memory.
+int hpx_main_restarted(hpx::program_options::variables_map&)
+{
+    hpx::thrust::memory_kind const expected =
+        first_kind == hpx::thrust::memory_kind::device ?
+        hpx::thrust::memory_kind::pinned :
+        hpx::thrust::memory_kind::device;
+    HPX_TEST(hpx::thrust::default_memory_kind() == expected);
+
+    hpx::thrust::device_vector<int> v(1000);
+    HPX_TEST_EQ(hpx::thrust::detail::is_pinned_host_memory(
+                    ::thrust::raw_pointer_cast(v.data())),
+        expected == hpx::thrust::memory_kind::pinned);
+
+    return hpx::local::finalize();
+}
+
 int main(int argc, char* argv[])
 {
-    HPX_TEST_EQ(hpx::local::init(hpx_main, argc, argv), 0);
+    hpx::local::init_params init_args;
+    init_args.cfg = {"hpx.thrust.max_cached=16777216"};
+    HPX_TEST_EQ(hpx::local::init(hpx_main, argc, argv, init_args), 0);
+
+    // the command line of the first runtime may select the memory kind
+    hpx::local::init_params restarted_args;
+    restarted_args.cfg = {first_kind == hpx::thrust::memory_kind::device ?
+            "hpx.thrust.memory=pinned" :
+            "hpx.thrust.memory=device",
+        "hpx.thrust.max_cached=0"};
+    char* restarted_argv[] = {argv[0], nullptr};
+    HPX_TEST_EQ(
+        hpx::local::init(hpx_main_restarted, 1, restarted_argv, restarted_args),
+        0);
     return hpx::util::report_errors();
 }

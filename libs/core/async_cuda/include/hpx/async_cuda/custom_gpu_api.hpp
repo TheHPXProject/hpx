@@ -41,6 +41,7 @@
 #define cudaEventDisableTiming hipEventDisableTiming
 #define cudaEventQuery hipEventQuery
 #define cudaEventRecord hipEventRecord
+#define cudaEventSynchronize hipEventSynchronize
 #define cudaFree hipFree
 #define cudaFreeHost hipHostFree
 #define cudaGetDevice hipGetDevice

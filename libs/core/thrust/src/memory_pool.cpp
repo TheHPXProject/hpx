@@ -12,6 +12,7 @@
 
 #include <hpx/thrust/memory.hpp>
 
+#include <algorithm>
 #include <atomic>
 #include <cstddef>
 #include <exception>
@@ -95,9 +96,11 @@ namespace hpx::thrust {
               : kind_(kind)
               , device_(device)
               , fallback_max_cached_(fallback_max_cached)
+              , final_(hpx::is_running())
               , max_cached_(max_cached_config(fallback_max_cached))
-              , final_(hpx::get_runtime_ptr() != nullptr)
             {
+                // final_ is sampled first: it is set only if the limit was
+                // read from the complete configuration
             }
 
             pool(pool const&) = delete;
@@ -111,6 +114,7 @@ namespace hpx::thrust {
             // allocated on the current device, which is this pool's device
             void* allocate(std::size_t const size_class)
             {
+                reclaim_deferred();
                 {
                     std::lock_guard<hpx::spinlock_no_backoff> l(mtx_);
                     if (auto it = free_.find(size_class);
@@ -160,43 +164,60 @@ namespace hpx::thrust {
                 free_block(p);
             }
 
+            // The block 'p' is given back while device work still reads it:
+            // it is reused only once 'event' has completed.
+            void deallocate_after(void* p, std::size_t const size_class,
+                cudaEvent_t const event) noexcept
+            {
+                try
+                {
+                    std::lock_guard<hpx::spinlock_no_backoff> l(mtx_);
+                    deferred_.push_back(deferred_block{p, size_class, event});
+                    return;
+                }
+                catch (...)
+                {
+                    // could not keep it aside, wait for the reads instead
+                }
+                (void) cudaEventSynchronize(event);
+                (void) cudaEventDestroy(event);
+                deallocate(p, size_class);
+            }
+
             // whether the limit comes from the complete configuration
             [[nodiscard]] bool is_final() const noexcept
             {
                 return final_.load(std::memory_order_acquire);
             }
 
-            // Before the runtime exists the configuration isn't complete, the
+            // Before the runtime runs the configuration isn't complete, the
             // limit is the fallback: applies hpx.thrust.max_cached once it is
-            // and frees the blocks above the limit.
+            // (again for each runtime, see unconfigure) and frees the blocks
+            // above the limit. The limit is final once the cache is within
+            // it.
             void configure()
             {
                 std::size_t const max_cached =
                     max_cached_config(fallback_max_cached_);
-
-                std::vector<void*> excess;
                 {
                     std::lock_guard<hpx::spinlock_no_backoff> l(mtx_);
                     max_cached_ = max_cached;
-                    while (cached_ > max_cached_ && !free_.empty())
+                }
+
+                // one block at a time, the largest first: this allocates
+                // nothing, memory may be short
+                while (true)
+                {
+                    void* p = nullptr;
                     {
-                        // the largest blocks first
+                        std::lock_guard<hpx::spinlock_no_backoff> l(mtx_);
+                        if (cached_ <= max_cached_ || free_.empty())
+                        {
+                            final_.store(true, std::memory_order_release);
+                            return;
+                        }
                         auto it = std::prev(free_.end());
-                        if (it->second.empty())
-                        {
-                            free_.erase(it);
-                            continue;
-                        }
-                        try
-                        {
-                            excess.push_back(it->second.back());
-                        }
-                        catch (...)
-                        {
-                            // out of memory: keep the remaining blocks
-                            // cached, they're still owned by the pool
-                            break;
-                        }
+                        p = it->second.back();
                         it->second.pop_back();
                         cached_ -= it->first;
                         if (it->second.empty())
@@ -204,21 +225,26 @@ namespace hpx::thrust {
                             free_.erase(it);
                         }
                     }
-                    final_.store(true, std::memory_order_release);
-                }
-                for (void* p : excess)
-                {
                     free_block(p);
                 }
             }
 
-            // frees the cached blocks
+            // the next runtime may configure another limit
+            void unconfigure() noexcept
+            {
+                final_.store(false, std::memory_order_release);
+            }
+
+            // frees the cached blocks, and those given back while device
+            // work still reads them once it has finished
             void release() noexcept
             {
                 std::map<std::size_t, std::vector<void*>> blocks;
+                std::vector<deferred_block> deferred;
                 {
                     std::lock_guard<hpx::spinlock_no_backoff> l(mtx_);
                     std::swap(blocks, free_);
+                    std::swap(deferred, deferred_);
                     cached_ = 0;
                 }
                 for (auto& [size_class, ps] : blocks)
@@ -228,9 +254,49 @@ namespace hpx::thrust {
                         free_block(p);
                     }
                 }
+                for (deferred_block const& b : deferred)
+                {
+                    (void) cudaEventSynchronize(b.event);
+                    (void) cudaEventDestroy(b.event);
+                    free_block(b.p);
+                }
             }
 
         private:
+            // a block given back while device work still reads it
+            struct deferred_block
+            {
+                void* p;
+                std::size_t size_class;
+                cudaEvent_t event;
+            };
+
+            // the deferred blocks whose reads have finished go to the cache
+            void reclaim_deferred() noexcept
+            {
+                while (true)
+                {
+                    deferred_block b{};
+                    {
+                        std::lock_guard<hpx::spinlock_no_backoff> l(mtx_);
+                        auto const it = std::find_if(deferred_.begin(),
+                            deferred_.end(), [](deferred_block const& d) {
+                                return cudaEventQuery(d.event) !=
+                                    cudaErrorNotReady;
+                            });
+                        if (it == deferred_.end())
+                        {
+                            return;
+                        }
+                        b = *it;
+                        *it = deferred_.back();
+                        deferred_.pop_back();
+                    }
+                    (void) cudaEventDestroy(b.event);
+                    deallocate(b.p, b.size_class);
+                }
+            }
+
             // nullptr if out of memory, throws for other errors
             void* allocate_new(std::size_t const size_class) const
             {
@@ -273,8 +339,8 @@ namespace hpx::thrust {
             memory_kind const kind_;
             int const device_;
             std::size_t const fallback_max_cached_;
-            std::size_t max_cached_;
             std::atomic<bool> final_;
+            std::size_t max_cached_;
 
             // never suspends the calling HPX thread: the device memory is
             // allocated on the GPU current on the OS thread, which may be
@@ -283,6 +349,7 @@ namespace hpx::thrust {
             hpx::spinlock_no_backoff mtx_;
             std::map<std::size_t, std::vector<void*>> free_;
             std::size_t cached_ = 0;
+            std::vector<deferred_block> deferred_;
         };
 
         int current_device()
@@ -310,14 +377,24 @@ namespace hpx::thrust {
                 "hpx.thrust.memory must be device or pinned, not '{}'", value);
         }
 
+        // The default memory kind while the runtime runs (the configuration
+        // is complete only then), else unknown_kind.
+        constexpr int unknown_kind = -1;
+
+        std::atomic<int>& cached_kind() noexcept
+        {
+            static std::atomic<int> kind{unknown_kind};
+            return kind;
+        }
+
+        bool forget_configuration_when_stopped();
+
         // The pools of all devices, created on first use of a device (each
         // knows its device's memory size only then), and the blocks handed
         // out, by address. Never destroyed: memory may be deallocated by
         // the destructors of other static objects.
         class pools
         {
-            static constexpr int unknown_kind = -1;
-
         public:
             static pools& instance()
             {
@@ -331,22 +408,22 @@ namespace hpx::thrust {
                 return published().load(std::memory_order_acquire);
             }
 
-            memory_kind default_kind()
+            // The runtime has stopped: the next one may configure other
+            // limits.
+            // The blocks stay cached (within the old limits) until the pools
+            // are configured again.
+            void unconfigure() noexcept
             {
-                if (int const value = kind_.load(std::memory_order_acquire);
-                    value != unknown_kind)
-                {
-                    return static_cast<memory_kind>(value);
-                }
+                all_final_.store(false, std::memory_order_release);
 
-                // the configuration is complete only once the runtime exists
-                memory_kind const kind = configured_memory_kind();
-                if (hpx::get_runtime_ptr() != nullptr)
+                std::lock_guard<hpx::spinlock_no_backoff> l(mtx_);
+                for (auto& p : device_pools_)
                 {
-                    kind_.store(
-                        static_cast<int>(kind), std::memory_order_release);
+                    if (p)
+                        p->unconfigure();
                 }
-                return kind;
+                if (pinned_pool_)
+                    pinned_pool_->unconfigure();
             }
 
             void* allocate(std::size_t const bytes, memory_kind const kind)
@@ -367,12 +444,47 @@ namespace hpx::thrust {
                 return block;
             }
 
+            // a staging copy queued on 'stream' reads 'block'
+            void note_read(void const* block, cudaStream_t const stream)
+            {
+                {
+                    std::lock_guard<hpx::spinlock_no_backoff> l(mtx_);
+                    if (blocks_.find(const_cast<void*>(block)) == blocks_.end())
+                    {
+                        return;    // not ours, freeing it synchronizes
+                    }
+                }
+
+                cudaEvent_t event = nullptr;
+                hpx::cuda::experimental::check_cuda_error(
+                    cudaEventCreateWithFlags(&event, cudaEventDisableTiming));
+                cudaEvent_t replaced = nullptr;
+                try
+                {
+                    hpx::cuda::experimental::check_cuda_error(
+                        cudaEventRecord(event, stream));
+                    std::lock_guard<hpx::spinlock_no_backoff> l(mtx_);
+                    cudaEvent_t& entry = reads_[block];
+                    replaced = std::exchange(entry, event);
+                }
+                catch (...)
+                {
+                    (void) cudaEventDestroy(event);
+                    throw;
+                }
+                if (replaced != nullptr)
+                {
+                    // the earlier read was queued before on the same stream
+                    (void) cudaEventDestroy(replaced);
+                }
+            }
+
             void deallocate(void* block, std::size_t const bytes) noexcept
             {
-                // a block allocated before the runtime existed, returned once
-                // it does: the pool keeps it only within the configured limit
+                // a block allocated before the runtime ran, returned once
+                // it runs: the pool keeps it only within the configured limit
                 if (!all_final_.load(std::memory_order_acquire) &&
-                    hpx::get_runtime_ptr() != nullptr)
+                    hpx::is_running())
                 {
                     try
                     {
@@ -386,6 +498,7 @@ namespace hpx::thrust {
                 }
 
                 pool* p = nullptr;
+                cudaEvent_t read = nullptr;
                 {
                     std::lock_guard<hpx::spinlock_no_backoff> l(mtx_);
                     auto const it = blocks_.find(block);
@@ -395,6 +508,22 @@ namespace hpx::thrust {
                     }
                     p = it->second;
                     blocks_.erase(it);
+                    if (auto const r = reads_.find(block); r != reads_.end())
+                    {
+                        read = r->second;
+                        reads_.erase(r);
+                    }
+                }
+
+                // a staging copy may still read it: reused only afterwards
+                if (read != nullptr)
+                {
+                    if (cudaEventQuery(read) == cudaErrorNotReady)
+                    {
+                        p->deallocate_after(block, size_class_of(bytes), read);
+                        return;
+                    }
+                    (void) cudaEventDestroy(read);
                 }
                 p->deallocate(block, size_class_of(bytes));
             }
@@ -469,9 +598,12 @@ namespace hpx::thrust {
             }
 
             // applies the configuration to the pools created before the
-            // runtime existed
+            // runtime ran (or used by an earlier runtime)
             void configure_pools()
             {
+                // configured once for each runtime (else again on each use)
+                bool const final = forget_configuration_when_stopped();
+
                 std::vector<pool*> pending;
                 {
                     std::lock_guard<hpx::spinlock_no_backoff> l(mtx_);
@@ -487,13 +619,13 @@ namespace hpx::thrust {
                 {
                     p->configure();
                 }
-                all_final_.store(true, std::memory_order_release);
+                all_final_.store(final, std::memory_order_release);
             }
 
             pool& pool_for(memory_kind const kind, int const device)
             {
                 if (!all_final_.load(std::memory_order_acquire) &&
-                    hpx::get_runtime_ptr() != nullptr)
+                    hpx::is_running())
                 {
                     configure_pools();
                 }
@@ -518,16 +650,15 @@ namespace hpx::thrust {
                     result = p.get();
                 }
 
-                // created just before the runtime existed, after the pools
+                // created just before the runtime ran, after the pools
                 // were configured
-                if (!result->is_final() && hpx::get_runtime_ptr() != nullptr)
+                if (!result->is_final() && hpx::is_running())
                 {
                     result->configure();
                 }
                 return *result;
             }
 
-            std::atomic<int> kind_ = unknown_kind;
             std::atomic<bool> all_final_ = false;
 
             // never suspends the calling HPX thread: the device memory is
@@ -538,12 +669,72 @@ namespace hpx::thrust {
             std::vector<std::unique_ptr<pool>> device_pools_;
             std::unique_ptr<pool> pinned_pool_;
             std::unordered_map<void*, pool*> blocks_;
+
+            // the last staging copy reading a block, by address
+            std::unordered_map<void const*, cudaEvent_t> reads_;
         };
+        // The configuration cached for a runtime (the default memory kind,
+        // the limits of the pools) is forgotten when it ends: a runtime
+        // started later in the same process may configure others. Returns
+        // whether it will be: only then may it be cached, i.e. while the
+        // runtime is running (not yet while it starts, when the configuration
+        // may not be complete, nor once it stops, when it has been forgotten
+        // already).
+        bool forget_configuration_when_stopped()
+        {
+            static std::atomic<bool> registered(false);
+            if (!hpx::is_running())
+            {
+                return false;
+            }
+            if (registered.exchange(true, std::memory_order_acq_rel))
+            {
+                return true;
+            }
+            try
+            {
+                // called once the runtime has stopped running
+                bool const registered_now = hpx::register_on_exit([]() {
+                    cached_kind().store(
+                        unknown_kind, std::memory_order_release);
+                    if (pools* p = pools::existing())
+                    {
+                        p->unconfigure();
+                    }
+                    registered.store(false, std::memory_order_release);
+                });
+                if (registered_now)
+                {
+                    return true;
+                }
+            }
+            // NOLINTNEXTLINE(bugprone-empty-catch)
+            catch (...)
+            {
+            }
+            registered.store(false, std::memory_order_release);
+            return false;
+        }
     }    // namespace
 
+    // reads the configuration only, the GPU isn't touched
     memory_kind default_memory_kind()
     {
-        return pools::instance().default_kind();
+        if (int const value = cached_kind().load(std::memory_order_acquire);
+            value != unknown_kind)
+        {
+            return static_cast<memory_kind>(value);
+        }
+
+        // the configuration is complete only once the runtime runs, it is
+        // cached for the rest of the runtime
+        memory_kind const kind = configured_memory_kind();
+        if (forget_configuration_when_stopped())
+        {
+            cached_kind().store(
+                static_cast<int>(kind), std::memory_order_release);
+        }
+        return kind;
     }
 
     void release_cached_memory() noexcept
@@ -573,6 +764,15 @@ namespace hpx::thrust::detail {
         if (p != nullptr)
         {
             pools::instance().deallocate(p, bytes);
+        }
+    }
+
+    void pool_note_read(void const* p, void* stream)
+    {
+        // without pools no memory comes from them
+        if (pools* existing = pools::existing(); existing != nullptr)
+        {
+            existing->note_read(p, static_cast<cudaStream_t>(stream));
         }
     }
 

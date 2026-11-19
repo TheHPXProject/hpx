@@ -30,6 +30,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <memory>
 #include <string>
 #include <type_traits>
@@ -569,14 +570,45 @@ namespace hpx::parcelset::detail {
         }
 
         // f is called once the steps of this parcel and of the parcels
-        // before it have finished, by the thread that finished the last one
+        // before it have finished, by the thread that finished the last one;
+        // if one of them failed, the arguments are incomplete and the action
+        // isn't scheduled (the waiter is called by 'completion')
         auto shared_f =
             std::make_shared<hpx::move_only_function<void()>>(HPX_MOVE(f));
-        completion->when_done([shared_f]() { (*shared_f)(); });
+        completion->when_done([shared_f, c = completion.get()]() {
+            if (std::exception_ptr const error = c->error())
+            {
+                hpx::report_error(error);
+                return;
+            }
+            (*shared_f)();
+        });
 
+        // each step finishes exactly once, also if starting it throws
         for (auto& action : actions)
         {
-            action([completion]() { completion->step_done(); });
+            auto finished = std::make_shared<std::atomic<bool>>(false);
+            serialization::detail::receive_step_done const done(
+                [completion, finished](std::exception_ptr error) {
+                    if (!finished->exchange(true))
+                    {
+                        completion->step_done(HPX_MOVE(error));
+                    }
+                });
+            try
+            {
+                action(done);
+            }
+            catch (...)
+            {
+                // the step had finished already: a waiter of the completion
+                // has thrown, pass that on
+                if (finished->exchange(true))
+                {
+                    throw;
+                }
+                completion->step_done(std::current_exception());
+            }
         }
     }
 

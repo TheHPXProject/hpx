@@ -26,9 +26,10 @@ namespace hpx::thrust {
     // entry hpx.thrust.memory: device (the default) or pinned. Device kernels
     // work on device memory faster, also on integrated GPUs (measured on an
     // NVIDIA GB10); the network sends pinned host memory from and receives
-    // it into its place without staging copies. Before the runtime exists,
-    // the configuration isn't complete yet: it's read again on every call
-    // until then.
+    // it into its place without staging copies. The configuration is
+    // complete only while the runtime runs: it's read again on every call
+    // before, and after the runtime has stopped (a runtime started later
+    // may configure another kind).
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT memory_kind default_memory_kind();
 
     // Frees the memory the pools keep for reuse. The pools free it themselves
@@ -46,9 +47,16 @@ namespace hpx::thrust::detail {
         std::size_t bytes, memory_kind kind);
 
     // Gives memory from pool_allocate back to its pool. The memory is reused
-    // right away: no device work may use it anymore.
+    // right away: no device work may use it anymore, except the reads
+    // announced with pool_note_read.
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void pool_deallocate(
         void* p, std::size_t bytes) noexcept;
+
+    // Work queued on 'stream' (a cudaStream_t) reads the memory at 'p': if
+    // it is memory from pool_allocate, the pool doesn't reuse it before that
+    // work has finished, also if it is given back earlier.
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void pool_note_read(
+        void const* p, void* stream);
 
     // whether p points to pinned host memory, which the host and the network
     // can access directly
