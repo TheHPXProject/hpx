@@ -21,6 +21,7 @@ if(HPX_WITH_DATAPAR)
       countif_datapar
       equal_binary_datapar
       equal_datapar
+      exclusive_scan_datapar
       fill_datapar
       filln_datapar
       find_datapar
@@ -34,6 +35,7 @@ if(HPX_WITH_DATAPAR)
       for_loop_datapar
       generate_datapar
       generaten_datapar
+      inclusive_scan_datapar
       lexicographical_compare_datapar
       mismatch_binary_datapar
       mismatch_datapar
