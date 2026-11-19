@@ -1,5 +1,6 @@
 //  Copyright (c) 2007-2024 Hartmut Kaiser
 //  Copyright (c) 2011      Bryce Lelbach
+//  Copyright (c) 2026 Divyanshi Talreja
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -92,7 +93,7 @@ namespace hpx::threads::policies {
                 threads::thread_init_data& data = task;
                 threads::thread_id_ref_type tid;
 
-                holder_->create_thread_object(tid, data);
+                holder_->create_thread_object(tid, data, true);
                 holder_->add_to_thread_map(tid.noref());
 
                 // Decrement only after thread_map_count_ has been incremented
@@ -180,8 +181,8 @@ namespace hpx::threads::policies {
 
         // create a new thread and schedule it if the initial state is equal to
         // pending
-        void create_thread(
-            thread_init_data& data, thread_id_ref_type* id, error_code& ec)
+        void create_thread(thread_init_data& data, thread_id_ref_type* id,
+            bool const caller_owns_holder, error_code& ec)
         {
             // thread has not been created yet
             if (id)
@@ -197,7 +198,7 @@ namespace hpx::threads::policies {
             if (data.run_now)
             {
                 threads::thread_id_ref_type tid;
-                holder_->create_thread_object(tid, data);
+                holder_->create_thread_object(tid, data, caller_owns_holder);
                 holder_->add_to_thread_map(tid.noref());
 
                 // push the new thread in the pending queue thread
