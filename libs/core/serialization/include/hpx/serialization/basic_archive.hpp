@@ -356,7 +356,8 @@ namespace hpx::serialization {
         }
 
         /// Make the archive optimistic. Call it after the constructor, so
-        /// that the flag is not written into the archive.
+        /// that the flag is not written into the archive. reset() keeps the
+        /// flag.
         void enable_optimistic() noexcept
         {
             flags_ = flags_ | archive_flags::archive_is_optimistic;
