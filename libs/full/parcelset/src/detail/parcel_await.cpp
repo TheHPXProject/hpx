@@ -113,6 +113,7 @@ namespace hpx::parcelset::detail {
             (*handle_futures)([&all_ready]() { all_ready.set_value(); });
             f.get();
         }
+        // NOLINTNEXTLINE(bugprone-empty-catch)
         catch (...)
         {
             // the error of the serialization is passed on instead
