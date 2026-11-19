@@ -185,12 +185,10 @@ namespace hpx::thrust {
                 {
                     deallocate(p, size_class);
                 }
-                else
-                {
-                    // the reads may not have finished, freeing the block
-                    // synchronizes
-                    free_block(p);
-                }
+
+                // Otherwise the reads may not have finished: the block is
+                // neither reused nor freed (it is lost, which takes an
+                // allocation failure followed by a CUDA error).
             }
 
             // whether the limit comes from the complete configuration
