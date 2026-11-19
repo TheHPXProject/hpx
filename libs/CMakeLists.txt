@@ -422,12 +422,20 @@ foreach(lib ${HPX_LIBS})
   endif()
 
   if(HPX_WITH_CXX_MODULES)
-    # generate list of headers to be #included by the module interface unit
+    # generate list of headers to be #included by the module interface unit When
+    # HPX_WITH_CXX_MODULE_STD is enabled, only include modules whose standard
+    # library includes have been guarded to avoid textual redefinition errors
+    # after import std;.
+    set(_converted_cxx_modules config config_registry preprocessor properties)
     set(cxx_module_headers)
     foreach(cxx_module ${HPX_${uppercase_lib}_ENABLED_CXX_MODULES})
-      set(cxx_module_headers
-          "${cxx_module_headers}#include <hpx/modules/${cxx_module}.hpp>\n"
+      if(NOT HPX_WITH_CXX_MODULE_STD OR cxx_module IN_LIST
+                                        _converted_cxx_modules
       )
+        set(cxx_module_headers
+            "${cxx_module_headers}#include <hpx/modules/${cxx_module}.hpp>\n"
+        )
+      endif()
     endforeach()
 
     hpx_configure_if_changed(
