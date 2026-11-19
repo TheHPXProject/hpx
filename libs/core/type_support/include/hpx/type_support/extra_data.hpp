@@ -180,23 +180,17 @@ namespace hpx::util {
         }
 
         // resets all objects (in the reverse order of their ids)
-        void reset() const
-        {
-            if (table_ == nullptr)
-            {
-                return;
-            }
-            extra_data_member_base** slots = table_->slots();
-            for (std::size_t i = table_->size; i != 0; --i)
-            {
-                if (slots[i - 1] != nullptr)
-                {
-                    slots[i - 1]->reset();
-                }
-            }
-        }
+        HPX_CORE_EXPORT void reset() const;
 
     private:
+        // a new table, not yet installed, and the storage of the object it
+        // is created for (in the same block)
+        struct new_table
+        {
+            table* t;
+            void* member;
+        };
+
         // A new table with room for the id 'id' (and for those assigned so
         // far), allocated together with the object of type T it is created
         // for. It takes over the objects of the current table.
@@ -205,116 +199,40 @@ namespace hpx::util {
         {
             using member_type = extra_data_member<T>;
 
-            std::size_t size = detail::extra_data_id_count();
-            if (size <= id)
-            {
-                size = id + 1;
-            }
-
-            constexpr std::size_t alignment =
-                alignof(member_type) > alignof(table) ? alignof(member_type) :
-                                                        alignof(table);
-            std::size_t const slots_end =
-                sizeof(table) + size * sizeof(extra_data_member_base*);
-            std::size_t const member_offset =
-                (slots_end + alignof(member_type) - 1) &
-                ~(alignof(member_type) - 1);
-
-            void* block =
-                allocate_block(member_offset + sizeof(member_type), alignment);
+            auto const [t, storage] =
+                prepare_table(id, sizeof(member_type), alignof(member_type));
             member_type* member = nullptr;
             try
             {
-                member = ::new (static_cast<char*>(block) + member_offset)
-                    member_type();
+                member = ::new (storage) member_type();
             }
             catch (...)
             {
-                free_block(block, alignment);
+                discard_table(t);
                 throw;
             }
-            member->in_table_block = true;
 
-            table* t = ::new (block) table{size, alignment, table_};
-            extra_data_member_base** slots = t->slots();
-            for (std::size_t i = 0; i != size; ++i)
-            {
-                slots[i] = nullptr;
-            }
-            if (table_ != nullptr)
-            {
-                extra_data_member_base** old_slots = table_->slots();
-                for (std::size_t i = 0; i != table_->size; ++i)
-                {
-                    slots[i] = old_slots[i];
-                }
-            }
-            slots[id] = member;
-            table_ = t;
+            install_table(t, id, member);
             return member->t_;
         }
 
+        // Allocates a table with room for the id 'id' and an object of the
+        // given size and alignment, with the objects of the current table.
+        [[nodiscard]] HPX_CORE_EXPORT new_table prepare_table(
+            extra_data_id_type id, std::size_t member_size,
+            std::size_t member_alignment) const;
+
+        // makes 't' the current table, with 'member' (in its block) for the
+        // id 'id'
+        HPX_CORE_EXPORT void install_table(table* t, extra_data_id_type id,
+            extra_data_member_base* member) noexcept;
+
+        // frees a table that hasn't been installed
+        HPX_CORE_EXPORT static void discard_table(table* t) noexcept;
+
         // destroys the objects in the reverse order of their ids, then frees
         // the tables
-        void clear() noexcept
-        {
-            if (table_ == nullptr)
-            {
-                return;
-            }
-
-            extra_data_member_base** slots = table_->slots();
-            for (std::size_t i = table_->size; i != 0; --i)
-            {
-                extra_data_member_base* member = slots[i - 1];
-                if (member == nullptr)
-                {
-                    continue;
-                }
-                if (member->in_table_block)
-                {
-                    member->~extra_data_member_base();
-                }
-                else
-                {
-                    delete member;
-                }
-            }
-
-            for (table* t = std::exchange(table_, nullptr); t != nullptr;)
-            {
-                table* previous = t->previous;
-                std::size_t const alignment = t->alignment;
-                t->~table();
-                free_block(t, alignment);
-                t = previous;
-            }
-        }
-
-        // the aligned operator new only for over-aligned objects: it can be
-        // considerably slower (e.g. with MSVC)
-        [[nodiscard]] static void* allocate_block(
-            std::size_t const size, std::size_t const alignment)
-        {
-            if (alignment > __STDCPP_DEFAULT_NEW_ALIGNMENT__)
-            {
-                return ::operator new(size, std::align_val_t(alignment));
-            }
-            return ::operator new(size);
-        }
-
-        static void free_block(
-            void* block, std::size_t const alignment) noexcept
-        {
-            if (alignment > __STDCPP_DEFAULT_NEW_ALIGNMENT__)
-            {
-                ::operator delete(block, std::align_val_t(alignment));
-            }
-            else
-            {
-                ::operator delete(block);
-            }
-        }
+        HPX_CORE_EXPORT void clear() noexcept;
 
         table* table_ = nullptr;
     };
