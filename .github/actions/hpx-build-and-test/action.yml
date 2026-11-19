@@ -85,6 +85,35 @@ runs:
       shell: bash
       run: tar -xzf build.tar.gz
 
+    # While GitHub rolls out a new runner image, the build job and this job
+    # may run on images with different MSVC toolsets. The CMake cache names
+    # the build job's cl.exe, and when ninja re-runs CMake here, CMake fails
+    # if that file doesn't exist. Make the build job's toolset directory a
+    # junction to this runner's toolset: the compile commands stay the same,
+    # so ninja doesn't rebuild what the archive holds.
+    - name: Map the build's MSVC toolset to this runner's
+      if: runner.os == 'Windows'
+      shell: bash
+      working-directory: build
+      run: |
+        set -euo pipefail
+
+        cached="$(sed -n 's/^CMAKE_CXX_COMPILER:[A-Z]*=//p' CMakeCache.txt)"
+        if [ -z "$cached" ] || [ -e "$cached" ] || [ -z "${VCToolsInstallDir:-}" ]; then
+          exit 0
+        fi
+        case "$cached" in
+          */VC/Tools/MSVC/*/bin/*) ;;
+          *) exit 0 ;;
+        esac
+
+        build_toolset="${cached%%/bin/*}"
+        runner_toolset="$(cygpath -m "${VCToolsInstallDir%\\}")"
+        echo "Mapping ${build_toolset} to ${runner_toolset}"
+        powershell -NoProfile -Command "New-Item -ItemType Junction \
+          -Path '$(cygpath -w "$build_toolset")' \
+          -Target '$(cygpath -w "$runner_toolset")' | Out-Null"
+
     - name: Build selected targets
       if: inputs.build-targets != '' || inputs.build-target != '' || inputs.target-file != ''
       shell: bash
