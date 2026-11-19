@@ -1,0 +1,56 @@
+# Copyright (c) 2026 Mohammad Izaan
+#
+# SPDX-License-Identifier: BSL-1.0
+# Distributed under the Boost Software License, Version 1.0. (See accompanying
+# file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+
+name: Windows (Release, VS2022, C++23 Modules import std)
+
+on: [pull_request]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: MSVC
+    runs-on: windows-2022
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v7
+      - uses: lukka/get-cmake@v4.5.0
+
+      - name: Install dependencies
+        uses: ./.github/actions/setup-vcpkg
+
+      - name: Set up MSVC environment
+        uses: ./.github/actions/msvc-dev-env
+
+      - name: Configure
+        shell: bash
+        run: |
+          cmake . -Bbuild -GNinja \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_INSTALL_PREFIX="$(cygpath -m "$GITHUB_WORKSPACE")/install" \
+              -DCMAKE_TOOLCHAIN_FILE='C:/projects/vcpkg/scripts/buildsystems/vcpkg.cmake' \
+              -DHPX_WITH_FETCH_ASIO=ON \
+              -DHPX_WITH_ASIO_TAG=asio-1-34-2 \
+              -DHPX_WITH_TESTS=OFF \
+              -DHPX_WITH_EXAMPLES=OFF \
+              -DHPX_WITH_DEPRECATION_WARNINGS=OFF \
+              -DHPX_COROUTINES_WITH_SWAP_CONTEXT_EMULATION=ON \
+              -DHPX_WITH_CHECK_MODULE_DEPENDENCIES=ON \
+              -DHPX_WITH_CXX_STANDARD=23 \
+              -DHPX_WITH_CXX_MODULES=ON \
+              -DHPX_WITH_CXX_MODULE_STD=ON \
+              -DHPX_WITH_CXX_MODULE_STD_UNRESTRICTED=ON \
+              -DHPX_WITH_DATAPAR=ON \
+              -DHPX_WITH_DATAPAR_BACKEND=EMULATE
+
+      - name: Build module targets
+        shell: bash
+        run: |
+          cmake --build build --config Release --target hpx_core_module hpx_full_module

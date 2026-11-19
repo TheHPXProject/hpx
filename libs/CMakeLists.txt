@@ -354,6 +354,9 @@ foreach(lib ${HPX_LIBS})
   # creation can move here as well.
   if(HPX_WITH_CXX_MODULES)
     add_library(hpx_${lib}_module STATIC)
+    if(HPX_WITH_CXX_MODULE_STD)
+      set_target_properties(hpx_${lib}_module PROPERTIES CXX_MODULE_STD ON)
+    endif()
     set_target_properties(
       hpx_${lib}_module PROPERTIES POSITION_INDEPENDENT_CODE ON
     )
@@ -419,12 +422,20 @@ foreach(lib ${HPX_LIBS})
   endif()
 
   if(HPX_WITH_CXX_MODULES)
-    # generate list of headers to be #included by the module interface unit
+    # generate list of headers to be #included by the module interface unit When
+    # HPX_WITH_CXX_MODULE_STD is enabled, only include modules whose standard
+    # library includes have been guarded to avoid textual redefinition errors
+    # after import std;.
+    set(_converted_cxx_modules config config_registry preprocessor properties)
     set(cxx_module_headers)
     foreach(cxx_module ${HPX_${uppercase_lib}_ENABLED_CXX_MODULES})
-      set(cxx_module_headers
-          "${cxx_module_headers}#include <hpx/modules/${cxx_module}.hpp>\n"
+      if(NOT HPX_WITH_CXX_MODULE_STD OR cxx_module IN_LIST
+                                        _converted_cxx_modules
       )
+        set(cxx_module_headers
+            "${cxx_module_headers}#include <hpx/modules/${cxx_module}.hpp>\n"
+        )
+      endif()
     endforeach()
 
     hpx_configure_if_changed(
@@ -482,16 +493,50 @@ foreach(lib ${HPX_LIBS})
 endforeach()
 
 if(HPX_WITH_CXX_MODULES)
-  # generate header file that #includes all required standard headers
-  set(cxx_standard_headers)
+  include(HPX_CollectStdHeaders)
+
+  # Read names, guards, and macro-providing headers from standard_headers.inc
+  hpx_get_standard_headers(_all_std_headers _std_header_guard_ _macro_headers)
+
+  # Generate list of macro-providing headers for third_party_headers.hpp
+  set(cxx_macro_standard_headers)
+  foreach(_macro_hdr ${_macro_headers})
+    set(cxx_macro_standard_headers
+        "${cxx_macro_standard_headers}#include <${_macro_hdr}>\n"
+    )
+  endforeach()
+
+  # generate header file that #includes all required standard headers. Ensure
+  # <version> is included first so feature-test macros are defined for guards.
+  set(cxx_standard_headers "#include <version>\n")
   foreach(std_header ${HPX_STANDARD_HEADERS})
-    set(cxx_standard_headers "${cxx_standard_headers}#include ${std_header}\n")
+    if(NOT std_header STREQUAL "<version>")
+      string(REGEX REPLACE "^<|>$" "" _clean_header "${std_header}")
+      string(REGEX REPLACE "[^a-zA-Z0-9_]" "_" _var_suffix "${_clean_header}")
+      set(_guard_var "_std_header_guard_${_var_suffix}")
+      if(DEFINED ${_guard_var})
+        set(cxx_standard_headers
+            "${cxx_standard_headers}#if ${${_guard_var}}\n# include ${std_header}\n#endif\n"
+        )
+      else()
+        set(cxx_standard_headers
+            "${cxx_standard_headers}#include ${std_header}\n"
+        )
+      endif()
+    endif()
   endforeach()
 
   hpx_configure_if_changed(
     INPUT "${HPX_SOURCE_DIR}/cmake/templates/std_headers.hpp.in"
     OUTPUT
       "${PROJECT_BINARY_DIR}/libs/core/config/include/hpx/config/std_headers.hpp"
+    CONFIGURE_ARGS @ONLY
+  )
+
+  hpx_configure_if_changed(
+    INPUT "${HPX_SOURCE_DIR}/cmake/templates/third_party_headers.hpp.in"
+    OUTPUT
+      "${PROJECT_BINARY_DIR}/libs/core/config/include/hpx/config/third_party_headers.hpp"
     CONFIGURE_ARGS @ONLY
   )
 endif()

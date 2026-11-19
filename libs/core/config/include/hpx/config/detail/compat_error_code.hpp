@@ -13,7 +13,9 @@
 
 #include <boost/system/error_code.hpp>
 
+#if defined(HPX_HAVE_TEXTUAL_STD_INCLUDES)
 #include <system_error>
+#endif
 
 ///////////////////////////////////////////////////////////////////////////////
 /// \cond NODETAIL

@@ -63,6 +63,24 @@ macro(hpx_check_cxx_modules_support)
       )
       set(HPX_MODULE_INTERFACE_EXTENSION ".cppm")
     endif()
+
+    if(HPX_WITH_CXX_MODULE_STD)
+      if(CMAKE_VERSION VERSION_LESS "3.30")
+        hpx_error(
+          "CMake 3.30+ is required for 'import std;' support (HPX_WITH_CXX_MODULE_STD). Current version: ${CMAKE_VERSION}"
+        )
+      endif()
+      if(HPX_CXX_STANDARD LESS 23)
+        hpx_error(
+          "HPX_WITH_CXX_MODULE_STD requires C++23 or newer. Current standard: C++${HPX_CXX_STANDARD}"
+        )
+      endif()
+      if(NOT HPX_WITH_CXX_MODULE_STD_UNRESTRICTED)
+        hpx_error(
+          "HPX_WITH_CXX_MODULE_STD cannot be enabled yet because not all HPX modules have been converted to support 'import std;'."
+        )
+      endif()
+    endif()
   endif()
 endmacro()
 
@@ -89,6 +107,12 @@ function(hpx_configure_module_producer producer)
     add_library(${_iface} INTERFACE)
     target_link_libraries(${_iface} INTERFACE ${producer})
   endif()
+
+  # Ensure the producer itself is scanned for module dependencies. With CMP0155
+  # OLD, CMake treats a target as a module target only if CXX_SCAN_FOR_MODULES
+  # is set on it, which is required for CMake to connect CXX_MODULE_STD
+  # dependencies (like the std module) to the producer target.
+  set_target_properties(${producer} PROPERTIES CXX_SCAN_FOR_MODULES ON)
 
   # Propagate scanning requirement to consumers via the interface target. CMake
   # uses this to enable its native module dependency scanning for any target

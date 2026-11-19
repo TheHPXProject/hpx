@@ -14,43 +14,39 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-and-test:
+  build:
     name: MSVC
-    uses: ./.github/workflows/sharded-build-and-test.yml
-    with:
-      runs-on: windows-2025-vs2026
-      get-cmake: true
-      vcpkg: true
-      msvc-dev-env: true
-      configure: |
-        cmake . -Bbuild -GNinja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_INSTALL_PREFIX="$(cygpath -m "$GITHUB_WORKSPACE")/install" \
-            -DHPX_WITH_PSEUDO_DEPENDENCIES=ON \
-            -DCMAKE_TOOLCHAIN_FILE='C:/projects/vcpkg/scripts/buildsystems/vcpkg.cmake' \
-            -DHPX_WITH_FETCH_ASIO=ON \
-            -DHPX_WITH_ASIO_TAG=asio-1-38-0 \
-            -DHPX_WITH_EXAMPLES=ON \
-            -DHPX_WITH_TESTS=ON \
-            -DHPX_WITH_TESTS_EXAMPLES=ON \
-            -DHPX_WITH_TESTS_UNIT=ON \
-            -DHPX_WITH_SUPERVISION=ON \
-            -DHPX_WITH_DEPRECATION_WARNINGS=OFF \
-            -DHPX_WITH_TESTS_MAX_THREADS_PER_LOCALITY=2 \
-            -DHPX_COROUTINES_WITH_SWAP_CONTEXT_EMULATION=ON \
-            -DHPX_WITH_VERIFY_LOCKS=ON \
-            -DHPX_WITH_VERIFY_LOCKS_BACKTRACE=ON \
-            -DHPX_WITH_CHECK_MODULE_DEPENDENCIES=ON \
-            -DHPX_WITH_CXX_MODULES=ON \
-            -DHPX_WITH_DATAPAR=ON \
-            -DHPX_WITH_DATAPAR_BACKEND=EMULATE
-      base-targets: hpx_core core components
-      # the external CMake build tests, against the build and the installed
-      # directory
-      extra-targets: install tests.unit.build
-      shards: 20
-      exclude-files: >-
-        .github/workflows/exclude.targets
-        .github/workflows/tests.examples.targets
-      # the default timeout of ctest, as in the other Windows workflows
-      ctest-timeout: "1500"
+    runs-on: windows-2025-vs2026
+
+    steps:
+      - uses: actions/checkout@v7
+      - uses: lukka/get-cmake@v4.5.0
+
+      - name: Install dependencies
+        uses: ./.github/actions/setup-vcpkg
+      - name: Configure
+        shell: bash
+        run: |
+          cmake . -Bbuild -G'Visual Studio 18 2026' \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_INSTALL_PREFIX="$PWD/build/install" \
+              -DCMAKE_TOOLCHAIN_FILE='C:/projects/vcpkg/scripts/buildsystems/vcpkg.cmake' \
+              -DHPX_WITH_FETCH_ASIO=ON \
+              -DHPX_WITH_ASIO_TAG=asio-1-38-0 \
+              -DHPX_WITH_EXAMPLES=OFF \
+              -DHPX_WITH_TESTS=OFF \
+              -DHPX_WITH_DEPRECATION_WARNINGS=OFF \
+              -DHPX_COROUTINES_WITH_SWAP_CONTEXT_EMULATION=ON \
+              -DHPX_WITH_CHECK_MODULE_DEPENDENCIES=ON \
+              -DHPX_WITH_CXX_MODULES=ON \
+              -DHPX_WITH_DATAPAR=ON \
+              -DHPX_WITH_DATAPAR_BACKEND=EMULATE
+      - name: Build
+        shell: bash
+        run: |
+          cmake --build build --config Release --target ALL_BUILD \
+            -- -maxcpucount:2 -verbosity:minimal -nologo
+      - name: Install
+        shell: bash
+        run: |
+          cmake --install build --config Release

@@ -8,7 +8,9 @@
 
 #include <hpx/config.hpp>
 
+#if defined(HPX_HAVE_TEXTUAL_STD_INCLUDES)
 #include <string>
+#endif
 
 namespace hpx::detail {
 
