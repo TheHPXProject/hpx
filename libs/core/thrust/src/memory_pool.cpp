@@ -179,9 +179,18 @@ namespace hpx::thrust {
                 {
                     // could not keep it aside, wait for the reads instead
                 }
-                (void) cudaEventSynchronize(event);
+                cudaError_t const error = cudaEventSynchronize(event);
                 (void) cudaEventDestroy(event);
-                deallocate(p, size_class);
+                if (error == cudaSuccess)
+                {
+                    deallocate(p, size_class);
+                }
+                else
+                {
+                    // the reads may not have finished, freeing the block
+                    // synchronizes
+                    free_block(p);
+                }
             }
 
             // whether the limit comes from the complete configuration
@@ -217,6 +226,12 @@ namespace hpx::thrust {
                             return;
                         }
                         auto it = std::prev(free_.end());
+                        if (it->second.empty())
+                        {
+                            // left by a failed deallocate
+                            free_.erase(it);
+                            continue;
+                        }
                         p = it->second.back();
                         it->second.pop_back();
                         cached_ -= it->first;
@@ -271,7 +286,9 @@ namespace hpx::thrust {
                 cudaEvent_t event;
             };
 
-            // the deferred blocks whose reads have finished go to the cache
+            // The deferred blocks whose reads have finished go to the cache.
+            // An error (e.g. of an earlier launch) doesn't show that the
+            // reads have finished: those blocks stay deferred.
             void reclaim_deferred() noexcept
             {
                 while (true)
@@ -281,8 +298,7 @@ namespace hpx::thrust {
                         std::lock_guard<hpx::spinlock_no_backoff> l(mtx_);
                         auto const it = std::find_if(deferred_.begin(),
                             deferred_.end(), [](deferred_block const& d) {
-                                return cudaEventQuery(d.event) !=
-                                    cudaErrorNotReady;
+                                return cudaEventQuery(d.event) == cudaSuccess;
                             });
                         if (it == deferred_.end())
                         {
@@ -461,10 +477,19 @@ namespace hpx::thrust {
                 cudaEvent_t replaced = nullptr;
                 try
                 {
-                    hpx::cuda::experimental::check_cuda_error(
-                        cudaEventRecord(event, stream));
+                    // One event covers all reads of the block: an earlier
+                    // read may have been queued on another stream, the event
+                    // completes only after it (the new copy was queued
+                    // before, it doesn't wait).
                     std::lock_guard<hpx::spinlock_no_backoff> l(mtx_);
                     cudaEvent_t& entry = reads_[block];
+                    if (entry != nullptr)
+                    {
+                        hpx::cuda::experimental::check_cuda_error(
+                            cudaStreamWaitEvent(stream, entry, 0));
+                    }
+                    hpx::cuda::experimental::check_cuda_error(
+                        cudaEventRecord(event, stream));
                     replaced = std::exchange(entry, event);
                 }
                 catch (...)
@@ -474,7 +499,6 @@ namespace hpx::thrust {
                 }
                 if (replaced != nullptr)
                 {
-                    // the earlier read was queued before on the same stream
                     (void) cudaEventDestroy(replaced);
                 }
             }
@@ -516,9 +540,10 @@ namespace hpx::thrust {
                 }
 
                 // a staging copy may still read it: reused only afterwards
+                // (an error doesn't show that the read has finished)
                 if (read != nullptr)
                 {
-                    if (cudaEventQuery(read) == cudaErrorNotReady)
+                    if (cudaEventQuery(read) != cudaSuccess)
                     {
                         p->deallocate_after(block, size_class_of(bytes), read);
                         return;
