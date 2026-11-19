@@ -13,11 +13,8 @@ if(HPX_WITH_HIP AND NOT TARGET roc::hipblas)
     )
   endif(HPX_WITH_CUDA)
 
-  # Needed on rostam
-  list(APPEND CMAKE_PREFIX_PATH $ENV{HIP_PATH}/lib/cmake/hip)
-  list(APPEND CMAKE_PREFIX_PATH $ENV{DEVICE_LIB_PATH}/cmake/AMDDeviceLibs)
-  list(APPEND CMAKE_PREFIX_PATH $ENV{DEVICE_LIB_PATH}/cmake/amd_comgr)
-  list(APPEND CMAKE_PREFIX_PATH $ENV{DEVICE_LIB_PATH}/cmake/hsa-runtime64)
+  include(HPX_HIPPrefixPath)
+  hpx_add_hip_prefix_path()
   # Setup hipblas (creates roc::hipblas)
   find_package(hipblas HINTS $ENV{HIPBLAS_ROOT} CONFIG)
   if(NOT hipblas_FOUND)
@@ -40,4 +37,13 @@ if(HPX_WITH_HIP AND NOT TARGET roc::hipblas)
     hpx_add_config_define(HPX_HAVE_HIP)
   endif()
 
+endif()
+
+# rocThrust for the thrust module (creates roc::rocthrust); also needed by
+# projects using HPX, which get it through the thrust module's link interface
+if(HPX_WITH_HIP
+   AND HPX_WITH_THRUST
+   AND NOT TARGET roc::rocthrust
+)
+  find_package(rocthrust REQUIRED CONFIG)
 endif()

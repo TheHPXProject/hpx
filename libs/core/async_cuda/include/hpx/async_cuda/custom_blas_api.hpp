@@ -10,7 +10,12 @@
 
 #if defined(HPX_HAVE_HIP) && defined(HPX_HAVE_GPUBLAS)
 
+// ROCm 6 has the header only in hipblas/
+#if __has_include(<hipblas/hipblas.h>)
+#include <hipblas/hipblas.h>
+#else
 #include <hipblas.h>
+#endif
 
 #define cublasCreate hipblasCreate
 #define cublasDestroy hipblasDestroy

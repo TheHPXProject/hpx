@@ -7,7 +7,7 @@
 if(HPX_WITH_EXAMPLES)
   add_hpx_pseudo_target(examples.modules.thrust)
   add_hpx_pseudo_dependencies(examples.modules examples.modules.thrust)
-  if(HPX_WITH_CUDA AND HPX_WITH_THRUST)
+  if((HPX_WITH_CUDA OR HPX_WITH_HIP) AND HPX_WITH_THRUST)
     set(thrust_examples device_fill host_fill device_copy device_transform
                         async_fill_n reverse_reduce
     )
