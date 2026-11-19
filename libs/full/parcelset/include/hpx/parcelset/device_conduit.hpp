@@ -58,6 +58,13 @@ namespace hpx::parcelset {
     ///    locality), calls 'done' once it has arrived (with the error if it
     ///    failed: the parcel isn't run then)
     ///
+    /// and optionally
+    ///
+    ///  - bool background_work_impl()
+    ///    makes progress, called with the parcelports' background work
+    ///  - static void config_defaults(std::vector<std::string>& ini)
+    ///    adds the defaults of its configuration entries
+    ///
     /// The descriptor of a chunk holds the sending locality and a tag unique
     /// for it. Conduits are registered with HPX_REGISTER_DEVICE_CONDUIT
     /// (compiled into HPX) or a static hpx::plugins::device_conduit_factory<>
@@ -121,6 +128,18 @@ namespace hpx::parcelset {
                 chunks_received_.load(std::memory_order_relaxed);
             s.bytes_received = bytes_received_.load(std::memory_order_relaxed);
             return s;
+        }
+
+        bool background_work() override
+        {
+            if constexpr (requires(Derived& d) { d.background_work_impl(); })
+            {
+                return derived().background_work_impl();
+            }
+            else
+            {
+                return false;
+            }
         }
 
     private:

@@ -600,6 +600,12 @@ namespace hpx::parcelset {
             return did_some_work;
         }
 
+        // the device conduit moves data next to the parcelports
+        if (device_conduit* conduit = get_device_conduit())
+        {
+            did_some_work = conduit->background_work();
+        }
+
         LPT_(debug).format(
             "parcelhandler::do_background_work: thread {}, mode {}", num_thread,
             get_parcelport_background_mode_name(mode));
