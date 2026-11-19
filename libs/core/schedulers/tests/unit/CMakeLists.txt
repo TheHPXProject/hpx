@@ -14,6 +14,7 @@ set(tests
     scheduler_mode_overrides
     scheduler_tuning
     shared_priority_queue_external_cleanup
+    shared_priority_queue_thread_creation
     steal_pending_early
     steal_staged_early
     thread_queue_get_next_threads
@@ -45,6 +46,7 @@ set(queue_length_all_threads_PARAMETERS THREADS_PER_LOCALITY 1)
 # with a single worker the task's last reference is dropped by the external
 # thread, see the test
 set(shared_priority_queue_external_cleanup_PARAMETERS THREADS_PER_LOCALITY 1)
+set(shared_priority_queue_thread_creation_PARAMETERS THREADS_PER_LOCALITY 2)
 
 set(steal_staged_early_PARAMETERS THREADS_PER_LOCALITY 4)
 set(steal_pending_early_PARAMETERS THREADS_PER_LOCALITY 4)
