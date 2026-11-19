@@ -69,8 +69,15 @@ runs:
             return @{ reason = "Visual Studio '$release' has no known release history" }
           }
           $history = "https://learn.microsoft.com/en-us/visualstudio/releases/$year/release-history"
+          # bounded: the build goes on with a warning if the page isn't
+          # read in time (from PowerShell 7.4 -TimeoutSec limits only the
+          # connection)
+          $timeout = @{ TimeoutSec = 60 }
+          if ((Get-Command Invoke-WebRequest).Parameters.ContainsKey('OperationTimeoutSeconds')) {
+            $timeout.OperationTimeoutSeconds = 60
+          }
           try {
-            $page = (Invoke-WebRequest -UseBasicParsing $history).Content
+            $page = (Invoke-WebRequest -UseBasicParsing @timeout $history).Content
           } catch {
             return @{ reason = "$history can't be read: $_" }
           }
