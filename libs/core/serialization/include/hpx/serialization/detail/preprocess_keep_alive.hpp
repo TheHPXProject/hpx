@@ -57,11 +57,20 @@ namespace hpx::serialization::detail {
     // pass checks the size of each buffer, and throws if a parcel was
     // serialized differently than it was preprocessed.
     //
+    // A future that isn't ready during a preprocessing round is serialized
+    // without the objects it holds, which the next round serializes. The
+    // buffers of these objects are inserted where the future is (see
+    // enter_future()), the following ones keep their positions.
+    //
     // The parcels of a message are serialized into one archive: an object
     // that an earlier parcel of the message has written already through a
     // tracked pointer is written as a back-reference, and the buffers of the
     // objects it contains aren't needed (see skip_back_reference). Each
     // buffer knows these objects from preprocessing (enter() and leave()).
+    // Within a parcel, the first occurrence of such an object can move to an
+    // earlier position in a later preprocessing round (into a future that
+    // wasn't ready before): the buffers created at its former position are
+    // dropped there (see drop_back_reference).
     HPX_CXX_CORE_EXPORT class preprocess_keep_alive
     {
     public:
@@ -72,12 +81,10 @@ namespace hpx::serialization::detail {
         // creates it (add()).
         [[nodiscard]] keep_alive_buffer const* next(std::size_t const size)
         {
-            std::size_t const pos = next_++;
-            if (pos < buffers_.size())
+            if (inserting_ == 0 && next_ != buffers_.size())
             {
-                return &checked(pos, size);
+                return &checked(next_++, size);
             }
-            HPX_ASSERT(pos == buffers_.size());
             return nullptr;
         }
 
@@ -85,10 +92,11 @@ namespace hpx::serialization::detail {
         // nullptr for.
         keep_alive_buffer const& add(keep_alive_buffer buffer)
         {
-            HPX_ASSERT(next_ == buffers_.size() + 1);
-            return buffers_
-                .emplace_back(keep_alive_entry{HPX_MOVE(buffer), enclosing_})
-                .buffer;
+            HPX_ASSERT(inserting_ != 0 || next_ == buffers_.size());
+            auto const it = buffers_.insert(
+                buffers_.begin() + static_cast<std::ptrdiff_t>(next_++),
+                keep_alive_entry{HPX_MOVE(buffer), enclosing_});
+            return it->buffer;
         }
 
         // Preprocessing: the object at 'object', pointed to by a tracked
@@ -104,6 +112,36 @@ namespace hpx::serialization::detail {
             enclosing_.pop_back();
         }
 
+        // Preprocessing: the future with the shared state 'state' isn't
+        // ready, the objects it holds are serialized in the next round.
+        void future_pending(void const* state)
+        {
+            pending_.push_back(state);
+        }
+
+        // Preprocessing: the future with the shared state 'state' is ready
+        // and is serialized with the objects it holds. If it wasn't ready in
+        // the previous round, the buffers of these objects are new: they are
+        // inserted at this position until leave_future(), instead of being
+        // matched to the buffers of that round. Returns whether
+        // leave_future() is needed.
+        [[nodiscard]] bool enter_future(void const* state)
+        {
+            if (std::find(revealed_.begin(), revealed_.end(), state) ==
+                revealed_.end())
+            {
+                return false;
+            }
+            ++inserting_;
+            return true;
+        }
+
+        void leave_future() noexcept
+        {
+            HPX_ASSERT(inserting_ != 0);
+            --inserting_;
+        }
+
         // The real pass: the buffer of the next object needing one.
         [[nodiscard]] keep_alive_buffer const& get_next(std::size_t const size)
         {
@@ -117,6 +155,25 @@ namespace hpx::serialization::detail {
                     pos);
             }
             return checked(pos, size);
+        }
+
+        // Preprocessing: the object at 'object' is written as a
+        // back-reference. If the next buffers were created for the objects it
+        // contains (an earlier round has written it here for the first time),
+        // its first occurrence has new buffers (see enter_future()): these
+        // aren't used anymore.
+        void drop_back_reference(void const* object)
+        {
+            auto const first =
+                buffers_.begin() + static_cast<std::ptrdiff_t>(next_);
+            auto last = first;
+            while (last != buffers_.end() &&
+                std::find(last->enclosing.begin(), last->enclosing.end(),
+                    object) != last->enclosing.end())
+            {
+                ++last;
+            }
+            buffers_.erase(first, last);
         }
 
         // The real pass: the object at 'object' is written as a
@@ -138,11 +195,14 @@ namespace hpx::serialization::detail {
         }
 
         // A new pass over the same objects (preprocessing round) starts at
-        // the first one again.
+        // the first one again; the futures that weren't ready in the last
+        // round may be now.
         void reset_position() noexcept
         {
             next_ = 0;
             enclosing_.clear();
+            revealed_ = std::exchange(pending_, {});
+            inserting_ = 0;
         }
 
         [[nodiscard]] bool empty() const noexcept
@@ -155,6 +215,7 @@ namespace hpx::serialization::detail {
         [[nodiscard]] keep_alive_list move_buffers() noexcept
         {
             reset_position();
+            revealed_.clear();
             return std::exchange(buffers_, keep_alive_list{});
         }
 
@@ -167,6 +228,7 @@ namespace hpx::serialization::detail {
         {
             buffers_ = buffers;
             reset_position();
+            revealed_.clear();
             parcel_start_ = parcel_start;
         }
 
@@ -199,6 +261,12 @@ namespace hpx::serialization::detail {
         std::size_t next_ = 0;
         std::vector<void const*> enclosing_;
         std::uint64_t parcel_start_ = 0;
+
+        // the shared states of the futures that aren't ready in this round,
+        // and of those that weren't in the previous one
+        std::vector<void const*> pending_;
+        std::vector<void const*> revealed_;
+        std::size_t inserting_ = 0;
     };
 }    // namespace hpx::serialization::detail
 
