@@ -272,6 +272,12 @@ set(sender_tests
     unique_sender
 )
 
+# MSVC needs more than 30 GB of memory to compile these (the sender path of the
+# scan partitioner they instantiate many times), more than CI machines have
+if(MSVC)
+  list(REMOVE_ITEM sender_tests copy_if_sender remove_copy_sender)
+endif()
+
 set(tests ${tests} ${sender_tests})
 
 foreach(test ${tests})
