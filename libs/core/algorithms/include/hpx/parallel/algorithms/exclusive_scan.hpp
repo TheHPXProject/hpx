@@ -296,6 +296,7 @@ namespace hpx {
 #include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/algorithms/detail/advance_and_get_distance.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
+#include <hpx/parallel/algorithms/detail/exclusive_scan.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/task_size_argument.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
@@ -321,39 +322,6 @@ namespace hpx::parallel {
         /// \cond NOINTERNAL
 
         ///////////////////////////////////////////////////////////////////////
-        // Our own version of the sequential exclusive_scan.
-        HPX_CXX_CORE_EXPORT template <typename InIter, typename Sent,
-            typename OutIter, typename T, typename Op>
-        constexpr util::in_out_result<InIter, OutIter>
-        sequential_exclusive_scan(
-            InIter first, Sent last, OutIter dest, T init, Op&& op)
-        {
-            T temp = init;
-            for (/* */; first != last; (void) ++first, ++dest)
-            {
-                init = HPX_INVOKE(op, init, *first);
-                *dest = temp;
-                temp = init;
-            }
-            return util::in_out_result<InIter, OutIter>{first, dest};
-        }
-
-        HPX_CXX_CORE_EXPORT template <typename InIter, typename OutIter,
-            typename T, typename Op>
-        constexpr T sequential_exclusive_scan_n(
-            InIter first, std::size_t count, OutIter dest, T init, Op&& op)
-        {
-            T temp = init;
-            for (/* */; count-- != 0; (void) ++first, ++dest)
-            {
-                init = HPX_INVOKE(op, init, *first);
-                *dest = temp;
-                temp = init;
-            }
-            return init;
-        }
-
-        ///////////////////////////////////////////////////////////////////////
         HPX_CXX_CORE_EXPORT template <typename IterPair>
         struct exclusive_scan
           : public algorithm<exclusive_scan<IterPair>, IterPair>
@@ -369,7 +337,7 @@ namespace hpx::parallel {
                 ExPolicy, InIter first, Sent last, OutIter dest, T const& init,
                 Op&& op)
             {
-                return sequential_exclusive_scan(
+                return sequential_exclusive_scan<ExPolicy>(
                     first, last, dest, init, HPX_FORWARD(Op, op));
             }
 
@@ -426,11 +394,20 @@ namespace hpx::parallel {
                     auto iters = part_begin.get_iterator_tuple();
                     if (get<0>(iters) != last)
                     {
-                        return sequential_exclusive_scan_n(get<0>(iters),
-                            part_size - 1, get<1>(iters), part_init, op);
+                        return sequential_exclusive_scan_n<ExPolicy>(
+                            get<0>(iters), part_size - 1, get<1>(iters),
+                            part_init, op);
                     }
                     return part_init;
                 };
+
+#if defined(HPX_HAVE_DATAPAR)
+                using loop_policy_type =
+                    decltype(hpx::execution::experimental::to_non_simd(
+                        std::declval<ExPolicy>()));
+#else
+                using loop_policy_type = std::decay_t<ExPolicy>;
+#endif
 
                 auto f3 = [op](zip_iterator part_begin, std::size_t part_size,
                               T val) mutable -> void {
@@ -438,8 +415,8 @@ namespace hpx::parallel {
                     *dst++ = val;
 
                     // MSVC 2015 fails if op is captured by reference
-                    util::const_loop_n<std::decay_t<ExPolicy>>(dst,
-                        part_size - 1, [=, &val](FwdIter2 it) mutable -> void {
+                    util::const_loop_n<loop_policy_type>(dst, part_size - 1,
+                        [=, &val](FwdIter2 it) mutable -> void {
                             *it = HPX_INVOKE(op, val, *it);
                         });
                 };
