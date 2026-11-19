@@ -41,7 +41,18 @@ namespace hpx::serialization {
         archive_is_saving = 0x00080000,
         archive_is_preprocessing = 0x00100000,
         enable_type_checking = 0x00200000,
-        all_archive_flags = 0x002fe000    // all of the above
+        all_archive_flags = 0x002fe000,    // all of the above
+
+        // local only, never sent: request_await() stops the archive
+        archive_is_optimistic = 0x00800000
+    };
+
+    /// Thrown by request_await() in an optimistic archive. It is not an
+    /// std::exception, so that only the code that made the archive optimistic
+    /// catches it. It is thrown and caught in different libraries, so its
+    /// type information must be visible.
+    HPX_CXX_CORE_EXPORT struct HPX_ALWAYS_EXPORT await_required
+    {
     };
 
     HPX_CXX_CORE_EXPORT constexpr archive_flags operator|(
@@ -336,10 +347,32 @@ namespace hpx::serialization {
         }
 
         /// Take over the extra data of another archive. The data items are
-        /// allocated separately, so they keep their addresses.
+        /// allocated separately, so they keep their addresses. The old extra
+        /// data of this archive is destroyed, and references to it become
+        /// invalid.
         void move_extra_data_from(basic_archive& rhs) noexcept
         {
             extra_data_ = HPX_MOVE(rhs.extra_data_);
+        }
+
+        /// Make the archive optimistic. Call it after the constructor, so
+        /// that the flag is not written into the archive.
+        void enable_optimistic() noexcept
+        {
+            flags_ = flags_ | archive_flags::archive_is_optimistic;
+        }
+
+        /// A save function that needs the preprocessing pass (a managed
+        /// id_type, a future that is not ready) calls this before any side
+        /// effect. An optimistic archive then stops with await_required;
+        /// other archives continue.
+        void request_await() const
+        {
+            if (static_cast<bool>(
+                    flags_ & archive_flags::archive_is_optimistic))
+            {
+                throw await_required{};
+            }
         }
 
     protected:

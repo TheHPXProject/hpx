@@ -598,6 +598,11 @@ namespace hpx::naming {
             // Avoid performing side effects if the archive is not saving the
             // data.
             hpx::id_type::management_type type = id_impl.get_management_type();
+            if (hpx::id_type::management_type::unmanaged != type)
+            {
+                ar.request_await();
+            }
+
             if (ar.is_preprocessing())
             {
                 preprocess_gid(id_impl, ar);
