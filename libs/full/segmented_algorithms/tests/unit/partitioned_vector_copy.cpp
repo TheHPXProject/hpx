@@ -132,12 +132,80 @@ void copy_tests_with_policy(
     copy_algo_tests_with_policy_async<T>(size, localities, policy, par);
 }
 
+template <typename T, typename ExPolicy>
+void check_copy_partition_layout(ExPolicy const& policy,
+    std::vector<hpx::id_type> const& input_owners,
+    std::vector<hpx::id_type> const& output_owners)
+{
+    hpx::partitioned_vector<T> input(
+        6, hpx::explicit_container_layout({2, 4}, input_owners));
+    hpx::partitioned_vector<T> output(
+        8, T(-1), hpx::explicit_container_layout({4, 4}, output_owners));
+
+    auto position = input.begin();
+    for (std::size_t i = 0; i != input.size(); ++i, ++position)
+    {
+        *position = T(i + 1);
+    }
+
+    auto operation =
+        hpx::copy(policy, input.begin(), input.end(), output.begin());
+    auto result = [&]() {
+        if constexpr (hpx::is_async_execution_policy_v<ExPolicy>)
+        {
+            return operation.get();
+        }
+        else
+        {
+            return operation;
+        }
+    }();
+    HPX_TEST(result == output.begin() + 6);
+
+    position = output.begin();
+    for (std::size_t i = 0; i != output.size(); ++i, ++position)
+    {
+        T const expected = i < input.size() ? T(i + 1) : T(-1);
+        HPX_TEST_EQ(*position, expected);
+    }
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 template <typename T>
 void copy_tests()
 {
     std::size_t const length = 12;
     std::vector<hpx::id_type> localities = hpx::find_all_localities();
+
+    {
+        std::vector<hpx::id_type> output_owners(2, hpx::find_here());
+        std::vector<hpx::id_type> input_owners = output_owners;
+        check_copy_partition_layout<T>(
+            hpx::execution::seq, input_owners, output_owners);
+        check_copy_partition_layout<T>(
+            hpx::execution::par, input_owners, output_owners);
+        check_copy_partition_layout<T>(
+            hpx::execution::seq(hpx::execution::task), input_owners,
+            output_owners);
+        check_copy_partition_layout<T>(
+            hpx::execution::par(hpx::execution::task), input_owners,
+            output_owners);
+
+        if (localities.size() > 1)
+        {
+            input_owners.assign(2, localities[1]);
+            check_copy_partition_layout<T>(
+                hpx::execution::seq, input_owners, output_owners);
+            check_copy_partition_layout<T>(
+                hpx::execution::par, input_owners, output_owners);
+            check_copy_partition_layout<T>(
+                hpx::execution::seq(hpx::execution::task), input_owners,
+                output_owners);
+            check_copy_partition_layout<T>(
+                hpx::execution::par(hpx::execution::task), input_owners,
+                output_owners);
+        }
+    }
 
     {
         hpx::partitioned_vector<T> v;
