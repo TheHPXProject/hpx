@@ -27,6 +27,7 @@ if(HPX_WITH_WORK_REQUESTING_SCHEDULERS)
     tests
     workrequesting_numa
     workrequesting_numa_hint
+    workrequesting_pending_boost
     workrequesting_random_victim
     workrequesting_run_as_child
     workrequesting_steal
@@ -35,6 +36,7 @@ if(HPX_WITH_WORK_REQUESTING_SCHEDULERS)
     workrequesting_suspend_resume
   )
   set(workrequesting_staged_stealing_PARAMETERS THREADS_PER_LOCALITY 4)
+  set(workrequesting_pending_boost_PARAMETERS THREADS_PER_LOCALITY 1)
 endif()
 
 set(workrequesting_numa_hint_PARAMETERS THREADS_PER_LOCALITY 4)

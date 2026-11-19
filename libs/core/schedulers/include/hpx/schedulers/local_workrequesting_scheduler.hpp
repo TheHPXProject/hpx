@@ -464,6 +464,7 @@ namespace hpx::threads::policies {
             // adaptive stealing
             std::uint16_t num_recent_steals_ = 0;
             std::uint16_t num_recent_tasks_executed_ = 0;
+            std::uint8_t consecutive_high_priority_tasks_ = 0;
             bool stealhalf_ = true;
 
 #if defined(HPX_HAVE_WORKREQUESTING_LAST_VICTIM)
@@ -1294,10 +1295,39 @@ namespace hpx::threads::policies {
 
             auto& d = data_[num_thread].data_;
 
-            if ((num_thread < num_high_priority_queues_ &&
-                    get_thread(d.high_priority_queue_, thrd)) ||
-                get_thread(d.bound_queue_, thrd) || get_thread(d.queue_, thrd))
+            // Give bound and normal work a turn if boosted tasks keep filling
+            // the high-priority queue. Bound work cannot be stolen, and a
+            // single worker cannot make progress without this check.
+            constexpr std::uint8_t max_consecutive_high_priority_tasks = 16;
+            bool const try_other_first = d.consecutive_high_priority_tasks_ >=
+                max_consecutive_high_priority_tasks;
+            bool from_other = try_other_first &&
+                (get_thread(d.bound_queue_, thrd) ||
+                    get_thread(d.queue_, thrd));
+            bool const from_high_priority = !from_other &&
+                num_thread < num_high_priority_queues_ &&
+                get_thread(d.high_priority_queue_, thrd);
+            if (!try_other_first && !from_high_priority)
             {
+                from_other = get_thread(d.bound_queue_, thrd) ||
+                    get_thread(d.queue_, thrd);
+            }
+
+            if (from_high_priority || from_other)
+            {
+                if (from_high_priority)
+                {
+                    if (d.consecutive_high_priority_tasks_ <
+                        max_consecutive_high_priority_tasks)
+                    {
+                        ++d.consecutive_high_priority_tasks_;
+                    }
+                }
+                else
+                {
+                    d.consecutive_high_priority_tasks_ = 0;
+                }
+
                 // We found a task to run, however before running it we handle
                 // steal requests (assuming that there is more work left that
                 // could be used to satisfy steal requests).
