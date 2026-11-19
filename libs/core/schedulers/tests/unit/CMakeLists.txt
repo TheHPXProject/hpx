@@ -21,9 +21,16 @@ set(tests
 )
 
 if(HPX_WITH_WORK_REQUESTING_SCHEDULERS)
-  list(APPEND tests workrequesting_random_victim workrequesting_steal
-       workrequesting_scheduler_mode workrequesting_suspend_resume
+  list(
+    APPEND
+    tests
+    workrequesting_pending_boost
+    workrequesting_random_victim
+    workrequesting_steal
+    workrequesting_scheduler_mode
+    workrequesting_suspend_resume
   )
+  set(workrequesting_pending_boost_PARAMETERS THREADS_PER_LOCALITY 1)
 endif()
 
 set(min_tasks_to_steal_staged_PARAMETERS THREADS_PER_LOCALITY 4)
