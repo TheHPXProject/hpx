@@ -1,4 +1,5 @@
 //  Copyright (c) 2019 John Biddiscombe
+//  Copyright (c) 2026 Divyanshi Talreja
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -445,14 +446,16 @@ namespace hpx::threads::policies {
                 tq_deb.debug(debug::str<>("create_thread "),
                     queue_data_print(this), "thread_priority::normal",
                     "run_now ", data.run_now);
-                return np_queue_->create_thread(data, tid, ec);
+                return np_queue_->create_thread(
+                    data, tid, thread_num == thread_num_, ec);
             }
             else if (bp_queue_ && (data.priority == thread_priority::bound))
             {
                 tq_deb.debug(debug::str<>("create_thread "),
                     queue_data_print(this), "thread_priority::bound",
                     "run_now ", data.run_now);
-                return bp_queue_->create_thread(data, tid, ec);
+                return bp_queue_->create_thread(
+                    data, tid, thread_num == thread_num_, ec);
             }
             else if (hp_queue_ &&
                 (data.priority == thread_priority::high ||
@@ -467,14 +470,16 @@ namespace hpx::threads::policies {
                 tq_deb.debug(debug::str<>("create_thread "),
                     queue_data_print(this), "thread_priority::high", "run_now ",
                     data.run_now);
-                return hp_queue_->create_thread(data, tid, ec);
+                return hp_queue_->create_thread(
+                    data, tid, thread_num == thread_num_, ec);
             }
             else if (lp_queue_ && (data.priority == thread_priority::low))
             {
                 tq_deb.debug(debug::str<>("create_thread "),
                     queue_data_print(this), "thread_priority::low", "run_now ",
                     data.run_now);
-                return lp_queue_->create_thread(data, tid, ec);
+                return lp_queue_->create_thread(
+                    data, tid, thread_num == thread_num_, ec);
             }
 
             tq_deb.error(debug::str<>("create_thread "), "priority?");
@@ -504,13 +509,11 @@ namespace hpx::threads::policies {
         }
 
         // ----------------------------------------------------------------
-        // Not thread safe. This function must only be called by the thread that
-        // owns the holder object. Creates a thread_data object using
-        // information from thread_init_data . If a thread data object is
-        // available on one of the heaps it will use that, otherwise a new one
-        // is created. Heaps store data ordered/sorted by stack size
-        void create_thread_object(
-            threads::thread_id_ref_type& tid, threads::thread_init_data& data)
+        // Only the owning worker may access the free lists. Other callers
+        // allocate a new thread object instead. Heaps store data by stack size.
+        void create_thread_object(threads::thread_id_ref_type& tid,
+            threads::thread_init_data& data,
+            [[maybe_unused]] bool const use_free_list)
         {
             HPX_ASSERT(data.stacksize >= thread_stacksize::minimal);
             HPX_ASSERT(data.stacksize <= thread_stacksize::maximal);
@@ -552,6 +555,12 @@ namespace hpx::threads::policies {
 
             // ASAN gets confused by reusing threads/stacks
 #if !defined(HPX_HAVE_ADDRESS_SANITIZER)
+            if (!use_free_list)
+            {
+                tid = allocate_thread_object(data, stacksize);
+                return;
+            }
+
             // Prefer recycled thread objects. If the heap is empty, first
             // move terminated threads back onto it so recursive async /
             // fork-join trees do not malloc under load.
