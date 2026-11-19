@@ -35,6 +35,8 @@
 #include <cstdint>
 #include <cstring>
 #include <memory>
+#include <stdexcept>
+#include <string>
 #include <system_error>
 #include <utility>
 #include <vector>
@@ -64,6 +66,11 @@ namespace {
     {
         gate_promise->set_value();
     }
+
+    // The deferred steps copy the data into place only once the test opens
+    // this one, so it can check that the action waits for them.
+    std::unique_ptr<hpx::promise<void>> step_gate_promise;
+    hpx::shared_future<void> step_gate;
 
     // The values of a delayed_data, produced asynchronously once the gate is
     // open.
@@ -208,8 +215,12 @@ struct delayed_data
         ar.get_extra_data<post_receive_actions>().add(
             [staging = HPX_MOVE(staging), destination = values.data()](
                 post_receive_actions::done_type done) {
-                hpx::post([staging, destination, done = HPX_MOVE(done)]() {
-                    hpx::this_thread::sleep_for(std::chrono::milliseconds(20));
+                hpx::post([staging, destination, done = HPX_MOVE(done),
+                              step_gate = step_gate]() {
+                    if (step_gate.valid())
+                    {
+                        step_gate.wait();
+                    }
                     std::copy(staging->begin(), staging->end(), destination);
                     ++steps_run;
                     done();
@@ -235,6 +246,35 @@ void check_data(delayed_data const& data)
 }
 HPX_PLAIN_ACTION(check_data)
 
+// set once the sending call has passed on the error, and whether it had
+// before the data it waited for was ready
+std::atomic<bool> send_returned(false);
+std::atomic<bool> returned_before_ready(false);
+
+// An argument that fails to serialize after the one before it has
+// registered data that is still being produced: that data is produced only
+// once the serialization has failed, and as late as possible (a call that
+// doesn't wait for it returns in the meantime).
+struct failing_argument
+{
+    template <typename Archive>
+    void serialize(Archive&, unsigned)
+    {
+        hpx::post([]() {
+            for (int i = 0; i != 10000 && !send_returned; ++i)
+            {
+                hpx::this_thread::yield();
+            }
+            returned_before_ready = send_returned.load();
+            open_gate();
+        });
+        throw std::runtime_error("failing_argument");
+    }
+};
+
+void check_failing(delayed_data const&, failing_argument const&) {}
+HPX_PLAIN_ACTION(check_failing)
+
 ///////////////////////////////////////////////////////////////////////////////
 namespace {
 
@@ -255,19 +295,26 @@ namespace {
         return flags;
     }
 
-    hpx::parcelset::parcel make_parcel(delayed_data data)
+    template <typename Action, typename F, typename... Ts>
+    hpx::parcelset::parcel make_action_parcel(F* f, Ts&&... ts)
     {
         hpx::id_type const here = hpx::find_here();
         hpx::naming::address addr(hpx::get_locality(),
             to_int(hpx::components::component_enum_type::invalid),
-            reinterpret_cast<void*>(&check_data));
+            reinterpret_cast<void*>(f));
 
         hpx::naming::gid_type dest = here.get_gid();
         hpx::parcelset::parcel p(hpx::parcelset::detail::create_parcel::call(
-            HPX_MOVE(dest), HPX_MOVE(addr), check_data_action(),
-            hpx::launch::async, HPX_MOVE(data)));
+            HPX_MOVE(dest), HPX_MOVE(addr), Action(), hpx::launch::async,
+            HPX_FORWARD(Ts, ts)...));
         p.set_source_id(here);
         return p;
+    }
+
+    hpx::parcelset::parcel make_parcel(delayed_data data)
+    {
+        return make_action_parcel<check_data_action>(
+            &check_data, HPX_MOVE(data));
     }
 
     // what parcelset::detail::parcel_await_apply hands to the parcelport
@@ -416,12 +463,24 @@ namespace {
             HPX_TEST_EQ(steps_run.load(), steps_before);
         }
 
+        // the steps wait for the test to open the gate
+        step_gate_promise = std::make_unique<hpx::promise<void>>();
+        step_gate = step_gate_promise->get_future().share();
+
         hpx::promise<void> scheduled;
         hpx::future<void> f = scheduled.get_future();
         p.on_receive_complete([&p, &scheduled]() {
             p.schedule_action();
             scheduled.set_value();
         });
+
+        // nothing is scheduled while a step is pending
+        if (deferred)
+        {
+            HPX_TEST(!f.is_ready());
+            HPX_TEST_EQ(steps_run.load(), steps_before);
+        }
+        step_gate_promise->set_value();
         f.get();
 
         HPX_TEST_EQ(steps_run.load(), steps_before + (deferred ? 1 : 0));
@@ -505,8 +564,51 @@ namespace {
     }
 }    // namespace
 
+namespace {
+
+    // Serializing a parcel fails after an argument has registered data that
+    // is still being produced: the error is passed on only once that data
+    // is ready, the archive tracking it must not go away before.
+    void test_failing_serialization()
+    {
+        std::size_t const alive_before = buffers_alive;
+
+        close_gate();
+        send_returned = false;
+        returned_before_ready = false;
+        bool caught = false;
+        try
+        {
+            hpx::parcelset::detail::parcel_await_apply(
+                make_action_parcel<check_failing_action>(&check_failing,
+                    delayed_data{65536, 7, {}}, failing_argument{}),
+                [](std::error_code const&, hpx::parcelset::parcel const&) {},
+                archive_flags(true),
+                [](hpx::parcelset::parcel&&,
+                    hpx::parcelset::write_handler_type&&) {
+                    // nothing is sent
+                    HPX_TEST(false);
+                });
+        }
+        catch (std::exception const& e)
+        {
+            caught = std::string(e.what()).find("failing_argument") !=
+                std::string::npos;
+        }
+        send_returned = true;
+        HPX_TEST(caught);
+
+        // the error was passed on only once the data was ready
+        gate.wait();
+        HPX_TEST(!returned_before_ready);
+        HPX_TEST_EQ(buffers_alive.load(), alive_before);
+    }
+}    // namespace
+
 int hpx_main(hpx::program_options::variables_map&)
 {
+    test_failing_serialization();
+
     // 16 ints go inline, 64 Ki ints (256 KiB) as a zero-copy chunk
     for (std::size_t const size : {std::size_t(16), std::size_t(65536)})
     {
@@ -518,6 +620,8 @@ int hpx_main(hpx::program_options::variables_map&)
     // the gate's shared state goes away while the runtime is still there
     gate = hpx::shared_future<void>();
     gate_promise.reset();
+    step_gate = hpx::shared_future<void>();
+    step_gate_promise.reset();
 
     return hpx::finalize();
 }

@@ -128,6 +128,15 @@ namespace hpx::serialization {
             return;
         }
 
+        // a preprocessing pass that prepares no copy (e.g. the size
+        // calculation of a checkpoint) only counts the bytes
+        if (ar.is_preprocessing())
+        {
+            ar << static_cast<std::uint8_t>(device_data_storage::in_archive);
+            ar.save_binary(detail::fundamental_types::none, device_data, bytes);
+            return;
+        }
+
         // no host copy prepared (small data, or no preprocessing pass): copy
         // the bytes into the archive before the temporary goes away
 #if defined(HPX_DEBUG)

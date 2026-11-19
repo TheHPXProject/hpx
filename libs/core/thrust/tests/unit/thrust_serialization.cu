@@ -27,6 +27,7 @@
 #include "thrust_serialization.hpp"
 
 #include <cstddef>
+#include <new>
 #include <type_traits>
 
 // universal_vector is serialized from its own memory only with allocators of
@@ -229,6 +230,68 @@ namespace {
             }
         }
     }
+
+    // elements without a default constructor go element by element, with
+    // the construction hooks, as for std::vector
+    struct no_default
+    {
+        explicit no_default(int const value)
+          : a(value)
+        {
+        }
+
+        int a;
+        short b = 0;
+
+        template <typename Archive>
+        void serialize(Archive& ar, unsigned)
+        {
+            // clang-format off
+            ar & b;
+            // clang-format on
+        }
+    };
+
+    template <typename Archive>
+    void save_construct_data(Archive& ar, no_default const* p, unsigned)
+    {
+        ar << p->a;
+    }
+
+    template <typename Archive>
+    void load_construct_data(Archive& ar, no_default* p, unsigned)
+    {
+        int a = 0;
+        ar >> a;
+        ::new (p) no_default(a);
+    }
+
+    void test_non_default_constructible()
+    {
+        ::thrust::host_vector<no_default> v;
+        for (int i = 0; i != 5; ++i)
+        {
+            no_default e(i);
+            e.b = static_cast<short>(10 * i);
+            v.push_back(e);
+        }
+
+        test::message m = test::send(test::archive_flags(true), true,
+            [&v](hpx::serialization::output_archive& ar) { ar << v; });
+
+        ::thrust::host_vector<no_default> w;
+        test::receive(
+            m, false, [&w](hpx::serialization::input_archive& ar) { ar >> w; });
+
+        HPX_TEST_EQ(w.size(), v.size());
+        for (std::size_t i = 0; i != w.size() && i != v.size(); ++i)
+        {
+            no_default const& got = w[i];
+            no_default const& sent = v[i];
+            HPX_TEST_EQ(got.a, sent.a);
+            HPX_TEST_EQ(got.b, sent.b);
+        }
+    }
 }    // namespace
 
 int hpx_main(hpx::program_options::variables_map&)
@@ -253,6 +316,7 @@ int hpx_main(hpx::program_options::variables_map&)
 
     test_host_accessible<::thrust::host_vector<int>>();
     test_host_accessible<::thrust::universal_vector<int>>();
+    test_non_default_constructible();
 
     return hpx::local::finalize();
 }
