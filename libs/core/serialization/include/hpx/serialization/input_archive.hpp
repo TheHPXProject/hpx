@@ -323,9 +323,13 @@ namespace hpx::serialization {
         /// \param count    The number of bytes.
         /// \param allow_zero_copy_receive Whether the data may arrive at
         ///                 \a address after this function has returned.
+        /// \param memory   Whether \a address refers to device memory: the
+        ///                 networking layer receives into it then (see
+        ///                 serialization_chunk::is_device_memory).
         void load_binary_chunk(detail::fundamental_types expected,
             void* address, std::size_t const count,
-            bool const allow_zero_copy_receive)
+            bool const allow_zero_copy_receive,
+            chunk_memory const memory = chunk_memory::host)
         {
             if (HPX_UNLIKELY(count == 0))
                 return;
@@ -337,13 +341,15 @@ namespace hpx::serialization {
 
             if (HPX_UNLIKELY(disable_data_chunking()))
             {
+                // device memory must not be written on the host
+                HPX_ASSERT(memory == chunk_memory::host);
                 size_ += buffer_->load_binary(expected, address, count);
             }
             else
             {
                 size_ += buffer_->load_binary_chunk(expected, address, count,
-                    allow_zero_copy_receive &&
-                        !disable_receive_data_chunking());
+                    allow_zero_copy_receive && !disable_receive_data_chunking(),
+                    memory);
             }
         }
 
