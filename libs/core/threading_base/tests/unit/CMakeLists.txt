@@ -14,6 +14,7 @@ set(tests
     stack_sized_function
     task_size_annotations
     task_size_hint
+    thread_description_address
     thread_exit_callbacks
     thread_data_is_background
 )
