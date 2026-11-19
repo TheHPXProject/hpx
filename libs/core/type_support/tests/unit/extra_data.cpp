@@ -88,6 +88,13 @@ namespace {
         HPX_TEST(hpx::util::detail::extra_data_id_count() > id1);
     }
 
+    // assigns the ids of item<20> ... item<20 + N - 1>
+    template <int... Ns>
+    void assign_ids(std::integer_sequence<int, Ns...>)
+    {
+        ((void) extra_data_id<item<20 + Ns>>(), ...);
+    }
+
     void test_get()
     {
         extra_data data;
@@ -107,11 +114,14 @@ namespace {
         HPX_TEST_EQ(a.value, 42);
 
         // a type whose id is larger than those known when the items were
-        // added grows the table: the items keep their addresses
-        item<7>& c = data.get<item<7>>();
+        // added (and than the smallest table) grows the table: the items keep
+        // their addresses
+        assign_ids(std::make_integer_sequence<int, 20>{});
+        HPX_TEST(extra_data_id<item<39>>() >= 16);
+        item<39>& c = data.get<item<39>>();
         HPX_TEST(data.try_get<item<0>>() == &a);
         HPX_TEST(data.try_get<item<1>>() == &b);
-        HPX_TEST(data.try_get<item<7>>() == &c);
+        HPX_TEST(data.try_get<item<39>>() == &c);
     }
 
     void test_reset()

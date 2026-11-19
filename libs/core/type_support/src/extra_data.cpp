@@ -35,6 +35,12 @@ namespace hpx::util {
 
     namespace {
 
+        // The smallest number of slots of a table: the ids are assigned when
+        // a type is used first, a table created early would otherwise grow
+        // when other types are used later. Covers the types of extra data of
+        // HPX and a few of the application.
+        constexpr std::size_t minimum_table_size = 16;
+
         // the aligned operator new only for over-aligned objects: it can be
         // considerably slower (e.g. with MSVC)
         void* allocate_block(
@@ -83,6 +89,10 @@ namespace hpx::util {
         if (size <= id)
         {
             size = id + 1;
+        }
+        if (size < minimum_table_size)
+        {
+            size = minimum_table_size;
         }
 
         std::size_t const alignment = member_alignment > alignof(table) ?

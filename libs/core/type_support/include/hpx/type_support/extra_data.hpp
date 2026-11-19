@@ -100,8 +100,8 @@ namespace hpx::util {
     // on first use and keep their addresses until the extra data is
     // destroyed (also when it is moved). Without objects it allocates
     // nothing; the first object is allocated together with the table of the
-    // objects (one slot for each id assigned so far, so the table isn't likely
-    // to grow).
+    // objects (one slot for each id assigned so far, at least 16, so the table
+    // isn't likely to grow).
     HPX_CXX_CORE_EXPORT class extra_data
     {
         // A table of the objects, by id, in a block that also holds the
