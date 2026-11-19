@@ -11,6 +11,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <functional>
 #include <memory>
 
@@ -51,12 +52,13 @@ namespace hpx::serialization::detail {
             void const* p, std::size_t size) = 0;
 
         // Receiving side: receives the data described by 'descriptor' into
-        // 'size' bytes of memory at 'p' and calls 'done' once it has
-        // arrived. It is started as one of the steps of the parcel that
-        // de-serialized the chunk (post_receive_actions::add_transfer), the
-        // parcel's action runs after 'done' has been called.
+        // 'size' bytes of memory at 'p' and calls 'done' once it has arrived
+        // (with the error if it failed). It is started as one of the steps of
+        // the parcel that de-serialized the chunk
+        // (post_receive_actions::add_transfer): the parcel's action runs
+        // after 'done' has been called, not at all if it failed.
         virtual void recv(device_chunk_descriptor const& descriptor, void* p,
-            std::size_t size, std::function<void()> done) = 0;
+            std::size_t size, std::function<void(std::exception_ptr)> done) = 0;
     };
 
     // The transport of an archive (extra data); none if 'transport' is

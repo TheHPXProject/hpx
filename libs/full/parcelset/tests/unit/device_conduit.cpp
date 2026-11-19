@@ -25,9 +25,11 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -64,14 +66,21 @@ public:
     }
 
     void recv_impl(detail::device_chunk_descriptor const& d, void* p,
-        std::size_t size, std::function<void()> done)
+        std::size_t size, std::function<void(std::exception_ptr)> done)
     {
         std::string const name = path(d);
-        HPX_TEST(std::ifstream(name, std::ios::binary)
+        bool const read =
+            std::ifstream(name, std::ios::binary)
                 .read(static_cast<char*>(p), static_cast<std::streamsize>(size))
-                .good());
+                .good();
         std::filesystem::remove(name);
-        done();
+        if (!read)
+        {
+            done(std::make_exception_ptr(
+                std::runtime_error("can't read " + name)));
+            return;
+        }
+        done(nullptr);
     }
 
 private:
@@ -110,6 +119,9 @@ struct device_like
         std::size_t size = 0;
         ar >> size;
         data.resize(size);
+
+        // the conduit moves the data (asked first, as device_vector does)
+        HPX_TEST(ar.next_chunk_from_transport());
         ar.load_binary_chunk(detail::fundamental_types::none, data.data(), size,
             true, hpx::serialization::chunk_memory::device);
     }

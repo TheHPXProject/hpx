@@ -20,6 +20,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <functional>
 #include <memory>
 #include <string>
@@ -44,9 +45,11 @@ namespace hpx::parcelset {
     ///    reused (the message's objects are kept alive until then)
     ///  - void recv_impl(
     ///        serialization::detail::device_chunk_descriptor const& d,
-    ///        void* p, std::size_t size, std::function<void()> done)
+    ///        void* p, std::size_t size,
+    ///        std::function<void(std::exception_ptr)> done)
     ///    receives the data 'd' describes (d.source is the sending
-    ///    locality), calls 'done' once it has arrived
+    ///    locality), calls 'done' once it has arrived (with the error if it
+    ///    failed: the parcel isn't run then)
     ///
     /// The descriptor of a chunk holds the sending locality and a tag unique
     /// for it. Conduits are registered with HPX_REGISTER_DEVICE_CONDUIT
@@ -142,7 +145,8 @@ namespace hpx::parcelset {
             }
 
             void recv(serialization::detail::device_chunk_descriptor const&,
-                void*, std::size_t, std::function<void()>) override
+                void*, std::size_t,
+                std::function<void(std::exception_ptr)>) override
             {
                 HPX_ASSERT_MSG(false, "a sending transport doesn't receive");
             }
@@ -172,16 +176,20 @@ namespace hpx::parcelset {
 
             void recv(serialization::detail::device_chunk_descriptor const& d,
                 void* p, std::size_t const size,
-                std::function<void()> done) override
+                std::function<void(std::exception_ptr)> done) override
             {
                 device_conduit_impl& b = base(conduit_);
-                conduit_.recv_impl(
-                    d, p, size, [&b, size, done = HPX_MOVE(done)]() {
-                        b.chunks_received_.fetch_add(
-                            1, std::memory_order_relaxed);
-                        b.bytes_received_.fetch_add(
-                            size, std::memory_order_relaxed);
-                        done();
+                conduit_.recv_impl(d, p, size,
+                    [&b, size, done = HPX_MOVE(done)](
+                        std::exception_ptr error) {
+                        if (!error)
+                        {
+                            b.chunks_received_.fetch_add(
+                                1, std::memory_order_relaxed);
+                            b.bytes_received_.fetch_add(
+                                size, std::memory_order_relaxed);
+                        }
+                        done(HPX_MOVE(error));
                     });
             }
 
