@@ -4,7 +4,7 @@
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-set(tests relocate relocate_at uninitialized_relocate_n_primitive)
+set(tests extra_data relocate relocate_at uninitialized_relocate_n_primitive)
 
 if(HPX_WITH_CXX20_COROUTINES)
   set(tests ${tests} generator)

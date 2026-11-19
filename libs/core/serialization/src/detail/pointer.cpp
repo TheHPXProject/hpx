@@ -23,15 +23,17 @@ namespace hpx::util {
     extra_data_id_type extra_data_helper<
         serialization::detail::input_pointer_tracker>::id() noexcept
     {
-        static std::uint8_t id = 0;
-        return &id;
+        static extra_data_id_type const id =
+            hpx::util::detail::next_extra_data_id();
+        return id;
     }
 
     extra_data_id_type extra_data_helper<
         serialization::detail::output_pointer_tracker>::id() noexcept
     {
-        static std::uint8_t id = 0;
-        return &id;
+        static extra_data_id_type const id =
+            hpx::util::detail::next_extra_data_id();
+        return id;
     }
 
     void

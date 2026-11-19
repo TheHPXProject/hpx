@@ -12,7 +12,6 @@
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/type_support.hpp>
 
-#include <cstdint>
 #include <string>
 #include <utility>
 
@@ -23,8 +22,9 @@ namespace hpx::util {
     extra_data_id_type
     extra_data_helper<lcos::detail::registered_name_tracker>::id() noexcept
     {
-        static std::uint8_t id = 0;
-        return &id;
+        static extra_data_id_type const id =
+            hpx::util::detail::next_extra_data_id();
+        return id;
     }
 
     void extra_data_helper<lcos::detail::registered_name_tracker>::reset(
