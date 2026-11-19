@@ -70,6 +70,14 @@ foreach(test ${tests})
   add_hpx_unit_test("modules.schedulers" ${test} ${${test}_PARAMETERS})
 endforeach()
 
+add_hpx_unit_test(
+  "modules.schedulers" shared_priority_queue_thread_creation_shared_queue
+  EXECUTABLE shared_priority_queue_thread_creation
+  PSEUDO_DEPS_NAME shared_priority_queue_thread_creation
+  THREADS_PER_LOCALITY 2
+  ARGS --shared-normal-queue --hpx:ini=hpx.thread_queue.cached_threads_count=8
+)
+
 # with a single worker nobody else could convert the staged tasks
 add_hpx_unit_test(
   "modules.schedulers" min_tasks_to_steal_staged_single_worker
