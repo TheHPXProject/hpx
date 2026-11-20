@@ -6,8 +6,8 @@
 
 # The task sizes the algorithms give their worker tasks, see
 # task_size_checks.hpp
-set(tests task_sizes_multi_call task_sizes_predicates task_sizes_reduce_merge
-          task_sizes_scans
+set(tests task_sizes_multi_call task_sizes_no_function task_sizes_predicates
+          task_sizes_reduce_merge task_sizes_scans
 )
 
 foreach(test ${tests})

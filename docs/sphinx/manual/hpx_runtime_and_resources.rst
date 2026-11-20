@@ -62,7 +62,10 @@ settings that a *tuner* may change while the scheduler runs. The tuner is
 selected with ``hpx.scheduler_tuner`` (see :ref:`ini_hpx`); the default,
 ``static``, keeps the configured values, so that the scheduler decides like
 the priority local scheduling policy. The settings of the rules are listed in
-:ref:`ini_hpx_scheduler_policy`. Applications can register their own tuners
+:ref:`ini_hpx_scheduler_policy`. A tuner reads and changes each setting as its
+type (``hpx::threads::policies::tuning_parameter_type``): switches, counts and
+sizes as ``std::uint32_t``, the idle backoff times (in microseconds) as
+``float``. Applications can register their own tuners
 with ``hpx::threads::policies::register_scheduler_tuner`` before the runtime
 is started.
 

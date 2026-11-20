@@ -20,6 +20,17 @@
 
 namespace hpx::thrust {
 
+    namespace detail {
+
+        // Thrust's device backend: CUDA, or HIP with rocThrust (its CUDA
+        // compatibility headers need CUB, which ROCm doesn't have)
+#if defined(HPX_HAVE_HIP)
+        namespace device_system = ::thrust::hip;
+#else
+        namespace device_system = ::thrust::cuda;
+#endif
+    }    // namespace detail
+
     HPX_CXX_CORE_EXPORT struct thrust_task_policy;    // for async ops
     HPX_CXX_CORE_EXPORT template <typename Executor, typename Parameters>
     struct thrust_task_policy_shim;
@@ -89,7 +100,7 @@ namespace hpx::thrust {
 
         auto get() const
         {
-            return ::thrust::cuda::par_nosync.on(stream());
+            return detail::device_system::par_nosync.on(stream());
         }
 
         hpx::future<void> get_future() const
@@ -152,7 +163,7 @@ namespace hpx::thrust {
 
         auto get() const
         {
-            return ::thrust::cuda::par_nosync.on(stream());
+            return detail::device_system::par_nosync.on(stream());
         }
 
         hpx::future<void> get_future() const

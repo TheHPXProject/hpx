@@ -240,7 +240,8 @@ namespace hpx::threads::policies {
         {
             HPX_ASSERT(wake_one_max_size_ != scheduler_tuning_parameters::npos);
             return size != threads::task_size::unknown &&
-                static_cast<double>(size) <= parameters.get(wake_one_max_size_);
+                static_cast<std::uint32_t>(size) <=
+                parameters.get<std::uint32_t>(wake_one_max_size_);
         }
 
         /// Rules 2 to 4: whom to wake up after a new nano or small thread was
@@ -269,7 +270,7 @@ namespace hpx::threads::policies {
             // (hpx.scheduler_policy.wake_target_only)
             if (target != caller)
             {
-                return parameters.get(wake_target_only_) != 0.0 ?
+                return parameters.get<std::uint32_t>(wake_target_only_) != 0 ?
                     wake_action::target_if_sleeping :
                     wake_action::all;
             }
@@ -285,8 +286,9 @@ namespace hpx::threads::policies {
             //   belong to a caller that waits for them without yielding
             //   (hpx.scheduler_policy.wake_one_unless_placed_by_caller).
             if ((!placed_by_caller &&
-                    parameters.get(wake_one_unless_placed_by_caller_) != 0.0) ||
-                (parameters.get(wake_if_nobody_spins_) != 0.0 &&
+                    parameters.get<std::uint32_t>(
+                        wake_one_unless_placed_by_caller_) != 0) ||
+                (parameters.get<std::uint32_t>(wake_if_nobody_spins_) != 0 &&
                     !has_spinning_worker()))
             {
                 return wake_action::one;
@@ -319,25 +321,29 @@ namespace hpx::threads::policies {
             double const exponent =
                 (std::min) (static_cast<double>(count), max_exponent);
 
+            auto const max_period = static_cast<double>(
+                parameters.get<float>(worker, max_idle_backoff_time_));
+
             idle_step step{};
-            step.period = std::chrono::microseconds(std::lround(
-                (std::min) (parameters.get(worker, max_idle_backoff_time_),
-                    std::pow(2.0, exponent))));
+            step.period = std::chrono::microseconds(
+                std::lround((std::min) (max_period, std::pow(2.0, exponent))));
 
             // a round of more pauses lasts longer than the measured one; the
             // rounds are also those of the sentinel, which spins through a
             // period to sleep
-            step.pauses_per_round = static_cast<std::uint32_t>(
-                parameters.get(worker, pauses_per_round_));
+            step.pauses_per_round =
+                parameters.get<std::uint32_t>(worker, pauses_per_round_);
             double const rounds_per_us = spin_rounds_per_us *
                 calibration_pauses_per_round / step.pauses_per_round;
+            auto const steal_check_interval = static_cast<double>(
+                parameters.get<float>(worker, steal_check_interval_));
             step.steal_check_rounds = (std::max) (std::uint64_t(1),
                 static_cast<std::uint64_t>(
-                    std::llround(parameters.get(worker, steal_check_interval_) *
-                        rounds_per_us)));
+                    std::llround(steal_check_interval * rounds_per_us)));
 
             if (static_cast<double>(step.period.count()) >=
-                parameters.get(worker, min_idle_backoff_time_))
+                static_cast<double>(
+                    parameters.get<float>(worker, min_idle_backoff_time_)))
             {
                 return step;    // sleep, or spin as the sentinel
             }
@@ -354,7 +360,7 @@ namespace hpx::threads::policies {
         [[nodiscard]] bool free_pass_after_wake(
             scheduler_tuning_parameters const& parameters) const noexcept
         {
-            return parameters.get(free_pass_after_wake_) != 0.0;
+            return parameters.get<std::uint32_t>(free_pass_after_wake_) != 0;
         }
 
     private:

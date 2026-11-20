@@ -44,6 +44,16 @@ if(HPX_WITH_CUDA AND NOT TARGET Cuda::cuda)
   find_package(CUDAToolkit MODULE REQUIRED)
   if(CUDAToolkit_FOUND)
     target_link_libraries(Cuda::cuda INTERFACE CUDA::cudart)
+    # CUDA 13 keeps Thrust, CUB and libcu++ in include/cccl: nvcc searches
+    # there, host compilers compiling sources that include them need the
+    # directory
+    foreach(_hpx_cuda_include_dir ${CUDAToolkit_INCLUDE_DIRS})
+      if(EXISTS "${_hpx_cuda_include_dir}/cccl/thrust")
+        target_include_directories(
+          Cuda::cuda SYSTEM INTERFACE "${_hpx_cuda_include_dir}/cccl"
+        )
+      endif()
+    endforeach()
     if(TARGET CUDA::cublas)
       set(HPX_WITH_GPUBLAS ON)
       hpx_add_config_define(HPX_HAVE_GPUBLAS)
