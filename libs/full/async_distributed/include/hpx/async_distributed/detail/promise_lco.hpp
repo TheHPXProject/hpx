@@ -81,13 +81,13 @@ namespace hpx::lcos::detail {
             return device_;
         }
 
-        void set_value(RemoteResult&& result)
+        void set_value(RemoteResult&& result) override
         {
             HPX_ASSERT(shared_state_);
             shared_state_->set_remote_data(HPX_MOVE(result));
         }
 
-        void set_exception(std::exception_ptr const& e)
+        void set_exception(std::exception_ptr const& e) override
         {
             HPX_ASSERT(shared_state_);
             shared_state_->set_exception(e);
