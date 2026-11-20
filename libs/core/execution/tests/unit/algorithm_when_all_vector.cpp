@@ -346,6 +346,20 @@ void test_when_all_vector_stopped_propagation()
         ex::start(os);
         HPX_TEST(set_stopped_called);
     }
+
+    // Connecting a named lvalue receiver with a pre-stopped stop token
+    {
+        hpx::stop_source stop_source;
+        stop_source.request_stop();
+
+        std::atomic<bool> set_stopped_called{false};
+        auto s2 = ex::when_all_vector(std::vector{ex::just(42)});
+
+        stopped_receiver r{stop_source, set_stopped_called};
+        auto os = ex::connect(std::move(s2), r);
+        ex::start(os);
+        HPX_TEST(set_stopped_called);
+    }
 }
 
 int main()
