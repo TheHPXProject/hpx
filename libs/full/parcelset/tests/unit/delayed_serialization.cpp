@@ -1007,8 +1007,8 @@ namespace {
 namespace {
 
     // Serializing a parcel fails after an argument has registered data that
-    // is still being produced: the error is passed on only once that data
-    // is ready, the archive tracking it must not go away before.
+    // is still being produced: the error is passed on right away, and the
+    // archive tracking that data is kept until the data is ready.
     void test_failing_serialization()
     {
         std::size_t const alive_before = buffers_alive;
