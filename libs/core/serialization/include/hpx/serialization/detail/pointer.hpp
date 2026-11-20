@@ -125,7 +125,7 @@ namespace hpx::serialization::detail {
             }
         }
 
-        alignas(void*) unsigned char storage_[2 * sizeof(void*)];
+        alignas(void*) unsigned char storage_[2 * sizeof(void*)] = {};
         manage_type manage_ = nullptr;
     };
 
