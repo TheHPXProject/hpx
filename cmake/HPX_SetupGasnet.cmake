@@ -23,7 +23,7 @@ macro(hpx_setup_gasnet)
         GASNET_REBUILD_MESSAGE
         "Build GASNet as follows and make the .pc files visible via "
         "PKG_CONFIG_PATH or CMAKE_PREFIX_PATH:\n"
-        "  export CXXFLAGS=-fPIC -O3; export CFLAGS=-fPIC -O3;\n"
+        "  export CXXFLAGS='-fPIC -O3'; export CFLAGS='-fPIC -O3';\n"
         "  PMI_LIBS=probe CFLAGS=-fPIC CCFLAGS=-fPIC CXXFLAGS=-fPIC\n"
         "  ./configure --enable-par --disable-ucx --enable-mpi \\\n"
         "    --with-c-compiler=mpicc --with-cxx-compiler=mpicxx \\\n"
@@ -235,61 +235,58 @@ ${GASNET_BUILD_GASNET_CXX}"
       )
     endif()
 
-    # Hard requirement under the mpi conduit: UCX built with multithreading.
-    #
-    # This is NOT GASNet's own ucx conduit -- the rebuild recipe above passes
-    # --disable-ucx on purpose, since we drive GASNet through OpenMPI's mpi
-    # conduit instead.  The UCX we require here is the one OpenMPI itself was
-    # built against (hence /opt/ucx on PKG_CONFIG_PATH): gasnet-mpi links
-    # through libmpi, so an MPI built on UCX pulls it in transitively and it has
-    # to be MT-capable for HPX's threading model.  Do not "fix" this by relaxing
-    # --disable-ucx or by dropping the check below; they are unrelated knobs.
+    # Under the mpi conduit, an MPI library built on UCX needs a UCX built with
+    # multithreading support for HPX's threading model: gasnet-mpi links through
+    # libmpi, which pulls in the UCX it was built with. This is not GASNet's own
+    # ucx conduit. MPI libraries that don't use UCX (for instance MPICH with
+    # OFI) are fine, so this only warns.
     if("${HPX_WITH_PARCELPORT_GASNET_CONDUIT}" STREQUAL "mpi")
       execute_process(
         COMMAND "${PKG_CONFIG_EXECUTABLE}" --variable=prefix ucx
         RESULT_VARIABLE GASNET_BUILD_PC_RESULT
         OUTPUT_VARIABLE GASNET_UCX_PREFIX
-        OUTPUT_STRIP_TRAILING_WHITESPACE
+        OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET
       )
       if(NOT GASNET_BUILD_PC_RESULT EQUAL 0 OR NOT GASNET_UCX_PREFIX)
         message(
-          FATAL_ERROR
-            "pkg-config could not locate the 'ucx' package. UCX is required "
-            "under the GASNet mpi conduit. Build it as follows and add "
-            "/opt/ucx/lib/pkgconfig to PKG_CONFIG_PATH:\n"
-            "  ./configure --prefix=/opt/ucx --enable-mt\n"
-            "  && make && sudo make install"
+          STATUS
+            "GASNet mpi conduit: no UCX found through pkg-config, not checking "
+            "whether the MPI library uses a UCX with multithreading support"
         )
-      endif()
-      find_program(
-        GASNET_UCX_INFO ucx_info HINTS "${GASNET_UCX_PREFIX}/bin" NO_CACHE
-      )
-      if(NOT GASNET_UCX_INFO)
-        message(
-          FATAL_ERROR
-            "Could not find the 'ucx_info' tool for the UCX installation at "
-            "'${GASNET_UCX_PREFIX}'. It is needed to verify that UCX was "
-            "built with multithreading support."
+      else()
+        find_program(
+          GASNET_UCX_INFO ucx_info HINTS "${GASNET_UCX_PREFIX}/bin" NO_CACHE
         )
-      endif()
-      execute_process(
-        COMMAND "${GASNET_UCX_INFO}" -b
-        RESULT_VARIABLE GASNET_UCX_INFO_RESULT
-        OUTPUT_VARIABLE GASNET_UCX_BUILDINFO
-        ERROR_QUIET
-      )
-      string(REGEX MATCH "#define[ \t]+ENABLE_MT[ \t]+1" GASNET_UCX_MT
-                   "${GASNET_UCX_BUILDINFO}"
-      )
-      if(NOT GASNET_UCX_INFO_RESULT EQUAL 0 OR NOT GASNET_UCX_MT)
-        message(
-          FATAL_ERROR
-            "UCX at '${GASNET_UCX_PREFIX}' was not built with "
-            "multithreading support ('ucx_info -b' does not report "
-            "ENABLE_MT 1). HPX requires UCX built with --enable-mt:\n"
-            "  ./configure --prefix=/opt/ucx --enable-mt\n"
-            "  && make && sudo make install"
-        )
+        if(NOT GASNET_UCX_INFO)
+          message(
+            WARNING
+              "Could not find the 'ucx_info' tool for the UCX installation at "
+              "'${GASNET_UCX_PREFIX}', not checking whether it was built with "
+              "multithreading support. If the MPI library uses this UCX, it "
+              "must have been configured with --enable-mt."
+          )
+        else()
+          execute_process(
+            COMMAND "${GASNET_UCX_INFO}" -b
+            RESULT_VARIABLE GASNET_UCX_INFO_RESULT
+            OUTPUT_VARIABLE GASNET_UCX_BUILDINFO
+            ERROR_QUIET
+          )
+          string(REGEX MATCH "#define[ \t]+ENABLE_MT[ \t]+1" GASNET_UCX_MT
+                       "${GASNET_UCX_BUILDINFO}"
+          )
+          if(NOT GASNET_UCX_INFO_RESULT EQUAL 0 OR NOT GASNET_UCX_MT)
+            message(
+              WARNING
+                "UCX at '${GASNET_UCX_PREFIX}' was not built with "
+                "multithreading support ('ucx_info -b' does not report "
+                "ENABLE_MT 1). If the MPI library uses this UCX, rebuild UCX "
+                "with --enable-mt:\n"
+                "  ./configure --prefix=/opt/ucx --enable-mt "
+                "&& make && make install"
+            )
+          endif()
+        endif()
       endif()
     endif()
 

@@ -98,7 +98,17 @@ namespace hpx::parcelset {
             static std::size_t mtu(util::runtime_configuration const& ini,
                 std::size_t num_pes, std::size_t slots)
             {
-                return util::gasnet_environment::mtu(ini, num_pes, slots);
+                std::size_t const mtu =
+                    util::gasnet_environment::mtu(ini, num_pes, slots);
+                if (mtu <= detail::header_size)
+                {
+                    HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
+                        "hpx::parcelset::policies::gasnet::parcelport",
+                        "hpx.parcel.gasnet.mtu must be larger than the page "
+                        "header ({} bytes, is {})",
+                        detail::header_size, mtu);
+                }
+                return mtu;
             }
 
             // In-flight chunks per (sender,receiver) pair.  Must be
@@ -109,14 +119,15 @@ namespace hpx::parcelset {
                 return util::gasnet_environment::slots(ini);
             }
 
-            // Bound (seconds) for the empty wait in do_stop(). Shutdown 
+            // Bound (seconds) for the empty wait in do_stop(). Shutdown
             // terminates even if a peer stops returning credit for its last
             // in-flight transfers; when the timeout fires the few stranded
             // parcels are dropped.  The time is measured as *zero transfer
             // activity*: an empty that keeps moving pages waits as long as it
             // needs (no premature message drops), only a genuinely stalled
             // empty aborts. override with hpx.parcel.gasnet.stop_timeout.
-            static std::size_t stop_timeout(util::runtime_configuration const& ini)
+            static std::size_t stop_timeout(
+                util::runtime_configuration const& ini)
             {
                 return hpx::util::get_entry_as<std::size_t>(
                     ini, "hpx.parcel.gasnet.stop_timeout", 30);
@@ -136,10 +147,11 @@ namespace hpx::parcelset {
             // every pass.  Each probe is one local load in the GASNet port,
             // so this chiefly bounds the per-pass loop length at large n (see
             // mailbox_array::default_probe_window).
-            static std::size_t scan_window(util::runtime_configuration const& ini)
+            static std::size_t scan_window(
+                util::runtime_configuration const& ini)
             {
-                return hpx::util::get_entry_as<std::size_t>(
-                    ini, "hpx.parcel.gasnet.scan_window",
+                return hpx::util::get_entry_as<std::size_t>(ini,
+                    "hpx.parcel.gasnet.scan_window",
                     mailbox_array::default_probe_window);
             }
 
@@ -147,8 +159,7 @@ namespace hpx::parcelset {
             // mismatch in mtu/slots/checksum silently corrupts transfers, so
             // the affordable startup-time collective runs unless explicitly
             // turned off via hpx.parcel.gasnet.uniform_check=0.
-            static bool uniform_check(
-                util::runtime_configuration const& ini)
+            static bool uniform_check(util::runtime_configuration const& ini)
             {
                 return hpx::util::get_entry_as<bool>(
                     ini, "hpx.parcel.gasnet.uniform_check", true);
@@ -169,8 +180,12 @@ namespace hpx::parcelset {
                     util::gasnet_environment::enabled() ?
                         util::gasnet_environment::rank() :
                         0))
-              , mtu_(mtu(ini, num_pes_, slots(ini)))
-              , slots_(slots(ini))
+              // validated only if this parcelport is used (it is created in
+              // every run of a build that has it)
+              , mtu_(util::gasnet_environment::enabled() ?
+                        mtu(ini, num_pes_, slots(ini)) :
+                        0)
+              , slots_(util::gasnet_environment::enabled() ? slots(ini) : 1)
               , stop_timeout_(stop_timeout(ini))
               // a parcelport that is compiled in but not selected for this
               // run (another one is) has no GASNet segment to carve from
@@ -186,8 +201,8 @@ namespace hpx::parcelset {
                 detail::g_discard_received.store(
                     false, std::memory_order_release);
                 here_ = here(my_pe_);
-                receiver_.set_poll_interval(static_cast<std::uint32_t>(
-                    hpx::util::get_entry_as<int>(
+                receiver_.set_poll_interval(
+                    static_cast<std::uint32_t>(hpx::util::get_entry_as<int>(
                         ini, "hpx.parcel.gasnet.progress_interval", 1)));
                 // 0: only the io drivers progress (default); 1: every worker
                 // thread; N>1: worker threads 0..N-1 only.  Progress from HPX
@@ -232,8 +247,8 @@ namespace hpx::parcelset {
                         31u +
                     (mailboxes_.checksum_enabled() ? 1u : 0u);
 
-                auto* const words = reinterpret_cast<std::uint32_t*>(
-                    mailboxes_.scratch_beg());
+                auto* const words =
+                    reinterpret_cast<std::uint32_t*>(mailboxes_.scratch_beg());
 
                 // Publish my fingerprint into my own scratch word via GASNet
                 // (self-RMA).  mailbox_array's constructor zeroed the whole
@@ -265,9 +280,8 @@ namespace hpx::parcelset {
                         // the cross-PE comparison has to be an actual get.
                         void* const remote_word =
                             mailboxes_.remote_ptr(pe, &words[pe]);
-                        util::gasnet_environment::get(
-                            static_cast<int>(pe), &other_hash, remote_word,
-                            sizeof(other_hash));
+                        util::gasnet_environment::get(static_cast<int>(pe),
+                            &other_hash, remote_word, sizeof(other_hash));
                     }
                     if (other_hash != hash)
                     {
@@ -285,7 +299,8 @@ namespace hpx::parcelset {
                               << mtu_ << " slots=" << slots_ << " checksum="
                               << (mailboxes_.checksum_enabled() ? 1 : 0)
                               << " fingerprint=0x" << std::hex << hash
-                              << std::dec << ").  This PE must be launched "
+                              << std::dec
+                              << ").  This PE must be launched "
                                  "with the same hpx.parcel.gasnet.mtu, "
                                  "hpx.parcel.gasnet.slots and "
                                  "hpx.parcel.gasnet.checksum values as "
@@ -481,7 +496,8 @@ namespace hpx::parcelset {
                 // conduit's global lock and slows everything down.
                 if (worker_progress_ <= 0 ||
                     (worker_progress_ > 1 &&
-                        num_thread >= static_cast<std::size_t>(worker_progress_)))
+                        num_thread >=
+                            static_cast<std::size_t>(worker_progress_)))
                 {
                     return false;
                 }
@@ -671,7 +687,6 @@ struct hpx::traits::plugin_config_data<
     }
 };
 
-HPX_REGISTER_PARCELPORT(
-    hpx::parcelset::policies::gasnet::parcelport, gasnet)
+HPX_REGISTER_PARCELPORT(hpx::parcelset::policies::gasnet::parcelport, gasnet)
 
 #endif

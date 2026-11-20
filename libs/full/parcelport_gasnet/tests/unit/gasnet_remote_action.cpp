@@ -37,9 +37,22 @@ std::uint64_t sum_and_locality(std::vector<std::uint64_t> const& data)
 }
 HPX_PLAIN_ACTION(sum_and_locality)
 
+std::uint32_t locality_id()
+{
+    return hpx::get_locality_id();
+}
+HPX_PLAIN_ACTION(locality_id)
+
 ///////////////////////////////////////////////////////////////////////////////
 void test_remote(hpx::id_type const& target, std::uint32_t target_id)
 {
+    // no arguments, and an empty vector: the smallest messages
+    HPX_TEST_EQ(hpx::async<locality_id_action>(target).get(), target_id);
+    HPX_TEST_EQ(hpx::async<sum_and_locality_action>(
+                    target, std::vector<std::uint64_t>())
+                    .get(),
+        std::uint64_t(target_id));
+
     // small payload
     HPX_TEST_EQ(hpx::async<increment_action>(target, 41U).get(), 42U);
 

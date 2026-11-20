@@ -310,9 +310,9 @@ def build_cmd(options, args):
             else ['--hpx:ini=hpx.parcel.tcp.priority=1000', '--hpx:ini=hpx.parcel.tcp.enable=1'] if pp == 'tcp'
             else [])
         cmd += select_parcelport(options.parcelport)
-        # GASNet is on by default when it is compiled in; outside a GASNet
-        # job it would start a one-process GASNet job in every rank of a
-        # test launched for another parcelport
+        # GASNet starts only when it is enabled and bootstraps the job
+        # (hpx.parcel.bootstrap=gasnet); switch it off explicitly anyway for
+        # the other parcelports
         if options.parcelport != 'gasnet':
             cmd += ['--hpx:ini=hpx.parcel.gasnet.enable!=0']
 

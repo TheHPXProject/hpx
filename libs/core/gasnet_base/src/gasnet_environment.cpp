@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <bit>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
@@ -27,11 +28,25 @@ namespace hpx::util {
         util::runtime_configuration const& cfg)
     {
 #if defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_MODULE_GASNET_BASE)
-        // The gasnet parcelport is used if it is not explicitly disabled
-        // (hpx.parcel.gasnet.enable, default 1).
-        if (!get_entry_as(cfg, "hpx.parcel.gasnet.enable", true))
+        // The gasnet parcelport is used only if it is enabled
+        // (hpx.parcel.gasnet.enable=1) and no other parcelport bootstraps
+        // the job (hpx.parcel.bootstrap unset or gasnet): otherwise every
+        // process of a run with another parcelport would start a GASNet job
+        // of its own. The parcelport's default configuration enables all
+        // parcelports, so the setting alone doesn't tell.
+        if (!get_entry_as(cfg, "hpx.parcel.gasnet.enable", false))
         {
-            LBT_(info) << "GASNET support disabled via configuration settings\n";
+            LBT_(info) << "GASNET support not enabled via configuration "
+                          "settings\n";
+            return false;
+        }
+        if (std::string const bootstrap =
+                cfg.get_entry("hpx.parcel.bootstrap", "");
+            !bootstrap.empty() && bootstrap != "gasnet")
+        {
+            LBT_(info) << "GASNET support not enabled, the job is "
+                          "bootstrapped by the "
+                       << bootstrap << " parcelport\n";
             return false;
         }
 
@@ -45,7 +60,20 @@ namespace hpx::util {
     {
         std::size_t const configured = get_entry_as<std::size_t>(
             cfg, "hpx.parcel.gasnet.slots", default_slots_per_dst);
-        return configured == 0 ? 1 : configured;
+        if (configured == 0)
+        {
+            return 1;
+        }
+        // the ring slot of a page is its 32-bit counter modulo slots, which
+        // stays consistent across the counter's wrap only for a power of two
+        if (!std::has_single_bit(configured))
+        {
+            HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
+                "hpx::util::gasnet_environment::slots",
+                "hpx.parcel.gasnet.slots must be a power of two (is {})",
+                configured);
+        }
+        return configured;
     }
 
     // Page size: hpx.parcel.gasnet.mtu if given, otherwise the largest power
@@ -58,6 +86,15 @@ namespace hpx::util {
             get_entry_as<std::size_t>(cfg, "hpx.parcel.gasnet.mtu", 0);
         if (configured != 0)
         {
+            // pages are scanned in 32-bit words (the parcelport also checks
+            // that a page is larger than its header)
+            if (configured % 4 != 0)
+            {
+                HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
+                    "hpx::util::gasnet_environment::mtu",
+                    "hpx.parcel.gasnet.mtu must be a multiple of 4 (is {})",
+                    configured);
+            }
             return configured;
         }
 
@@ -209,9 +246,8 @@ namespace hpx::util {
             void* owneraddr = nullptr;
             void* localaddr = nullptr;
             std::uintptr_t len = 0;
-            gex_Event_t const ev = gex_EP_QueryBoundSegmentNB(
-                tm_, static_cast<gex_Rank_t>(r), &owneraddr, &localaddr, &len,
-                0);
+            gex_Event_t const ev = gex_EP_QueryBoundSegmentNB(tm_,
+                static_cast<gex_Rank_t>(r), &owneraddr, &localaddr, &len, 0);
             gex_Event_Wait(ev);
             if (gex_Event_Test(ev) != GASNET_OK || owneraddr == nullptr)
             {
@@ -245,8 +281,7 @@ namespace hpx::util {
         }
 
         cfg.add_entry("hpx.parcel.gasnet.rank", std::to_string(this_rank));
-        cfg.add_entry(
-            "hpx.parcel.gasnet.processorname", get_processor_name());
+        cfg.add_entry("hpx.parcel.gasnet.processorname", get_processor_name());
     }
 
     void gasnet_environment::finalize() noexcept
@@ -384,8 +419,7 @@ namespace hpx::util {
     }
 
     gex_Event_t gasnet_environment::put_batch_nb(int rank, std::size_t n,
-        void* const* raddr, void const* const* laddr,
-        std::size_t const* nbytes)
+        void* const* raddr, void const* const* laddr, std::size_t const* nbytes)
     {
         HPX_ASSERT(tm_ != GEX_TM_INVALID);
 
@@ -400,8 +434,7 @@ namespace hpx::util {
 
     gex_Event_t gasnet_environment::put_batch_and_credit_nb(int rank,
         std::size_t n, void* const* raddr, void const* const* laddr,
-        std::size_t const* nbytes, void* credit_raddr,
-        void const* credit_laddr)
+        std::size_t const* nbytes, void* credit_raddr, void const* credit_laddr)
     {
         HPX_ASSERT(tm_ != GEX_TM_INVALID);
 
@@ -416,7 +449,8 @@ namespace hpx::util {
         // weakly ordered hosts
         std::atomic_thread_fence(std::memory_order_release);
         gex_RMA_PutNBI(tm_, static_cast<gex_Rank_t>(rank), credit_raddr,
-            const_cast<void*>(credit_laddr), sizeof(std::uint32_t), GEX_EVENT_DEFER, 0);
+            const_cast<void*>(credit_laddr), sizeof(std::uint32_t),
+            GEX_EVENT_DEFER, 0);
 
         return gex_NBI_EndAccessRegion(0);
     }
@@ -428,18 +462,18 @@ namespace hpx::util {
 
         gex_NBI_BeginAccessRegion(0);
         gex_RMA_PutNBI(tm_, static_cast<gex_Rank_t>(rank), raddr,
-            const_cast<void*>(laddr), sizeof(std::uint32_t), GEX_EVENT_DEFER, 0);
+            const_cast<void*>(laddr), sizeof(std::uint32_t), GEX_EVENT_DEFER,
+            0);
         return gex_NBI_EndAccessRegion(0);
     }
 
-    void gasnet_environment::put_uint32(int rank, void* raddr,
-        std::uint32_t value)
+    void gasnet_environment::put_uint32(
+        int rank, void* raddr, std::uint32_t value)
     {
         HPX_ASSERT(tm_ != GEX_TM_INVALID);
 
         std::uint32_t const tmp = value;
-        gex_RMA_PutBlocking(
-            tm_, static_cast<gex_Rank_t>(rank), raddr,
+        gex_RMA_PutBlocking(tm_, static_cast<gex_Rank_t>(rank), raddr,
             const_cast<std::uint32_t*>(&tmp), sizeof(tmp), 0);
     }
 
