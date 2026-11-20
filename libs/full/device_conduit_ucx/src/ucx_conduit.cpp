@@ -75,6 +75,23 @@ namespace hpx::parcelset::device_conduits {
 
         constexpr ucp_tag_t full_tag_mask = ~ucp_tag_t(0);
 
+        // The tag holds 16 bits of the sending locality: transfers from
+        // localities with larger ids would be matched to the wrong chunks,
+        // they fail instead.
+        std::exception_ptr check_source(
+            serialization::detail::device_chunk_descriptor const& d)
+        {
+            if ((d.source >> 16) == 0)
+            {
+                return nullptr;
+            }
+            return std::make_exception_ptr(
+                hpx::exception(hpx::error::network_error,
+                    "hpx::parcelset::device_conduits::ucx_conduit: the UCX "
+                    "conduit supports locality ids up to 65535, not " +
+                        std::to_string(d.source)));
+        }
+
         // the completion of a send or receive (the 'user_data' of the UCX
         // request)
         struct send_state
@@ -417,6 +434,12 @@ namespace hpx::parcelset::device_conduits {
         std::size_t const size,
         hpx::move_only_function<void(std::exception_ptr)> sent)
     {
+        if (std::exception_ptr error = check_source(d))
+        {
+            sent(HPX_MOVE(error));
+            return;
+        }
+
         std::uint64_t const tag = make_tag(d);
         hpx::shared_future<ucp_ep*> ep = endpoint(locality_id);
         if (ep.is_ready())
@@ -444,6 +467,12 @@ namespace hpx::parcelset::device_conduits {
         serialization::detail::device_chunk_descriptor const& d, void* p,
         std::size_t const size, std::function<void(std::exception_ptr)> done)
     {
+        if (std::exception_ptr error = check_source(d))
+        {
+            done(HPX_MOVE(error));
+            return;
+        }
+
         note_device(p);
 
         auto* state = new recv_state{HPX_MOVE(done)};
