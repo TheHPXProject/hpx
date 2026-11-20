@@ -33,6 +33,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <bit>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -93,10 +94,10 @@ namespace hpx::parcelset {
             // Page size.  0 (the default) selects it automatically: as large
             // as 1 MiB (fewer atomics/fences/loop iterations per byte, about
             // 25% faster on 8 nodes than 64 KiB), but shrunk as the job grows
-            // so that the symmetric rx+tx rings
-            // (npes * slots * mtu * 2) stay within 128 MiB, half of the
-            // default 256 MiB symmetric heap.  The result depends only on npes and slots, so
-            // it is identical on every PE, as the wire protocol requires.
+            // so that the symmetric rx+tx rings (npes * slots * mtu * 2) stay
+            // within 128 MiB, half of the default 256 MiB symmetric heap. The
+            // result depends only on npes and slots, so it is identical on
+            // every PE, as the wire protocol requires.
             static std::size_t mtu(util::runtime_configuration const& ini,
                 std::size_t num_pes, std::size_t slots)
             {
@@ -113,8 +114,8 @@ namespace hpx::parcelset {
                 constexpr std::size_t min_mtu = std::size_t(64) << 10;
 
                 std::size_t const denom =
-                    (std::max)(std::size_t(1), num_pes * slots * 2);
-                std::size_t m = (std::min)(max_mtu, budget / denom);
+                    (std::max) (std::size_t(1), num_pes * slots * 2);
+                std::size_t m = (std::min) (max_mtu, budget / denom);
                 // round down to a power of two
                 std::size_t p = min_mtu;
                 while (p * 2 <= m)
@@ -132,7 +133,22 @@ namespace hpx::parcelset {
                 std::size_t const slots = hpx::util::get_entry_as<std::size_t>(
                     ini, "hpx.parcel.openshmem.slots",
                     mailbox_array::default_slots_per_dst);
-                return slots == 0 ? 1 : slots;
+                if (slots == 0)
+                {
+                    return 1;
+                }
+                // the ring slot of a page is its 32-bit counter modulo
+                // slots, which stays consistent across the counter's wrap
+                // only for a power of two
+                if (!std::has_single_bit(slots))
+                {
+                    HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
+                        "hpx::parcelset::policies::openshmem::parcelport",
+                        "hpx.parcel.openshmem.slots must be a power of two "
+                        "(is {})",
+                        slots);
+                }
+                return slots;
             }
 
             // Expected size (bytes) of the symmetric data segment the job was
@@ -153,7 +169,8 @@ namespace hpx::parcelset {
             // activity*: an empty that keeps moving pages waits as long as it
             // needs (no premature message drops), only a genuinely stalled
             // empty aborts.  Override with hpx.parcel.openshmem.stop_timeout.
-            static std::size_t stop_timeout(util::runtime_configuration const& ini)
+            static std::size_t stop_timeout(
+                util::runtime_configuration const& ini)
             {
                 return hpx::util::get_entry_as<std::size_t>(
                     ini, "hpx.parcel.openshmem.stop_timeout", 30);
@@ -177,8 +194,8 @@ namespace hpx::parcelset {
             static std::size_t scan_window(
                 util::runtime_configuration const& ini)
             {
-                return hpx::util::get_entry_as<std::size_t>(
-                    ini, "hpx.parcel.openshmem.scan_window",
+                return hpx::util::get_entry_as<std::size_t>(ini,
+                    "hpx.parcel.openshmem.scan_window",
                     mailbox_array::default_probe_window);
             }
 
@@ -199,8 +216,7 @@ namespace hpx::parcelset {
             // oshrun job.  When enabling it, make sure every PE is launched
             // with identical hpx.parcel.openshmem.mtu, .slots and .checksum
             // values.
-            static bool uniform_check(
-                util::runtime_configuration const& ini)
+            static bool uniform_check(util::runtime_configuration const& ini)
             {
                 return hpx::util::get_entry_as<bool>(
                     ini, "hpx.parcel.openshmem.uniform_check", false);
@@ -297,7 +313,6 @@ namespace hpx::parcelset {
                 words[my_pe_] = protocol_fingerprint();
             }
 
-
             // Non-blocking: compare against every peer that has already
             // published (non-zero word).  The later of any two PEs to reach
             // do_run() sees the earlier one's word, so a mismatching pair is
@@ -317,11 +332,10 @@ namespace hpx::parcelset {
                 bool mismatch = false;
                 for (std::size_t pe = 0; pe < num_pes_; ++pe)
                 {
-                    std::uint32_t const other_hash =
-                        (pe == my_pe_) ?
-                            words[pe] :
-                            shmem_uint32_atomic_fetch(
-                                &words[pe], static_cast<int>(pe));
+                    std::uint32_t const other_hash = (pe == my_pe_) ?
+                        words[pe] :
+                        shmem_uint32_atomic_fetch(
+                            &words[pe], static_cast<int>(pe));
                     if (other_hash != 0 && other_hash != hash)
                     {
                         mismatch = true;
@@ -338,7 +352,8 @@ namespace hpx::parcelset {
                               << mtu_ << " slots=" << slots_ << " checksum="
                               << (mailboxes_.checksum_enabled() ? 1 : 0)
                               << " fingerprint=0x" << std::hex << hash
-                              << std::dec << ").  This PE must be launched "
+                              << std::dec
+                              << ").  This PE must be launched "
                                  "with the same hpx.parcel.openshmem.mtu, "
                                  "hpx.parcel.openshmem.slots and "
                                  "hpx.parcel.openshmem.checksum values as "
