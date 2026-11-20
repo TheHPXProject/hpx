@@ -267,11 +267,30 @@ namespace hpx::thrust {
                         free_block(p);
                     }
                 }
-                for (deferred_block const& b : deferred)
+                // a block whose wait failed may still be read: it stays
+                // deferred (it is lost if it can't be put back)
+                auto const kept_end = std::remove_if(deferred.begin(),
+                    deferred.end(), [this](deferred_block const& b) {
+                        if (cudaEventSynchronize(b.event) != cudaSuccess)
+                        {
+                            return false;
+                        }
+                        (void) cudaEventDestroy(b.event);
+                        free_block(b.p);
+                        return true;
+                    });
+                if (kept_end != deferred.begin())
                 {
-                    (void) cudaEventSynchronize(b.event);
-                    (void) cudaEventDestroy(b.event);
-                    free_block(b.p);
+                    try
+                    {
+                        std::lock_guard<hpx::spinlock_no_backoff> l(mtx_);
+                        deferred_.insert(
+                            deferred_.end(), deferred.begin(), kept_end);
+                    }
+                    // NOLINTNEXTLINE(bugprone-empty-catch)
+                    catch (...)
+                    {
+                    }
                 }
             }
 

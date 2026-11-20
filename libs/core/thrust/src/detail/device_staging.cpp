@@ -84,12 +84,23 @@ namespace hpx::serialization::detail {
 
             ~pinned_host_buffer()
             {
-                hpx::thrust::detail::pool_deallocate(data_, size_);
+                if (data_ != nullptr)
+                {
+                    hpx::thrust::detail::pool_deallocate(data_, size_);
+                }
             }
 
             [[nodiscard]] void* data() const noexcept
             {
                 return data_;
+            }
+
+            // A copy may still access the buffer (waiting for it failed, or
+            // it reported an error, which doesn't show that it has finished):
+            // the buffer is neither reused nor freed, it is lost.
+            void abandon() noexcept
+            {
+                data_ = nullptr;
             }
 
         private:
@@ -122,7 +133,10 @@ namespace hpx::serialization::detail {
                 catch (...)
                 {
                     // the buffer goes back to the pool, never under a copy
-                    (void) cudaStreamSynchronize(stream_);
+                    if (cudaStreamSynchronize(stream_) != cudaSuccess)
+                    {
+                        buffer_.abandon();
+                    }
                     throw;
                 }
             }
@@ -136,9 +150,20 @@ namespace hpx::serialization::detail {
             {
                 // normally the copy is done (the parcel waited for it); the
                 // buffer goes back to the pool, never under a copy
-                if (ready_.valid() && !ready_.is_ready())
+                if (!ready_.valid())
                 {
-                    (void) cudaStreamSynchronize(stream_);
+                    return;
+                }
+                if (!ready_.is_ready())
+                {
+                    if (cudaStreamSynchronize(stream_) != cudaSuccess)
+                    {
+                        buffer_.abandon();
+                    }
+                }
+                else if (ready_.has_exception())
+                {
+                    buffer_.abandon();
                 }
             }
 
@@ -221,6 +246,9 @@ namespace hpx::serialization::detail {
                     [state, staging, done = HPX_MOVE(done)]() {
                         if (state->has_exception())
                         {
+                            // the copy may still read the buffer
+                            staging->abandon();
+
                             // the arguments are incomplete: the parcel
                             // reports the error instead of running its action
                             done(state->get_exception_ptr());
@@ -231,7 +259,10 @@ namespace hpx::serialization::detail {
             }
             catch (...)
             {
-                (void) cudaStreamSynchronize(stream);
+                if (cudaStreamSynchronize(stream) != cudaSuccess)
+                {
+                    staging->abandon();
+                }
                 throw;
             }
         }
