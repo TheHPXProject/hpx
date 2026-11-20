@@ -140,15 +140,15 @@ GASNet do not wake idle worker threads; ``hpx.max_idle_loop_count=0`` keeps
 them polling, which avoids a delay of about 80 ms per message for applications
 with many round trips.
 
-The GASNet parcelport is enabled by default when |hpx| is built with it. To run
-an application of such a build with another parcelport, switch it off with
-``--hpx:ini=hpx.parcel.gasnet.enable=0``; otherwise every process starts a
-GASNet job of its own.
+GASNet is started only if the GASNet parcelport is enabled and bootstraps the
+job (``hpx.parcel.bootstrap=gasnet``; the default is TCP): both settings are
+required. Without them, an application of a build with the GASNet parcelport
+runs with another parcelport and doesn't start GASNet; a launch with only
+``hpx.parcel.gasnet.enable=1`` starts independent single-locality runs.
 
-``hpxrun.py`` adds all these settings with ``-p gasnet`` (and switches GASNet
-off for the other parcelports). The run wrapper ``-r gasnet`` starts the
-application with ``mpiexec -n <localities>``, which fits the ``mpi`` conduit and
-conduits started through GASNet's MPI spawner. The run wrapper ``-r
+``hpxrun.py`` adds all these settings with ``-p gasnet``. The run wrapper ``-r
+gasnet`` starts the application with ``mpiexec -n <localities>``, which fits the
+``mpi`` conduit and conduits started through GASNet's MPI spawner. The run wrapper ``-r
 gasnet-smp`` is meant for the ``smp`` conduit: it starts the application once
 with ``GASNET_PSHM_NODES=<localities>``, and GASNet-EX forks the processes on
 the local node:
