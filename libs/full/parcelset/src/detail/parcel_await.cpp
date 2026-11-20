@@ -271,6 +271,7 @@ namespace hpx::parcelset::detail {
             else
             {
                 // nothing has been sent yet, all of them failed
+                static_cast<Derived*>(this)->return_split_credits();
                 for (std::size_t i = 0; i != handler_.size(); ++i)
                 {
                     if (handler_[i])
@@ -348,9 +349,51 @@ namespace hpx::parcelset::detail {
 
         void apply()
         {
-            if (preprocess())
+            bool complete = false;
+            std::exception_ptr error;
+            try
+            {
+                complete = preprocess();
+            }
+            catch (...)
+            {
+                error = std::current_exception();
+            }
+            if (error)
+            {
+                // none of them is sent (not inside the handler: returning a
+                // credit may suspend this thread)
+                return_split_credits();
+                std::rethrow_exception(error);
+            }
+            if (complete)
             {
                 done();
+            }
+        }
+
+        // The parcels before the one that failed have been preprocessed and
+        // hold the credits split for their ids: return these, as none of the
+        // parcels is sent.
+        void return_split_credits() noexcept
+        {
+            for (std::size_t i = 0; i != idx_ && i != parcel_.size(); ++i)
+            {
+                for (auto const& entry : parcel_[i].move_split_gids())
+                {
+                    if (entry.second != naming::invalid_gid)
+                    {
+                        try
+                        {
+                            naming::decrement_refcnt(entry.second);
+                        }
+                        // NOLINTNEXTLINE(bugprone-empty-catch)
+                        catch (...)
+                        {
+                            // the credit is lost, the component stays alive
+                        }
+                    }
+                }
             }
         }
 

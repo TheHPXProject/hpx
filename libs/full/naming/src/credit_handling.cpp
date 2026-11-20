@@ -27,6 +27,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <mutex>
 #include <utility>
 
@@ -461,6 +462,14 @@ namespace hpx::naming {
     ///////////////////////////////////////////////////////////////////////////
     namespace detail {
 
+        // A consistent copy of the gid of 'id': another send may be splitting
+        // its credit concurrently.
+        gid_type locked_copy(gid_type const& id)
+        {
+            std::unique_lock<gid_type::mutex_type> l(id.get_mutex());
+            return gid_type(id);
+        }
+
         // custom deleter for managed gid_types, will be called when the last
         // copy of the corresponding hpx::id_type goes out of scope
         void gid_managed_deleter_impl(id_type_impl const* p) noexcept
@@ -527,7 +536,17 @@ namespace hpx::naming {
                         hpx::future<gid_type>&& gid_future) {
                         HPX_UNUSED(handle_futures);
                         HPX_ASSERT(handle_futures.has_futures());
-                        split_gids.set_gid(pos, gid_future.get());
+                        try
+                        {
+                            split_gids.set_gid(pos, gid_future.get());
+                        }
+                        catch (...)
+                        {
+                            // the slot stays empty, the next preprocessing
+                            // round reports the error
+                            split_gids.set_split_error(
+                                std::current_exception());
+                        }
                     });
 
                 handle_futures.await_future(
@@ -563,7 +582,8 @@ namespace hpx::naming {
                 serialization::detail::preprocess_gid_types>();
 
             // the split credits are matched to the ids by their gid
-            auto const [pos, split_already] = split_gids.find_or_add(id_impl);
+            auto const [pos, split_already] =
+                split_gids.find_or_add(locked_copy(id_impl));
             if (split_already)
             {
                 // an earlier preprocessing round has split a credit for this
@@ -643,7 +663,7 @@ namespace hpx::naming {
                 // a credit preprocessing has split for this id's gid
                 auto& split_gids = ar.get_extra_data<preprocess_gid_types>();
 
-                new_gid = split_gids.take(id_impl);
+                new_gid = split_gids.take(locked_copy(id_impl));
                 HPX_ASSERT(new_gid != invalid_gid);
             }
 

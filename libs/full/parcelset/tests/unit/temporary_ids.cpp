@@ -36,6 +36,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <memory>
 #include <system_error>
 #include <utility>
@@ -77,6 +78,7 @@ hpx::id_type other;
 // them into 'ids'.
 struct temporary_ids
 {
+    bool with_shared = false;    // whether 'shared' and 'boxed' are sent
     hpx::id_type shared;
     std::shared_ptr<hpx::id_type> boxed;
     std::size_t count = 0;
@@ -84,7 +86,7 @@ struct temporary_ids
 
     void save(hpx::serialization::output_archive& ar, unsigned) const
     {
-        ar << shared << boxed << count;
+        ar << with_shared << shared << boxed << count;
         for (std::size_t i = 0; i != count; ++i)
         {
             // a new id_type_impl, which goes away once it is written (the
@@ -98,7 +100,7 @@ struct temporary_ids
 
     void load(hpx::serialization::input_archive& ar, unsigned)
     {
-        ar >> shared >> boxed >> count;
+        ar >> with_shared >> shared >> boxed >> count;
         ids.resize(count);
         for (auto& id : ids)
         {
@@ -125,16 +127,25 @@ void check_ids(
     hpx::shared_future<hpx::id_type> const& f, temporary_ids const& data)
 {
     bool passed = data.ids.size() == data.count && refers_to(f.get(), other);
-    if (data.shared)
+    if (data.with_shared)
     {
-        passed = passed && refers_to(data.shared, other);
+        passed = passed && refers_to(data.shared, other) && data.boxed &&
+            refers_to(*data.boxed, other);
     }
-    if (data.boxed)
+    else
     {
-        passed = passed && refers_to(*data.boxed, other);
+        passed = passed && !data.shared && !data.boxed;
     }
-    for (hpx::id_type const& id : data.ids)
+    for (std::size_t i = 0; i != data.ids.size(); ++i)
     {
+        hpx::id_type const& id = data.ids[i];
+
+        // each one was sent on its own, none as a back-reference to another
+        for (std::size_t j = 0; j != i; ++j)
+        {
+            passed = passed && id.impl() != data.ids[j].impl();
+        }
+
         passed = passed &&
             id.get_management_type() ==
                 hpx::id_type::management_type::managed &&
@@ -194,7 +205,12 @@ namespace {
         hpx::future<hpx::parcelset::parcel> preprocessed = promise.get_future();
         hpx::parcelset::detail::parcel_await_apply(
             make_parcel(f, HPX_MOVE(data)),
-            [](std::error_code const&, hpx::parcelset::parcel const&) {},
+            [&promise](
+                std::error_code const& ec, hpx::parcelset::parcel const&) {
+                // a failing preprocessing round
+                promise.set_exception(
+                    std::make_exception_ptr(std::system_error(ec)));
+            },
             archive_flags(),
             [&promise](hpx::parcelset::parcel&& p,
                 hpx::parcelset::write_handler_type&&) {
@@ -252,7 +268,9 @@ namespace {
 
     void wait_for_actions(std::size_t const count)
     {
-        for (int i = 0; i != 500 && actions_run < count; ++i)
+        // without a time limit: the actions read 'base' and 'other', which
+        // must stay valid (a lost action makes the test time out)
+        while (actions_run < count)
         {
             hpx::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
@@ -265,7 +283,8 @@ namespace {
         std::size_t const actions_before = actions_run;
         {
             std::vector<hpx::parcelset::parcel> ps;
-            ps.push_back(preprocess(temporary_ids{{}, {}, count, {}}, pending));
+            ps.push_back(
+                preprocess(temporary_ids{false, {}, {}, count, {}}, pending));
             decode(encode(ps), 1);
         }
         wait_for_actions(actions_before + 1);
@@ -287,7 +306,7 @@ namespace {
             for (std::size_t i = 0; i != parcels; ++i)
             {
                 ps.push_back(preprocess(
-                    temporary_ids{other, boxed, count, {}}, i % 2 != 0));
+                    temporary_ids{true, other, boxed, count, {}}, i % 2 != 0));
             }
             decode(encode(ps), parcels);
         }

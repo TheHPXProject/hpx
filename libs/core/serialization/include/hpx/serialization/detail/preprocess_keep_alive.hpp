@@ -125,13 +125,20 @@ namespace hpx::serialization::detail {
         // inserted at this position until leave_future(), instead of being
         // matched to the buffers of that round. Returns whether
         // leave_future() is needed.
+        //
+        // A future serialized more than once may have been pending only at
+        // some of its occurrences in the previous round (it became ready in
+        // between): each occurrence that was pending inserts its buffers, the
+        // others are matched to the buffers created for them.
         [[nodiscard]] bool enter_future(void const* state)
         {
-            if (std::find(revealed_.begin(), revealed_.end(), state) ==
-                revealed_.end())
+            auto const it =
+                std::find(revealed_.begin(), revealed_.end(), state);
+            if (it == revealed_.end())
             {
                 return false;
             }
+            revealed_.erase(it);
             ++inserting_;
             return true;
         }

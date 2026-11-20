@@ -18,6 +18,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <exception>
+#include <memory>
 #include <mutex>
 #include <utility>
 #include <vector>
@@ -52,20 +53,19 @@ namespace test {
         hpx::serialization::detail::keep_alive_list preprocess(
             std::uint32_t const flags, save_type const& save)
         {
-            hpx::serialization::detail::keep_alive_list buffers;
+            // one archive for all rounds, as parcel_await uses: its extra
+            // data keeps the buffers and the futures that were pending
+            // between the rounds
+            hpx::serialization::detail::preprocess_container data;
+            hpx::serialization::output_archive archive(data, flags, nullptr,
+                nullptr, HPX_ZERO_COPY_SERIALIZATION_THRESHOLD);
+
+            // as a parcel does: keeps the buffers alive
+            auto& keep_alive = archive.get_extra_data<
+                hpx::serialization::detail::preprocess_keep_alive>();
             while (true)
             {
-                hpx::serialization::detail::preprocess_container data;
-                hpx::serialization::output_archive archive(data, flags, nullptr,
-                    nullptr, HPX_ZERO_COPY_SERIALIZATION_THRESHOLD);
-
-                // as a parcel does: keeps the buffers alive
-                auto& keep_alive = archive.get_extra_data<
-                    hpx::serialization::detail::preprocess_keep_alive>();
-                if (!buffers.empty())
-                {
-                    keep_alive.set_buffers(buffers);
-                }
+                archive.reset();
 
                 // not inside a handler while waiting: this thread may
                 // continue on another OS thread, which doesn't know the
@@ -110,16 +110,11 @@ namespace test {
                     std::rethrow_exception(error);
                 }
 
-                if (!keep_alive.empty())
-                {
-                    buffers = keep_alive.move_buffers();
-                }
-
                 auto* futures = archive.try_get_extra_data<
                     hpx::serialization::detail::preprocess_futures>();
                 if (futures == nullptr || !futures->has_futures())
                 {
-                    return buffers;
+                    return keep_alive.move_buffers();
                 }
 
                 // another round once the futures are ready
@@ -277,10 +272,17 @@ namespace test {
             std::exception_ptr step_error;
             for (std::size_t i = 0; i != steps.size(); ++i)
             {
+                // each step finishes once: by its callback or by throwing
+                // (as post_receive_actions' run_all counts them)
+                auto const once = std::make_shared<std::atomic<bool>>(false);
                 try
                 {
-                    steps[i]([&pending, &done, &step_mtx, &step_error](
+                    steps[i]([&pending, &done, &step_mtx, &step_error, once](
                                  std::exception_ptr e) {
+                        if (once->exchange(true))
+                        {
+                            return;
+                        }
                         if (e)
                         {
                             std::lock_guard<std::mutex> l(step_mtx);
@@ -298,7 +300,12 @@ namespace test {
                 catch (...)
                 {
                     error = std::current_exception();
-                    if ((pending -= steps.size() - i) == 0)
+
+                    // this step (unless its callback ran) and the ones not
+                    // started
+                    std::size_t const finished =
+                        steps.size() - i - (once->exchange(true) ? 1 : 0);
+                    if (finished != 0 && (pending -= finished) == 0)
                     {
                         done.set_value();
                     }

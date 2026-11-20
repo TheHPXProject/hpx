@@ -62,7 +62,11 @@ namespace hpx::serialization {
     // function creates needs an owner that keeps it alive until then
     // whenever the chunk refers to its memory: if that is pinned, or if it
     // is device memory and the parcelport moves device memory. Only a
-    // temporary sent from a host copy (which the parcel keeps) needs none.
+    // temporary sent from a host copy (which the parcel keeps) needs none,
+    // unless its allocator frees the memory asynchronously on another
+    // stream (e.g. cudaFreeAsync) and doesn't come from HPX's pools: the
+    // copy is made asynchronously, and only the pools make freeing wait for
+    // it.
 
     HPX_CXX_CORE_EXPORT template <typename T, typename Alloc>
     void serialize(output_archive& ar,
