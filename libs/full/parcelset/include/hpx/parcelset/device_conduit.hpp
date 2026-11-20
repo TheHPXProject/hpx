@@ -114,7 +114,25 @@ namespace hpx::parcelset {
                 {
                     return false;
                 }
-                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
+                // nothing else makes progress at shutdown
+                bool did_work = false;
+                if constexpr (requires(
+                                  Derived& d) { d.background_work_impl(); })
+                {
+                    try
+                    {
+                        did_work = derived().background_work_impl();
+                    }
+                    catch (...)
+                    {
+                        return false;
+                    }
+                }
+                if (!did_work)
+                {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                }
             }
             return true;
         }

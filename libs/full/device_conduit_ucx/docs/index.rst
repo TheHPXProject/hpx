@@ -21,9 +21,13 @@ makes the primary context of the memory's GPU current on threads that have
 none.
 
 Enable it with ``HPX_WITH_DEVICE_CONDUIT_UCX=ON`` and select it at runtime
-with ``hpx.parcel.device_conduit=ucx``. It uses the UCX library of the MPI
-library if that is UCX based (one process can use only one UCX library), else
-the one ``UCX_ROOT`` names.
+with ``hpx.parcel.device_conduit=ucx``. It looks for UCX next to the MPI
+library (``MPI_HOME``, if it is set) first, then in ``UCX_ROOT``. One process
+can use only one UCX library: if the MPI library is UCX based and its UCX is
+installed elsewhere (or ``MPI_HOME`` is not set because MPI was found through
+its compiler wrappers), set ``UCX_ROOT`` to that UCX installation. The UCX that
+was found is remembered in the |cmake|_ cache: to switch to another one,
+configure a new build directory.
 
 The conduit reads its UCX configuration from the ``UCX_`` environment
 variables, like the MPI library, and from those with the prefix
