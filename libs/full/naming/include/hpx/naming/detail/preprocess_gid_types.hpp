@@ -106,7 +106,7 @@ namespace hpx::serialization::detail {
 
                 for (auto const& gid : gids)
                 {
-                    naming::decrement_refcnt(gid);
+                    return_credit(gid);
                 }
             }
         }
@@ -262,7 +262,33 @@ namespace hpx::serialization::detail {
             }
         }
 
+        // Returns the credits of split gids that won't be sent (those the
+        // credit split hasn't produced yet have none).
+        static void return_credits(split_gids_type const& gids) noexcept
+        {
+            for (auto const& entry : gids)
+            {
+                if (entry.second != naming::invalid_gid)
+                {
+                    return_credit(entry.second);
+                }
+            }
+        }
+
     private:
+        static void return_credit(naming::gid_type const& gid) noexcept
+        {
+            try
+            {
+                naming::decrement_refcnt(gid);
+            }
+            // NOLINTNEXTLINE(bugprone-empty-catch)
+            catch (...)
+            {
+                // the credit is lost, the component stays alive
+            }
+        }
+
         // The entries of one gid: preprocessing matches them in this order
         // (those up to 'matched' are matched in round 'round'), the real pass
         // takes them in this order (up to 'taken').
