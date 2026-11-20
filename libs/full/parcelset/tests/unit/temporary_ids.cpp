@@ -38,6 +38,7 @@
 #include <cstdint>
 #include <exception>
 #include <memory>
+#include <stdexcept>
 #include <system_error>
 #include <utility>
 #include <vector>
@@ -161,6 +162,23 @@ void check_ids(
 HPX_PLAIN_ACTION(check_ids)
 
 ///////////////////////////////////////////////////////////////////////////////
+// the actions of a batch of parcels whose second one fails to serialize
+void hold_id(hpx::id_type const&) {}
+HPX_PLAIN_ACTION(hold_id)
+
+struct failing
+{
+    template <typename Archive>
+    void serialize(Archive&, unsigned)
+    {
+        throw std::runtime_error("failing");
+    }
+};
+
+void fail_to_send(failing const&) {}
+HPX_PLAIN_ACTION(fail_to_send)
+
+///////////////////////////////////////////////////////////////////////////////
 namespace {
 
     std::uint32_t archive_flags()
@@ -170,6 +188,22 @@ namespace {
                     hpx::serialization::archive_flags::endian_big :
                     hpx::serialization::archive_flags::endian_little);
         return flags | hpx::serialization::archive_flags::disable_data_chunking;
+    }
+
+    template <typename Action, typename F, typename... Ts>
+    hpx::parcelset::parcel make_action_parcel(F* f, Ts&&... ts)
+    {
+        hpx::id_type const here = hpx::find_here();
+        hpx::naming::address addr(hpx::get_locality(),
+            to_int(hpx::components::component_enum_type::invalid),
+            reinterpret_cast<void*>(f));
+
+        hpx::naming::gid_type dest = here.get_gid();
+        hpx::parcelset::parcel p(hpx::parcelset::detail::create_parcel::call(
+            HPX_MOVE(dest), HPX_MOVE(addr), Action(), hpx::launch::async,
+            HPX_FORWARD(Ts, ts)...));
+        p.set_source_id(here);
+        return p;
     }
 
     hpx::parcelset::parcel make_parcel(
@@ -386,6 +420,83 @@ namespace {
         HPX_TEST(refers_to(ry, other));
     }
 
+    // The credit recorded for the gid of the managed id was split from another
+    // id of the same component, which may be cached (the default): the id
+    // sent keeps its own flags, it must not be cached.
+    void test_flags_of_the_id()
+    {
+        hpx::id_type y = other;
+
+        // another id of the component (a credit of its own), not cached
+        hpx::naming::gid_type gid = split_credit(y);
+        hpx::naming::detail::set_dont_store_in_cache(gid);
+        hpx::id_type x(gid, hpx::id_type::management_type::managed);
+
+        hpx::serialization::detail::preprocess_gid_types::split_gids_type
+            split_gids;
+        split_gids.emplace_back(stripped(x), split_credit(y));
+
+        hpx::id_type rx;
+        bool thrown = false;
+        try
+        {
+            real_pass(
+                HPX_MOVE(split_gids),
+                [&](hpx::serialization::output_archive& ar) { ar << x; },
+                [&](hpx::serialization::input_archive& ar) { ar >> rx; });
+        }
+        catch (hpx::exception const&)
+        {
+            thrown = true;
+        }
+
+        HPX_TEST(!thrown);
+        HPX_TEST(refers_to(rx, other));
+        HPX_TEST(rx && !hpx::naming::detail::store_in_cache(rx.get_gid()));
+    }
+
+    // A batch of parcels whose second one fails to serialize: nothing is
+    // sent, the credit split for the id in the first one is returned, so the
+    // component goes away with its last id.
+    void test_failing_batch()
+    {
+        std::size_t const alive_before = servers_alive;
+        {
+            hpx::id_type held = hpx::new_<server>(hpx::find_here()).get();
+            HPX_TEST_EQ(servers_alive.load(), alive_before + 1);
+
+            std::vector<hpx::parcelset::parcel> ps;
+            ps.push_back(make_action_parcel<hold_id_action>(&hold_id, held));
+            ps.push_back(make_action_parcel<fail_to_send_action>(
+                &fail_to_send, failing{}));
+            std::vector<hpx::parcelset::write_handler_type> handlers(2,
+                [](std::error_code const&, hpx::parcelset::parcel const&) {});
+
+            bool caught = false;
+            try
+            {
+                hpx::parcelset::detail::parcels_await_apply(HPX_MOVE(ps),
+                    HPX_MOVE(handlers), archive_flags(),
+                    [](std::vector<hpx::parcelset::parcel>&&,
+                        std::vector<hpx::parcelset::write_handler_type>&&) {
+                        // nothing is sent
+                        HPX_TEST(false);
+                    });
+            }
+            catch (std::exception const&)
+            {
+                caught = true;
+            }
+            HPX_TEST(caught);
+        }
+
+        for (int i = 0; i != 500 && servers_alive != alive_before; ++i)
+        {
+            hpx::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        HPX_TEST_EQ(servers_alive.load(), alive_before);
+    }
+
     // The credit recorded for the gid of the managed id belongs to another
     // gid: the real pass throws instead of sending the other gid.
     void test_credit_of_other_id()
@@ -438,6 +549,10 @@ int hpx_main(hpx::program_options::variables_map&)
     // the real pass of a parcel with crafted split credits
     test_any_order();
     test_credit_of_other_id();
+    test_flags_of_the_id();
+
+    // the credits of the parcels of a failing batch
+    test_failing_batch();
 
     // every credit came back: the components go away with their last id
     base = hpx::invalid_id;

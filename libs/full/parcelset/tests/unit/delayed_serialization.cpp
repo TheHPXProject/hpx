@@ -377,6 +377,43 @@ void check_future_first(
 }
 HPX_PLAIN_ACTION(check_future_first)
 
+// The same future twice, not ready at its first occurrence when the parcel is
+// preprocessed first, but at its second one (reveal makes it ready in
+// between), followed by another object: the next round inserts the buffer of
+// the first occurrence only, the second one and the object after it keep the
+// buffers created for them.
+std::unique_ptr<hpx::promise<delayed_data>> reveal_promise;
+
+struct reveal
+{
+    void save(hpx::serialization::output_archive& ar, unsigned) const
+    {
+        if (ar.is_preprocessing() && reveal_promise)
+        {
+            auto const promise = HPX_MOVE(reveal_promise);
+            promise->set_value(delayed_data{65536, 11, {}});
+        }
+    }
+
+    void load(hpx::serialization::input_archive&, unsigned) {}
+
+    HPX_SERIALIZATION_SPLIT_MEMBER()
+};
+
+void check_future_twice(hpx::shared_future<delayed_data> const& first,
+    reveal const&, hpx::shared_future<delayed_data> const& second,
+    delayed_data const& other)
+{
+    if (first.get().first == 11 && first.get().values_match() &&
+        second.get().first == 11 && second.get().values_match() &&
+        other.first == 33 && other.values_match())
+    {
+        ++actions_passed;
+    }
+    ++actions_run;
+}
+HPX_PLAIN_ACTION(check_future_twice)
+
 // An object shared by the value of a future that isn't ready when the parcel
 // is preprocessed first and the argument after it, followed by another object
 // of the same size: in the next round the shared object is written first in
@@ -834,6 +871,41 @@ namespace {
         wait_for_actions(actions_before + 1);
     }
 
+    // A future serialized twice is pending only at its first occurrence in
+    // the first preprocessing round: the second round creates a buffer for
+    // that occurrence only.
+    void test_future_twice(bool const zero_copy)
+    {
+        std::size_t const actions_before = actions_run;
+        std::size_t const created_before = buffers_created;
+
+        message m;
+        {
+            std::uint32_t const flags = archive_flags(zero_copy);
+            close_gate();
+            reveal_promise = std::make_unique<hpx::promise<delayed_data>>();
+            hpx::shared_future<delayed_data> const pending =
+                reveal_promise->get_future().share();
+            hpx::parcelset::parcel p = preprocess_with_closed_gate(
+                make_action_parcel<check_future_twice_action>(
+                    &check_future_twice, pending, reveal{}, pending,
+                    delayed_data{2 * 65536, 33, {}}),
+                flags, true);
+            HPX_TEST(!reveal_promise);
+
+            // the second occurrence and the object after it in the first
+            // round, the first occurrence in the second one
+            HPX_TEST_EQ(buffers_created - created_before, std::size_t(3));
+            HPX_TEST_EQ(p.keep_alive().size(), std::size_t(3));
+
+            m = encode(p, flags);
+        }
+        HPX_TEST_EQ(buffers_alive.load(), std::size_t(0));
+
+        HPX_TEST(!decode(m, false));
+        wait_for_actions(actions_before + 1);
+    }
+
     // The first occurrence of a shared object moves into the value of a
     // future that is ready only after the first preprocessing round: the
     // buffer the first round created at its former position isn't used, the
@@ -1043,6 +1115,8 @@ int hpx_main(hpx::program_options::variables_map&)
     test_shared_in_message(false);
     test_pending_future(true);
     test_pending_future(false);
+    test_future_twice(true);
+    test_future_twice(false);
     test_moved_into_future(true);
     test_moved_into_future(false);
     test_cycle();
