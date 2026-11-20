@@ -219,9 +219,10 @@ namespace hpx::serialization {
         }
 
         // The data goes to the GPU the vector's memory is on, if it has
-        // memory, else to the GPU the receiving side asked for (the
+        // memory (also an empty vector with capacity, whose memory resize
+        // reuses), else to the GPU the receiving side asked for (the
         // destination's, see receive_device), else to the current one.
-        int device = v.empty() ?
+        int device = v.capacity() == 0 ?
             -1 :
             detail::device_of(::thrust::raw_pointer_cast(v.data()));
         if (device < 0)

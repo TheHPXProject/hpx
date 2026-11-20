@@ -137,7 +137,9 @@ namespace hpx::traits::detail {
 
         static int call(Component const& component) noexcept
         {
-            return component.get_receive_device();
+            // through base_lco: an LCO may override it as a private member
+            return static_cast<hpx::lcos::base_lco const&>(component)
+                .get_receive_device();
         }
     };
 }    // namespace hpx::traits::detail
