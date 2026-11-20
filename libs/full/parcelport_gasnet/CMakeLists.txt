@@ -39,8 +39,7 @@ add_hpx_module(
   GLOBAL_HEADER_GEN ON
   SOURCES ${parcelport_gasnet_sources}
   HEADERS ${parcelport_gasnet_headers}
-  DEPENDENCIES hpx_core PkgConfig::GASNET
-               ${gasnet_additional_dependencies}
+  DEPENDENCIES hpx_core PkgConfig::GASNET ${gasnet_additional_dependencies}
   MODULE_DEPENDENCIES hpx_actions hpx_command_line_handling hpx_parcelset_base
                       hpx_parcelset hpx_plugin_factories
   CMAKE_SUBDIRS examples tests

@@ -292,7 +292,7 @@ namespace hpx::parcelset {
                 if (mismatch)
                 {
                     // All PEs converge on the same mismatch, so every PE
-                    // aborts here — no single-PE hang.
+                    // aborts here: no single-PE hang.
                     std::cerr << "gasnet: PE " << my_pe_
                               << ": wire-protocol parameter mismatch across "
                                  "PEs (mtu="
@@ -370,7 +370,7 @@ namespace hpx::parcelset {
                 // empty that keeps transferring pages is allowed to take as
                 // long as it needs (otherwise a legitimately slow-but-moving
                 // empty would drop messages), and only a genuinely stalled
-                // empty — no page movement for stop_timeout_ seconds — aborts
+                // empty, no page movement for stop_timeout_ seconds, aborts
                 // so shutdown still terminates when a peer never returns
                 // credit (or never publishes) again.  Transfer activity is
                 // measured via mailbox_array::transfer_count(), which changes
@@ -406,10 +406,10 @@ namespace hpx::parcelset {
 
                 // Final collective barrier before the drivers stop and the
                 // transport finalizes.  Every connection reaps its last access
-                // region before finishing — poll_send() waits for the final
+                // region before finishing, poll_send() waits for the final
                 // data+credit region (sender_connection.cpp), and the
                 // receiver waits in its 'reaping_credit' state for the final
-                // credit-return region (receiver_connection.hpp) — so this PE
+                // credit-return region (receiver_connection.hpp), so this PE
                 // has no access region outstanding when the drain loop exits.
                 // The barrier then confirms job-wide that every PE agrees the
                 // empty has drained before any of them proceeds to

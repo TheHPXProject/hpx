@@ -103,8 +103,8 @@ namespace hpx::util {
 
         // RMA: blocking get of 'nbytes' from remote 'raddr' on 'rank' into
         // local 'laddr'.
-        static void get(int rank, void* laddr, void const* raddr,
-            std::size_t nbytes);
+        static void get(
+            int rank, void* laddr, void const* raddr, std::size_t nbytes);
 
         // Data-only batch of n pages, non-blocking: the caller publishes the
         // credit with put_uint32_nb() once the returned event has completed.

@@ -15,8 +15,8 @@
 #include <hpx/parcelport_gasnet/receiver_connection.hpp>
 
 #include <atomic>
-#include <cstdint>
 #include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <deque>
 #include <memory>
@@ -74,7 +74,8 @@ namespace hpx::parcelset::policies::gasnet {
             std::fprintf(stderr, "\n");
         }
 
-        bool background_work(std::size_t arena_idx, std::size_t arena_cnt) noexcept
+        bool background_work(
+            std::size_t arena_idx, std::size_t arena_cnt) noexcept
         {
             bool has_work = false;
 
@@ -128,7 +129,8 @@ namespace hpx::parcelset::policies::gasnet {
             }
         }
 
-        connection_ptr accept(std::size_t arena_idx, std::size_t arena_cnt) noexcept
+        connection_ptr accept(
+            std::size_t arena_idx, std::size_t arena_cnt) noexcept
         {
             auto& mailboxes = pp_.get_mailboxes();
 
@@ -158,7 +160,6 @@ namespace hpx::parcelset::policies::gasnet {
                 active_connections_.erase(src);
                 pending_.fetch_sub(1, std::memory_order_acq_rel);
                 return connection_ptr();
-
             }
 
             return std::make_shared<connection_type>(pe, mailboxes, &pp_);
