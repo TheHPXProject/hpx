@@ -75,6 +75,7 @@
 #define cudaStreamPerThread hipStreamPerThread
 #define cudaStreamQuery hipStreamQuery
 #define cudaStreamSynchronize hipStreamSynchronize
+#define cudaStreamWaitEvent hipStreamWaitEvent
 #define cudaSuccess hipSuccess
 
 #elif defined(HPX_HAVE_CUDA)
