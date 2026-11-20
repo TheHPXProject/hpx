@@ -54,18 +54,17 @@ namespace {
     template <int N>
     void lookups(hpx::util::extra_data const& data, std::size_t const count)
     {
-        // read for each lookup: the lookups can't be hoisted out of the loop
+        // The object is read for each lookup and each result is stored
+        // (also nullptr): the lookups can be neither hoisted out of the loop
+        // nor removed.
         hpx::util::extra_data const* volatile object = &data;
+        item<N> const* volatile result = nullptr;
 
-        std::size_t sum = 0;
         for (std::size_t i = 0; i != count; ++i)
         {
-            if (auto const* p = object->try_get<item<N>>())
-            {
-                sum += static_cast<std::size_t>(p->value);
-            }
+            result = object->try_get<item<N>>();
         }
-        sink = sink + sum;
+        (void) result;
     }
 }    // namespace
 
