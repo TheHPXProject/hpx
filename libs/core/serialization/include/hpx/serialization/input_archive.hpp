@@ -104,6 +104,7 @@ namespace hpx::serialization {
                 serialization::binary_filter* filter = nullptr;
                 *this >> detail::raw_ptr(filter);
                 buffer_->set_filter(filter);
+                filtered_ = true;
             }
         }
 
@@ -274,6 +275,14 @@ namespace hpx::serialization {
             return current_pos();
         }
 
+        // Whether the data comes through a filter (e.g. decompression): the
+        // filter writes all of it on the host, also the data of zero-copy
+        // chunks.
+        [[nodiscard]] constexpr bool is_filtered() const noexcept
+        {
+            return filtered_;
+        }
+
         // this function is needed to avoid a MSVC linker error
         [[nodiscard]] constexpr std::size_t current_pos() const noexcept
         {
@@ -355,6 +364,7 @@ namespace hpx::serialization {
 
     private:
         std::unique_ptr<erased_input_container> buffer_;
+        bool filtered_ = false;
     };
 }    // namespace hpx::serialization
 

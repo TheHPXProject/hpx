@@ -127,7 +127,9 @@ namespace hpx::serialization {
         // host: an archive without chunks (e.g. with the array optimization
         // disabled) copies the data through the host instead. Preprocessing
         // archives report chunking as disabled but copy nothing.
-        if (ar.enable_device_chunks() &&
+        // A filter (e.g. compression) reads the data on the host: it is
+        // copied into the archive below.
+        if (ar.enable_device_chunks() && !ar.is_filtered() &&
             (ar.is_preprocessing() || !ar.disable_data_chunking()) &&
             bytes >= ar.get_zero_copy_serialization_threshold())
         {
@@ -212,9 +214,10 @@ namespace hpx::serialization {
         T* device_data = ::thrust::raw_pointer_cast(v.data());
 
         // Zero-copy receive: the networking layer places the data at the
-        // address handed over here only after this function returns.
+        // address handed over here only after this function returns. A
+        // filter (e.g. decompression) writes all data on the host instead.
         bool const zero_copy_receive =
-            storage != device_data_storage::in_archive &&
+            storage != device_data_storage::in_archive && !ar.is_filtered() &&
             !ar.disable_receive_data_chunking() &&
             ar.try_get_extra_data<detail::allow_zero_copy_receive>() != nullptr;
 
