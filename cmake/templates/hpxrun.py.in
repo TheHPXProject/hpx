@@ -299,12 +299,14 @@ def build_cmd(options, args):
         # in a build that also has MPI, LCI or LCW they would initialise MPI in
         # every GASNet process, which is not a job started by an MPI launcher.
         # OpenSHMEM is switched off as well: it would otherwise start its
-        # runtime inside the GASNet job.
+        # runtime inside the GASNet job. The 'key!=value' form is accepted
+        # also when that parcelport (and with it the key) is not part of the
+        # build.
         select_parcelport = (lambda pp:
             ['--hpx:ini=hpx.parcel.mpi.priority=1000', '--hpx:ini=hpx.parcel.mpi.enable=1', '--hpx:ini=hpx.parcel.bootstrap=mpi'] if pp == 'mpi'
             else ['--hpx:ini=hpx.parcel.lci.priority=1000', '--hpx:ini=hpx.parcel.lci.enable=1', '--hpx:ini=hpx.parcel.bootstrap=lci'] if pp == 'lci'
             else ['--hpx:ini=hpx.parcel.lcw.priority=1000', '--hpx:ini=hpx.parcel.lcw.enable=1', '--hpx:ini=hpx.parcel.bootstrap=lcw'] if pp == 'lcw'
-            else ['--hpx:ini=hpx.parcel.gasnet.priority=1000', '--hpx:ini=hpx.parcel.gasnet.enable=1', '--hpx:ini=hpx.parcel.bootstrap=gasnet', '--hpx:ini=hpx.max_idle_loop_count=0', '--hpx:ini=hpx.parcel.mpi.enable=0', '--hpx:ini=hpx.parcel.lci.enable=0', '--hpx:ini=hpx.parcel.lcw.enable=0', '--hpx:ini=hpx.parcel.tcp.enable=0', '--hpx:ini=hpx.parcel.openshmem.enable!=0'] if pp == 'gasnet'
+            else ['--hpx:ini=hpx.parcel.gasnet.priority=1000', '--hpx:ini=hpx.parcel.gasnet.enable=1', '--hpx:ini=hpx.parcel.bootstrap=gasnet', '--hpx:ini=hpx.max_idle_loop_count=0', '--hpx:ini=hpx.parcel.mpi.enable!=0', '--hpx:ini=hpx.parcel.lci.enable!=0', '--hpx:ini=hpx.parcel.lcw.enable!=0', '--hpx:ini=hpx.parcel.tcp.enable!=0', '--hpx:ini=hpx.parcel.openshmem.enable!=0'] if pp == 'gasnet'
             else ['--hpx:ini=hpx.parcel.tcp.priority=1000', '--hpx:ini=hpx.parcel.tcp.enable=1'] if pp == 'tcp'
             else [])
         cmd += select_parcelport(options.parcelport)
