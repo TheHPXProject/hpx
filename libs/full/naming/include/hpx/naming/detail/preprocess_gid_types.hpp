@@ -164,25 +164,37 @@ namespace hpx::serialization::detail {
             naming::gid_type const stripped =
                 naming::detail::get_stripped_gid(id);
 
-            std::lock_guard<mutex_type> l(mtx_);
-            auto const it = index_.find(stripped);
-            for (entries* e = it != index_.end() ? &it->second : nullptr;
-                e != nullptr && e->taken != e->positions.size(); ++e->taken)
+            // the exceptions are thrown without holding the lock (creating
+            // them may suspend the thread)
+            bool other_id = false;
             {
-                auto& entry = split_gids_[e->positions[e->taken]];
-                if (entry.second == naming::invalid_gid)
+                std::lock_guard<mutex_type> l(mtx_);
+                auto const it = index_.find(stripped);
+                for (entries* e = it != index_.end() ? &it->second : nullptr;
+                    e != nullptr && e->taken != e->positions.size(); ++e->taken)
                 {
-                    continue;
+                    auto& entry = split_gids_[e->positions[e->taken]];
+                    if (entry.second == naming::invalid_gid)
+                    {
+                        continue;
+                    }
+                    ++e->taken;
+                    if (naming::detail::get_stripped_gid(entry.second) ==
+                        stripped)
+                    {
+                        return std::exchange(entry.second, naming::invalid_gid);
+                    }
+                    other_id = true;
+                    break;
                 }
-                ++e->taken;
-                if (naming::detail::get_stripped_gid(entry.second) != stripped)
-                {
-                    HPX_THROW_EXCEPTION(hpx::error::serialization_error,
-                        "preprocess_gid_types::take",
-                        "the split credit for a managed id of this parcel "
-                        "belongs to another id");
-                }
-                return std::exchange(entry.second, naming::invalid_gid);
+            }
+
+            if (other_id)
+            {
+                HPX_THROW_EXCEPTION(hpx::error::serialization_error,
+                    "preprocess_gid_types::take",
+                    "the split credit for a managed id of this parcel "
+                    "belongs to another id");
             }
 
             HPX_THROW_EXCEPTION(hpx::error::serialization_error,

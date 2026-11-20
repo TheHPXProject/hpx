@@ -27,6 +27,7 @@
 #include "thrust_serialization.hpp"
 
 #include <cstddef>
+#include <cstdint>
 #include <new>
 #include <optional>
 #include <type_traits>
