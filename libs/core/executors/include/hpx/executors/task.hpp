@@ -568,15 +568,39 @@ namespace hpx::execution::experimental {
                     return *promise_->scheduler_;
                 }
 
-                template <typename Tag>
+                template <typename Query, typename... Args>
                     requires(
                         bool(hpx::execution::experimental::forwarding_query(
-                            Tag{})) &&
-                        std::is_invocable_v<Tag, inner_env_type const&>)
-                decltype(auto) query(Tag tag) const noexcept(
-                    std::is_nothrow_invocable_v<Tag, inner_env_type const&>)
+                            Query{})) &&
+                        requires(inner_env_type const& e, Query q,
+                            Args&&... args) {
+                            e.query(q, HPX_FORWARD(Args, args)...);
+                        })
+                decltype(auto) query(Query q, Args&&... args) const
+                    noexcept(noexcept(promise_->env_->query(
+                        q, HPX_FORWARD(Args, args)...)))
                 {
-                    return tag(*(promise_->env_));
+                    return promise_->env_->query(
+                        q, HPX_FORWARD(Args, args)...);
+                }
+
+                template <typename Query, typename... Args>
+                    requires(
+                        bool(hpx::execution::experimental::forwarding_query(
+                            Query{})) &&
+                        !requires(inner_env_type const& e, Query q,
+                            Args&&... args) {
+                            e.query(q, HPX_FORWARD(Args, args)...);
+                        } &&
+                        requires(inner_env_type const& e, Query q,
+                            Args&&... args) {
+                            q(e, HPX_FORWARD(Args, args)...);
+                        })
+                decltype(auto) query(Query q, Args&&... args) const
+                    noexcept(noexcept(
+                        q(*(promise_->env_), HPX_FORWARD(Args, args)...)))
+                {
+                    return q(*(promise_->env_), HPX_FORWARD(Args, args)...);
                 }
             };
 
