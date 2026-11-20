@@ -24,14 +24,15 @@ jobs:
       uses: ./.github/actions/setup-vcpkg
     # the runner has no GPU, so this job only builds the CUDA code, with clang
     # as the C++ and CUDA compiler (cmake/toolchains/Windows-Clang-CUDA.cmake);
-    # clang needs the CUDA headers, libraries, libdevice and ptxas, the Thrust
+    # clang needs the CUDA headers (including the curand ones its CUDA runtime
+    # wrapper includes), libraries, libdevice and ptxas, the Thrust
     # integration needs CUDA 13.1 or newer
     - name: Install CUDA
       uses: Jimver/cuda-toolkit@v0.2.36
       with:
         cuda: '13.3.1'
         method: 'network'
-        sub-packages: '["nvcc", "crt", "nvvm", "cudart", "thrust", "cublas", "cublas_dev"]'
+        sub-packages: '["nvcc", "crt", "nvvm", "cudart", "thrust", "cublas", "cublas_dev", "curand", "curand_dev"]'
     # the clang of Visual Studio 2022 is too old for CUDA 13: unpack the LLVM
     # release archive (a .tar.xz) so that bin is directly in LLVM_PATH
     - name: Install clang
