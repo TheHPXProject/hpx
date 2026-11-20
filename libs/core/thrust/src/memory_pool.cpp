@@ -498,16 +498,26 @@ namespace hpx::thrust {
                     // read may have been queued on another stream, the event
                     // completes only after it (the new copy was queued
                     // before, it doesn't wait).
-                    std::lock_guard<hpx::spinlock_no_backoff> l(mtx_);
-                    cudaEvent_t& entry = reads_[block];
-                    if (entry != nullptr)
+                    // the errors are thrown without holding the lock
+                    // (creating the exception may suspend the thread)
+                    cudaError_t error = cudaSuccess;
                     {
-                        hpx::cuda::experimental::check_cuda_error(
-                            cudaStreamWaitEvent(stream, entry, 0));
+                        std::lock_guard<hpx::spinlock_no_backoff> l(mtx_);
+                        cudaEvent_t& entry = reads_[block];
+                        if (entry != nullptr)
+                        {
+                            error = cudaStreamWaitEvent(stream, entry, 0);
+                        }
+                        if (error == cudaSuccess)
+                        {
+                            error = cudaEventRecord(event, stream);
+                        }
+                        if (error == cudaSuccess)
+                        {
+                            replaced = std::exchange(entry, event);
+                        }
                     }
-                    hpx::cuda::experimental::check_cuda_error(
-                        cudaEventRecord(event, stream));
-                    replaced = std::exchange(entry, event);
+                    hpx::cuda::experimental::check_cuda_error(error);
                 }
                 catch (...)
                 {
@@ -724,14 +734,25 @@ namespace hpx::thrust {
         // already).
         bool forget_configuration_when_stopped()
         {
-            static std::atomic<bool> registered(false);
+            // not registered, being registered (by another thread, which
+            // may still fail), registered
+            enum : int
+            {
+                none,
+                registering,
+                done
+            };
+            static std::atomic<int> registered(none);
             if (!hpx::is_running())
             {
                 return false;
             }
-            if (registered.exchange(true, std::memory_order_acq_rel))
+            int expected = none;
+            if (!registered.compare_exchange_strong(
+                    expected, registering, std::memory_order_acq_rel))
             {
-                return true;
+                // cached only once the hook is in place
+                return expected == done;
             }
             try
             {
@@ -743,10 +764,11 @@ namespace hpx::thrust {
                     {
                         p->unconfigure();
                     }
-                    registered.store(false, std::memory_order_release);
+                    registered.store(none, std::memory_order_release);
                 });
                 if (registered_now)
                 {
+                    registered.store(done, std::memory_order_release);
                     return true;
                 }
             }
@@ -754,7 +776,7 @@ namespace hpx::thrust {
             catch (...)
             {
             }
-            registered.store(false, std::memory_order_release);
+            registered.store(none, std::memory_order_release);
             return false;
         }
     }    // namespace

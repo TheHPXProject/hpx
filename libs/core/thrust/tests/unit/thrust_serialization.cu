@@ -348,7 +348,7 @@ namespace {
 
     // with the array optimization disabled the elements are received one by
     // one into fresh elements, as for std::vector
-    void test_array_optimization_disabled()
+    [[maybe_unused]] void test_array_optimization_disabled()
     {
         using hpx::serialization::archive_flags;
 
@@ -444,7 +444,10 @@ int hpx_main(hpx::program_options::variables_map&)
     test_host_accessible<::thrust::host_vector<int>>();
     test_host_accessible<::thrust::universal_vector<int>>();
     test_non_default_constructible();
+#if !defined(HPX_SERIALIZATION_HAVE_ALL_TYPES_ARE_BITWISE_SERIALIZABLE)
+    // all types are copied as bytes otherwise
     test_array_optimization_disabled();
+#endif
     test_other_byte_order();
 
     return hpx::local::finalize();

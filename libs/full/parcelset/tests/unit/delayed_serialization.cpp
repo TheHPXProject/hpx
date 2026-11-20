@@ -34,6 +34,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <exception>
 #include <memory>
 #include <optional>
 #include <stdexcept>
@@ -464,7 +465,13 @@ namespace {
         hpx::future<hpx::parcelset::parcel> f = promise.get_future();
         hpx::parcelset::detail::parcel_await_apply(
             HPX_MOVE(p),
-            [](std::error_code const&, hpx::parcelset::parcel const&) {}, flags,
+            [&promise](
+                std::error_code const& ec, hpx::parcelset::parcel const&) {
+                // a failing preprocessing round
+                promise.set_exception(
+                    std::make_exception_ptr(std::system_error(ec)));
+            },
+            flags,
             [&promise](hpx::parcelset::parcel&& preprocessed,
                 hpx::parcelset::write_handler_type&&) {
                 promise.set_value(HPX_MOVE(preprocessed));
@@ -980,15 +987,23 @@ namespace {
     void test_failing_resumed_serialization()
     {
         close_gate();
-        std::atomic<bool> handled(false);
-        std::atomic<bool> failed(false);
+
+        // shared with the handler, which may run after a timeout of the test
+        struct state
+        {
+            std::atomic<bool> handled = false;
+            std::atomic<bool> failed = false;
+        };
+        auto const result = std::make_shared<state>();
+        std::atomic<bool> const& handled = result->handled;
+        std::atomic<bool> const& failed = result->failed;
+
         hpx::parcelset::detail::parcel_await_apply(
             make_action_parcel<check_failing_later_action>(&check_failing_later,
                 delayed_data{65536, 7, {}}, failing_later_argument{}),
-            [&handled, &failed](
-                std::error_code const& ec, hpx::parcelset::parcel const&) {
-                failed = static_cast<bool>(ec);
-                handled = true;
+            [result](std::error_code const& ec, hpx::parcelset::parcel const&) {
+                result->failed = static_cast<bool>(ec);
+                result->handled = true;
             },
             archive_flags(true),
             [](hpx::parcelset::parcel&&, hpx::parcelset::write_handler_type&&) {

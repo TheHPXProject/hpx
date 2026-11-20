@@ -587,23 +587,26 @@ namespace hpx::parcelset::detail {
         // each step finishes exactly once, also if starting it throws
         for (auto& action : actions)
         {
-            auto finished = std::make_shared<std::atomic<bool>>(false);
-            serialization::detail::receive_step_done const done(
-                [completion, finished](std::exception_ptr error) {
-                    if (!finished->exchange(true))
-                    {
-                        completion->step_done(HPX_MOVE(error));
-                    }
-                });
+            // also setting the step up may throw: the step finishes with
+            // that error
+            std::shared_ptr<std::atomic<bool>> finished;
             try
             {
+                finished = std::make_shared<std::atomic<bool>>(false);
+                serialization::detail::receive_step_done const done(
+                    [completion, finished](std::exception_ptr error) {
+                        if (!finished->exchange(true))
+                        {
+                            completion->step_done(HPX_MOVE(error));
+                        }
+                    });
                 action(done);
             }
             catch (...)
             {
                 // the step had finished already: a waiter of the completion
                 // has thrown, pass that on
-                if (finished->exchange(true))
+                if (finished && finished->exchange(true))
                 {
                     throw;
                 }
