@@ -163,8 +163,8 @@ namespace hpx::parcelset {
                 // the transfer is counted until it finishes, once: through
                 // its callback (which send_impl may call before it throws)
                 // or because send_impl threw
-                b.in_flight_.fetch_add(1, std::memory_order_relaxed);
                 auto const once = std::make_shared<std::atomic<bool>>(false);
+                b.in_flight_.fetch_add(1, std::memory_order_relaxed);
                 try
                 {
                     conduit_.send_impl(locality_id_, d, p, size,
@@ -252,8 +252,8 @@ namespace hpx::parcelset {
             {
                 device_conduit_impl& b = base(conduit_);
                 // counted until it finishes, once (see sending_transport)
-                b.in_flight_.fetch_add(1, std::memory_order_relaxed);
                 auto const once = std::make_shared<std::atomic<bool>>(false);
+                b.in_flight_.fetch_add(1, std::memory_order_relaxed);
                 try
                 {
                     conduit_.recv_impl(d, p, size,
@@ -274,6 +274,17 @@ namespace hpx::parcelset {
                                     1, std::memory_order_relaxed);
                                 b.bytes_received_.fetch_add(
                                     size, std::memory_order_relaxed);
+                            }
+                            else if (b.draining_.load(
+                                         std::memory_order_acquire))
+                            {
+                                // the runtime has gone: the message is
+                                // dropped, its error can't be reported
+                                LPT_(warning).format(
+                                    "device conduit: a receive failed during "
+                                    "shutdown: {}",
+                                    hpx::get_error_what(error));
+                                return;
                             }
                             done(HPX_MOVE(error));
                         });

@@ -235,16 +235,18 @@ std::filesystem::path make_chunk_directory()
 }
 
 // waits (bounded) until the sends that 'before' doesn't count yet have
-// completed: the conduit completes them after the parcels have left
+// completed: the conduit completes them after the parcels have left (and
+// counts the chunk before its bytes)
 hpx::parcelset::device_conduit_statistics wait_for_sends(
     hpx::parcelset::device_conduit const* conduit,
     hpx::parcelset::device_conduit_statistics const& before,
-    std::uint64_t chunks)
+    std::uint64_t chunks, std::uint64_t bytes)
 {
     auto const deadline =
         std::chrono::steady_clock::now() + std::chrono::seconds(10);
     hpx::parcelset::device_conduit_statistics s = conduit->statistics();
-    while (s.chunks_sent - before.chunks_sent < chunks &&
+    while ((s.chunks_sent - before.chunks_sent < chunks ||
+               s.bytes_sent - before.bytes_sent < bytes) &&
         std::chrono::steady_clock::now() < deadline)
     {
         hpx::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -258,6 +260,11 @@ int hpx_main()
     hpx::parcelset::device_conduit const* conduit =
         hpx::parcelset::get_device_conduit();
     HPX_TEST(conduit != nullptr);
+    if (conduit == nullptr)
+    {
+        // launched without the test conduit
+        return hpx::finalize();
+    }
     HPX_TEST_EQ(conduit->name(), std::string("test_file"));
 
     std::filesystem::path const dir = make_chunk_directory();
@@ -287,7 +294,7 @@ int hpx_main()
         // the device data of both arguments and both results went through
         // the conduit, in both directions
         hpx::parcelset::device_conduit_statistics const after =
-            wait_for_sends(conduit, before, 2);
+            wait_for_sends(conduit, before, 2, 16 + (1 << 20));
         HPX_TEST_EQ(after.chunks_sent - before.chunks_sent, std::uint64_t(2));
         HPX_TEST_EQ(after.bytes_sent - before.bytes_sent,
             std::uint64_t(16 + (1 << 20)));
