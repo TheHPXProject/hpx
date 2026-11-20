@@ -379,21 +379,8 @@ namespace hpx::parcelset::detail {
         {
             for (std::size_t i = 0; i != idx_ && i != parcel_.size(); ++i)
             {
-                for (auto const& entry : parcel_[i].move_split_gids())
-                {
-                    if (entry.second != naming::invalid_gid)
-                    {
-                        try
-                        {
-                            naming::decrement_refcnt(entry.second);
-                        }
-                        // NOLINTNEXTLINE(bugprone-empty-catch)
-                        catch (...)
-                        {
-                            // the credit is lost, the component stays alive
-                        }
-                    }
-                }
+                serialization::detail::preprocess_gid_types::return_credits(
+                    parcel_[i].move_split_gids());
             }
         }
 

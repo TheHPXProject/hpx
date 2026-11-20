@@ -497,6 +497,40 @@ namespace {
         HPX_TEST_EQ(servers_alive.load(), alive_before);
     }
 
+    // A parcel that is dropped after its preprocessing (as a parcelport does
+    // that can't connect to the destination) returns the credit split for
+    // the id it carries, so the component goes away with its last id.
+    void test_dropped_parcel()
+    {
+        std::size_t const alive_before = servers_alive;
+        {
+            hpx::id_type held = hpx::new_<server>(hpx::find_here()).get();
+            HPX_TEST_EQ(servers_alive.load(), alive_before + 1);
+
+            bool preprocessed = false;
+            hpx::parcelset::detail::parcel_await_apply(
+                make_action_parcel<hold_id_action>(&hold_id, held),
+                [](std::error_code const&, hpx::parcelset::parcel const&) {
+                    HPX_TEST(false);
+                },
+                archive_flags(),
+                [&preprocessed](hpx::parcelset::parcel&& p,
+                    hpx::parcelset::write_handler_type&&) {
+                    // the parcel is not sent
+                    preprocessed = true;
+                    hpx::parcelset::parcel dropped(HPX_MOVE(p));
+                },
+                HPX_ZERO_COPY_SERIALIZATION_THRESHOLD);
+            HPX_TEST(preprocessed);
+        }
+
+        for (int i = 0; i != 500 && servers_alive != alive_before; ++i)
+        {
+            hpx::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        HPX_TEST_EQ(servers_alive.load(), alive_before);
+    }
+
     // The credit recorded for the gid of the managed id belongs to another
     // gid: the real pass throws instead of sending the other gid.
     void test_credit_of_other_id()
@@ -553,6 +587,7 @@ int hpx_main(hpx::program_options::variables_map&)
 
     // the credits of the parcels of a failing batch
     test_failing_batch();
+    test_dropped_parcel();
 
     // every credit came back: the components go away with their last id
     base = hpx::invalid_id;

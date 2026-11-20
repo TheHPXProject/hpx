@@ -188,7 +188,19 @@ namespace hpx::parcelset::detail {
     {
     }
 
-    parcel::~parcel() = default;
+    // A parcel that is dropped after its preprocessing, before it is encoded
+    // (e.g. because no connection to its destination could be made), still
+    // holds the credits split for its ids: return them, so the components
+    // they refer to can go away. A parcel that is encoded has handed them to
+    // the archive, a received one has none.
+    parcel::~parcel()
+    {
+        if (!split_gids_.empty() && get_runtime_ptr() != nullptr)
+        {
+            serialization::detail::preprocess_gid_types::return_credits(
+                split_gids_);
+        }
+    }
 
     parcel::parcel(naming::gid_type&& dest, naming::address&& addr,
         std::unique_ptr<actions::base_action> act)
