@@ -45,7 +45,7 @@ namespace hpx::parcelset::device_conduits {
 
     namespace {
 
-        void check(ucs_status_t const status, char const* what)
+        void check_status(ucs_status_t const status, char const* what)
         {
             if (status != UCS_OK)
             {
@@ -205,7 +205,7 @@ namespace hpx::parcelset::device_conduits {
         // reads the settings of memory domains and transports from UCX_*
         // only)
         ucp_config_t* config = nullptr;
-        check(ucp_config_read("HPX_DEVICE_CONDUIT", nullptr, &config),
+        check_status(ucp_config_read("HPX_DEVICE_CONDUIT", nullptr, &config),
             "ucp_config_read");
 
         if (std::getenv("HPX_DEVICE_CONDUIT_UCX_RNDV_THRESH") == nullptr)
@@ -217,7 +217,7 @@ namespace hpx::parcelset::device_conduits {
             if (status != UCS_OK)
             {
                 ucp_config_release(config);
-                check(status, "ucp_config_modify(RNDV_THRESH)");
+                check_status(status, "ucp_config_modify(RNDV_THRESH)");
             }
         }
 
@@ -228,7 +228,7 @@ namespace hpx::parcelset::device_conduits {
 
         ucs_status_t const status = ucp_init(&params, config, &context_);
         ucp_config_release(config);
-        check(status, "ucp_init");
+        check_status(status, "ucp_init");
 
         // HPX threads send and receive from any OS thread
         ucp_worker_params_t worker_params;
@@ -240,7 +240,7 @@ namespace hpx::parcelset::device_conduits {
             s != UCS_OK)
         {
             ucp_cleanup(context_);
-            check(s, "ucp_worker_create");
+            check_status(s, "ucp_worker_create");
         }
 
         // UCX may provide less than requested (a UCX built without
@@ -253,7 +253,7 @@ namespace hpx::parcelset::device_conduits {
         {
             ucp_worker_destroy(worker_);
             ucp_cleanup(context_);
-            check(s != UCS_OK ? s : UCS_ERR_UNSUPPORTED,
+            check_status(s != UCS_OK ? s : UCS_ERR_UNSUPPORTED,
                 "ucp_worker_create (UCS_THREAD_MODE_MULTI, a UCX built with "
                 "--enable-mt is required)");
         }
@@ -266,7 +266,7 @@ namespace hpx::parcelset::device_conduits {
         {
             ucp_worker_destroy(worker_);
             ucp_cleanup(context_);
-            check(s, "ucp_worker_get_address");
+            check_status(s, "ucp_worker_get_address");
         }
         auto const* begin = reinterpret_cast<char const*>(address);
         address_.assign(begin, begin + address_length);
@@ -363,7 +363,8 @@ namespace hpx::parcelset::device_conduits {
                     reinterpret_cast<ucp_address_t const*>(address.data());
 
                 ucp_ep_h ep = nullptr;
-                check(ucp_ep_create(worker_, &params, &ep), "ucp_ep_create");
+                check_status(
+                    ucp_ep_create(worker_, &params, &ep), "ucp_ep_create");
                 return ep;
             });
         endpoints_.emplace(locality_id, ep);
