@@ -8,7 +8,8 @@
 #pragma once
 
 // This header may be force-included into all sources of a target (see
-// HPX::auto_wrap_main on MSVC), so make it a no-op for non-C++ sources.
+// HPX::auto_wrap_main with the MSVC ABI), so make it a no-op for non-C++
+// sources.
 #if defined(__cplusplus)
 
 #include <hpx/wrap_main.hpp>
