@@ -53,8 +53,9 @@ namespace hpx::parcelset::detail {
 
         // The parcel keeps the buffers zero-copy chunks will refer to alive
         // (serialization creates them only if this exists). Buffers from an
-        // earlier preprocessing of this parcel (e.g. by post() before handing
-        // it to the parcelport) are reused; the archive keeps those of its
+        // earlier preprocessing of this parcel (a pass before the parcel
+        // reached the parcelport, as in big_boot_barrier) are reused; the
+        // archive keeps those of its
         // earlier rounds (reset() only starts again at the first object).
         // Only the serialization of device memory (the thrust module)
         // creates such buffers.
