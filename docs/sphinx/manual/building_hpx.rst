@@ -94,6 +94,12 @@ used CMake options.
    this experimental parcelport may provide better performance than the MPI parcelport. Please refer to
    :ref:`using_the_lci_parcelport` for more information about the LCI parcelport.
 
+.. option:: HPX_WITH_PARCELPORT_GASNET
+
+   Enable the GASNet parcelport. This enables the use of GASNet-EX for the networking operations in the HPX
+   runtime. The default value is ``OFF`` because it requires a GASNet-EX installation. Please refer to
+   :ref:`using_the_gasnet_parcelport` for how to build and run |hpx| with the GASNet parcelport.
+
 .. option:: HPX_WITH_APEX
 
    Enable APEX integration. `APEX <https://uo-oaciss.github.io/apex/quickstarthpx/>`_ can be used to profile |hpx|
