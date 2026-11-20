@@ -436,7 +436,13 @@ namespace hpx::serialization::detail {
             (void) cudaGetLastError();
             return -1;
         }
-        return attributes.type == cudaMemoryTypeDevice ? attributes.device : -1;
+#if defined(HPX_HAVE_HIP) && defined(HIP_VERSION_MAJOR) && HIP_VERSION_MAJOR < 6
+        // ROCm 6 renamed hipPointerAttribute_t::memoryType to type
+        auto const type = attributes.memoryType;
+#else
+        auto const type = attributes.type;
+#endif
+        return type == cudaMemoryTypeDevice ? attributes.device : -1;
     }
 
     scoped_device::scoped_device(int const device)
