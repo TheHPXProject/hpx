@@ -453,14 +453,10 @@ namespace hpx::execution::experimental {
                 stop_source_.get_token()};
             std::optional<inner_env_type> env_{};
             std::optional<scheduler_type> scheduler_{};
-            std::optional<allocator_type> alloc_{};
-            bool has_custom_alloc_{false};
-
-            task_promise() = default;
+            allocator_type alloc_;
 
             template <typename... Args>
-                requires(sizeof...(Args) > 0)
-            explicit task_promise(Args const&... args)
+            static constexpr allocator_type init_alloc(Args const&... args)
             {
                 if constexpr (has_allocator_arg<Args...>::value)
                 {
@@ -470,9 +466,29 @@ namespace hpx::execution::experimental {
                                       allocator_type>,
                         "Provided allocator must be convertible to "
                         "allocator_type");
-                    has_custom_alloc_ = true;
-                    alloc_.emplace(find_allocator<Args...>::get(args...));
+                    return allocator_type(
+                        find_allocator<Args...>::get(args...));
                 }
+                else
+                {
+                    static_assert(
+                        std::is_default_constructible_v<allocator_type>,
+                        "allocator_type must be default constructible when no "
+                        "allocator_arg_t is provided");
+                    return allocator_type{};
+                }
+            }
+
+            task_promise()
+              : alloc_(init_alloc())
+            {
+            }
+
+            template <typename... Args>
+                requires(sizeof...(Args) > 0)
+            explicit task_promise(Args const&... args)
+              : alloc_(init_alloc(args...))
+            {
             }
 
             task<T, TaskEnv> get_return_object() noexcept;
@@ -537,16 +553,7 @@ namespace hpx::execution::experimental {
                 auto query(hpx::execution::experimental::get_allocator_t)
                     const noexcept
                 {
-                    if (promise_->has_custom_alloc_ &&
-                        promise_->alloc_.has_value())
-                    {
-                        return *promise_->alloc_;
-                    }
-                    static_assert(
-                        std::is_default_constructible_v<allocator_type>,
-                        "allocator_type must be default constructible if no "
-                        "custom allocator is provided");
-                    return allocator_type{};
+                    return promise_->alloc_;
                 }
 
                 auto query(hpx::execution::experimental::get_scheduler_t)
