@@ -17,6 +17,7 @@ function(add_hpx_test category name)
       NO_PARCELPORT_LCI
       NO_PARCELPORT_LCW
       NO_PARCELPORT_GASNET
+      NO_PARCELPORT_OPENSHMEM
   )
   set(one_value_args EXECUTABLE LOCALITIES THREADS_PER_LOCALITY TIMEOUT
                      RUNWRAPPER PSEUDO_DEPS_NAME
