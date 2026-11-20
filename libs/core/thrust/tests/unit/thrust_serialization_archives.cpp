@@ -273,10 +273,12 @@ namespace test {
             for (std::size_t i = 0; i != steps.size(); ++i)
             {
                 // each step finishes once: by its callback or by throwing
-                // (as post_receive_actions' run_all counts them)
-                auto const once = std::make_shared<std::atomic<bool>>(false);
+                // (as post_receive_actions' run_all counts them), also if
+                // setting it up throws
+                std::shared_ptr<std::atomic<bool>> once;
                 try
                 {
+                    once = std::make_shared<std::atomic<bool>>(false);
                     steps[i]([&pending, &done, &step_mtx, &step_error, once](
                                  std::exception_ptr e) {
                         if (once->exchange(true))
@@ -303,8 +305,8 @@ namespace test {
 
                     // this step (unless its callback ran) and the ones not
                     // started
-                    std::size_t const finished =
-                        steps.size() - i - (once->exchange(true) ? 1 : 0);
+                    std::size_t const finished = steps.size() - i -
+                        (once && once->exchange(true) ? 1 : 0);
                     if (finished != 0 && (pending -= finished) == 0)
                     {
                         done.set_value();
