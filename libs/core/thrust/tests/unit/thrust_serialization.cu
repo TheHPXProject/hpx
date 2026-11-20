@@ -329,6 +329,92 @@ namespace {
             HPX_TEST_EQ(got.b, sent.b);
         }
     }
+
+    // a field the serialization leaves out
+    struct partial
+    {
+        int a = 0;
+        short b = 0;
+
+        template <typename Archive>
+        void serialize(Archive& ar, unsigned)
+        {
+            // clang-format off
+            ar & b;
+            // clang-format on
+        }
+    };
+
+    // with the array optimization disabled the elements are received one by
+    // one into fresh elements, as for std::vector
+    void test_array_optimization_disabled()
+    {
+        using hpx::serialization::archive_flags;
+
+        ::thrust::host_vector<partial> v(3);
+        for (std::size_t i = 0; i != v.size(); ++i)
+        {
+            v[i].a = static_cast<int>(i + 1);
+            v[i].b = static_cast<short>(10 * i);
+        }
+
+        std::uint32_t const flags = test::archive_flags(true) |
+            static_cast<std::uint32_t>(
+                archive_flags::disable_array_optimization);
+        test::message m = test::send(flags, true,
+            [&v](hpx::serialization::output_archive& ar) { ar << v; });
+
+        // an element the vector holds already doesn't keep its value
+        ::thrust::host_vector<partial> w(1);
+        w[0].a = 99;
+        test::receive(
+            m, false, [&w](hpx::serialization::input_archive& ar) { ar >> w; });
+
+        HPX_TEST_EQ(w.size(), v.size());
+        for (std::size_t i = 0; i != w.size() && i != v.size(); ++i)
+        {
+            partial const& got = w[i];
+            HPX_TEST_EQ(got.b, v[i].b);
+            HPX_TEST_EQ(got.a, 0);
+        }
+    }
+
+    // the elements of a device_vector are sent as raw bytes: an archive with
+    // another byte order is rejected when saving, as when loading (only
+    // with HPX_SERIALIZATION_WITH_SUPPORTS_ENDIANESS archives can have one)
+    void test_other_byte_order()
+    {
+#if defined(HPX_SERIALIZATION_HAVE_SUPPORTS_ENDIANESS)
+        using hpx::serialization::archive_flags;
+
+        std::uint32_t const both = static_cast<std::uint32_t>(
+            archive_flags::endian_big | archive_flags::endian_little);
+        std::uint32_t flags = test::archive_flags(true);
+        std::uint32_t const other =
+            (flags & static_cast<std::uint32_t>(archive_flags::endian_big)) ?
+            static_cast<std::uint32_t>(archive_flags::endian_little) :
+            static_cast<std::uint32_t>(archive_flags::endian_big);
+        flags = (flags & ~both) | other;
+
+        ::thrust::device_vector<int> const v(16, 7);
+        bool caught = false;
+        try
+        {
+            test::send(flags, false,
+                [&v](hpx::serialization::output_archive& ar) { ar << v; });
+        }
+        catch (hpx::exception const&)
+        {
+            caught = true;
+        }
+        HPX_TEST(caught);
+
+        // an empty vector carries no elements, it is fine
+        ::thrust::device_vector<int> const empty;
+        test::send(flags, false,
+            [&empty](hpx::serialization::output_archive& ar) { ar << empty; });
+#endif
+    }
 }    // namespace
 
 int hpx_main(hpx::program_options::variables_map&)
@@ -357,6 +443,8 @@ int hpx_main(hpx::program_options::variables_map&)
     test_host_accessible<::thrust::host_vector<int>>();
     test_host_accessible<::thrust::universal_vector<int>>();
     test_non_default_constructible();
+    test_array_optimization_disabled();
+    test_other_byte_order();
 
     return hpx::local::finalize();
 }

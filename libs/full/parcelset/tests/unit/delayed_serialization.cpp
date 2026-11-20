@@ -275,6 +275,24 @@ struct failing_argument
 
 void check_failing(delayed_data const&, failing_argument const&) {}
 HPX_PLAIN_ACTION(check_failing)
+
+// An argument that serializes in the first preprocessing round and fails in
+// the next one, which runs once the data of the argument before it has been
+// produced (the gate is open).
+struct failing_later_argument
+{
+    template <typename Archive>
+    void serialize(Archive&, unsigned)
+    {
+        if (gate.valid() && gate.is_ready())
+        {
+            throw std::runtime_error("failing_later_argument");
+        }
+    }
+};
+
+void check_failing_later(delayed_data const&, failing_later_argument const&) {}
+HPX_PLAIN_ACTION(check_failing_later)
 // Two delayed_data serialized one after the other from the same storage, as
 // temporaries a serialize() function creates on the fly: each must get its own
 // buffer although both have the same address.
@@ -637,9 +655,15 @@ namespace {
         step_gate_promise = std::make_unique<hpx::promise<void>>();
         step_gate = step_gate_promise->get_future().share();
 
+        // the step must have finished when the action is scheduled: check
+        // it right there, before the action can run
+        std::size_t const steps_expected = steps_before + (deferred ? 1 : 0);
+        std::atomic<std::size_t> steps_at_schedule(0);
+
         hpx::promise<void> scheduled;
         hpx::future<void> f = scheduled.get_future();
-        p.on_receive_complete([&p, &scheduled]() {
+        p.on_receive_complete([&p, &scheduled, &steps_at_schedule]() {
+            steps_at_schedule = steps_run.load();
             p.schedule_action();
             scheduled.set_value();
         });
@@ -653,7 +677,8 @@ namespace {
         step_gate_promise->set_value();
         f.get();
 
-        HPX_TEST_EQ(steps_run.load(), steps_before + (deferred ? 1 : 0));
+        HPX_TEST_EQ(steps_at_schedule.load(), steps_expected);
+        HPX_TEST_EQ(steps_run.load(), steps_expected);
         return deferred;
     }
 
@@ -947,9 +972,47 @@ namespace {
     }
 }    // namespace
 
+namespace {
+
+    // A later preprocessing round fails: it runs from the continuation of
+    // the data the first round waits for, the error must reach the parcel's
+    // write handler.
+    void test_failing_resumed_serialization()
+    {
+        close_gate();
+        std::atomic<bool> handled(false);
+        std::atomic<bool> failed(false);
+        hpx::parcelset::detail::parcel_await_apply(
+            make_action_parcel<check_failing_later_action>(&check_failing_later,
+                delayed_data{65536, 7, {}}, failing_later_argument{}),
+            [&handled, &failed](
+                std::error_code const& ec, hpx::parcelset::parcel const&) {
+                failed = static_cast<bool>(ec);
+                handled = true;
+            },
+            archive_flags(true),
+            [](hpx::parcelset::parcel&&, hpx::parcelset::write_handler_type&&) {
+                // nothing is sent
+                HPX_TEST(false);
+            });
+
+        // the first round waits for the data
+        HPX_TEST(!handled);
+
+        open_gate();
+        for (int i = 0; i != 100000 && !handled; ++i)
+        {
+            hpx::this_thread::yield();
+        }
+        HPX_TEST(handled);
+        HPX_TEST(failed);
+    }
+}    // namespace
+
 int hpx_main(hpx::program_options::variables_map&)
 {
     test_failing_serialization();
+    test_failing_resumed_serialization();
 
     // 16 ints go inline, 64 Ki ints (256 KiB) as a zero-copy chunk
     for (std::size_t const size : {std::size_t(16), std::size_t(65536)})
