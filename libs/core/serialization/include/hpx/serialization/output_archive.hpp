@@ -161,6 +161,7 @@ namespace hpx::serialization {
             {
                 *this << detail::raw_ptr(filter);
                 buffer_->set_filter(filter);
+                filtered_ = true;
             }
         }
 
@@ -177,6 +178,14 @@ namespace hpx::serialization {
         [[nodiscard]] constexpr std::size_t bytes_written() const noexcept
         {
             return size_;
+        }
+
+        // Whether the data goes through a filter (e.g. compression): the
+        // filter reads all of it on the host, also the data of zero-copy
+        // chunks.
+        [[nodiscard]] constexpr bool is_filtered() const noexcept
+        {
+            return filtered_;
         }
 
         [[nodiscard]] std::size_t get_num_chunks() const noexcept
@@ -429,6 +438,7 @@ namespace hpx::serialization {
 
     private:
         std::unique_ptr<erased_output_container> buffer_;
+        bool filtered_ = false;
     };
 }    // namespace hpx::serialization
 
