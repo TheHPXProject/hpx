@@ -15,26 +15,26 @@ macro(hpx_setup_gasnet)
 
     # Known-good build recipe for the PAR/mpi conduit this parcelport needs.
     # Defined up front so it can be reported both when the .pc file cannot be
-    # found and when a found .pc turns out to be misconfigured.  GASNet emits
-    # a static archive (libgasnet-mpi-par.a); -fPIC is what makes it linkable
-    # into HPX's shared objects, so the compile flags are essential here.
+    # found and when a found .pc turns out to be misconfigured.  GASNet emits a
+    # static archive (libgasnet-mpi-par.a); -fPIC is what makes it linkable into
+    # HPX's shared objects, so the compile flags are essential here.
     string(
       CONCAT
-      GASNET_REBUILD_MESSAGE
-      "Build GASNet as follows and make the .pc files visible via "
-      "PKG_CONFIG_PATH or CMAKE_PREFIX_PATH:\n"
-      "  export CXXFLAGS=-fPIC -O3; export CFLAGS=-fPIC -O3;\n"
-      "  PMI_LIBS=probe CFLAGS=-fPIC CCFLAGS=-fPIC CXXFLAGS=-fPIC\n"
-      "  ./configure --enable-par --disable-ucx --enable-mpi \\\n"
-      "    --with-c-compiler=mpicc --with-cxx-compiler=mpicxx \\\n"
-      "    --with-mpi=/opt/openmpi --enable-hwloc \\\n"
-      "    --prefix=/opt/gasnet-par --with-cflags=-fPIC \\\n"
-      "    --with-cxxflags=-fPIC --disable-udp --disable-ibv \\\n"
-      "    --enable-pmi --with-pmi-home=/opt/pmix \\\n"
-      "    --enable-segment-large --with-ldflags=-fPIC \\\n"
-      "    --with-mpi-cflags=-fPIC && make -j4 && sudo make install\n"
-      "  export PKG_CONFIG_PATH=/opt/ucx/lib/pkgconfig:"
-      "/opt/openmpi/lib/pkgconfig:/opt/gasnet-par/lib/pkgconfig:$PKG_CONFIG_PATH"
+        GASNET_REBUILD_MESSAGE
+        "Build GASNet as follows and make the .pc files visible via "
+        "PKG_CONFIG_PATH or CMAKE_PREFIX_PATH:\n"
+        "  export CXXFLAGS=-fPIC -O3; export CFLAGS=-fPIC -O3;\n"
+        "  PMI_LIBS=probe CFLAGS=-fPIC CCFLAGS=-fPIC CXXFLAGS=-fPIC\n"
+        "  ./configure --enable-par --disable-ucx --enable-mpi \\\n"
+        "    --with-c-compiler=mpicc --with-cxx-compiler=mpicxx \\\n"
+        "    --with-mpi=/opt/openmpi --enable-hwloc \\\n"
+        "    --prefix=/opt/gasnet-par --with-cflags=-fPIC \\\n"
+        "    --with-cxxflags=-fPIC --disable-udp --disable-ibv \\\n"
+        "    --enable-pmi --with-pmi-home=/opt/pmix \\\n"
+        "    --enable-segment-large --with-ldflags=-fPIC \\\n"
+        "    --with-mpi-cflags=-fPIC && make -j4 && sudo make install\n"
+        "  export PKG_CONFIG_PATH=/opt/ucx/lib/pkgconfig:"
+        "/opt/openmpi/lib/pkgconfig:/opt/gasnet-par/lib/pkgconfig:$PKG_CONFIG_PATH"
     )
 
     if(GASNet_ROOT AND NOT "${GASNet_ROOT}" IN_LIST CMAKE_PREFIX_PATH)
@@ -58,6 +58,50 @@ macro(hpx_setup_gasnet)
       )
     endif()
 
+    # GASNet's .pc records the runtime of the compiler GASNet was built with
+    # (e.g. '-L/usr/lib/gcc/x86_64-redhat-linux/11 -lgcc -lpthread'). With a
+    # different compiler for HPX, that directory makes the linker pick up the
+    # older compiler's libstdc++ (undefined references to newer symbols). The
+    # compiler driver adds its own runtime, so drop these entries.
+    get_target_property(
+      _gasnet_link_libraries PkgConfig::GASNET INTERFACE_LINK_LIBRARIES
+    )
+    get_target_property(
+      _gasnet_link_directories PkgConfig::GASNET INTERFACE_LINK_DIRECTORIES
+    )
+    if(_gasnet_link_libraries)
+      list(FILTER _gasnet_link_libraries EXCLUDE REGEX
+           "(^|/)lib(gcc|gcc_s|gcc_eh|pthread)\\.(a|so)"
+      )
+      set_target_properties(
+        PkgConfig::GASNET PROPERTIES INTERFACE_LINK_LIBRARIES
+                                     "${_gasnet_link_libraries}"
+      )
+    endif()
+    # libs/CMakeLists.txt also adds GASNET_LIBRARY_DIRS to hpx_core directly
+    if(NOT _gasnet_link_directories)
+      set(_gasnet_link_directories)
+    endif()
+    set(_gasnet_kept_directories)
+    foreach(_dir IN LISTS _gasnet_link_directories GASNET_LIBRARY_DIRS)
+      if(EXISTS "${_dir}/libgcc.a")
+        message(STATUS "GASNet: dropping compiler runtime directory ${_dir}")
+      elseif(NOT "${_dir}" IN_LIST _gasnet_kept_directories)
+        list(APPEND _gasnet_kept_directories "${_dir}")
+      endif()
+    endforeach()
+    set_target_properties(
+      PkgConfig::GASNET PROPERTIES INTERFACE_LINK_DIRECTORIES
+                                   "${_gasnet_kept_directories}"
+    )
+    set(GASNET_LIBRARY_DIRS
+        "${_gasnet_kept_directories}"
+        CACHE INTERNAL ""
+    )
+    set(GASNET_LIBRARY_DIRS "${_gasnet_kept_directories}")
+    find_package(Threads REQUIRED)
+    target_link_libraries(PkgConfig::GASNET INTERFACE Threads::Threads)
+
     if("${HPX_WITH_PARCELPORT_GASNET_CONDUIT}" STREQUAL "mpi")
       set(GASNET_MPI_FOUND TRUE)
       include(HPX_SetupMPI)
@@ -70,8 +114,8 @@ macro(hpx_setup_gasnet)
     # splits them into two list elements, and CMake de-duplicates the repeated
     # "--param" tokens, which leaves a bare "name=value" behind that the
     # compiler and linker take for an input file. These flags only tune the
-    # GASNet build itself, so drop the pairs from both properties here, in
-    # one place.
+    # GASNet build itself, so drop the pairs from both properties here, in one
+    # place.
     foreach(_gasnet_prop INTERFACE_COMPILE_OPTIONS INTERFACE_LINK_OPTIONS)
       get_target_property(_gasnet_opts PkgConfig::GASNET ${_gasnet_prop})
       if(_gasnet_opts)
@@ -95,16 +139,24 @@ macro(hpx_setup_gasnet)
 
     # Validate the GASNet build configuration. HPX requires a GASNet built in
     # PAR threading mode with the mpi conduit, with position-independent code
-    # (GASNet is consumed as a static archive; -fPIC is what makes it
-    # linkable into HPX's shared objects), on top of a UCX built with
-    # multithreading support.  The library artefacts themselves are whatever
-    # the gasnet-<conduit>-par .pc resolves to, so only the pkg-config metadata
-    # is validated here.
+    # (GASNet is consumed as a static archive; -fPIC is what makes it linkable
+    # into HPX's shared objects), on top of a UCX built with multithreading
+    # support.  The library artefacts themselves are whatever the
+    # gasnet-<conduit>-par .pc resolves to, so only the pkg-config metadata is
+    # validated here.
 
     set(GASNET_PC_NAME "gasnet-${HPX_WITH_PARCELPORT_GASNET_CONDUIT}-par")
 
-    foreach(_var IN ITEMS GASNET_DEFINES GASNET_CFLAGS GASNET_LDFLAGS
-                       GASNET_LIBS GASNET_INCLUDES GASNET_CC GASNET_CXX)
+    foreach(
+      _var IN
+      ITEMS GASNET_DEFINES
+            GASNET_CFLAGS
+            GASNET_LDFLAGS
+            GASNET_LIBS
+            GASNET_INCLUDES
+            GASNET_CC
+            GASNET_CXX
+    )
       execute_process(
         COMMAND "${PKG_CONFIG_EXECUTABLE}" --variable=${_var}
                 "${GASNET_PC_NAME}"
@@ -118,19 +170,18 @@ macro(hpx_setup_gasnet)
               "${GASNET_PC_NAME}"
       RESULT_VARIABLE GASNET_BUILD_PC_RESULT
       OUTPUT_VARIABLE GASNET_BUILD_SPAWNER_PMI
-      OUTPUT_STRIP_TRAILING_WHITESPACE
-      ERROR_QUIET
+      OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET
     )
 
     # hard requirement: PAR threading mode
     string(REGEX MATCH "-DGASNET_PARSYNC([ ]|$)" GASNET_BUILD_PARSYNC
-           "${GASNET_BUILD_GASNET_DEFINES}"
+                 "${GASNET_BUILD_GASNET_DEFINES}"
     )
     string(REGEX MATCH "-DGASNET_SEQ([ ]|$)" GASNET_BUILD_SEQ
-           "${GASNET_BUILD_GASNET_DEFINES}"
+                 "${GASNET_BUILD_GASNET_DEFINES}"
     )
     string(REGEX MATCH "-DGASNET_PAR([ ]|$)" GASNET_BUILD_PAR
-           "${GASNET_BUILD_GASNET_DEFINES}"
+                 "${GASNET_BUILD_GASNET_DEFINES}"
     )
     if(GASNET_BUILD_PARSYNC)
       message(
@@ -158,7 +209,7 @@ macro(hpx_setup_gasnet)
     if("${HPX_WITH_PARCELPORT_GASNET_CONDUIT}" STREQUAL "mpi")
       string(FIND "${GASNET_BUILD_GASNET_LIBS}" "gasnet-mpi" GASNET_BUILD_LIB)
       string(FIND "${GASNET_BUILD_GASNET_INCLUDES}" "mpi-conduit"
-             GASNET_BUILD_INC
+                  GASNET_BUILD_INC
       )
       if(GASNET_BUILD_LIB EQUAL -1 OR GASNET_BUILD_INC EQUAL -1)
         message(
@@ -170,16 +221,17 @@ macro(hpx_setup_gasnet)
       endif()
     endif()
 
-# hard requirement: position-independent code
-    set(GASNET_BUILD_FLAGS "${GASNET_BUILD_GASNET_CFLAGS} \
+    # hard requirement: position-independent code
+    set(GASNET_BUILD_FLAGS
+        "${GASNET_BUILD_GASNET_CFLAGS} \
 ${GASNET_BUILD_GASNET_LDFLAGS} ${GASNET_BUILD_GASNET_CC} \
-${GASNET_BUILD_GASNET_CXX}")
+${GASNET_BUILD_GASNET_CXX}"
+    )
     string(FIND "${GASNET_BUILD_FLAGS}" "-fPIC" GASNET_BUILD_PIC)
     if(GASNET_BUILD_PIC EQUAL -1)
       message(
-        FATAL_ERROR
-          "GASNet was built without -fPIC. HPX requires a position-"
-          "independent GASNet build. ${GASNET_REBUILD_MESSAGE}"
+        FATAL_ERROR "GASNet was built without -fPIC. HPX requires a position-"
+                    "independent GASNet build. ${GASNET_REBUILD_MESSAGE}"
       )
     endif()
 
@@ -189,10 +241,9 @@ ${GASNET_BUILD_GASNET_CXX}")
     # --disable-ucx on purpose, since we drive GASNet through OpenMPI's mpi
     # conduit instead.  The UCX we require here is the one OpenMPI itself was
     # built against (hence /opt/ucx on PKG_CONFIG_PATH): gasnet-mpi links
-    # through libmpi, so an MPI built on UCX pulls it in transitively and it
-    # has to be MT-capable for HPX's threading model.  Do not "fix" this by
-    # relaxing --disable-ucx or by dropping the check below; they are unrelated
-    # knobs.
+    # through libmpi, so an MPI built on UCX pulls it in transitively and it has
+    # to be MT-capable for HPX's threading model.  Do not "fix" this by relaxing
+    # --disable-ucx or by dropping the check below; they are unrelated knobs.
     if("${HPX_WITH_PARCELPORT_GASNET_CONDUIT}" STREQUAL "mpi")
       execute_process(
         COMMAND "${PKG_CONFIG_EXECUTABLE}" --variable=prefix ucx
@@ -211,9 +262,7 @@ ${GASNET_BUILD_GASNET_CXX}")
         )
       endif()
       find_program(
-        GASNET_UCX_INFO ucx_info
-        HINTS "${GASNET_UCX_PREFIX}/bin"
-        NO_CACHE
+        GASNET_UCX_INFO ucx_info HINTS "${GASNET_UCX_PREFIX}/bin" NO_CACHE
       )
       if(NOT GASNET_UCX_INFO)
         message(
@@ -230,7 +279,7 @@ ${GASNET_BUILD_GASNET_CXX}")
         ERROR_QUIET
       )
       string(REGEX MATCH "#define[ \t]+ENABLE_MT[ \t]+1" GASNET_UCX_MT
-             "${GASNET_UCX_BUILDINFO}"
+                   "${GASNET_UCX_BUILDINFO}"
       )
       if(NOT GASNET_UCX_INFO_RESULT EQUAL 0 OR NOT GASNET_UCX_MT)
         message(
@@ -246,7 +295,7 @@ ${GASNET_BUILD_GASNET_CXX}")
 
     # informational: hwloc and PMI support as built
     string(FIND "${GASNET_BUILD_GASNET_LIBS} ${GASNET_BUILD_GASNET_INCLUDES}"
-           "hwloc" GASNET_BUILD_HWLOC
+                "hwloc" GASNET_BUILD_HWLOC
     )
     if(GASNET_BUILD_HWLOC EQUAL -1)
       message(STATUS "GASNet built without hwloc support.")
