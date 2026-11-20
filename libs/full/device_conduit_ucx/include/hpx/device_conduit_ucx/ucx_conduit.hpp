@@ -63,7 +63,7 @@ namespace hpx::parcelset::device_conduits {
         void send_impl(std::uint32_t locality_id,
             serialization::detail::device_chunk_descriptor const& d,
             void const* p, std::size_t size,
-            hpx::move_only_function<void()> sent);
+            hpx::move_only_function<void(std::exception_ptr)> sent);
 
         void recv_impl(serialization::detail::device_chunk_descriptor const& d,
             void* p, std::size_t size,
@@ -88,7 +88,8 @@ namespace hpx::parcelset::device_conduits {
         void note_device(void const* p) noexcept;
 
         void start_send(ucp_ep* ep, std::uint64_t tag, void const* p,
-            std::size_t size, hpx::move_only_function<void()> sent);
+            std::size_t size,
+            hpx::move_only_function<void(std::exception_ptr)> sent);
 
         ucp_context* context_ = nullptr;
         ucp_worker* worker_ = nullptr;

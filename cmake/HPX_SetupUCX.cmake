@@ -6,16 +6,17 @@
 
 # Finds UCX for the UCX device conduit (PkgConfig::UCX). It must be the UCX
 # library of the MPI library if that is UCX based (one process can't use two
-# different UCX libraries): look next to MPI first, then UCX_ROOT, then the
-# default pkg-config paths. HPX_UCX_ROOT remembers the UCX that was found (for
+# different UCX libraries): look next to MPI (MPI_HOME) first, then UCX_ROOT,
+# then the default pkg-config paths. If MPI's UCX is installed elsewhere,
+# UCX_ROOT must name it. HPX_UCX_ROOT remembers the UCX that was found (for
 # projects using an installed HPX).
 macro(hpx_setup_ucx)
   if(NOT TARGET PkgConfig::UCX)
     find_package(PkgConfig REQUIRED)
 
     set(_hpx_ucx_pkgconfig_dirs)
-    foreach(_hpx_ucx_root ${HPX_UCX_ROOT} ${UCX_ROOT} $ENV{UCX_ROOT}
-                          ${MPI_HOME} $ENV{MPI_HOME}
+    foreach(_hpx_ucx_root ${HPX_UCX_ROOT} ${MPI_HOME} $ENV{MPI_HOME}
+                          ${UCX_ROOT} $ENV{UCX_ROOT}
     )
       list(APPEND _hpx_ucx_pkgconfig_dirs "${_hpx_ucx_root}/lib/pkgconfig"
            "${_hpx_ucx_root}/lib64/pkgconfig"
