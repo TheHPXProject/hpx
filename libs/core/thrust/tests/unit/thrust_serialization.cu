@@ -32,6 +32,7 @@
 #include <cstring>
 #include <new>
 #include <optional>
+#include <stdexcept>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -79,6 +80,10 @@ struct identity_filter : hpx::serialization::binary_filter
     void load(void* dst, std::size_t const dst_count) override
     {
         HPX_TEST(current_ + dst_count <= buffer_.size());
+        if (current_ + dst_count > buffer_.size())
+        {
+            throw std::runtime_error("identity_filter: too little data");
+        }
         std::memcpy(dst, buffer_.data() + current_, dst_count);
         current_ += dst_count;
     }
