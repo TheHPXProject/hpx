@@ -14,6 +14,7 @@ set(tests
     serialization_custom_constructor
     serialization_deque
     serialization_error_code
+    serialization_filtered_chunks
     serialization_list
     serialization_map
     serialization_multimap
