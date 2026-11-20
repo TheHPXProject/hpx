@@ -453,7 +453,7 @@ namespace hpx::when_all_vector_detail {
                 if (stop_source_.stop_requested())
                 {
                     hpx::execution::experimental::set_stopped(
-                        HPX_FORWARD(Receiver, receiver));
+                        HPX_MOVE(receiver));
                     return;
                 }
 
