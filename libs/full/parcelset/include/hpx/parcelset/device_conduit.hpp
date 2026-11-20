@@ -10,7 +10,9 @@
 #include <hpx/assert.hpp>
 
 #if defined(HPX_HAVE_NETWORKING)
+#include <hpx/modules/errors.hpp>
 #include <hpx/modules/functional.hpp>
+#include <hpx/modules/logging.hpp>
 #include <hpx/modules/parcelset_base.hpp>
 #include <hpx/modules/plugin_factories.hpp>
 #include <hpx/modules/runtime_configuration.hpp>
@@ -18,12 +20,14 @@
 #include <hpx/modules/serialization.hpp>
 
 #include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
 #include <functional>
 #include <memory>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -40,9 +44,12 @@ namespace hpx::parcelset {
     ///  - void send_impl(std::uint32_t locality_id,
     ///        serialization::detail::device_chunk_descriptor const& d,
     ///        void const* p, std::size_t size,
-    ///        hpx::move_only_function<void()> sent)
+    ///        hpx::move_only_function<void(std::exception_ptr)> sent)
     ///    starts sending the data, calls 'sent' once the memory may be
-    ///    reused (the message's objects are kept alive until then)
+    ///    reused (the message's objects are kept alive until then), with
+    ///    the error if the data couldn't be sent: the parcel has left
+    ///    already, so the error is reported, and the send doesn't count in
+    ///    the statistics
     ///  - void recv_impl(
     ///        serialization::detail::device_chunk_descriptor const& d,
     ///        void* p, std::size_t size,
@@ -84,6 +91,25 @@ namespace hpx::parcelset {
         receiver() override
         {
             return std::make_shared<receiving_transport>(derived());
+        }
+
+        [[nodiscard]] bool drain(
+            std::chrono::steady_clock::duration const timeout) noexcept override
+        {
+            // the runtime is going away: errors of transfers that finish
+            // now are logged, not reported (peers may have exited already)
+            draining_.store(true, std::memory_order_release);
+
+            auto const deadline = std::chrono::steady_clock::now() + timeout;
+            while (in_flight_.load(std::memory_order_acquire) != 0)
+            {
+                if (std::chrono::steady_clock::now() >= deadline)
+                {
+                    return false;
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+            return true;
         }
 
         [[nodiscard]] device_conduit_statistics statistics() const override
@@ -133,14 +159,60 @@ namespace hpx::parcelset {
                     hpx::get_locality_id(),
                     b.next_tag_.fetch_add(1, std::memory_order_relaxed)};
 
-                // the message's objects stay alive until the data is sent
-                conduit_.send_impl(locality_id_, d, p, size,
-                    [&b, size, keep_alive = keep_alive_]() mutable {
-                        b.chunks_sent_.fetch_add(1, std::memory_order_relaxed);
-                        b.bytes_sent_.fetch_add(
-                            size, std::memory_order_relaxed);
-                        keep_alive.reset();
-                    });
+                // the message's objects stay alive until the data is sent;
+                // the transfer is counted until it finishes, once: through
+                // its callback (which send_impl may call before it throws)
+                // or because send_impl threw
+                b.in_flight_.fetch_add(1, std::memory_order_relaxed);
+                auto const once = std::make_shared<std::atomic<bool>>(false);
+                try
+                {
+                    conduit_.send_impl(locality_id_, d, p, size,
+                        [&b, size, once, keep_alive = keep_alive_](
+                            std::exception_ptr error) mutable {
+                            if (once->exchange(true))
+                            {
+                                return;
+                            }
+                            auto const finished =
+                                hpx::experimental::scope_exit([&b] {
+                                    b.in_flight_.fetch_sub(
+                                        1, std::memory_order_release);
+                                });
+
+                            // the parcel referring to the data has left
+                            keep_alive.reset();
+                            if (error)
+                            {
+                                if (b.draining_.load(std::memory_order_acquire))
+                                {
+                                    LPT_(warning).format(
+                                        "device conduit: a send failed during "
+                                        "shutdown: {}",
+                                        hpx::get_error_what(error));
+                                }
+                                else
+                                {
+                                    hpx::report_error(HPX_MOVE(error));
+                                }
+                            }
+                            else
+                            {
+                                b.chunks_sent_.fetch_add(
+                                    1, std::memory_order_relaxed);
+                                b.bytes_sent_.fetch_add(
+                                    size, std::memory_order_relaxed);
+                            }
+                        });
+                }
+                catch (...)
+                {
+                    if (!once->exchange(true))
+                    {
+                        b.in_flight_.fetch_sub(1, std::memory_order_release);
+                    }
+                    throw;
+                }
                 return d;
             }
 
@@ -179,18 +251,41 @@ namespace hpx::parcelset {
                 std::function<void(std::exception_ptr)> done) override
             {
                 device_conduit_impl& b = base(conduit_);
-                conduit_.recv_impl(d, p, size,
-                    [&b, size, done = HPX_MOVE(done)](
-                        std::exception_ptr error) {
-                        if (!error)
-                        {
-                            b.chunks_received_.fetch_add(
-                                1, std::memory_order_relaxed);
-                            b.bytes_received_.fetch_add(
-                                size, std::memory_order_relaxed);
-                        }
-                        done(HPX_MOVE(error));
-                    });
+                // counted until it finishes, once (see sending_transport)
+                b.in_flight_.fetch_add(1, std::memory_order_relaxed);
+                auto const once = std::make_shared<std::atomic<bool>>(false);
+                try
+                {
+                    conduit_.recv_impl(d, p, size,
+                        [&b, size, once, done = HPX_MOVE(done)](
+                            std::exception_ptr error) {
+                            if (once->exchange(true))
+                            {
+                                return;
+                            }
+                            auto const finished =
+                                hpx::experimental::scope_exit([&b] {
+                                    b.in_flight_.fetch_sub(
+                                        1, std::memory_order_release);
+                                });
+                            if (!error)
+                            {
+                                b.chunks_received_.fetch_add(
+                                    1, std::memory_order_relaxed);
+                                b.bytes_received_.fetch_add(
+                                    size, std::memory_order_relaxed);
+                            }
+                            done(HPX_MOVE(error));
+                        });
+                }
+                catch (...)
+                {
+                    if (!once->exchange(true))
+                    {
+                        b.in_flight_.fetch_sub(1, std::memory_order_release);
+                    }
+                    throw;
+                }
             }
 
         private:
@@ -199,6 +294,12 @@ namespace hpx::parcelset {
 
         // tags of the chunks this locality sends, unique for it
         std::atomic<std::uint64_t> next_tag_ = 1;
+
+        // set once drain() has started (at shutdown)
+        std::atomic<bool> draining_ = false;
+
+        // the sends and receives whose completion hasn't run yet
+        std::atomic<std::size_t> in_flight_ = 0;
 
         std::atomic<std::uint64_t> chunks_sent_ = 0;
         std::atomic<std::uint64_t> bytes_sent_ = 0;
