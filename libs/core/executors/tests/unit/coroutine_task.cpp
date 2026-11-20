@@ -279,6 +279,12 @@ struct test_custom_error_receiver
 
     struct env
     {
+        hpx::execution::experimental::task_scheduler query(
+            hpx::execution::experimental::get_scheduler_t) const noexcept
+        {
+            return hpx::execution::experimental::task_scheduler(
+                hpx::execution::experimental::get_parallel_scheduler());
+        }
     };
 
     env get_env() const noexcept
@@ -476,6 +482,13 @@ struct test_stopped_receiver
         {
             return token_;
         }
+
+        hpx::execution::experimental::task_scheduler query(
+            hpx::execution::experimental::get_scheduler_t) const noexcept
+        {
+            return hpx::execution::experimental::task_scheduler(
+                hpx::execution::experimental::get_parallel_scheduler());
+        }
     };
 
     env get_env() const noexcept
@@ -647,18 +660,46 @@ void test_environment_traits()
     HPX_TEST_EQ(hpx::get<0>(res.value()), 10);
 }
 
+struct test_receiver_tag_t;
+
 struct custom_receiver_env
 {
     int val = 12345;
+
+    constexpr custom_receiver_env() noexcept = default;
+    constexpr explicit custom_receiver_env(int v) noexcept
+      : val(v)
+    {
+    }
+
+    int query(test_receiver_tag_t) const noexcept;
+
+    hpx::execution::experimental::task_scheduler query(
+        hpx::execution::experimental::get_scheduler_t) const noexcept
+    {
+        return hpx::execution::experimental::task_scheduler(
+            hpx::execution::experimental::get_parallel_scheduler());
+    }
 };
 
-inline constexpr struct test_receiver_tag_t : ex::forwarding_query_t
+struct test_receiver_tag_t : ex::forwarding_query_t
 {
-    int operator()(custom_receiver_env const& env) const noexcept
+    template <typename Env>
+        requires requires(Env const& env, test_receiver_tag_t const& self) {
+            env.query(self);
+        }
+    int operator()(Env const& env) const noexcept
     {
-        return env.val;
+        return env.query(*this);
     }
-} test_receiver_tag{};
+};
+
+inline constexpr test_receiver_tag_t test_receiver_tag{};
+
+inline int custom_receiver_env::query(test_receiver_tag_t) const noexcept
+{
+    return val;
+}
 
 struct receiver_with_env
 {

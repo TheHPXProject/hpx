@@ -572,33 +572,31 @@ namespace hpx::execution::experimental {
                     requires(
                         bool(hpx::execution::experimental::forwarding_query(
                             Query{})) &&
-                        requires(inner_env_type const& e, Query q,
-                            Args&&... args) {
+                        requires(
+                            inner_env_type const& e, Query q, Args&&... args) {
                             e.query(q, HPX_FORWARD(Args, args)...);
                         })
                 decltype(auto) query(Query q, Args&&... args) const
-                    noexcept(noexcept(promise_->env_->query(
-                        q, HPX_FORWARD(Args, args)...)))
+                    noexcept(noexcept(
+                        promise_->env_->query(q, HPX_FORWARD(Args, args)...)))
                 {
-                    return promise_->env_->query(
-                        q, HPX_FORWARD(Args, args)...);
+                    return promise_->env_->query(q, HPX_FORWARD(Args, args)...);
                 }
 
                 template <typename Query, typename... Args>
                     requires(
                         bool(hpx::execution::experimental::forwarding_query(
                             Query{})) &&
-                        !requires(inner_env_type const& e, Query q,
-                            Args&&... args) {
+                        !requires(
+                            inner_env_type const& e, Query q, Args&&... args) {
                             e.query(q, HPX_FORWARD(Args, args)...);
                         } &&
-                        requires(inner_env_type const& e, Query q,
-                            Args&&... args) {
+                        requires(
+                            inner_env_type const& e, Query q, Args&&... args) {
                             q(e, HPX_FORWARD(Args, args)...);
                         })
-                decltype(auto) query(Query q, Args&&... args) const
-                    noexcept(noexcept(
-                        q(*(promise_->env_), HPX_FORWARD(Args, args)...)))
+                decltype(auto) query(Query q, Args&&... args) const noexcept(
+                    noexcept(q(*(promise_->env_), HPX_FORWARD(Args, args)...)))
                 {
                     return q(*(promise_->env_), HPX_FORWARD(Args, args)...);
                 }
