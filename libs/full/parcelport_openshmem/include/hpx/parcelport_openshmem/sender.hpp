@@ -55,7 +55,8 @@ namespace hpx::parcelset::policies::openshmem {
         connection_ptr create_connection(int dest, void* pp)
         {
             auto* const mailboxes = static_cast<mailbox_array*>(pp);
-            if (dest < 0 || static_cast<std::size_t>(dest) >= mailboxes->num_pes())
+            if (dest < 0 ||
+                static_cast<std::size_t>(dest) >= mailboxes->num_pes())
             {
                 HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
                     "openshmem::sender::create_connection",
@@ -96,7 +97,7 @@ namespace hpx::parcelset::policies::openshmem {
         // serialized (their chunks must not interleave in the shared
         // per-(sender,destination) rx ring).  Connections whose destination
         // is already reserved by another in-flight connection are skipped
-        // and re-queued — a caller whose destination cannot do work right
+        // and re-queued, a caller whose destination cannot do work right
         // now moves on to the next connection. Does not block.
         bool background_work() noexcept
         {

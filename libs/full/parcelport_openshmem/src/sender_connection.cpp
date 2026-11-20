@@ -12,8 +12,11 @@
 #include <hpx/serialization/serialization_chunk.hpp>
 
 #include <algorithm>
-
+#include <cstddef>
+#include <cstdint>
 #include <cstring>
+#include <memory>
+#include <utility>
 
 #include <shmem.h>
 
@@ -28,8 +31,7 @@ namespace hpx::parcelset::policies::openshmem {
         using tchunk_type = parcel_buffer<>::transmission_chunk_type;
         auto const& tch = buffer_.transmission_chunks_;
         std::uint32_t const counts[3] = {buffer_.num_chunks_.first,
-            buffer_.num_chunks_.second,
-            static_cast<std::uint32_t>(tch.size())};
+            buffer_.num_chunks_.second, static_cast<std::uint32_t>(tch.size())};
         desc_.resize(sizeof(counts) + tch.size() * sizeof(tchunk_type));
         std::memcpy(desc_.data(), counts, sizeof(counts));
         if (!tch.empty())
@@ -104,7 +106,8 @@ namespace hpx::parcelset::policies::openshmem {
             {
                 auto const& sg = segs_[si];
                 std::size_t const so = offset + done - sg.start;
-                std::size_t const n = (std::min)(sg.len - so, chunk_size - done);
+                std::size_t const n =
+                    (std::min) (sg.len - so, chunk_size - done);
                 std::memcpy(out + done, sg.ptr + so, n);
                 done += n;
                 if (done < chunk_size)
@@ -144,9 +147,9 @@ namespace hpx::parcelset::policies::openshmem {
                 static_cast<std::size_t>(num_chunks_ - chunk_idx_));
             for (std::size_t k = 0; k < n; ++k)
             {
-                std::size_t const chunk_size = stage_chunk(
-                    chunk_idx_ + static_cast<std::uint32_t>(k),
-                    mailboxes.tx_page_at(dst, k));
+                std::size_t const chunk_size =
+                    stage_chunk(chunk_idx_ + static_cast<std::uint32_t>(k),
+                        mailboxes.tx_page_at(dst, k));
                 mailboxes.put_page_nbi(
                     dst, k, detail::header_size + chunk_size);
             }

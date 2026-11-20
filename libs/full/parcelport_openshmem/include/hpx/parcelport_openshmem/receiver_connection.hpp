@@ -14,12 +14,13 @@
 #include <hpx/parcelset/decode_parcels.hpp>
 #include <hpx/parcelset/parcel_buffer.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
-#include <algorithm>
 #include <cstring>
+#include <memory>
 #include <utility>
 #include <vector>
 
@@ -121,7 +122,7 @@ namespace hpx::parcelset::policies::openshmem {
             std::memcpy(&header, page, sizeof(header));
 
             // The page is consumed on every path below (credit returned to
-            // the sender), so a failure must not lead to 'retry this page' —
+            // the sender), so a failure must not lead to 'retry this page',
             // that would read the next page and silently lose the transfer.
             // Handle it as a terminal/loud failure instead.
             std::size_t chunk_size = 0;
@@ -210,7 +211,7 @@ namespace hpx::parcelset::policies::openshmem {
 
                 // Sequence cross-checks: every continuation chunk must belong to
                 // the same message and arrive strictly in order.  Any mismatch
-                // means the stream lost or reordered pages — fail loudly.
+                // means the stream lost or reordered pages: fail loudly.
                 if (header.message_id != expected_message_id_ ||
                     header.num_chunks != expected_chunks_ ||
                     header.chunk_index != received_chunks_)
@@ -261,8 +262,7 @@ namespace hpx::parcelset::policies::openshmem {
                 "openshmem: PE %zu: dropping malformed message from src %d "
                 "(num_chunks=%u chunk_index=%u message_id=%llu "
                 "size=%llu checksum=%08x, draining %zu remaining page(s))\n",
-                mailboxes_.my_pe(), src_, header.num_chunks,
-                header.chunk_index,
+                mailboxes_.my_pe(), src_, header.num_chunks, header.chunk_index,
                 static_cast<unsigned long long>(header.message_id),
                 static_cast<unsigned long long>(header.size), header.checksum,
                 remaining);
@@ -330,7 +330,7 @@ namespace hpx::parcelset::policies::openshmem {
                 case stream_stage::counts:
                 {
                     std::size_t const take =
-                        (std::min)(sizeof(counts_) - stage_got_, n);
+                        (std::min) (sizeof(counts_) - stage_got_, n);
                     std::memcpy(
                         reinterpret_cast<unsigned char*>(counts_) + stage_got_,
                         p, take);
@@ -354,9 +354,10 @@ namespace hpx::parcelset::policies::openshmem {
                 }
                 case stream_stage::tchunks:
                 {
-                    std::size_t const total = buffer_.transmission_chunks_.size() *
+                    std::size_t const total =
+                        buffer_.transmission_chunks_.size() *
                         sizeof(buffer_type::transmission_chunk_type);
-                    std::size_t const take = (std::min)(total - stage_got_, n);
+                    std::size_t const take = (std::min) (total - stage_got_, n);
                     std::memcpy(reinterpret_cast<unsigned char*>(
                                     buffer_.transmission_chunks_.data()) +
                             stage_got_,
@@ -375,7 +376,7 @@ namespace hpx::parcelset::policies::openshmem {
                 case stream_stage::data:
                 {
                     std::size_t const take =
-                        (std::min)(buffer_.data_.size() - stage_got_, n);
+                        (std::min) (buffer_.data_.size() - stage_got_, n);
                     std::memcpy(buffer_.data_.data() + stage_got_, p, take);
                     stage_got_ += take;
                     p += take;
@@ -391,10 +392,10 @@ namespace hpx::parcelset::policies::openshmem {
                 {
                     auto& c = buffer_.chunks_[zc_idx_];
                     std::size_t const total = c.size();
-                    std::size_t const take = (std::min)(total - stage_got_, n);
-                    std::memcpy(static_cast<unsigned char*>(c.data()) +
-                            stage_got_,
-                        p, take);
+                    std::size_t const take = (std::min) (total - stage_got_, n);
+                    std::memcpy(
+                        static_cast<unsigned char*>(c.data()) + stage_got_, p,
+                        take);
                     stage_got_ += take;
                     p += take;
                     n -= take;
@@ -459,9 +460,10 @@ namespace hpx::parcelset::policies::openshmem {
                 buffer_.chunks_.resize(nzc);
                 for (std::size_t i = 0; i != nzc; ++i)
                 {
-                    buffer_.chunks_[i] = serialization::create_pointer_chunk(
-                        nullptr, static_cast<std::size_t>(
-                                     buffer_.transmission_chunks_[i].second));
+                    buffer_.chunks_[i] =
+                        serialization::create_pointer_chunk(nullptr,
+                            static_cast<std::size_t>(
+                                buffer_.transmission_chunks_[i].second));
                 }
                 try
                 {

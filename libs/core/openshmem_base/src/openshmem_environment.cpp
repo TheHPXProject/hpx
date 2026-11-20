@@ -11,6 +11,7 @@
 #include <hpx/modules/util.hpp>
 #include <hpx/openshmem_base/openshmem_environment.hpp>
 
+#include <cstdint>
 #include <cstdlib>
 #include <iostream>
 #include <stdexcept>
@@ -31,8 +32,7 @@ namespace hpx::util {
             cfg, "hpx.parcel.openshmem.enable", false);
     }
 
-    void openshmem_environment::init(
-        int*, char***, runtime_configuration& cfg)
+    void openshmem_environment::init(int*, char***, runtime_configuration& cfg)
     {
         // Guard the mutated statics the same way finalize() does, so a
         // re-entrant or concurrent init() cannot race the backend state.
