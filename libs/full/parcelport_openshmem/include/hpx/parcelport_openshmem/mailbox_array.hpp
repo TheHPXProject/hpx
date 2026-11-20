@@ -116,8 +116,8 @@ namespace hpx::parcelset::policies::openshmem {
         // below gives bit-identical results to the instruction path).
         template <bool Hw, typename Step>
         inline std::uint32_t crc_pages_impl(unsigned char const* data,
-            std::size_t size, Step step, std::uint32_t (*byte_step)(
-                                              std::uint32_t, unsigned char))
+            std::size_t size, Step step,
+            std::uint32_t (*byte_step)(std::uint32_t, unsigned char))
         {
             std::uint32_t a = 0xFFFFFFFFu, b = 0xFFFFFFFFu, c = 0xFFFFFFFFu;
             while (size >= 24)
@@ -219,7 +219,8 @@ namespace hpx::parcelset::policies::openshmem {
             return page_checksum_sw(data, size);
         }
 
-        inline std::uint64_t message_total_size(message_header const& h) noexcept
+        inline std::uint64_t message_total_size(
+            message_header const& h) noexcept
         {
             return (std::uint64_t(h.total_size_high) << 32) | h.total_size_low;
         }
@@ -264,9 +265,8 @@ namespace hpx::parcelset::policies::openshmem {
             if (offset > total_size)
                 return false;
 
-            if (chunk_size_for(
-                    h.chunk_index, h.num_chunks, total_size, payload_size) >
-                payload_size)
+            if (chunk_size_for(h.chunk_index, h.num_chunks, total_size,
+                    payload_size) > payload_size)
                 return false;
 
             std::uint64_t const expected_chunks =
@@ -294,8 +294,8 @@ namespace hpx::parcelset::policies::openshmem {
             chunk_size = chunk_size_for(header.chunk_index, header.num_chunks,
                 total_size, payload_size);
 
-            return !use_checksum || header.checksum ==
-                crc32(page + header_size, chunk_size);
+            return !use_checksum ||
+                header.checksum == crc32(page + header_size, chunk_size);
         }
     }    // namespace detail
 
@@ -341,8 +341,8 @@ namespace hpx::parcelset::policies::openshmem {
 
         mailbox_array() = default;
 
-        mailbox_array(std::size_t num_pes, std::size_t my_pe,
-            std::size_t mtu, std::size_t slots_per_dst,
+        mailbox_array(std::size_t num_pes, std::size_t my_pe, std::size_t mtu,
+            std::size_t slots_per_dst,
             std::size_t symmetric_memory_size = default_symmetric_memory_size,
             bool checksum = true,
             std::size_t probe_window = default_probe_window)
@@ -379,11 +379,24 @@ namespace hpx::parcelset::policies::openshmem {
                 {
                     switch (end && *end ? *end : 0)
                     {
-                    case 'k': case 'K': v *= 1024.0; break;
-                    case 'm': case 'M': v *= 1024.0 * 1024.0; break;
-                    case 'g': case 'G': v *= 1024.0 * 1024.0 * 1024.0; break;
-                    case 't': case 'T': v *= 1099511627776.0; break;
-                    default: break;
+                    case 'k':
+                    case 'K':
+                        v *= 1024.0;
+                        break;
+                    case 'm':
+                    case 'M':
+                        v *= 1024.0 * 1024.0;
+                        break;
+                    case 'g':
+                    case 'G':
+                        v *= 1024.0 * 1024.0 * 1024.0;
+                        break;
+                    case 't':
+                    case 'T':
+                        v *= 1099511627776.0;
+                        break;
+                    default:
+                        break;
                     }
                     symmetric_memory_size_ = static_cast<std::size_t>(v);
                 }
@@ -394,9 +407,9 @@ namespace hpx::parcelset::policies::openshmem {
                     "openshmem::mailbox_array::mailbox_array",
                     "mailbox geometry needs " + std::to_string(bytes) +
                         " bytes of symmetric memory (npes=" +
-                        std::to_string(num_pes_) + " slots=" +
-                        std::to_string(slots_per_dst_) + " mtu=" +
-                        std::to_string(mtu_) +
+                        std::to_string(num_pes_) +
+                        " slots=" + std::to_string(slots_per_dst_) +
+                        " mtu=" + std::to_string(mtu_) +
                         ") but the symmetric heap is only " +
                         std::to_string(symmetric_memory_size_) +
                         " bytes; lower hpx.parcel.openshmem.slots/mtu or "
@@ -412,7 +425,8 @@ namespace hpx::parcelset::policies::openshmem {
                     "openshmem: warning: symmetric memory mapping is %zu "
                     "bytes (2 * npes * slots * mtu + (2 * npes^2 + npes) * 4 "
                     "with "
-                    "npes=%zu slots=%zu mtu=%zu), more than three quarters of the "
+                    "npes=%zu slots=%zu mtu=%zu), more than three quarters of "
+                    "the "
                     "configured symmetric segment (%zu bytes).  Lower "
                     "hpx.parcel.openshmem.slots (build-time "
                     "HPX_WITH_PARCELPORT_OPENSHMEM_SLOTS), run on fewer PEs, "
@@ -612,8 +626,8 @@ namespace hpx::parcelset::policies::openshmem {
 
         // Non-blocking scan of the source arena owned by 'arena_idx'.  With
         // 'arena_cnt' concurrent scanners each thread polls only its own slots
-        int try_detect_pe_notification(std::size_t arena_idx = 0,
-            std::size_t arena_cnt = 0) const noexcept
+        int try_detect_pe_notification(
+            std::size_t arena_idx = 0, std::size_t arena_cnt = 0) const noexcept
         {
             if (arena_cnt == 0)
             {
@@ -628,17 +642,15 @@ namespace hpx::parcelset::policies::openshmem {
                 return -1;
             }
 
-            std::size_t const window = probe_window_ == 0 ?
-                width :
-                (std::min)(width, probe_window_);
+            std::size_t const window =
+                probe_window_ == 0 ? width : (std::min) (width, probe_window_);
 
             // Rotate the scan start point so no single (lowest-index) ready
             // source can hog this arena.
             std::size_t const slot =
                 arena_idx < num_pes_ ? arena_idx : num_pes_ - 1;
-            std::size_t start =
-                lo + (scan_rotate_[slot].fetch_add(1,
-                         std::memory_order_relaxed) %
+            std::size_t start = lo +
+                (scan_rotate_[slot].fetch_add(1, std::memory_order_relaxed) %
                     width);
 
             if (!remote_delivery_)
@@ -808,7 +820,8 @@ namespace hpx::parcelset::policies::openshmem {
                     return 0;
                 }
             }
-            return slots_per_dst_ - static_cast<std::size_t>(produced - consumed);
+            return slots_per_dst_ -
+                static_cast<std::size_t>(produced - consumed);
         }
 
         unsigned char* tx_page_at(
@@ -1002,7 +1015,8 @@ namespace hpx::parcelset::policies::openshmem {
         // (message) gets a fresh id, which the receiver uses to cross-check
         std::uint64_t next_message_id() noexcept
         {
-            return message_sequence_.fetch_add(1, std::memory_order_relaxed) + 1;
+            return message_sequence_.fetch_add(1, std::memory_order_relaxed) +
+                1;
         }
 
     private:

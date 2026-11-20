@@ -1534,7 +1534,8 @@ if(HPX_WITH_NETWORKING)
     endif()
 
     hpx_option(
-      HPX_WITH_PARCELPORT_OPENSHMEM_SLOTS STRING
+      HPX_WITH_PARCELPORT_OPENSHMEM_SLOTS
+      STRING
       "Set the number of in-flight chunks per (sender,receiver) pair for the OpenSHMEM parcelport (default: 8)."
       8
       CATEGORY "Parcelport"

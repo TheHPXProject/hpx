@@ -13,8 +13,8 @@
 #include <hpx/modules/thread_support.hpp>
 #include <hpx/parcelport_openshmem/receiver_connection.hpp>
 
-#include <cstddef>
 #include <atomic>
+#include <cstddef>
 #include <deque>
 #include <memory>
 #include <mutex>
@@ -57,7 +57,8 @@ namespace hpx::parcelset::policies::openshmem {
             return pending_.load(std::memory_order_acquire) > 0;
         }
 
-        bool background_work(std::size_t arena_idx, std::size_t arena_cnt) noexcept
+        bool background_work(
+            std::size_t arena_idx, std::size_t arena_cnt) noexcept
         {
             bool has_work = false;
 
@@ -97,7 +98,8 @@ namespace hpx::parcelset::policies::openshmem {
             }
         }
 
-        connection_ptr accept(std::size_t arena_idx, std::size_t arena_cnt) noexcept
+        connection_ptr accept(
+            std::size_t arena_idx, std::size_t arena_cnt) noexcept
         {
             auto& mailboxes = pp_.get_mailboxes();
 

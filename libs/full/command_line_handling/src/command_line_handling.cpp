@@ -1003,7 +1003,8 @@ namespace hpx::util {
             util::openshmem_environment::init(&argc, &argv, rtcfg_);
             num_localities_ =
                 static_cast<std::size_t>(util::openshmem_environment::size());
-            node_ = static_cast<std::size_t>(util::openshmem_environment::rank());
+            node_ =
+                static_cast<std::size_t>(util::openshmem_environment::rank());
         }
 #endif
 #if (defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_PARCELPORT_MPI)) ||      \

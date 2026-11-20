@@ -345,7 +345,7 @@ namespace hpx::parcelset {
                 if (mismatch)
                 {
                     // All PEs converge on the same mismatch, so every PE
-                    // aborts here — no single-PE hang.
+                    // aborts here: no single-PE hang.
                     std::cerr << "openshmem: PE " << my_pe_
                               << ": wire-protocol parameter mismatch across "
                                  "PEs (mtu="
