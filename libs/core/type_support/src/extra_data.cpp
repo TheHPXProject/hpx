@@ -8,9 +8,9 @@
 #include <hpx/assert.hpp>
 #include <hpx/type_support/extra_data.hpp>
 
+#include <algorithm>
 #include <atomic>
 #include <cstddef>
-#include <cstring>
 #include <new>
 #include <utility>
 
@@ -107,17 +107,15 @@ namespace hpx::util {
         void* block = allocate_block(member_offset + member_size, alignment);
 
         table* t = ::new (block) table{size, alignment, table_};
-        // the objects of the current table, the other slots are empty (all
-        // bits zero is a null pointer on all supported platforms)
+        // the objects of the current table, the other slots are empty
+        // (compilers turn both into memcpy and memset)
         extra_data_member_base** slots = t->slots();
         std::size_t const copied = table_ != nullptr ? table_->size : 0;
         if (copied != 0)
         {
-            std::memcpy(slots, table_->slots(),
-                copied * sizeof(extra_data_member_base*));
+            std::copy_n(table_->slots(), copied, slots);
         }
-        std::memset(slots + copied, 0,
-            (size - copied) * sizeof(extra_data_member_base*));
+        std::fill_n(slots + copied, size - copied, nullptr);
 
         return new_table{t, static_cast<char*>(block) + member_offset};
     }
