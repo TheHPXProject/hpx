@@ -44,8 +44,8 @@ namespace hpx_start {
 
 #else
 
-// HPX::auto_wrap_main on MSVC force-includes this into every translation unit,
-// in which case main() is provided by hpx_wrap instead.
+// HPX::auto_wrap_main with the MSVC ABI force-includes this into every
+// translation unit, in which case main() is provided by hpx_wrap instead.
 #if defined(HPX_HAVE_STATIC_LINKING) &&                                        \
     !defined(HPX_AUTO_WRAP_MAIN_FORCE_INCLUDE)
 #include <hpx/hpx_main_impl.hpp>
