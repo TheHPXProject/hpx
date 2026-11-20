@@ -17,6 +17,7 @@
 #include <hpx/modules/serialization.hpp>
 
 #include <hpx/modules/actions.hpp>
+#include <hpx/modules/errors.hpp>
 #include <hpx/parcelset/detail/parcel_await.hpp>
 #include <hpx/parcelset/parcelset_fwd.hpp>
 
@@ -230,7 +231,54 @@ namespace hpx::parcelset::detail {
             HPX_ASSERT(handle_futures != nullptr);
 
             auto this_ = this->shared_from_this();
-            (*handle_futures)([this_]() { this_->apply(); });
+            (*handle_futures)([this_]() { this_->resume(); });
+        }
+
+        // a later pass runs from the continuation of a future: its error
+        // goes to the write handler(s) instead of the caller of the send
+        void resume()
+        {
+            // only the preprocessing is guarded: once done() hands the parcel
+            // on, its errors are reported by whoever took the parcel
+            bool complete = false;
+            std::exception_ptr error;
+            try
+            {
+                complete = static_cast<Derived*>(this)->preprocess();
+            }
+            catch (...)
+            {
+                error = std::current_exception();
+            }
+
+            if (!error)
+            {
+                if (complete)
+                {
+                    this->done();
+                }
+                return;
+            }
+
+            error_code const ec = make_error_code(error);
+            if constexpr (std::is_same_v<Parcel, parcelset::parcel>)
+            {
+                if (handler_)
+                {
+                    handler_(ec, parcel_);
+                }
+            }
+            else
+            {
+                // nothing has been sent yet, all of them failed
+                for (std::size_t i = 0; i != handler_.size(); ++i)
+                {
+                    if (handler_[i])
+                    {
+                        handler_[i](ec, parcel_[i]);
+                    }
+                }
+            }
         }
 
         put_parcel_type put_parcel_;
@@ -255,9 +303,15 @@ namespace hpx::parcelset::detail {
         {
         }
 
+        // whether the parcel is complete (else it waits for futures)
+        bool preprocess()
+        {
+            return apply_single(parcel_);
+        }
+
         void apply()
         {
-            if (apply_single(parcel_))
+            if (preprocess())
             {
                 done();
             }
@@ -281,14 +335,23 @@ namespace hpx::parcelset::detail {
         {
         }
 
-        void apply()
+        // whether all parcels are complete (else one waits for futures)
+        bool preprocess()
         {
             for (/*idx_*/; idx_ != parcel_.size(); ++idx_)
             {
                 if (!apply_single(parcel_[idx_]))
-                    return;
+                    return false;
             }
-            done();
+            return true;
+        }
+
+        void apply()
+        {
+            if (preprocess())
+            {
+                done();
+            }
         }
 
         std::size_t idx_;

@@ -67,7 +67,48 @@ namespace test {
                     keep_alive.set_buffers(buffers);
                 }
 
-                save(archive);
+                // not inside a handler while waiting: this thread may
+                // continue on another OS thread, which doesn't know the
+                // handled exception (as parcel_await_apply does)
+                std::exception_ptr error;
+                try
+                {
+                    save(archive);
+                }
+                catch (...)
+                {
+                    error = std::current_exception();
+                }
+                if (error)
+                {
+                    // futures registered before the error notify the
+                    // archive's extra data: keep the archive until they are
+                    // ready, then pass the error on
+                    if (auto* futures = archive.try_get_extra_data<
+                            hpx::serialization::detail::preprocess_futures>();
+                        futures != nullptr && futures->has_futures())
+                    {
+                        try
+                        {
+                            hpx::promise<void> ready;
+                            hpx::future<void> f = ready.get_future();
+                            (*futures)([&ready]() { ready.set_value(); });
+
+                            // the waiting thread may be woken before the
+                            // future is ready
+                            while (!f.is_ready())
+                            {
+                                f.wait();
+                            }
+                        }
+                        // NOLINTNEXTLINE(bugprone-empty-catch)
+                        catch (...)
+                        {
+                            // the error of save() is passed on instead
+                        }
+                    }
+                    std::rethrow_exception(error);
+                }
 
                 if (!keep_alive.empty())
                 {

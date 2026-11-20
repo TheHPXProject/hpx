@@ -74,6 +74,15 @@ namespace hpx::serialization {
         using detail::device_data_storage;
 
         std::size_t const size = v.size();
+        if (size != 0 && ar.endianess_differs())
+        {
+            // the elements are sent as raw bytes, they can't be converted
+            HPX_THROW_EXCEPTION(hpx::error::serialization_error,
+                "hpx::serialization::serialize(device_vector)",
+                "the elements of a device_vector can't be sent in an archive "
+                "with another byte order");
+        }
+
         ar << size;
         if (size == 0)
             return;

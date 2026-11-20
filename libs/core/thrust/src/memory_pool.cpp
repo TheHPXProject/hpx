@@ -827,6 +827,11 @@ namespace hpx::thrust::detail {
             (void) cudaGetLastError();
             return false;
         }
+#if defined(HPX_HAVE_HIP) && defined(HIP_VERSION_MAJOR) && HIP_VERSION_MAJOR < 6
+        // before ROCm 6, hipPointerAttribute_t names the field memoryType
+        return attributes.memoryType == cudaMemoryTypeHost;
+#else
         return attributes.type == cudaMemoryTypeHost;
+#endif
     }
 }    // namespace hpx::thrust::detail
