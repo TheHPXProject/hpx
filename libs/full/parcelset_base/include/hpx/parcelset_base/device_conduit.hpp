@@ -11,6 +11,7 @@
 #if defined(HPX_HAVE_NETWORKING)
 #include <hpx/modules/serialization.hpp>
 
+#include <chrono>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -71,6 +72,17 @@ namespace hpx::parcelset {
 
         /// What the conduit has moved so far.
         [[nodiscard]] virtual device_conduit_statistics statistics() const = 0;
+
+        /// Waits until the transfers the conduit has started have finished
+        /// (their completions refer to the conduit), but not longer than
+        /// 'timeout'. Returns whether they have. Called at shutdown, after
+        /// the parcelports and the thread manager have stopped, on an OS
+        /// thread, before the conduit is destroyed: a conduit must be able
+        /// to finish its transfers without HPX threads (driving its own
+        /// progress if needed). Errors of transfers finishing then are logged
+        /// only.
+        [[nodiscard]] virtual bool drain(
+            std::chrono::steady_clock::duration timeout) noexcept = 0;
     };
 }    // namespace hpx::parcelset
 

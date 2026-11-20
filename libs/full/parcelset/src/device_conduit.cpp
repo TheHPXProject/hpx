@@ -17,6 +17,7 @@
 #include <hpx/parcelset/init_parcelports.hpp>
 
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -91,6 +92,22 @@ namespace hpx::parcelset {
         void reset_device_conduit() noexcept
         {
             current_conduit.store(nullptr, std::memory_order_release);
+            if (!conduit)
+            {
+                return;
+            }
+
+            // A conduit may complete a send after the message carrying its
+            // descriptor (the completion refers to the conduit): wait for the
+            // transfers still in flight. If they don't finish, keep the
+            // conduit (a late completion must not touch a destroyed one);
+            // such a completion is best effort: it releases the message's
+            // objects after the runtime has gone.
+            if (!conduit->drain(std::chrono::seconds(10)))
+            {
+                [[maybe_unused]] auto* leaked = conduit.release();
+                return;
+            }
             conduit.reset();
         }
 
