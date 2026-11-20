@@ -26,6 +26,14 @@ set(thrust_serialization_PARAMETERS THREADS_PER_LOCALITY 4)
 set(thrust_serialization_CUDA ON)
 set(thrust_serialization_SOURCES thrust_serialization_archives.cpp)
 
+# the tests include thrust headers directly: with modules built as static
+# libraries, hpx_core links hpx_thrust privately and doesn't forward the include
+# directories of rocThrust
+set(thrust_test_dependencies)
+if(HPX_WITH_HIP AND TARGET roc::rocthrust)
+  set(thrust_test_dependencies roc::rocthrust)
+endif()
+
 foreach(test ${tests})
   if(${${test}_CUDA})
     set(sources ${test}.cu)
@@ -38,7 +46,7 @@ foreach(test ${tests})
   add_hpx_executable(
     ${test}_test INTERNAL_FLAGS
     SOURCES ${sources} ${${test}_SOURCES} ${${test}_FLAGS}
-    DEPENDENCIES ${${test_program}_FLAGS}
+    DEPENDENCIES ${thrust_test_dependencies}
     EXCLUDE_FROM_ALL
     HPX_PREFIX ${HPX_BUILD_PREFIX}
     FOLDER "Tests/Unit/Modules/Core/Thrust"
