@@ -19,8 +19,8 @@
 
 #include <algorithm>
 #include <atomic>
-#include <cstdio>
 #include <cstddef>
+#include <cstdio>
 #include <deque>
 #include <iterator>
 #include <list>
@@ -88,7 +88,7 @@ namespace hpx::parcelset::policies::gasnet {
         // serialized (their chunks must not interleave in the shared
         // per-(sender,destination) rx ring).  Connections whose destination
         // is already reserved by another in-flight connection are skipped
-        // and re-queued — a caller whose destination cannot do work right
+        // and re-queued, a caller whose destination cannot do work right
         // now moves on to the next connection. Does not block.
         bool background_work() noexcept
         {

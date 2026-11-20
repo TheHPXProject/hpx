@@ -93,7 +93,7 @@ namespace hpx::parcelset::policies::gasnet {
     // progress (one io_service driver per arena plus any HPX thread that runs
     // the background-works callback), the arena scan may read a source's
     // consumed mirror while the thread delivering that source's pages writes
-    // it.  Relaxed ordering suffices — they are local-only watermarks used to
+    // it.  Relaxed ordering suffices, they are local-only watermarks used to
     // derive slot indices and to decide "published vs consumed".
     //
     // One MTU-sized page == one chunk (message_header + payload), matching
@@ -129,7 +129,7 @@ namespace hpx::parcelset::policies::gasnet {
         // CRC32, table-driven, over the payload bytes only.  The header
         // fields are validated structurally (exact geometry) and by
         // message-id/sequence cross-checks, so the checksum does not need
-        // to cover the header itself — which keeps the sender and receiver
+        // to cover the header itself, which keeps the sender and receiver
         // able to recompute it over a single contiguous byte range (the
         // transferred payload region).
         //
@@ -192,8 +192,8 @@ namespace hpx::parcelset::policies::gasnet {
         // below gives bit-identical results to the instruction path).
         template <bool Hw, typename Step>
         inline std::uint32_t crc_pages_impl(unsigned char const* data,
-            std::size_t size, Step step, std::uint32_t (*byte_step)(
-                                              std::uint32_t, unsigned char))
+            std::size_t size, Step step,
+            std::uint32_t (*byte_step)(std::uint32_t, unsigned char))
         {
             std::uint32_t a = 0xFFFFFFFFu, b = 0xFFFFFFFFu, c = 0xFFFFFFFFu;
             while (size >= 24)
@@ -294,7 +294,8 @@ namespace hpx::parcelset::policies::gasnet {
             return page_checksum_sw(data, size);
         }
 
-        inline std::uint64_t message_total_size(message_header const& h) noexcept
+        inline std::uint64_t message_total_size(
+            message_header const& h) noexcept
         {
             return (std::uint64_t(h.total_size_high) << 32) | h.total_size_low;
         }
@@ -346,9 +347,8 @@ namespace hpx::parcelset::policies::gasnet {
             if (offset > total_size)
                 return false;
 
-            if (chunk_size_for(
-                    h.chunk_index, h.num_chunks, total_size, payload_size) >
-                payload_size)
+            if (chunk_size_for(h.chunk_index, h.num_chunks, total_size,
+                    payload_size) > payload_size)
                 return false;
 
             std::uint64_t const expected_chunks =
@@ -379,8 +379,8 @@ namespace hpx::parcelset::policies::gasnet {
             chunk_size = chunk_size_for(header.chunk_index, header.num_chunks,
                 total_size, payload_size);
 
-            return !use_checksum || header.checksum ==
-                crc32(page + header_size, chunk_size);
+            return !use_checksum ||
+                header.checksum == crc32(page + header_size, chunk_size);
         }
 
         // Set by parcelport::do_stop(): by then the HPX scheduler and AGAS are
@@ -424,8 +424,9 @@ namespace hpx::parcelset::policies::gasnet {
         //
         //   2 * npes * slots * mtu + 2 * npes^2 * 4 + npes * 4 bytes
         //
-        // With the defaults (slots=8, mtu=64 KiB, the smallest automatic value) the footprint is ~1 MiB per
-        // added PE, so a 1024-PE run occupies ~1 GiB of registered memory.
+        // With the defaults (slots=8, mtu=64 KiB, the smallest automatic
+        // value) the footprint is ~1 MiB per added PE, so a 1024-PE run
+        // occupies ~1 GiB of registered memory.
         // The constructor asserts the carve fits the segment attached in
         // hpx::util::gasnet_environment::init().
         static constexpr std::size_t symmetric_bytes(
@@ -437,8 +438,8 @@ namespace hpx::parcelset::policies::gasnet {
 
         mailbox_array() = default;
 
-        mailbox_array(std::size_t num_pes, std::size_t my_pe,
-            std::size_t mtu, std::size_t slots_per_dst, bool checksum = true,
+        mailbox_array(std::size_t num_pes, std::size_t my_pe, std::size_t mtu,
+            std::size_t slots_per_dst, bool checksum = true,
             std::size_t probe_window = default_probe_window)
           : num_pes_(num_pes)
           , my_pe_(my_pe)
@@ -475,12 +476,13 @@ namespace hpx::parcelset::policies::gasnet {
                     "gasnet::mailbox_array::mailbox_array",
                     "mailbox carve of " + std::to_string(bytes) +
                         " bytes does not fit the registered segment (" +
-                        std::to_string(hpx::util::gasnet_environment::segment_size()) +
+                        std::to_string(
+                            hpx::util::gasnet_environment::segment_size()) +
                         " bytes) on PE " + std::to_string(my_pe_));
             }
 
-            unsigned char* base =
-                static_cast<unsigned char*>(hpx::util::gasnet_environment::segment_addr());
+            unsigned char* base = static_cast<unsigned char*>(
+                hpx::util::gasnet_environment::segment_addr());
             base_ = base;
             carved_bytes_ = bytes;
 
@@ -723,12 +725,12 @@ namespace hpx::parcelset::policies::gasnet {
         // Each probe is a single local relaxed load of src's produced counter
         // (produced_beg_[src*npes+my_pe]): GASNet RDMA leaves the sender's
         // put of the data page *and* that counter directly in our registered
-        // segment, so no remote read is needed to "pull" delivery — the bytes
+        // segment, so no remote read is needed to "pull" delivery, the bytes
         // are already visible.  This is the GASNet counterpart of the
         // openshmem code's shmem_uint32_atomic_fetch ping-pong, and it costs
         // zero remote round-trips.
-        int try_detect_pe_notification(std::size_t arena_idx = 0,
-            std::size_t arena_cnt = 0) const noexcept
+        int try_detect_pe_notification(
+            std::size_t arena_idx = 0, std::size_t arena_cnt = 0) const noexcept
         {
             if (arena_cnt == 0)
             {
@@ -743,9 +745,8 @@ namespace hpx::parcelset::policies::gasnet {
                 return -1;
             }
 
-            std::size_t const window = probe_window_ == 0 ?
-                width :
-                (std::min)(width, probe_window_);
+            std::size_t const window =
+                probe_window_ == 0 ? width : (std::min) (width, probe_window_);
 
             // Rotate the scan start point so no single (lowest-index) ready
             // source can hog this arena.  A fixed low-to-high scan always
@@ -757,9 +758,8 @@ namespace hpx::parcelset::policies::gasnet {
             // ready source is probed within 'width' consecutive calls.
             std::size_t const slot =
                 arena_idx < num_pes_ ? arena_idx : num_pes_ - 1;
-            std::size_t start =
-                lo + (scan_rotate_[slot].fetch_add(1,
-                         std::memory_order_relaxed) %
+            std::size_t start = lo +
+                (scan_rotate_[slot].fetch_add(1, std::memory_order_relaxed) %
                     width);
 
             for (std::size_t k = 0; k < window; ++k)
@@ -780,8 +780,7 @@ namespace hpx::parcelset::policies::gasnet {
                 // data memcpy precedes a release fence), and the acquire
                 // then orders our downstream reads of the landing page.
                 std::uint32_t const produced =
-                    std::atomic_ref<std::uint32_t>(
-                        produced_beg_[w])
+                    std::atomic_ref<std::uint32_t>(produced_beg_[w])
                         .load(std::memory_order_acquire);
                 std::uint32_t const consumed =
                     consumed_locals_[src].load(std::memory_order_relaxed);
@@ -907,8 +906,8 @@ namespace hpx::parcelset::policies::gasnet {
                 note_send_stall(dst_pe);
                 return 0;
             }
-            return (std::min)(
-                slots_per_dst_ - static_cast<std::size_t>(in_flight),
+            return (
+                std::min) (slots_per_dst_ - static_cast<std::size_t>(in_flight),
                 max_batch);
         }
 
@@ -940,7 +939,8 @@ namespace hpx::parcelset::policies::gasnet {
                 for (std::size_t k = 0; k < n; ++k)
                 {
                     std::size_t const slot = (produced + k) % slots_per_dst_;
-                    std::memcpy(rx_beg_ + (my_pe_ * slots_per_dst_ + slot) * mtu_,
+                    std::memcpy(
+                        rx_beg_ + (my_pe_ * slots_per_dst_ + slot) * mtu_,
                         tx_page_at(dst_pe, k), counts[k]);
                 }
                 std::atomic_ref<std::uint32_t>(produced_beg_[w])
@@ -1016,8 +1016,7 @@ namespace hpx::parcelset::policies::gasnet {
             // credit put's visibility (remote path): once we observe the
             // page published, the landing-page bytes are safe to memcpy.
             std::uint32_t produced =
-                std::atomic_ref<std::uint32_t>(
-                    produced_beg_[w])
+                std::atomic_ref<std::uint32_t>(produced_beg_[w])
                     .load(std::memory_order_acquire);
             // Modular (wrap-safe) comparison, symmetric with send_batch(): the
             // in-flight page count is (produced - consumed) mod 2^32 and is
@@ -1072,10 +1071,9 @@ namespace hpx::parcelset::policies::gasnet {
         // receive reservation, since draining is what advances 'consumed'.
         bool page_ready(std::size_t const src) const noexcept
         {
-            std::uint32_t const produced =
-                std::atomic_ref<std::uint32_t>(
-                    produced_beg_[src * num_pes_ + my_pe_])
-                    .load(std::memory_order_acquire);
+            std::uint32_t const produced = std::atomic_ref<std::uint32_t>(
+                produced_beg_[src * num_pes_ + my_pe_])
+                                               .load(std::memory_order_acquire);
             std::uint32_t const consumed =
                 consumed_locals_[src].load(std::memory_order_relaxed);
             return produced != consumed;
@@ -1205,7 +1203,8 @@ namespace hpx::parcelset::policies::gasnet {
         // that the chunks it collects all belong to one message.
         std::uint64_t next_message_id() noexcept
         {
-            return message_sequence_.fetch_add(1, std::memory_order_relaxed) + 1;
+            return message_sequence_.fetch_add(1, std::memory_order_relaxed) +
+                1;
         }
 
     private:
@@ -1222,7 +1221,8 @@ namespace hpx::parcelset::policies::gasnet {
                 std::fprintf(stderr,
                     "gasnet::mailbox_array: PE %zu has had %llu back-pressure "
                     "polls (window full or NB region in flight) to PE %zu\n",
-                    my_pe_, static_cast<unsigned long long>(stall_warn_interval),
+                    my_pe_,
+                    static_cast<unsigned long long>(stall_warn_interval),
                     dst_pe);
             }
         }
@@ -1235,7 +1235,8 @@ namespace hpx::parcelset::policies::gasnet {
                 std::fprintf(stderr,
                     "gasnet::mailbox_array: PE %zu has had %llu back-pressure "
                     "polls (credit-return region in flight) from PE %zu\n",
-                    my_pe_, static_cast<unsigned long long>(stall_warn_interval),
+                    my_pe_,
+                    static_cast<unsigned long long>(stall_warn_interval),
                     src_pe);
             }
         }
