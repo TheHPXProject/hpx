@@ -10,7 +10,6 @@
 
 #if defined(HPX_HAVE_CXX20_COROUTINES)
 
-#include <hpx/execution_base/stdexec_forward.hpp>
 #include <hpx/executors/task_scheduler.hpp>
 #include <hpx/modules/execution_base.hpp>
 #include <hpx/modules/synchronization.hpp>
