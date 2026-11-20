@@ -10,11 +10,11 @@ include(${CMAKE_CURRENT_LIST_DIR}/FindOpenSHMEM.cmake)
 macro(hpx_setup_openshmem)
   if(NOT TARGET OpenSHMEM::openshmem)
 
-    # When this macro runs at HPX build time the OpenSHMEM location is
-    # detected through pkg-config (oshmem-c/oshmem/oshmem-cxx) and the
-    # resulting values are cached.  When it runs on a consumer
-    # (find_package(HPX)) the cached values are reused as-is, so the consumer
-    # needs neither pkg-config nor the oshmem module files themselves.
+    # When this macro runs at HPX build time the OpenSHMEM location is detected
+    # through pkg-config (oshmem-c/oshmem/oshmem-cxx) and the resulting values
+    # are cached.  When it runs on a consumer (find_package(HPX)) the cached
+    # values are reused as-is, so the consumer needs neither pkg-config nor the
+    # oshmem module files themselves.
     if(NOT HPX_OPENSHMEM_LIBRARIES)
 
       find_openshmem()
@@ -32,8 +32,9 @@ macro(hpx_setup_openshmem)
       # A shared link picks those up transitively through liboshmem.so's
       # DT_NEEDED entries; a static link does not, so append the explicitly
       # resolved UCX paths in that case.  The paths are absolute, so they cannot
-      # be satisfied by a different UCX on the default search path.
-      set(_oshmem_link_libraries "${OSHMEM_LIBRARIES}")
+      # be satisfied by a different UCX on the default search path. Use the full
+      # paths: OSHMEM_LIBRARIES has only the names, without directories.
+      set(_oshmem_link_libraries "${OSHMEM_LINK_LIBRARIES}")
       if(HPX_OPENSHMEM_REQUIRE_UCX AND OpenSHMEM_UCX_LIBRARIES)
         list(APPEND _oshmem_link_libraries ${OpenSHMEM_UCX_LIBRARIES})
       endif()
@@ -56,10 +57,8 @@ macro(hpx_setup_openshmem)
     add_library(OpenSHMEM::openshmem INTERFACE IMPORTED GLOBAL)
     set_target_properties(
       OpenSHMEM::openshmem
-      PROPERTIES INTERFACE_INCLUDE_DIRECTORIES
-                 "${HPX_OPENSHMEM_INCLUDE_DIRS}"
-                 INTERFACE_LINK_LIBRARIES
-                 "${HPX_OPENSHMEM_LIBRARIES}"
+      PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${HPX_OPENSHMEM_INCLUDE_DIRS}"
+                 INTERFACE_LINK_LIBRARIES "${HPX_OPENSHMEM_LIBRARIES}"
     )
 
     hpx_info("OpenSHMEM libraries: ${HPX_OPENSHMEM_LIBRARIES}")

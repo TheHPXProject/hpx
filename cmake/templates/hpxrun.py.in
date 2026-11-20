@@ -324,8 +324,10 @@ def build_cmd(options, args):
             # a build that also has MPI, LCI or LCW they would call MPI_Init a
             # second time, after the OpenSHMEM runtime already initialised
             # MPI, and abort. GASNet is switched off as well, each of the two
-            # would otherwise start its runtime inside the other's job.
-            else ['--hpx:ini=hpx.parcel.openshmem.priority=1000', '--hpx:ini=hpx.parcel.openshmem.enable=1', '--hpx:ini=hpx.max_idle_loop_count=0', '--hpx:ini=hpx.parcel.mpi.enable=0', '--hpx:ini=hpx.parcel.lci.enable=0', '--hpx:ini=hpx.parcel.lcw.enable=0', '--hpx:ini=hpx.parcel.tcp.enable=0', '--hpx:ini=hpx.parcel.gasnet.enable!=0'] if pp == 'openshmem'
+            # would otherwise start its runtime inside the other's job. The
+            # 'key!=value' form is accepted also when that parcelport (and
+            # with it the key) is not part of the build.
+            else ['--hpx:ini=hpx.parcel.openshmem.priority=1000', '--hpx:ini=hpx.parcel.openshmem.enable=1', '--hpx:ini=hpx.max_idle_loop_count=0', '--hpx:ini=hpx.parcel.mpi.enable!=0', '--hpx:ini=hpx.parcel.lci.enable!=0', '--hpx:ini=hpx.parcel.lcw.enable!=0', '--hpx:ini=hpx.parcel.tcp.enable!=0', '--hpx:ini=hpx.parcel.gasnet.enable!=0'] if pp == 'openshmem'
             else [])
         cmd += select_parcelport(options.parcelport)
 
