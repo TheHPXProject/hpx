@@ -573,20 +573,40 @@ namespace hpx::parcelset::detail {
         // before it have finished, by the thread that finished the last one;
         // if one of them failed, the arguments are incomplete and the action
         // isn't scheduled (the waiter is called by 'completion')
-        auto shared_f =
-            std::make_shared<hpx::move_only_function<void()>>(HPX_MOVE(f));
-        completion->when_done([shared_f, c = completion.get()]() {
-            if (std::exception_ptr const error = c->error())
-            {
-                hpx::report_error(error);
-                return;
-            }
-            (*shared_f)();
-        });
+        //
+        // All steps finish (the parcels after this one wait for them), also
+        // if the waiter can't be set up or a waiter that runs while a step is
+        // started throws; that error is passed on afterwards.
+        std::exception_ptr error;
+        try
+        {
+            auto shared_f =
+                std::make_shared<hpx::move_only_function<void()>>(HPX_MOVE(f));
+            completion->when_done([shared_f, c = completion.get()]() {
+                if (std::exception_ptr const failed = c->error())
+                {
+                    hpx::report_error(failed);
+                    return;
+                }
+                (*shared_f)();
+            });
+        }
+        catch (...)
+        {
+            error = std::current_exception();
+        }
+        bool const no_waiter = static_cast<bool>(error);
 
         // each step finishes exactly once, also if starting it throws
         for (auto& action : actions)
         {
+            if (no_waiter)
+            {
+                // not started: nothing would use its data
+                completion->step_done(error);
+                continue;
+            }
+
             // also setting the step up may throw: the step finishes with
             // that error
             std::shared_ptr<std::atomic<bool>> finished;
@@ -594,24 +614,36 @@ namespace hpx::parcelset::detail {
             {
                 finished = std::make_shared<std::atomic<bool>>(false);
                 serialization::detail::receive_step_done const done(
-                    [completion, finished](std::exception_ptr error) {
+                    [completion, finished](std::exception_ptr e) {
                         if (!finished->exchange(true))
                         {
-                            completion->step_done(HPX_MOVE(error));
+                            completion->step_done(HPX_MOVE(e));
                         }
                     });
                 action(done);
             }
             catch (...)
             {
-                // the step had finished already: a waiter of the completion
-                // has thrown, pass that on
                 if (finished && finished->exchange(true))
                 {
-                    throw;
+                    // the step had finished already: a waiter of the
+                    // completion has thrown, passed on once all steps have
+                    // started
+                    if (!error)
+                    {
+                        error = std::current_exception();
+                    }
                 }
-                completion->step_done(std::current_exception());
+                else
+                {
+                    completion->step_done(std::current_exception());
+                }
             }
+        }
+
+        if (error)
+        {
+            std::rethrow_exception(error);
         }
     }
 

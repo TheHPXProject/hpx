@@ -13,6 +13,7 @@
 #include <hpx/thrust/memory.hpp>
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cstddef>
 #include <exception>
@@ -308,25 +309,38 @@ namespace hpx::thrust {
             // reads have finished: those blocks stay deferred.
             void reclaim_deferred() noexcept
             {
+                // one pass over the deferred blocks collects (up to) a batch
+                // of finished ones, which are given back without holding the
+                // lock; another pass only if the batch was full
                 while (true)
                 {
-                    deferred_block b{};
+                    std::array<deferred_block, 64> finished{};
+                    std::size_t count = 0;
                     {
                         std::lock_guard<hpx::spinlock_no_backoff> l(mtx_);
-                        auto const it = std::find_if(deferred_.begin(),
-                            deferred_.end(), [](deferred_block const& d) {
-                                return cudaEventQuery(d.event) == cudaSuccess;
-                            });
-                        if (it == deferred_.end())
+                        for (std::size_t i = 0;
+                            i != deferred_.size() && count != finished.size();)
                         {
-                            return;
+                            if (cudaEventQuery(deferred_[i].event) !=
+                                cudaSuccess)
+                            {
+                                ++i;
+                                continue;
+                            }
+                            finished[count++] = deferred_[i];
+                            deferred_[i] = deferred_.back();
+                            deferred_.pop_back();
                         }
-                        b = *it;
-                        *it = deferred_.back();
-                        deferred_.pop_back();
                     }
-                    (void) cudaEventDestroy(b.event);
-                    deallocate(b.p, b.size_class);
+                    for (std::size_t i = 0; i != count; ++i)
+                    {
+                        (void) cudaEventDestroy(finished[i].event);
+                        deallocate(finished[i].p, finished[i].size_class);
+                    }
+                    if (count != finished.size())
+                    {
+                        return;
+                    }
                 }
             }
 

@@ -1042,7 +1042,10 @@ namespace {
 
         // and released once the data is ready
         open_gate();
-        for (int i = 0; i != 100000 && buffers_alive != alive_before; ++i)
+        for (auto const deadline =
+                 std::chrono::steady_clock::now() + std::chrono::seconds(30);
+            buffers_alive != alive_before &&
+            std::chrono::steady_clock::now() < deadline;)
         {
             hpx::this_thread::yield();
         }
@@ -1087,7 +1090,9 @@ namespace {
         HPX_TEST(!handled);
 
         open_gate();
-        for (int i = 0; i != 100000 && !handled; ++i)
+        for (auto const deadline =
+                 std::chrono::steady_clock::now() + std::chrono::seconds(30);
+            !handled && std::chrono::steady_clock::now() < deadline;)
         {
             hpx::this_thread::yield();
         }
