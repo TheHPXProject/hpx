@@ -444,6 +444,13 @@ namespace hpx::parcelset::device_conduits {
         hpx::shared_future<ucp_ep*> ep = endpoint(locality_id);
         if (ep.is_ready())
         {
+            if (ep.has_exception())
+            {
+                // connecting failed: the data can't be sent, release the
+                // message anyway
+                sent(ep.get_exception_ptr());
+                return;
+            }
             start_send(ep.get(), tag, p, size, HPX_MOVE(sent));
             return;
         }
