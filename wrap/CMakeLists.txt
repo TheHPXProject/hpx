@@ -97,7 +97,7 @@ if(HPX_WITH_PRECOMPILED_HEADERS)
   target_precompile_headers(hpx_wrap REUSE_FROM hpx_precompiled_headers)
 endif()
 
-if(NOT MSVC)
+if(NOT MSVC AND NOT CMAKE_CXX_SIMULATE_ID STREQUAL "MSVC")
   add_library(
     hpx_auto_wrap STATIC ${hpx_wrap_SOURCES} ${hpx_wrap_HEADERS}
                          ${config_header}
@@ -172,7 +172,7 @@ if(HPX_WITH_PRECOMPILED_HEADERS)
   target_precompile_headers(hpx_wrap REUSE_FROM hpx_precompiled_headers)
 endif()
 
-if(NOT MSVC)
+if(NOT MSVC AND NOT CMAKE_CXX_SIMULATE_ID STREQUAL "MSVC")
   install(
     TARGETS hpx_auto_wrap
     EXPORT HPXInternalTargets
