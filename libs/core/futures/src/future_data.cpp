@@ -144,7 +144,10 @@ namespace hpx::lcos::detail {
                            "directly execute child({}), description({})",
             thrd, thrd->get_description());
 
-        if (threads::detail::execute_thread(HPX_MOVE(runs_child)))
+        // runs_child keeps the thread data alive until we return: thrd is used
+        // below after the child has terminated (or has been rescheduled) and
+        // runs_child_ was reset
+        if (threads::detail::execute_thread(runs_child))
         {
             // don't try running this twice
             {
@@ -192,7 +195,9 @@ namespace hpx::lcos::detail {
         // thread was suspended, in this case we need to load it again.
         if (s == empty)
         {
-            s = state_.load(std::memory_order_relaxed);
+            // acquire: pairs with the release CAS in set_value/set_exception,
+            // so the storage read below is synchronized
+            s = state_.load(std::memory_order_acquire);
         }
 
         if (s == value)
@@ -377,9 +382,18 @@ namespace hpx::lcos::detail {
         {
             hpx::intrusive_ptr<future_data_base> this_(this);    // keep alive
 
+            // Non-HPX threads wait on the default agent, whose resume()
+            // records a wakeup that can be stale by the time the waiter runs
+            // again, so they must treat every wakeup as potentially spurious
+            // and loop until the state is no longer empty. HPX threads are
+            // always resumed deliberately -- #7490 resumes a waiter while the
+            // state is still empty and expects wait() to return so get() can
+            // report future_uncompleted -- so they wait at most once.
+            bool const is_hpx_thread = nullptr != hpx::threads::get_self_ptr();
+
             std::unique_lock l(mtx_);
             s = state_.load(std::memory_order_relaxed);
-            if (s == empty)
+            while (s == empty)
             {
                 cond_.wait(l, "future_data_base::wait", ec);
                 if (ec)
@@ -398,6 +412,13 @@ namespace hpx::lcos::detail {
                 // return stale (uninitialised) bytes to the caller of
                 // future::get().
                 s = state_.load(std::memory_order_acquire);
+
+                // HPX threads return after the first resume, even if the
+                // state is still empty (see #7490)
+                if (is_hpx_thread)
+                {
+                    break;
+                }
             }
         }
 

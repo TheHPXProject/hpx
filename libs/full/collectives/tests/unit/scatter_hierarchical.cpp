@@ -33,7 +33,9 @@ constexpr char const* scatter_direct_explicit_generation_basename =
     "/test/scatter_hierarchical/explicit_generation/";
 constexpr char const* scatter_direct_local_basename =
     "/test/scatter_hierarchical/local/";
-#if defined(HPX_DEBUG)
+// Fewer iterations on Windows as well: each step of a hierarchical collective
+// waits for idle workers to wake up, which takes much longer there
+#if defined(HPX_DEBUG) || defined(HPX_WINDOWS)
 constexpr int ITERATIONS = 50;
 #else
 constexpr int ITERATIONS = 500;

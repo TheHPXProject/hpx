@@ -13,8 +13,9 @@
 // The test lets the workers go to sleep, then creates nano and small tasks in
 // each of these ways and checks that all of them run, also while the worker
 // that created them stays busy without yielding, so that only other workers
-// can run them. The ctest variant sets hpx.min_idle_backoff_time to 0: idle
-// workers never spin.
+// can run them. It does so for the local priority queue scheduler and for its
+// tuned variant, which decides the same way with the default settings. The
+// ctest variant sets hpx.min_idle_backoff_time to 0: idle workers never spin.
 
 #include <hpx/execution.hpp>
 #include <hpx/future.hpp>
@@ -140,21 +141,31 @@ int hpx_main(hpx::program_options::variables_map&)
     return hpx::local::finalize();
 }
 
-int main(int argc, char* argv[])
+void test_scheduler(
+    int argc, char* argv[], hpx::resource::scheduling_policy const scheduler)
 {
     hpx::local::init_params init_args;
 
     // idle workers go to sleep after a few hundred microseconds
     init_args.cfg = {"hpx.max_idle_loop_count=1000"};
 
-    // the tested behavior is specific to the local priority queue scheduler,
-    // make sure it is used regardless of --hpx:queuing
-    init_args.rp_callback = [](hpx::resource::partitioner& rp,
+    // the tested behavior is specific to the local priority queue schedulers,
+    // make sure the given one is used regardless of --hpx:queuing
+    init_args.rp_callback = [scheduler](hpx::resource::partitioner& rp,
                                 hpx::program_options::variables_map const&) {
-        rp.create_thread_pool(
-            "default", hpx::resource::scheduling_policy::local_priority_fifo);
+        rp.create_thread_pool("default", scheduler);
     };
 
     HPX_TEST_EQ(hpx::local::init(hpx_main, argc, argv, init_args), 0);
+}
+
+int main(int argc, char* argv[])
+{
+    for (auto const scheduler :
+        {hpx::resource::scheduling_policy::local_priority_fifo,
+            hpx::resource::scheduling_policy::local_priority_tuned_fifo})
+    {
+        test_scheduler(argc, argv, scheduler);
+    }
     return hpx::util::report_errors();
 }

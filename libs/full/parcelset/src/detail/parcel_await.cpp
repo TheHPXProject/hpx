@@ -8,6 +8,7 @@
 #include <hpx/config.hpp>
 
 #if defined(HPX_HAVE_NETWORKING)
+#include <hpx/assert.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/lcos_local.hpp>
 #include <hpx/modules/naming.hpp>
@@ -25,6 +26,48 @@
 #include <vector>
 
 namespace hpx::parcelset::detail {
+
+    // One preprocessing pass over the parcel. Returns false if the pass found
+    // futures that are not ready yet; the caller must then wait for them and
+    // run the pass again.
+    //
+    // We are doing a fixed point iteration until we are sure that the
+    // serialization process requires nothing more to wait on ...
+    // Things where we need waiting:
+    //  - (shared_)future<id_type>: when the future wasn't ready yet, we
+    //      need to do another await round for the id splitting
+    //  - id_type: we need to await, if and only if, the credit of the
+    //      id needs to split.
+    static bool preprocess_parcel(parcelset::parcel& p,
+        serialization::output_archive& archive,
+        serialization::detail::preprocess_container const& data,
+        std::size_t overhead)
+    {
+        archive.reset();
+
+        archive << p;
+
+        auto const* handle_futures = archive.try_get_extra_data<
+            serialization::detail::preprocess_futures>();
+        if (handle_futures && handle_futures->has_futures())
+        {
+            return false;
+        }
+
+        archive.flush();
+
+        p.size() = data.size() + overhead;
+        p.num_chunks() = archive.get_num_chunks();
+
+        auto* split_gids = archive.try_get_extra_data<
+            serialization::detail::preprocess_gid_types>();
+        if (split_gids)
+        {
+            p.set_split_gids(split_gids->move_split_gids());
+        }
+
+        return true;
+    }
 
     template <typename Parcel, typename Handler, typename Derived>
     struct parcel_await_base : std::enable_shared_from_this<Derived>
@@ -50,40 +93,24 @@ namespace hpx::parcelset::detail {
 
         bool apply_single(parcelset::parcel& p)
         {
-            archive_.reset();
+            if (preprocess_parcel(p, archive_, data_, overhead_))
+            {
+                return true;
+            }
+            wait_for_futures();
+            return false;
+        }
 
-            archive_ << p;
-
+        // run the next pass when the futures found in the last pass are
+        // ready
+        void wait_for_futures()
+        {
             auto* handle_futures = archive_.try_get_extra_data<
                 serialization::detail::preprocess_futures>();
+            HPX_ASSERT(handle_futures != nullptr);
 
-            // We are doing a fixed point iteration until we are sure that the
-            // serialization process requires nothing more to wait on ...
-            // Things where we need waiting:
-            //  - (shared_)future<id_type>: when the future wasn't ready yet, we
-            //      need to do another await round for the id splitting
-            //  - id_type: we need to await, if and only if, the credit of the
-            //      id needs to split.
-            if (handle_futures && handle_futures->has_futures())
-            {
-                auto this_ = this->shared_from_this();
-                (*handle_futures)([this_]() { this_->apply(); });
-                return false;
-            }
-
-            archive_.flush();
-
-            p.size() = data_.size() + overhead_;
-            p.num_chunks() = archive_.get_num_chunks();
-
-            auto* split_gids = archive_.try_get_extra_data<
-                serialization::detail::preprocess_gid_types>();
-            if (split_gids)
-            {
-                p.set_split_gids(split_gids->move_split_gids());
-            }
-
-            return true;
+            auto this_ = this->shared_from_this();
+            (*handle_futures)([this_]() { this_->apply(); });
         }
 
         put_parcel_type put_parcel_;
@@ -147,9 +174,27 @@ namespace hpx::parcelset::detail {
     void parcel_await_apply(parcelset::parcel&& p, write_handler_type&& f,
         std::uint32_t archive_flags, put_parcel_type pp)
     {
-        auto const ptr = std::make_shared<parcel_await>(
-            HPX_MOVE(p), HPX_MOVE(f), archive_flags, HPX_MOVE(pp));
-        ptr->apply();
+        // Run the first pass on the stack. Most parcels have no futures to
+        // wait for, so they need no heap object.
+        serialization::detail::preprocess_container data;
+        serialization::output_archive archive(data, archive_flags);
+        if (preprocess_parcel(p, archive, data, archive.bytes_written()))
+        {
+            pp(HPX_MOVE(p), HPX_MOVE(f));
+            return;
+        }
+
+        // Some futures are not ready. Their continuations refer to the extra
+        // data of the archive, so the heap object takes it over. This must
+        // not throw: unwinding would free the extra data while the futures
+        // still refer to it.
+        auto const ptr = [&]() noexcept {
+            auto await = std::make_shared<parcel_await>(
+                HPX_MOVE(p), HPX_MOVE(f), archive_flags, HPX_MOVE(pp));
+            await->archive_.move_extra_data_from(archive);
+            return await;
+        }();
+        ptr->wait_for_futures();
     }
 
     void parcels_await_apply(std::vector<parcelset::parcel>&& p,

@@ -122,6 +122,10 @@ namespace hpx::execution::experimental::detail {
         using position_iterator = std::vector<source_iterator>::const_iterator;
 
     public:
+        // dereferences the stored iterator of the shape
+        static constexpr hpx::threads::task_size dereference_task_size =
+            hpx::traits::iterator_dereference_task_size_v<source_iterator>;
+
         indexed_shape_iterator() = default;
 
         explicit indexed_shape_iterator(position_iterator current)

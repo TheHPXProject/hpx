@@ -47,6 +47,13 @@ namespace hpx::util {
         };
     }    // namespace detail
 
+    /// \brief The notifier used by an io_service_pool constructed without one
+    ///
+    /// The notifier has no callbacks and lives until the end of the program.
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT
+        threads::policies::callback_notifier const&
+        default_io_service_pool_notifier() noexcept;
+
     /// A pool of io_service objects.
     HPX_CXX_CORE_EXPORT class HPX_CORE_EXPORT io_service_pool
     {
@@ -54,16 +61,20 @@ namespace hpx::util {
         /// \brief Construct the io_service pool.
         /// \param pool_size [in] The number of threads to run to serve incoming
         ///                  requests
-        /// \param notifier     [in]
+        /// \param notifier     [in] The notifier called for each thread start
+        ///                     and stop. The pool keeps a reference to it, so
+        ///                     it has to outlive the pool.
         /// \param pool_name    [in]
         /// \param name_postfix [in]
         explicit io_service_pool(std::size_t pool_size = 2,
             threads::policies::callback_notifier const& notifier =
-                threads::policies::callback_notifier(),
+                default_io_service_pool_notifier(),
             char const* pool_name = "", char const* name_postfix = "");
 
         /// \brief Construct the io_service pool.
-        /// \param notifier     [in]
+        /// \param notifier     [in] The notifier called for each thread start
+        ///                     and stop. The pool keeps a reference to it, so
+        ///                     it has to outlive the pool.
         /// \param pool_name    [in]
         /// \param name_postfix [in]
         explicit io_service_pool(

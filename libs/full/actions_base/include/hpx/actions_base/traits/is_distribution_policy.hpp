@@ -8,6 +8,7 @@
 #pragma once
 
 #include <hpx/config.hpp>
+#include <hpx/modules/functional.hpp>
 
 #include <cstddef>
 #include <cstdint>
@@ -24,6 +25,14 @@ namespace hpx::traits {
     HPX_CXX_EXPORT template <typename T>
     inline constexpr bool is_distribution_policy_v =
         is_distribution_policy<T>::value;
+
+    // hpx::async<&f>(policy, ...) runs f where the policy says, as an action,
+    // and not locally
+    template <typename T>
+        requires(is_distribution_policy_v<T>)
+    struct is_remote_target<T> : std::true_type
+    {
+    };
 
     // By default, the number of partitions is the same as the number of
     // localities represented by the given distribution policy.

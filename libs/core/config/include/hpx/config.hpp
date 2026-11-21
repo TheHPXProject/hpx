@@ -307,6 +307,10 @@
 #if !defined(HPX_PLUGIN_COMPONENT_PREFIX)
 #  if defined(HPX_PLUGIN_NAME)
 #    define HPX_PLUGIN_COMPONENT_PREFIX HPX_MANGLE_NAME(HPX_PLUGIN_NAME)
+// HPX_PLUGIN_NAME gets its default only below, but a plugin has to export its
+// startup and shutdown functions under its own name
+#  elif defined(HPX_PLUGIN_NAME_DEFAULT)
+#    define HPX_PLUGIN_COMPONENT_PREFIX HPX_MANGLE_NAME(HPX_PLUGIN_NAME_DEFAULT)
 #  elif defined(HPX_COMPONENT_NAME)
 #    define HPX_PLUGIN_COMPONENT_PREFIX HPX_MANGLE_NAME(HPX_COMPONENT_NAME)
 #  endif

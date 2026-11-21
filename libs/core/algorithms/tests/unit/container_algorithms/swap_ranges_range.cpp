@@ -27,6 +27,9 @@ unsigned int seed;
 std::mt19937 gen;
 std::uniform_int_distribution<> dis(1, 10007);
 
+// Generated values must not match the sentinels used below (100 and 200).
+constexpr std::size_t minimum_test_value = 201;
+
 template <typename IteratorTag>
 void test_swap_ranges_sent(IteratorTag)
 {
@@ -34,7 +37,8 @@ void test_swap_ranges_sent(IteratorTag)
     std::vector<std::size_t> d(c.size());
 
     std::size_t len = std::rand() % 10005 + 1;
-    std::size_t begin_num = std::rand();
+    std::size_t begin_num =
+        static_cast<std::size_t>(std::rand()) + minimum_test_value;
 
     std::iota(std::begin(c), std::begin(c) + static_cast<std::ptrdiff_t>(len),
         begin_num);
@@ -88,7 +92,8 @@ void test_swap_ranges_sent(ExPolicy policy, IteratorTag)
     std::vector<std::size_t> d(c.size());
 
     std::size_t len = std::rand() % 10005 + 1;
-    std::size_t begin_num = std::rand();
+    std::size_t begin_num =
+        static_cast<std::size_t>(std::rand()) + minimum_test_value;
 
     std::iota(std::begin(c), std::begin(c) + static_cast<std::ptrdiff_t>(len),
         begin_num);

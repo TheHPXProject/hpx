@@ -26,6 +26,11 @@
 #include <type_traits>
 #include <utility>
 
+#if defined(HPX_HAVE_CXX26_REFLECTION) &&                                      \
+    defined(HPX_HAVE_CXX26_REFLECTION_ANNOTATIONS)
+#include <meta>
+#endif
+
 #include <hpx/config/warnings_prefix.hpp>
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -69,7 +74,94 @@ namespace hpx::actions {
                 return (component->*f)(HPX_FORWARD(Ts, vs)...);
             }
         }
+
+#if defined(HPX_HAVE_CXX26_REFLECTION) &&                                      \
+    defined(HPX_HAVE_CXX26_REFLECTION_ANNOTATIONS)
+        // A member with an explicit object parameter can have the same type as
+        // a member function, but no member function pointer can be extracted
+        // from it.
+        consteval bool has_explicit_object_parameter(std::meta::info const m)
+        {
+            auto const params = std::meta::parameters_of(m);
+            return !params.empty() &&
+                std::meta::is_explicit_object_parameter(params[0]);
+        }
+
+        // Constructors and destructors have no type to compare, the other
+        // checks keep extract from failing.
+        template <typename Fn>
+        consteval bool is_member_function_of_type(std::meta::info const m)
+        {
+            return std::meta::is_function(m) &&
+                !std::meta::is_static_member(m) &&
+                !std::meta::is_constructor(m) && !std::meta::is_destructor(m) &&
+                !std::meta::is_deleted(m) &&
+                std::meta::is_same_type(std::meta::type_of(m), ^^Fn) &&
+                !has_explicit_object_parameter(m);
+        }
+
+        // reflect_function does not take a member function pointer, so the
+        // member F points to is looked up in Component. Comparing pointers is
+        // not a constant expression if one of them points to a virtual member,
+        // so virtual members are compared as reflected values first.
+        template <typename Component, typename Fn, auto F>
+        consteval std::meta::info member_function_of()
+        {
+            constexpr auto ctx = std::meta::access_context::unchecked();
+            for (std::meta::info const m :
+                std::meta::members_of(^^Component, ctx))
+            {
+                if (std::meta::is_virtual(m) &&
+                    is_member_function_of_type<Fn>(m) &&
+                    std::meta::reflect_constant(std::meta::extract<decltype(F)>(
+                        m)) == std::meta::reflect_constant(F))
+                {
+                    return m;
+                }
+            }
+
+            // F is not virtual now. A pointer to a consteval member can't be
+            // reflected as a constant, so the others are compared directly.
+            for (std::meta::info const m :
+                std::meta::members_of(^^Component, ctx))
+            {
+                if (!std::meta::is_virtual(m) &&
+                    is_member_function_of_type<Fn>(m) &&
+                    std::meta::extract<decltype(F)>(m) == F)
+                {
+                    return m;
+                }
+            }
+            return {};
+        }
+
+        // Specializations of member function templates are not members of
+        // Component, so they are not found and stay unknown.
+        template <typename Component, typename Fn, auto F>
+        consteval threads::task_size member_function_task_size()
+        {
+            constexpr std::meta::info m =
+                member_function_of<Component, Fn, F>();
+            if constexpr (m == std::meta::info{})
+            {
+                return threads::task_size::unknown;
+            }
+            else
+            {
+                return hpx::traits::detail::annotated_function_task_size<m>();
+            }
+        }
+#endif
     }    // namespace detail
+
+    ///////////////////////////////////////////////////////////////////////////
+    //  The specializations below pass Derived to basic_action as is, the
+    //  specializations for Derived == void at the end of this file make the
+    //  action its own derived type. The base classes don't name F: MSVC 19.52
+    //  fails with an internal compiler error (C1001) if the base class of an
+    //  action names the member function pointer of a component with more than
+    //  one base class, when the action is instantiated in a translation unit
+    //  importing the C++ module the component was exported from.
 
     ///////////////////////////////////////////////////////////////////////////
     //  Specialized generic non-const component action types allowing to hold an
@@ -77,11 +169,19 @@ namespace hpx::actions {
     template <typename Component, typename R, typename... Ps,
         R (Component::*F)(Ps...), typename Derived>
     struct action<R (Component::*)(Ps...), F, Derived>
-      : basic_action<Component, R(Ps...),
-            detail::action_type_t<action<R (Component::*)(Ps...), F, Derived>,
-                Derived>>
+      : basic_action<Component, R(Ps...), Derived>
     {
-        using derived_type = detail::action_type_t<action, Derived>;
+        using derived_type = Derived;
+
+#if defined(HPX_HAVE_CXX26_REFLECTION) &&                                      \
+    defined(HPX_HAVE_CXX26_REFLECTION_ANNOTATIONS)
+        // The member function can give the action a size with an annotation.
+        // A sized function bound to the action hides this with its own size.
+        static constexpr threads::task_size function_task_size() noexcept
+        {
+            return detail::member_function_task_size<Component, R(Ps...), F>();
+        }
+#endif
 
         static std::string get_action_name(naming::address_type lva)
         {
@@ -108,11 +208,20 @@ namespace hpx::actions {
     template <typename Component, typename R, typename... Ps,
         R (Component::*F)(Ps...) const, typename Derived>
     struct action<R (Component::*)(Ps...) const, F, Derived>
-      : basic_action<Component, R(Ps...),
-            detail::action_type_t<
-                action<R (Component::*)(Ps...) const, F, Derived>, Derived>>
+      : basic_action<Component, R(Ps...), Derived>
     {
-        using derived_type = detail::action_type_t<action, Derived>;
+        using derived_type = Derived;
+
+#if defined(HPX_HAVE_CXX26_REFLECTION) &&                                      \
+    defined(HPX_HAVE_CXX26_REFLECTION_ANNOTATIONS)
+        // The member function can give the action a size with an annotation.
+        // A sized function bound to the action hides this with its own size.
+        static constexpr threads::task_size function_task_size() noexcept
+        {
+            return detail::member_function_task_size<Component, R(Ps...) const,
+                F>();
+        }
+#endif
 
         static std::string get_action_name(naming::address_type lva)
         {
@@ -139,11 +248,20 @@ namespace hpx::actions {
     template <typename Component, typename R, typename... Ps,
         R (Component::*F)(Ps...) noexcept, typename Derived>
     struct action<R (Component::*)(Ps...) noexcept, F, Derived>
-      : basic_action<Component, R(Ps...),
-            detail::action_type_t<
-                action<R (Component::*)(Ps...) noexcept, F, Derived>, Derived>>
+      : basic_action<Component, R(Ps...), Derived>
     {
-        using derived_type = detail::action_type_t<action, Derived>;
+        using derived_type = Derived;
+
+#if defined(HPX_HAVE_CXX26_REFLECTION) &&                                      \
+    defined(HPX_HAVE_CXX26_REFLECTION_ANNOTATIONS)
+        // The member function can give the action a size with an annotation.
+        // A sized function bound to the action hides this with its own size.
+        static constexpr threads::task_size function_task_size() noexcept
+        {
+            return detail::member_function_task_size<Component,
+                R(Ps...) noexcept, F>();
+        }
+#endif
 
         static std::string get_action_name(naming::address_type lva)
         {
@@ -170,12 +288,20 @@ namespace hpx::actions {
     template <typename Component, typename R, typename... Ps,
         R (Component::*F)(Ps...) const noexcept, typename Derived>
     struct action<R (Component::*)(Ps...) const noexcept, F, Derived>
-      : basic_action<Component, R(Ps...),
-            detail::action_type_t<
-                action<R (Component::*)(Ps...) const noexcept, F, Derived>,
-                Derived>>
+      : basic_action<Component, R(Ps...), Derived>
     {
-        using derived_type = detail::action_type_t<action, Derived>;
+        using derived_type = Derived;
+
+#if defined(HPX_HAVE_CXX26_REFLECTION) &&                                      \
+    defined(HPX_HAVE_CXX26_REFLECTION_ANNOTATIONS)
+        // The member function can give the action a size with an annotation.
+        // A sized function bound to the action hides this with its own size.
+        static constexpr threads::task_size function_task_size() noexcept
+        {
+            return detail::member_function_task_size<Component,
+                R(Ps...) const noexcept, F>();
+        }
+#endif
 
         static std::string get_action_name(naming::address_type lva)
         {
@@ -194,6 +320,40 @@ namespace hpx::actions {
             return detail::component_invoke<Component, R>(
                 lva, comptype, F, HPX_FORWARD(Ts, vs)...);
         }
+    };
+
+    ///////////////////////////////////////////////////////////////////////////
+    //  Component actions without a derived type are their own derived type
+    template <typename Component, typename R, typename... Ps,
+        R (Component::*F)(Ps...)>
+    struct action<R (Component::*)(Ps...), F, void>
+      : action<R (Component::*)(Ps...), F,
+            action<R (Component::*)(Ps...), F, void>>
+    {
+    };
+
+    template <typename Component, typename R, typename... Ps,
+        R (Component::*F)(Ps...) const>
+    struct action<R (Component::*)(Ps...) const, F, void>
+      : action<R (Component::*)(Ps...) const, F,
+            action<R (Component::*)(Ps...) const, F, void>>
+    {
+    };
+
+    template <typename Component, typename R, typename... Ps,
+        R (Component::*F)(Ps...) noexcept>
+    struct action<R (Component::*)(Ps...) noexcept, F, void>
+      : action<R (Component::*)(Ps...) noexcept, F,
+            action<R (Component::*)(Ps...) noexcept, F, void>>
+    {
+    };
+
+    template <typename Component, typename R, typename... Ps,
+        R (Component::*F)(Ps...) const noexcept>
+    struct action<R (Component::*)(Ps...) const noexcept, F, void>
+      : action<R (Component::*)(Ps...) const noexcept, F,
+            action<R (Component::*)(Ps...) const noexcept, F, void>>
+    {
     };
     /// \endcond
 }    // namespace hpx::actions

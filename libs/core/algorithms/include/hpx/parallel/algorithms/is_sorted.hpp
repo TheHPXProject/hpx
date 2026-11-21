@@ -229,10 +229,12 @@ namespace hpx {
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/iterator_support.hpp>
+#include <hpx/modules/threading_base.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
 #include <hpx/parallel/algorithms/detail/is_sorted.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
+#include <hpx/parallel/algorithms/detail/task_size_argument.hpp>
 #include <hpx/parallel/util/adapt_placement_mode.hpp>
 #include <hpx/parallel/util/cancellation_token.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
@@ -293,6 +295,11 @@ namespace hpx::parallel {
                         return result::get(true);
                 }
 
+                // an iteration has the size of the predicate called with two
+                // adjacent elements
+                auto const size =
+                    task_size_of_iteration<task_size_argument_t<FwdIter_, Proj>,
+                        task_size_argument_t<FwdIter_, Proj>>(pred, first);
                 util::invoke_projected<Pred, Proj> pred_projected{
                     HPX_FORWARD(Pred, pred), HPX_FORWARD(Proj, proj)};
                 hpx::parallel::util::cancellation_token<> tok;
@@ -335,7 +342,9 @@ namespace hpx::parallel {
 
                 return util::partitioner<ExPolicy, bool,
                     intermediate_result_t>::call(HPX_FORWARD(ExPolicy, policy),
-                    first, count, HPX_MOVE(f1), HPX_MOVE(f2));
+                    first, count,
+                    hpx::threads::detail::with_task_size(HPX_MOVE(f1), size),
+                    HPX_MOVE(f2));
             }
         };
         /// \endcond
@@ -381,10 +390,17 @@ namespace hpx::parallel {
                 difference_type count = detail::distance(first, last);
                 if constexpr (!has_scheduler_executor)
                 {
+                    // an empty or single element range is sorted: return its
+                    // end (last may be a sentinel of a different type)
                     if (count <= 1)
-                        return result::get(HPX_MOVE(last));
+                        return result::get(std::next(first, count));
                 }
 
+                // an iteration has the size of the predicate called with two
+                // adjacent elements
+                auto const size =
+                    task_size_of_iteration<task_size_argument_t<FwdIter_, Proj>,
+                        task_size_argument_t<FwdIter_, Proj>>(pred, first);
                 util::invoke_projected<Pred, Proj> pred_projected{
                     HPX_FORWARD(Pred, pred), HPX_FORWARD(Proj, proj)};
 
@@ -447,7 +463,8 @@ namespace hpx::parallel {
                     util::partitioner<policy_type, FwdIter_, void>;
                 return partitioner_type::call_with_index(
                     HPX_FORWARD(decltype(policy), policy), first, count, 1,
-                    HPX_MOVE(f1), HPX_MOVE(f2));
+                    hpx::threads::detail::with_task_size(HPX_MOVE(f1), size),
+                    HPX_MOVE(f2));
             }
         };
         /// \endcond

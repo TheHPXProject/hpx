@@ -14,6 +14,7 @@
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/parallel/util/result_types.hpp>
 
+#include <type_traits>
 #include <utility>
 
 namespace hpx::parallel::detail {
@@ -55,6 +56,18 @@ namespace hpx::parallel::detail {
     }
 
     ///////////////////////////////////////////////////////////////////////////
+    HPX_CXX_CORE_EXPORT template <typename Sender>
+        requires(hpx::execution::experimental::is_sender_v<Sender> &&
+            !hpx::traits::is_future_v<std::decay_t<Sender>>)
+    auto get_iter_pair(Sender&& sender)
+    {
+        return hpx::execution::experimental::then(
+            HPX_FORWARD(Sender, sender), [](auto&& it) {
+                auto const& t = it.get_iterator_tuple();
+                return std::make_pair(hpx::get<0>(t), hpx::get<1>(t));
+            });
+    }
+
     HPX_CXX_CORE_EXPORT template <typename ZipIter>
     constexpr std::pair<typename hpx::tuple_element<0,
                             typename ZipIter::iterator_tuple_type>::type,

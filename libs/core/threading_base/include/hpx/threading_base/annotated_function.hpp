@@ -13,6 +13,7 @@
 
 #if defined(HPX_HAVE_THREAD_DESCRIPTION)
 #include <hpx/modules/functional.hpp>
+#include <hpx/modules/thread_support.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/threading_base/scoped_annotation.hpp>
 #include <hpx/threading_base/thread_description.hpp>
@@ -173,6 +174,20 @@ struct hpx::traits::get_task_size<hpx::detail::annotated_function<F>, Size>
         return get_task_size<
             typename hpx::detail::annotated_function<F>::fun_type, Size>::call(f
                 .get_bound_function());
+    }
+};
+
+template <typename F, hpx::threads::thread_stacksize Default>
+struct hpx::traits::get_stack_size<hpx::detail::annotated_function<F>, Default>
+  : get_stack_size<typename hpx::detail::annotated_function<F>::fun_type,
+        Default>
+{
+    [[nodiscard]] static constexpr threads::thread_stacksize call(
+        hpx::detail::annotated_function<F> const& f) noexcept
+    {
+        return get_stack_size<
+            typename hpx::detail::annotated_function<F>::fun_type,
+            Default>::call(f.get_bound_function());
     }
 };
 

@@ -14,6 +14,7 @@
 #include <hpx/modules/functional.hpp>
 #include <hpx/threading_base/scheduler_mode.hpp>
 #include <hpx/threading_base/scheduler_state.hpp>
+#include <hpx/threading_base/scheduling_policy.hpp>
 #include <hpx/threading_base/thread_data.hpp>
 #include <hpx/threading_base/thread_init_data.hpp>
 #include <hpx/threading_base/thread_pool_base.hpp>
@@ -125,7 +126,40 @@ namespace hpx::threads::policies {
             return description_;
         }
 
+        /// The idle callback of the workers of most schedulers. It uses
+        /// idle_step_for and free_pass_after_wake.
         bool idle_callback(std::size_t num_thread);
+
+        /// The idle callback of a scheduler that has scheduling rules of its
+        /// own (see local_priority_queue_scheduler): if Rules::tunes_idle,
+        /// rules 6 to 8 come from rules, otherwise from idle_step_for and
+        /// free_pass_after_wake, as in idle_callback. Defined in
+        /// detail/idle_callback.hpp, instantiated for fixed_scheduling_rules
+        /// in scheduler_base.cpp and for tuned_scheduling_rules in
+        /// scheduler_base_tuned.cpp.
+        template <typename Rules>
+        bool idle_callback_with_rules(
+            std::size_t num_thread, Rules const& rules);
+
+#if defined(HPX_HAVE_THREAD_MANAGER_IDLE_BACKOFF)
+        /// What the given worker does for its next idle backoff period after
+        /// count periods without work (rules 6 and 7 of scheduling_policy,
+        /// called by idle_callback): the period doubles with every one, up to
+        /// hpx.max_idle_backoff_time, and periods shorter than
+        /// hpx.min_idle_backoff_time are spent spinning. This uses the
+        /// configured values; a scheduler with tunable rules takes them from
+        /// its rules instead (see idle_callback_with_rules).
+        [[nodiscard]] idle_step idle_step_for(
+            std::size_t num_thread, std::uint32_t count) const;
+
+        /// Whether a worker woken up by a notification may steal once
+        /// without the early minima of the scheduler (rule 8 of
+        /// scheduling_policy, called by idle_callback, as idle_step_for).
+        [[nodiscard]] constexpr bool free_pass_after_wake() const noexcept
+        {
+            return true;
+        }
+#endif
 
         /// Called by a worker thread that found work: clear its idle backoff
         /// count (if set), so that do_some_work does not keep notifying it
@@ -151,13 +185,12 @@ namespace hpx::threads::policies {
         /// Whether this scheduler wakes up workers for new threads of the
         /// given size itself (in create_thread). Then create_thread and
         /// create_work don't call do_some_work for them.
-        [[nodiscard]] bool wakes_up_for(
+        [[nodiscard]] constexpr bool wakes_up_for(
             [[maybe_unused]] threads::task_size size) const noexcept
         {
 #if defined(HPX_HAVE_THREAD_MANAGER_IDLE_BACKOFF)
-            return wakes_up_for_small_ &&
-                (size == threads::task_size::nano ||
-                    size == threads::task_size::small_);
+            return size != threads::task_size::unknown &&
+                size <= wake_one_max_size_;
 #else
             return false;
 #endif
@@ -297,6 +330,16 @@ namespace hpx::threads::policies {
         [[nodiscard]] bool leave_scheduling_loop();
         void abandon_scheduling_loop() noexcept;
 
+        // A thread created from outside the workers (by an OS thread that is
+        // not a worker, such as a parcelport's, or by an HPX thread of
+        // another pool) can arrive while the last worker leaves. The pool
+        // brackets such a creation with these: begin_outside_creation returns
+        // false if the pool is stopping and no worker is left to run the new
+        // thread, and the last worker to leave waits for the creations that
+        // have begun, so that it sees their threads.
+        [[nodiscard]] bool begin_outside_creation() noexcept;
+        void end_outside_creation() noexcept;
+
         // Enumerate all matching threads
         virtual bool enumerate_threads(
             hpx::function<bool(thread_id_type)> const& f,
@@ -415,9 +458,10 @@ namespace hpx::threads::policies {
         std::vector<util::aligned_line_data<idle_backoff_data>>
             wait_count_data_;
 
-        // set by schedulers that wake up workers for nano and small threads
-        // themselves, see wakes_up_for
-        bool wakes_up_for_small_ = false;
+        // set by schedulers that wake up workers for new threads up to this
+        // size themselves (rule 1 of scheduling_policy), see wakes_up_for;
+        // unknown for the others
+        threads::task_size wake_one_max_size_ = threads::task_size::unknown;
 
         // one bit per worker that announced it is going to sleep
         std::vector<util::aligned_line_data<std::atomic<std::uint64_t>>>
@@ -428,8 +472,36 @@ namespace hpx::threads::policies {
         // (see idle_callback); they find new work without being woken up
         util::aligned_line_data<std::atomic<std::size_t>> spinning_workers_{0};
 
+        // The sentinel: one idle worker that would go to sleep spins instead,
+        // for as long as it would have slept (see idle_callback). worker is
+        // the number of that worker plus one (0 if there is none),
+        // new_threads counts the threads queued while it spins, so that it
+        // looks at the queues of the others right after one arrives. Both
+        // are on one cache line: a worker that queues a thread reads worker
+        // and, if there is a sentinel, increments new_threads. The sentinel
+        // isn't counted in spinning_workers_, so a worker that queues small
+        // threads for itself still wakes up a sleeper (see
+        // has_spinning_worker).
+        struct idle_sentinel_data
+        {
+            std::atomic<std::size_t> worker{0};
+            std::atomic<std::uint64_t> new_threads{0};
+        };
+        util::aligned_line_data<idle_sentinel_data> sentinel_;
+
+        // tell the sentinel, if there is one, that a thread was queued
+        void signal_sentinel() noexcept
+        {
+            auto& data = sentinel_.data_;
+            if (data.worker.load(std::memory_order_relaxed) != 0)
+            {
+                data.new_threads.fetch_add(1, std::memory_order_relaxed);
+            }
+        }
+
         void notify_worker(std::size_t i);
         bool has_visible_work(std::size_t num_thread) const;
+        void spin_as_sentinel(std::size_t num_thread, idle_step const& step);
 
         // Is an idle worker spinning, so that it will probably find work
         // queued before this call without being woken up? Call it after
@@ -490,8 +562,15 @@ namespace hpx::threads::policies {
 
         std::atomic<std::int64_t> background_thread_count_;
 
-        // see leave_scheduling_loop
-        std::atomic<std::int64_t> workers_in_loop_{0};
+        // see leave_scheduling_loop and begin_outside_creation: the workers
+        // in the scheduling loop in the low 32 bits, the creations from
+        // outside the workers that have begun in the high 32 bits, so that
+        // all changes of both are in one modification order
+        static constexpr std::uint64_t outside_creation_unit = std::uint64_t(1)
+            << 32;
+        static constexpr std::uint64_t workers_in_loop_mask =
+            outside_creation_unit - 1;
+        std::atomic<std::uint64_t> workers_in_loop_{0};
 
         std::atomic<polling_function_ptr> polling_function_mpi_;
         std::atomic<polling_function_ptr> polling_function_cuda_;
@@ -530,6 +609,14 @@ namespace hpx::threads::policies {
         void apply_to_matching_modes(
             hpx::threads::mask_cref_type pu_mask, F&& f) noexcept;
     };
+
+    // see scheduler_base.cpp and scheduler_base_tuned.cpp
+    extern template HPX_CORE_EXPORT bool
+    scheduler_base::idle_callback_with_rules<fixed_scheduling_rules>(
+        std::size_t, fixed_scheduling_rules const&);
+    extern template HPX_CORE_EXPORT bool
+    scheduler_base::idle_callback_with_rules<tuned_scheduling_rules>(
+        std::size_t, tuned_scheduling_rules const&);
 
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT std::ostream& operator<<(
         std::ostream& os, scheduler_base const& scheduler);

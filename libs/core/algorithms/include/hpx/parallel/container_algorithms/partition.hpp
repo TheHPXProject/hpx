@@ -978,10 +978,7 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        static parallel::util::detail::algorithm_result_t<ExPolicy,
-            subrange_t<std::ranges::iterator_t<Rng>,
-                std::ranges::sentinel_t<Rng>>>
-        invoke_default(
+        static decltype(auto) invoke_default(
             ExPolicy&& policy, Rng&& rng, Pred pred, Proj proj = Proj())
         {
             using iterator = std::ranges::iterator_t<Rng>;
@@ -1034,10 +1031,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        static typename parallel::util::detail::algorithm_result<ExPolicy,
-            subrange_t<FwdIter>>::type
-        invoke_default(ExPolicy&& policy, FwdIter first, Sent last, Pred pred,
-            Proj proj = Proj())
+        static decltype(auto) invoke_default(ExPolicy&& policy, FwdIter first,
+            Sent last, Pred pred, Proj proj = Proj())
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Requires at least forward iterator.");
@@ -1095,10 +1090,7 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        static parallel::util::detail::algorithm_result_t<ExPolicy,
-            subrange_t<std::ranges::iterator_t<Rng>,
-                std::ranges::sentinel_t<Rng>>>
-        invoke_default(
+        static decltype(auto) invoke_default(
             ExPolicy&& policy, Rng&& rng, Pred pred, Proj proj = Proj())
         {
             using iterator = std::ranges::iterator_t<Rng>;
@@ -1156,16 +1148,15 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        static parallel::util::detail::algorithm_result_t<ExPolicy,
-            subrange_t<BidirIter>>
-        invoke_default(ExPolicy&& policy, BidirIter first, Sent last, Pred pred,
-            Proj proj = Proj())
+        static decltype(auto) invoke_default(ExPolicy&& policy, BidirIter first,
+            Sent last, Pred pred, Proj proj = Proj())
         {
             static_assert(std::bidirectional_iterator<BidirIter>,
                 "Requires at least bidirectional iterator.");
 
             using is_seq = std::integral_constant<bool,
-                !std::random_access_iterator<BidirIter>>;
+                hpx::is_sequenced_execution_policy_v<ExPolicy> ||
+                    !std::random_access_iterator<BidirIter>>;
 
             return hpx::parallel::util::make_subrange<BidirIter, BidirIter>(
                 hpx::parallel::detail::stable_partition<BidirIter>().call2(
@@ -1225,11 +1216,9 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        static parallel::util::detail::algorithm_result_t<ExPolicy,
-            partition_copy_result<std::ranges::iterator_t<Rng>, FwdIter2,
-                FwdIter3>>
-        invoke_default(ExPolicy&& policy, Rng&& rng, FwdIter2 dest_true,
-            FwdIter3 dest_false, Pred pred, Proj proj = Proj())
+        static decltype(auto) invoke_default(ExPolicy&& policy, Rng&& rng,
+            FwdIter2 dest_true, FwdIter3 dest_false, Pred pred,
+            Proj proj = Proj())
         {
             using iterator = std::ranges::iterator_t<Rng>;
             using result_type = hpx::tuple<iterator, FwdIter2, FwdIter3>;
@@ -1291,10 +1280,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        static parallel::util::detail::algorithm_result_t<ExPolicy,
-            partition_copy_result<FwdIter, OutIter2, OutIter3>>
-        invoke_default(ExPolicy&& policy, FwdIter first, Sent last,
-            OutIter2 dest_true, OutIter3 dest_false, Pred pred,
+        static decltype(auto) invoke_default(ExPolicy&& policy, FwdIter first,
+            Sent last, OutIter2 dest_true, OutIter3 dest_false, Pred pred,
             Proj proj = Proj())
         {
             using result_type = hpx::tuple<FwdIter, OutIter2, OutIter3>;

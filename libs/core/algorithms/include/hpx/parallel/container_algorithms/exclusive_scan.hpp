@@ -79,7 +79,7 @@ namespace hpx { namespace ranges {
     ///
     template <typename InIter, typename Sent, typename OutIter,
         typename T = typename std::iterator_traits<InIter>::value_type,
-        typename Op = std::plus<T>>
+        typename Op = std::plus<>>
     exclusive_scan_result<InIter, OutIter>
     exclusive_scan(InIter first, Sent last, OutIter dest, T init, Op&& op = Op());
 
@@ -168,7 +168,7 @@ namespace hpx { namespace ranges {
     template <typename ExPolicy, typename FwdIter1, typename Sent,
         typename FwdIter2,
         typename T = typename std::iterator_traits<FwdIter1>::value_type,
-        typename Op = std::plus<T>>
+        typename Op = std::plus<>>
     typename parallel::util::detail::algorithm_result<ExPolicy,
         exclusive_scan_result<FwdIter1, FwdIter2>>::type
     exclusive_scan(ExPolicy&& policy, FwdIter1 first, Sent last, FwdIter2 dest,
@@ -180,7 +180,7 @@ namespace hpx { namespace ranges {
     /// *(first + (i - result) - 1))
     ///
     /// \note   Complexity: O(\a last - \a first) applications of the
-    ///         predicate \a std::plus<T>.
+    ///         predicate \a std::plus<>.
     ///
     /// \tparam Rng         The type of the source range used (deduced).
     ///                     The iterators extracted from this range type must
@@ -231,7 +231,7 @@ namespace hpx { namespace ranges {
     template <typename Rng, typename O,
         typename T = typename std::iterator_traits<
             std::ranges::iterator_t<Rng>>::value_type,
-        typename Op = std::plus<T>>
+        typename Op = std::plus<>>
     exclusive_scan_result<std::ranges::iterator_t<Rng>, O>
     exclusive_scan(Rng&& rng, O dest, T init, Op&& op = Op());
 
@@ -241,7 +241,7 @@ namespace hpx { namespace ranges {
     /// *(first + (i - result) - 1))
     ///
     /// \note   Complexity: O(\a last - \a first) applications of the
-    ///         predicate \a std::plus<T>.
+    ///         predicate \a std::plus<>.
     ///
     /// \tparam ExPolicy    The type of the execution policy to use (deduced).
     ///                     It describes the manner in which the execution
@@ -317,7 +317,7 @@ namespace hpx { namespace ranges {
     template <typename ExPolicy, typename Rng,  typename O,
         typename T = typename std::iterator_traits<
             std::ranges::iterator_t<Rng>>::value_type,
-        typename Op = std::plus<T>>
+        typename Op = std::plus<>>
     typename parallel::util::detail::algorithm_result<ExPolicy,
         exclusive_scan_result<std::ranges::iterator_t<Rng>, O>>
     exclusive_scan(ExPolicy&& policy, Rng&& rng, O dest, T init, Op&& op = Op());
@@ -396,10 +396,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        static parallel::util::detail::algorithm_result_t<ExPolicy,
-            exclusive_scan_result<FwdIter1, FwdIter2>>
-        invoke_default(ExPolicy&& policy, FwdIter1 first, Sent last,
-            FwdIter2 dest, T init, Op op = Op())
+        static decltype(auto) invoke_default(ExPolicy&& policy, FwdIter1 first,
+            Sent last, FwdIter2 dest, T init, Op op = Op())
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Requires at least forward iterator.");
@@ -454,9 +452,7 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        static parallel::util::detail::algorithm_result_t<ExPolicy,
-            exclusive_scan_result<std::ranges::iterator_t<Rng>, O>>
-        invoke_default(
+        static decltype(auto) invoke_default(
             ExPolicy&& policy, Rng&& rng, O dest, T init, Op op = Op())
         {
             static_assert(std::forward_iterator<std::ranges::iterator_t<Rng>>,

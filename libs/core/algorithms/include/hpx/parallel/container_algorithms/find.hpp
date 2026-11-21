@@ -13,9 +13,8 @@
 #pragma once
 
 #if defined(DOXYGEN)
-namespace hpx {
-    namespace ranges {
-        // clang-format off
+namespace hpx { namespace ranges {
+    // clang-format off
 
     /// Returns the first element in the range [first, last) that is equal
     /// to value
@@ -1996,16 +1995,19 @@ namespace hpx {
     typename std::ranges::iterator_t<Rng>
     find_last_if_not(Rng&& rng, Pred&& pred, Proj&& proj = Proj());
 
+    // clang-format on
+}}    // namespace hpx::ranges
+
 #else    // DOXYGEN
 
 #include <hpx/config.hpp>
-#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/algorithms/traits/projected.hpp>
 #include <hpx/algorithms/traits/projected_range.hpp>
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/type_support.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/algorithms/find.hpp>
 
 #include <iterator>
@@ -2018,7 +2020,8 @@ namespace hpx::ranges {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::ranges::find
     HPX_CXX_CORE_EXPORT inline constexpr struct find_t final
-      : hpx::detail::tag_dispatch<find_t, hpx::detail::tag_parallel_algorithm<find_t>>
+      : hpx::detail::tag_dispatch<find_t,
+            hpx::detail::tag_parallel_algorithm<find_t>>
     {
         template <typename ExPolicy, typename Iter, typename Sent,
             typename Proj = hpx::identity,
@@ -2053,10 +2056,11 @@ namespace hpx::ranges {
                 std::ranges::range<Rng> &&
                 hpx::parallel::traits::is_projected_range_v<Proj, Rng>
             )
+        // clang-format on
         static hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
             std::ranges::iterator_t<Rng>>
-        invoke_default(ExPolicy&& policy, Rng&& rng, T const& val,
-            Proj proj = Proj())
+        invoke_default(
+            ExPolicy&& policy, Rng&& rng, T const& val, Proj proj = Proj())
         {
             using iterator_type = std::ranges::iterator_t<Rng>;
 
@@ -2153,10 +2157,11 @@ namespace hpx::ranges {
                     >::value_type
                 >
             )
+        // clang-format on
         static hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
             std::ranges::iterator_t<Rng>>
-        invoke_default(ExPolicy&& policy, Rng&& rng, Pred pred,
-            Proj proj = Proj())
+        invoke_default(
+            ExPolicy&& policy, Rng&& rng, Pred pred, Proj proj = Proj())
         {
             using iterator_type = std::ranges::iterator_t<Rng>;
 
@@ -2341,10 +2346,11 @@ namespace hpx::ranges {
                     hpx::parallel::traits::projected_range<Proj2, Rng2>
                 >
             )
+        // clang-format on
         static hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
-            std::ranges::iterator_t<Rng1>> invoke_default(ExPolicy&& policy, Rng1&& rng1,
-            Rng2&& rng2, Pred op = Pred(), Proj1 proj1 = Proj1(),
-            Proj2 proj2 = Proj2())
+            std::ranges::iterator_t<Rng1>>
+        invoke_default(ExPolicy&& policy, Rng1&& rng1, Rng2&& rng2,
+            Pred op = Pred(), Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
         {
             using iterator_type = std::ranges::iterator_t<Rng1>;
 

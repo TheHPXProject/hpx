@@ -29,8 +29,7 @@
 namespace hpx::components::stubs {
 
     ///////////////////////////////////////////////////////////////////////////
-    // The \a runtime_support class is the client side representation of a
-    // \a server#runtime_support component
+    /// Provides client-side access to the runtime-support component.
     HPX_CXX_EXPORT struct HPX_EXPORT runtime_support
     {
         ///////////////////////////////////////////////////////////////////////

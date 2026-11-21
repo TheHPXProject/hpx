@@ -352,7 +352,42 @@ void test_lru_insert_oversize_entry()
     // dereference an invalid iterator
     // insert key 1 with an entry of size 5 and check that it fails
     HPX_TEST(!c.insert(1, entry_type(1, 5)));
-    // (don't check what remains in the cache)
+    // the rejected entry does not evict the other entries
+    HPX_TEST_EQ(static_cast<cache_type::size_type>(1), c.size());
+    HPX_TEST(c.holds_key(0));
+}
+
+///////////////////////////////////////////////////////////////////////////////
+void test_lru_insert_existing_key()
+{
+    using entry_type = hpx::util::cache::entries::lru_entry<int>;
+    using cache_type = hpx::util::cache::local_cache<int, entry_type>;
+
+    cache_type c(3);
+
+    for (int i = 0; i != 3; ++i)
+    {
+        HPX_TEST(c.insert(i, i));
+    }
+
+    // inserting an existing key into a full cache fails without evicting
+    // another entry first
+    for (int i = 0; i != 3; ++i)
+    {
+        HPX_TEST(!c.insert(i, i + 10));
+        HPX_TEST_EQ(static_cast<cache_type::size_type>(3), c.size());
+        HPX_TEST(c.holds_key(0));
+        HPX_TEST(c.holds_key(1));
+        HPX_TEST(c.holds_key(2));
+    }
+
+    // the existing values are unchanged
+    for (int i = 0; i != 3; ++i)
+    {
+        int value = -1;
+        HPX_TEST(c.get_entry(i, value));
+        HPX_TEST_EQ(i, value);
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -636,6 +671,7 @@ int main()
     test_lru_reserve();
     test_lru_free_space_order();
     test_lru_insert_oversize_entry();
+    test_lru_insert_existing_key();
     test_update_entry_size();
     test_update_entry_size_no_room();
     test_lru_free_large_sizes();

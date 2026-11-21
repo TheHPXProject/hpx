@@ -10,6 +10,7 @@
 #include <hpx/cache/entries/entry.hpp>
 
 #include <chrono>
+#include <cstdint>
 #include <type_traits>
 #include <utility>
 
@@ -43,6 +44,7 @@ namespace hpx::util::cache::entries {
         /// \brief Any cache entry has to be default constructible
         lru_entry()
           : access_time_(std::chrono::steady_clock::now())
+          , access_sequence_(detail::next_entry_sequence())
         {
         }
 
@@ -52,6 +54,7 @@ namespace hpx::util::cache::entries {
             std::is_nothrow_constructible_v<base_type, Value const&>)
           : base_type(val)
           , access_time_(std::chrono::steady_clock::now())
+          , access_sequence_(detail::next_entry_sequence())
         {
         }
 
@@ -60,6 +63,7 @@ namespace hpx::util::cache::entries {
         explicit lru_entry(Value&& val) noexcept
           : base_type(HPX_MOVE(val))
           , access_time_(std::chrono::steady_clock::now())
+          , access_sequence_(detail::next_entry_sequence())
         {
         }
 
@@ -68,7 +72,8 @@ namespace hpx::util::cache::entries {
         ///
         /// In the case of the LRU entry we store the time of the last access
         /// which will be used to compare the age of an entry during the
-        /// invocation of the operator<().
+        /// invocation of the operator<(). Accesses within the same tick of
+        /// the clock are ordered by a sequence number.
         ///
         /// \returns  This function should return true if the cache needs to
         ///           update its internal heap. Usually this is needed if the
@@ -77,6 +82,7 @@ namespace hpx::util::cache::entries {
         bool touch()
         {
             access_time_ = std::chrono::steady_clock::now();
+            access_sequence_ = detail::next_entry_sequence();
             return true;
         }
 
@@ -89,9 +95,15 @@ namespace hpx::util::cache::entries {
 
         /// \brief Compare the 'age' of two entries. An entry is 'older' than
         ///        another entry if it has been accessed less recently (LRU).
+        ///        Of two entries accessed within the same tick of the clock,
+        ///        the one accessed first is older.
         friend auto operator<(lru_entry const& lhs, lru_entry const& rhs)
         {
-            return rhs.get_access_time() < lhs.get_access_time();
+            if (lhs.access_time_ != rhs.access_time_)
+            {
+                return rhs.access_time_ < lhs.access_time_;
+            }
+            return rhs.access_sequence_ < lhs.access_sequence_;
         }
         friend auto operator>(lru_entry const& lhs, lru_entry const& rhs)
         {
@@ -107,7 +119,8 @@ namespace hpx::util::cache::entries {
         }
         friend auto operator==(lru_entry const& lhs, lru_entry const& rhs)
         {
-            return lhs.get_access_time() == rhs.get_access_time();
+            return lhs.access_time_ == rhs.access_time_ &&
+                lhs.access_sequence_ == rhs.access_sequence_;
         }
         friend auto operator!=(lru_entry const& lhs, lru_entry const& rhs)
         {
@@ -116,5 +129,6 @@ namespace hpx::util::cache::entries {
 
     private:
         time_point access_time_;
+        std::uint64_t access_sequence_;
     };
 }    // namespace hpx::util::cache::entries

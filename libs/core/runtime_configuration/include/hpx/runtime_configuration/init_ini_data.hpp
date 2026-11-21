@@ -37,21 +37,21 @@ namespace hpx::util {
 
     ///////////////////////////////////////////////////////////////////////////
     // load registry information for all statically registered modules
-    HPX_CXX_CORE_EXPORT
-    std::vector<std::shared_ptr<components::component_registry_base>>
-    load_component_factory_static(util::section& ini, std::string name,
-        hpx::util::plugin::get_plugins_list_type get_factory,
-        error_code& ec = throws);
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT
+        std::vector<std::shared_ptr<components::component_registry_base>>
+        load_component_factory_static(util::section& ini, std::string name,
+            hpx::util::plugin::get_plugins_list_type get_factory,
+            error_code& ec = throws);
 
     ///////////////////////////////////////////////////////////////////////////
     // load plugin registry information for all statically registered plugin
     // modules. Injects `static = 1` into each generated [hpx.plugins.*]
     // section so load_plugins routes to the static loader at runtime.
-    HPX_CXX_CORE_EXPORT
-    std::vector<std::shared_ptr<plugins::plugin_registry_base>>
-    load_plugin_factory_static(util::section& ini, std::string const& name,
-        hpx::util::plugin::get_plugins_list_type get_factory,
-        error_code& ec = throws);
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT
+        std::vector<std::shared_ptr<plugins::plugin_registry_base>>
+        load_plugin_factory_static(util::section& ini, std::string const& name,
+            hpx::util::plugin::get_plugins_list_type get_factory,
+            error_code& ec = throws);
 
     ///////////////////////////////////////////////////////////////////////////
     // global function to read component ini information

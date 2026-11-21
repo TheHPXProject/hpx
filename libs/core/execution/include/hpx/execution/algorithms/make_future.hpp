@@ -23,6 +23,7 @@
 
 #include <exception>
 #include <memory>
+#include <system_error>
 #include <type_traits>
 #include <utility>
 
@@ -89,9 +90,25 @@ namespace hpx::execution::experimental {
             }
 
         public:
-            void set_error(std::exception_ptr ep) && noexcept
+            template <typename E>
+            void set_error(E&& err) && noexcept
             {
-                data->set_exception(HPX_MOVE(ep));
+                if constexpr (std::is_same_v<std::decay_t<E>,
+                                  std::exception_ptr>)
+                {
+                    data->set_exception(HPX_FORWARD(E, err));
+                }
+                else if constexpr (std::is_same_v<std::decay_t<E>,
+                                       std::error_code>)
+                {
+                    data->set_exception(std::make_exception_ptr(
+                        std::system_error(HPX_FORWARD(E, err))));
+                }
+                else
+                {
+                    data->set_exception(
+                        std::make_exception_ptr(HPX_FORWARD(E, err)));
+                }
                 data.reset();
             }
 
@@ -122,6 +139,100 @@ namespace hpx::execution::experimental {
             void set_value() && noexcept
             {
                 HPX_MOVE(*this).set_value_impl(hpx::util::unused);
+            }
+        };
+
+        // The receivers below mark the operation as finished before they make
+        // the future ready. Making the future ready runs the continuations
+        // that are attached to it, and a continuation that runs synchronously
+        // may call get() on the future, which runs the loop until the
+        // operation is finished. A waiter that sees the operation finished
+        // still waits in get() until the future is ready. The receivers don't
+        // touch the loop after making the future ready.
+        struct run_loop_future_data_base
+        {
+            bool loop_operation_finished = false;
+        };
+
+        HPX_CXX_CORE_EXPORT template <typename T>
+        struct run_loop_future_receiver : future_receiver<T>
+        {
+            using base_type = future_receiver<T>;
+            hpx::execution::experimental::run_loop& loop;
+            run_loop_future_data_base* data;
+
+            run_loop_future_receiver(run_loop& loop,
+                run_loop_future_data_base* data,
+                hpx::lcos::detail::future_data_base<T>* base_ptr)
+              : base_type{{base_ptr}}
+              , loop(loop)
+              , data(data)
+            {
+            }
+
+            template <typename U>
+            void set_value(U&& u) && noexcept
+            {
+                auto data_keepalive = this->base_type::data;
+                loop.complete_operation(data->loop_operation_finished);
+                HPX_MOVE(*static_cast<base_type*>(this))
+                    .set_value(HPX_FORWARD(U, u));
+            }
+
+            template <typename E>
+            void set_error(E&& e) && noexcept
+            {
+                auto data_keepalive = this->base_type::data;
+                loop.complete_operation(data->loop_operation_finished);
+                HPX_MOVE(*static_cast<base_type*>(this))
+                    .set_error(HPX_FORWARD(E, e));
+            }
+
+            void set_stopped() && noexcept
+            {
+                auto data_keepalive = this->base_type::data;
+                loop.complete_operation(data->loop_operation_finished);
+                base_type::set_stopped();
+            }
+        };
+
+        template <>
+        struct run_loop_future_receiver<void> : future_receiver<void>
+        {
+            using base_type = future_receiver<void>;
+            hpx::execution::experimental::run_loop& loop;
+            run_loop_future_data_base* data;
+
+            run_loop_future_receiver(run_loop& loop,
+                run_loop_future_data_base* data,
+                hpx::lcos::detail::future_data_base<void>* base_ptr)
+              : base_type{{base_ptr}}
+              , loop(loop)
+              , data(data)
+            {
+            }
+
+            void set_value() && noexcept
+            {
+                auto data_keepalive = this->base_type::data;
+                loop.complete_operation(data->loop_operation_finished);
+                HPX_MOVE(*static_cast<base_type*>(this)).set_value();
+            }
+
+            template <typename E>
+            void set_error(E&& e) && noexcept
+            {
+                auto data_keepalive = this->base_type::data;
+                loop.complete_operation(data->loop_operation_finished);
+                HPX_MOVE(*static_cast<base_type*>(this))
+                    .set_error(HPX_FORWARD(E, e));
+            }
+
+            void set_stopped() && noexcept
+            {
+                auto data_keepalive = this->base_type::data;
+                loop.complete_operation(data->loop_operation_finished);
+                base_type::set_stopped();
             }
         };
 
@@ -166,6 +277,15 @@ namespace hpx::execution::experimental {
             {
                 detail::start_operation_state(op_state);
             }
+
+            template <typename Sender, typename ReceiverFactory>
+            future_data(init_no_addref no_addref, other_allocator const& alloc,
+                Sender&& sender, ReceiverFactory&& receiver_factory)
+              : base_type(no_addref, alloc)
+              , op_state(hpx::execution::experimental::connect(
+                    HPX_FORWARD(Sender, sender), receiver_factory(*this)))
+            {
+            }
             // NOLINTEND(bugprone-crtp-constructor-accessibility)
         };
 
@@ -174,6 +294,7 @@ namespace hpx::execution::experimental {
         struct future_data_with_run_loop
           : future_data<T, Allocator, OperationState,
                 future_data_with_run_loop<T, Allocator, OperationState>>
+          , run_loop_future_data_base
         {
             hpx::execution::experimental::run_loop& loop;
 
@@ -186,10 +307,15 @@ namespace hpx::execution::experimental {
             future_data_with_run_loop(init_no_addref no_addref,
                 other_allocator const& alloc,
                 run_loop_scheduler_type const& sched, Sender&& sender)
-              : base_type(no_addref, alloc, HPX_FORWARD(Sender, sender))
+              : base_type(no_addref, alloc, HPX_FORWARD(Sender, sender),
+                    [this, &sched](auto& self) {
+                        return run_loop_future_receiver<T>{
+                            get_run_loop_from_scheduler(sched), this, &self};
+                    })
+              , run_loop_future_data_base{}
               , loop(get_run_loop_from_scheduler(sched))
             {
-                this->set_on_completed([this]() { loop.finish(); });
+                detail::start_operation_state(this->op_state);
             }
 
             hpx::util::unused_type* get_result_void(
@@ -201,7 +327,8 @@ namespace hpx::execution::experimental {
 
             void execute_deferred(error_code& = throws) override
             {
-                loop.run();
+                loop.run_until(
+                    [this]() { return this->loop_operation_finished; });
             }
         };
 
@@ -261,7 +388,7 @@ namespace hpx::execution::experimental {
                 std::decay_t<detail::single_result_t<value_types>>;
             using operation_state_type = hpx::util::invoke_result_t<
                 hpx::execution::experimental::connect_t, Sender,
-                detail::future_receiver<result_type>>;
+                detail::run_loop_future_receiver<result_type>>;
 
             using shared_state = future_data_with_run_loop<result_type,
                 allocator_type, operation_state_type>;

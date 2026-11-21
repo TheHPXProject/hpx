@@ -21,10 +21,10 @@ namespace hpx {
     ///                     (\a last - \a first) - 1 application of the predicate
     ///                     where \a result is the value returned
     ///
-    /// \tparam InIter      The type of the source iterators used for the
+    /// \tparam FwdIter     The type of the source iterators used for the
     ///                     range (deduced).
-    ///                     This iterator type must meet the requirements of an
-    ///                     input iterator.
+    ///                     This iterator type must meet the requirements of a
+    ///                     forward iterator.
     /// \tparam Pred        The type of an optional function/function object to use.
     ///
     /// \param first        Refers to the beginning of the sequence of elements
@@ -40,15 +40,15 @@ namespace hpx {
     ///                     The signature does not need to have const &, but
     ///                     the function must not modify the objects passed to
     ///                     it. The types \a Type1 must be such
-    ///                     that objects of type \a InIter
+    ///                     that objects of type \a FwdIter
     ///                     can be dereferenced and then implicitly converted
     ///                     to \a Type1 .
     ///
     /// \returns  The \a adjacent_find algorithm returns an iterator to the
     ///           first of the identical elements. If no such elements are
     ///           found, \a last is returned.
-    template <typename InIter, typename Pred = hpx::parallel::detail::equal_to>
-    InIter adjacent_find(InIter first, InIter last, Pred&& pred = Pred());
+    template <typename FwdIter, typename Pred = hpx::parallel::detail::equal_to>
+    FwdIter adjacent_find(FwdIter first, FwdIter last, Pred&& pred = Pred());
 
     /// Searches the range [first, last) for two consecutive identical elements.
     /// This version uses the given binary predicate pred
@@ -127,12 +127,15 @@ namespace hpx {
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/iterator_support.hpp>
+#include <hpx/modules/threading_base.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/algorithms/adjacent_find.hpp>
 #include <hpx/parallel/algorithms/detail/adjacent_find.hpp>
 #include <hpx/parallel/algorithms/detail/advance_to_sentinel.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
+#include <hpx/parallel/algorithms/detail/distance.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
+#include <hpx/parallel/algorithms/detail/task_size_argument.hpp>
 #include <hpx/parallel/util/adapt_placement_mode.hpp>
 #include <hpx/parallel/util/cancellation_token.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
@@ -191,7 +194,7 @@ namespace hpx::parallel {
                 {
                     if (first == last)
                     {
-                        return result::get(HPX_MOVE(last));
+                        return result::get(HPX_MOVE(first));
                     }
                 }
 
@@ -211,6 +214,11 @@ namespace hpx::parallel {
                 }
                 util::cancellation_token<difference_type> tok(count);
 
+                // an iteration has the size of the predicate called with two
+                // adjacent elements
+                auto const size =
+                    task_size_of_iteration<task_size_argument_t<FwdIter, Proj>,
+                        task_size_argument_t<FwdIter, Proj>>(pred, first);
                 util::invoke_projected<Pred, Proj> pred_projected{
                     HPX_FORWARD(Pred, pred), HPX_FORWARD(Proj, proj)};
 
@@ -245,7 +253,8 @@ namespace hpx::parallel {
                 return partitioner_type::call_with_index(
                     HPX_FORWARD(decltype(policy), policy),
                     hpx::util::zip_iterator(first, next), count - 1, 1,
-                    HPX_MOVE(f1), HPX_MOVE(f2));
+                    hpx::threads::detail::with_task_size(HPX_MOVE(f1), size),
+                    HPX_MOVE(f2));
             }
         };
         /// \endcond
@@ -258,16 +267,16 @@ namespace hpx {
       : hpx::detail::tag_dispatch<adjacent_find_t,
             hpx::detail::tag_parallel_algorithm<adjacent_find_t>>
     {
-        template <typename InIter,
+        template <typename FwdIter,
             typename Pred = hpx::parallel::detail::equal_to>
-            requires(std::input_iterator<InIter>)
-        static InIter invoke_default(
-            InIter first, InIter last, Pred pred = Pred())
+            requires(std::forward_iterator<FwdIter>)
+        static FwdIter invoke_default(
+            FwdIter first, FwdIter last, Pred pred = Pred())
         {
-            static_assert(std::input_iterator<InIter>,
-                "Requires at least input iterator.");
+            static_assert(std::forward_iterator<FwdIter>,
+                "Requires at least a forward iterator");
 
-            return parallel::detail::adjacent_find<InIter, InIter>().call(
+            return parallel::detail::adjacent_find<FwdIter, FwdIter>().call(
                 hpx::execution::seq, first, last, HPX_MOVE(pred),
                 hpx::identity_v);
         }

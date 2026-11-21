@@ -25,6 +25,7 @@ set(algorithms_headers
     hpx/parallel/algorithms/detail/advance_to_sentinel.hpp
     hpx/parallel/algorithms/detail/algorithm_value.hpp
     hpx/parallel/algorithms/detail/contains.hpp
+    hpx/parallel/algorithms/detail/copy_if.hpp
     hpx/parallel/algorithms/detail/dispatch.hpp
     hpx/parallel/algorithms/detail/distance.hpp
     hpx/parallel/algorithms/detail/equal.hpp
@@ -35,6 +36,7 @@ set(algorithms_headers
     hpx/parallel/algorithms/detail/insertion_sort.hpp
     hpx/parallel/algorithms/detail/iota.hpp
     hpx/parallel/algorithms/detail/is_sorted.hpp
+    hpx/parallel/algorithms/detail/lexicographical_compare.hpp
     hpx/parallel/algorithms/detail/mismatch.hpp
     hpx/parallel/algorithms/detail/parallel_stable_sort.hpp
     hpx/parallel/algorithms/detail/pivot.hpp
@@ -188,6 +190,7 @@ set(algorithms_headers
     hpx/parallel/task_block.hpp
     hpx/parallel/task_group.hpp
     hpx/parallel/unseq.hpp
+    hpx/parallel/unseq/elements_per_call.hpp
     hpx/parallel/unseq/loop.hpp
     hpx/parallel/unseq/reduce.hpp
     hpx/parallel/unseq/reduce_helpers.hpp
@@ -202,6 +205,7 @@ set(algorithms_headers
     hpx/parallel/util/detail/chunk_size.hpp
     hpx/parallel/util/detail/chunk_size_iterator.hpp
     hpx/parallel/util/detail/clear_container.hpp
+    hpx/parallel/util/detail/elements_per_task_size.hpp
     hpx/parallel/util/detail/handle_exception_termination_handler.hpp
     hpx/parallel/util/detail/handle_local_exceptions.hpp
     hpx/parallel/util/detail/handle_remote_exceptions.hpp
@@ -209,6 +213,7 @@ set(algorithms_headers
     hpx/parallel/util/detail/scoped_executor_parameters.hpp
     hpx/parallel/util/detail/sender_util.hpp
     hpx/parallel/util/detail/select_partitioner.hpp
+    hpx/parallel/util/detail/transfer_task_size.hpp
     hpx/parallel/util/foreach_partitioner.hpp
     hpx/parallel/util/invoke_projected.hpp
     hpx/parallel/util/loop.hpp
@@ -235,12 +240,15 @@ if(HPX_WITH_DATAPAR)
       hpx/parallel/datapar.hpp
       hpx/parallel/datapar/adjacent_difference.hpp
       hpx/parallel/datapar/adjacent_find.hpp
+      hpx/parallel/datapar/copy_if.hpp
+      hpx/parallel/datapar/elements_per_call.hpp
       hpx/parallel/datapar/equal.hpp
       hpx/parallel/datapar/fill.hpp
       hpx/parallel/datapar/find.hpp
       hpx/parallel/datapar/generate.hpp
       hpx/parallel/datapar/handle_local_exceptions.hpp
       hpx/parallel/datapar/iterator_helpers.hpp
+      hpx/parallel/datapar/lexicographical_compare.hpp
       hpx/parallel/datapar/loop.hpp
       hpx/parallel/datapar/mismatch.hpp
       hpx/parallel/datapar/reduce.hpp
@@ -302,6 +310,7 @@ add_hpx_module(
     hpx_serialization
     hpx_synchronization
     hpx_tag_invoke
+    hpx_thread_support
     hpx_threading_base
     hpx_timing
     hpx_tracing

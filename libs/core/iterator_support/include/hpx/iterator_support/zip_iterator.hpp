@@ -11,9 +11,11 @@
 #include <hpx/iterator_support/detail/minimum_category.hpp>
 #include <hpx/iterator_support/iterator_facade.hpp>
 #include <hpx/iterator_support/traits/is_iterator.hpp>
+#include <hpx/iterator_support/traits/iterator_dereference_task_size.hpp>
 #include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/serialization.hpp>
+#include <hpx/modules/thread_support.hpp>
 #include <hpx/modules/type_support.hpp>
 
 #include <cstddef>
@@ -556,5 +558,77 @@ namespace hpx::traits {
     template <typename... Iter>
     struct is_zip_iterator<hpx::util::zip_iterator<Iter...>> : std::true_type
     {
+    };
+
+    namespace detail {
+
+        // A sentinel in a zip_iterator is not dereferenced.
+        HPX_CXX_CORE_EXPORT template <typename Iter>
+        struct zip_element_dereference_task_size
+          : iterator_dereference_task_size<Iter>
+        {
+        };
+
+        template <>
+        struct zip_element_dereference_task_size<hpx::default_sentinel_t>
+        {
+            static constexpr threads::task_size value =
+                threads::task_size::nano;
+
+            [[nodiscard]] static constexpr threads::task_size call(
+                hpx::default_sentinel_t) noexcept
+            {
+                return value;
+            }
+        };
+
+        HPX_CXX_CORE_EXPORT template <typename IteratorTuple>
+        struct zip_dereference_task_size;
+
+        template <typename... Iters>
+        struct zip_dereference_task_size<hpx::tuple<Iters...>>
+        {
+            static constexpr threads::task_size value = [] {
+                threads::task_size result = threads::task_size::nano;
+                ((result = threads::combined_task_size(
+                      result, zip_element_dereference_task_size<Iters>::value)),
+                    ...);
+                return result;
+            }();
+
+            template <std::size_t... Is>
+            [[nodiscard]] static constexpr threads::task_size call(
+                hpx::util::index_pack<Is...>,
+                hpx::tuple<Iters...> const& iterators) noexcept
+            {
+                threads::task_size result = threads::task_size::nano;
+                ((result = threads::combined_task_size(result,
+                      zip_element_dereference_task_size<Iters>::call(
+                          hpx::get<Is>(iterators)))),
+                    ...);
+                return result;
+            }
+        };
+    }    // namespace detail
+
+    // Dereferencing a zip_iterator dereferences each of its iterators.
+    template <typename... Ts>
+    struct iterator_dereference_task_size<hpx::util::zip_iterator<Ts...>>
+    {
+    private:
+        using iterator_tuple_type =
+            typename hpx::util::zip_iterator<Ts...>::iterator_tuple_type;
+        using sizes = detail::zip_dereference_task_size<iterator_tuple_type>;
+
+    public:
+        static constexpr threads::task_size value = sizes::value;
+
+        [[nodiscard]] static constexpr threads::task_size call(
+            hpx::util::zip_iterator<Ts...> const& it) noexcept
+        {
+            return sizes::call(hpx::util::make_index_pack_t<
+                                   hpx::tuple_size_v<iterator_tuple_type>>(),
+                it.get_iterator_tuple());
+        }
     };
 }    // namespace hpx::traits

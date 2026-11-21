@@ -25,6 +25,9 @@
 
 #include <hpx/init_runtime/pre_main.hpp>
 
+#include <cstddef>
+#include <exception>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -74,6 +77,33 @@ namespace hpx::detail {
     }
 #endif
 
+#if !defined(HPX_COMPUTE_DEVICE_CODE)
+    // Detaching the global barrier releases its communicator, which queues a
+    // decref for the communicator id. The final garbage_collect() shutdown
+    // function has already run at this point, so flush that decref here.
+    static void detach_global_barrier()
+    {
+        hpx::distributed::barrier::get_global_barrier().detach();
+        garbage_collect();
+    }
+
+    // post_main() runs on worker localities as soon as their (empty) hpx_main
+    // returns, so detaching there breaks later remote uses of the global
+    // barrier (see #6430). Register the detach as a shutdown function only
+    // once pre-shutdown starts: shutdown functions run in registration order,
+    // so this places it after every pre-shutdown and shutdown function that
+    // was registered before shutdown started. The global barrier can be used
+    // from those functions on the locality that registered them, but not from
+    // shutdown functions that are themselves registered during pre-shutdown
+    // or shutdown. Shutdown functions run concurrently on all localities, so
+    // an action sent from a shutdown function to another locality may find
+    // the global barrier already detached there.
+    static void register_global_barrier_detach()
+    {
+        register_shutdown_function(&detach_global_barrier);
+    }
+#endif
+
     ///////////////////////////////////////////////////////////////////////////
     // Install performance counter startup functions for core subsystems.
     static void register_counter_types()
@@ -116,8 +146,17 @@ namespace hpx::detail {
         for (auto const& t :
             parcelset::detail::get_message_handler_registrations())
         {
-            error_code ec(throwmode::lightweight);
-            rtd.register_message_handler(hpx::get<0>(t), hpx::get<1>(t), ec);
+            if (hpx::get<2>(t))
+            {
+                error_code ec(throwmode::lightweight);
+                rtd.register_message_handler(
+                    hpx::get<0>(t), hpx::get<1>(t), ec);
+            }
+            else
+            {
+                rtd.register_message_handler(
+                    hpx::get<0>(t), hpx::get<1>(t), hpx::throws);
+            }
         }
         lbt_ << "(3rd stage) pre_main: registered message handlers";
     }
@@ -140,6 +179,10 @@ namespace hpx::detail {
         // Tidy supervision state on every locality at actual shutdown; see
         // tidy_supervision() for why post_main() is not the right place.
         register_pre_shutdown_function(&tidy_supervision);
+#endif
+
+#if !defined(HPX_COMPUTE_DEVICE_CODE)
+        register_pre_shutdown_function(&register_global_barrier_detach);
 #endif
 
         using components::stubs::runtime_support;
@@ -223,28 +266,82 @@ namespace hpx::detail {
             distributed::barrier::synchronize();
             lbt_ << "(2nd stage) pre_main: passed 2nd stage boot barrier";
 
-            // Work on registration requests for message handler plugins
+            auto const num_localities =
+                static_cast<std::size_t>(rt.get_config().get_num_localities());
+            auto const this_locality =
+                static_cast<std::size_t>(hpx::get_locality_id());
+
+            std::exception_ptr registration_exception;
+            try
+            {
+                // Work on registration requests for message handler plugins
 #if defined(HPX_HAVE_NETWORKING)
-            register_message_handlers();
+                register_message_handlers();
 #endif
-            // Register all counter types before the startup functions are being
-            // executed.
-            register_counter_types();
+                // Register all counter types before the startup functions are being
+                // executed.
+                register_counter_types();
+            }
+            catch (...)
+            {
+                registration_exception = std::current_exception();
+            }
 
             // Second stage bootstrap synchronizes performance counter loading
             // across all localities.
             distributed::barrier::synchronize();
             lbt_ << "(3rd stage) pre_main: passed 3rd stage boot barrier";
 
-            runtime_support::call_startup_functions(find_here(), true);
-            lbt_ << "(3rd stage) pre_main: ran pre-startup functions";
+            bool any_registration_error = (registration_exception != nullptr);
+            if (num_localities > 1)
+            {
+                any_registration_error = hpx::collectives::all_reduce(
+                    hpx::launch::sync, "/0/hpx/registration_status",
+                    any_registration_error, std::logical_or<bool>{},
+                    hpx::collectives::num_sites_arg(num_localities),
+                    hpx::collectives::this_site_arg(this_locality));
+            }
+
+            std::exception_ptr startup_exception;
+            if (!any_registration_error)
+            {
+                try
+                {
+                    runtime_support::call_startup_functions(find_here(), true);
+                    lbt_ << "(3rd stage) pre_main: ran pre-startup functions";
+                }
+                catch (...)
+                {
+                    startup_exception = std::current_exception();
+                }
+            }
 
             // Third stage separates pre-startup and startup function phase.
             distributed::barrier::synchronize();
             lbt_ << "(4th stage) pre_main: passed 4th stage boot barrier";
 
-            runtime_support::call_startup_functions(find_here(), false);
-            lbt_ << "(4th stage) pre_main: ran startup functions";
+            bool any_pre_startup_error = (startup_exception != nullptr);
+            if (!any_registration_error && num_localities > 1)
+            {
+                any_pre_startup_error = hpx::collectives::all_reduce(
+                    hpx::launch::sync, "/0/hpx/pre_startup_status",
+                    any_pre_startup_error, std::logical_or<bool>{},
+                    hpx::collectives::num_sites_arg(num_localities),
+                    hpx::collectives::this_site_arg(this_locality));
+            }
+
+            if (!any_registration_error && !any_pre_startup_error)
+            {
+                try
+                {
+                    runtime_support::call_startup_functions(find_here(), false);
+                    lbt_ << "(4th stage) pre_main: ran startup functions";
+                }
+                catch (...)
+                {
+                    startup_exception = std::current_exception();
+                }
+            }
 
             // Forth stage bootstrap synchronizes startup functions across all
             // localities. This is done after component loading to guarantee that
@@ -252,6 +349,36 @@ namespace hpx::detail {
             // component tables are populated.
             distributed::barrier::synchronize();
             lbt_ << "(5th stage) pre_main: passed 5th stage boot barrier";
+
+            bool any_startup_error = (startup_exception != nullptr);
+            if (!any_registration_error && !any_pre_startup_error &&
+                num_localities > 1)
+            {
+                any_startup_error = hpx::collectives::all_reduce(
+                    hpx::launch::sync, "/0/hpx/startup_status",
+                    any_startup_error, std::logical_or<bool>{},
+                    hpx::collectives::num_sites_arg(num_localities),
+                    hpx::collectives::this_site_arg(this_locality));
+            }
+
+            if (registration_exception)
+            {
+                std::rethrow_exception(registration_exception);
+            }
+            if (any_registration_error)
+            {
+                HPX_THROW_EXCEPTION(hpx::error::invalid_status, "pre_main",
+                    "a registration function failed on a remote locality");
+            }
+            if (startup_exception)
+            {
+                std::rethrow_exception(startup_exception);
+            }
+            if (any_pre_startup_error || any_startup_error)
+            {
+                HPX_THROW_EXCEPTION(hpx::error::invalid_status, "pre_main",
+                    "a startup function failed on a remote locality");
+            }
 #endif
         }
 
@@ -301,9 +428,6 @@ namespace hpx::detail {
         hpx::collectives::detail::reset_local_communicator();
         hpx::collectives::detail::reset_world_channel_communicator();
         hpx::collectives::detail::reset_cached_channel_communicators();
-
-        // simply destroy global barrier
-        hpx::distributed::barrier::get_global_barrier().detach();
 #endif
     }
 }    // namespace hpx::detail
