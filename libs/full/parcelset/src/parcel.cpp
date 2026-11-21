@@ -27,8 +27,10 @@
 #include <hpx/parcelset/parcel.hpp>
 #include <hpx/parcelset/parcelhandler.hpp>
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <memory>
 #include <string>
 #include <type_traits>
@@ -370,6 +372,18 @@ namespace hpx::parcelset::detail {
         split_gids_ = HPX_MOVE(split_gids);
     }
 
+    parcel::keep_alive_type const& parcel::keep_alive() const
+    {
+        return keep_alive_;
+    }
+
+    void parcel::set_keep_alive(keep_alive_type&& keep_alive)
+    {
+        // a later preprocessing round starts from these buffers and hands
+        // back all of them
+        keep_alive_ = HPX_MOVE(keep_alive);
+    }
+
     std::size_t parcel::num_chunks() const
     {
         return num_chunks_;
@@ -467,6 +481,7 @@ namespace hpx::parcelset::detail {
         {
             // If the object was migrated, just load the action and return.
             action_->load(ar);
+            take_post_receive_actions(ar);
             return true;
         }
 
@@ -475,6 +490,7 @@ namespace hpx::parcelset::detail {
                 serialization::detail::allow_zero_copy_receive>() != nullptr)
         {
             action_->load(ar);
+            take_post_receive_actions(ar);
             return false;
         }
 
@@ -489,6 +505,9 @@ namespace hpx::parcelset::detail {
     {
         // make sure this parcel destination matches the proper locality
         HPX_ASSERT(destination_locality() == data_.addr_.locality_);
+
+        // the arguments must be complete (see on_receive_complete)
+        HPX_ASSERT(post_receive_actions_.empty());
 
         std::pair<naming::address_type, naming::component_type> const p =
             determine_lva();
@@ -521,6 +540,76 @@ namespace hpx::parcelset::detail {
         action_->schedule_thread(
             HPX_MOVE(data_.dest_), p.first, p.second, num_thread);
         return false;
+    }
+
+    void parcel::take_post_receive_actions(serialization::input_archive& ar)
+    {
+        // also without steps of its own: the parcel may use data that the
+        // steps of an earlier parcel in the same archive complete
+        auto* actions = ar.try_get_extra_data<
+            serialization::detail::post_receive_actions>();
+        if (actions != nullptr)
+        {
+            HPX_ASSERT(post_receive_actions_.empty());
+            auto steps = actions->take_parcel_steps();
+            post_receive_actions_ = HPX_MOVE(steps.actions);
+            receive_completion_ = HPX_MOVE(steps.completion);
+        }
+    }
+
+    void parcel::on_receive_complete(hpx::move_only_function<void()> f)
+    {
+        auto actions = HPX_MOVE(post_receive_actions_);
+        post_receive_actions_.clear();
+        auto completion = HPX_MOVE(receive_completion_);
+        if (!completion)
+        {
+            HPX_ASSERT(actions.empty());
+            f();
+            return;
+        }
+
+        // f is called once the steps of this parcel and of the parcels
+        // before it have finished, by the thread that finished the last one;
+        // if one of them failed, the arguments are incomplete and the action
+        // isn't scheduled (the waiter is called by 'completion')
+        auto shared_f =
+            std::make_shared<hpx::move_only_function<void()>>(HPX_MOVE(f));
+        completion->when_done([shared_f, c = completion.get()]() {
+            if (std::exception_ptr const error = c->error())
+            {
+                hpx::report_error(error);
+                return;
+            }
+            (*shared_f)();
+        });
+
+        // each step finishes exactly once, also if starting it throws
+        for (auto& action : actions)
+        {
+            auto finished = std::make_shared<std::atomic<bool>>(false);
+            serialization::detail::receive_step_done const done(
+                [completion, finished](std::exception_ptr error) {
+                    if (!finished->exchange(true))
+                    {
+                        completion->step_done(HPX_MOVE(error));
+                    }
+                });
+            try
+            {
+                action(done);
+            }
+            catch (...)
+            {
+                // the step had finished already: a waiter of the completion
+                // has thrown, pass that on
+                if (finished->exchange(true))
+                {
+                    throw;
+                }
+                completion->step_done(std::current_exception());
+            }
+        }
     }
 
     void parcel::load_data(serialization::input_archive& ar)

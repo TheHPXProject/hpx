@@ -664,6 +664,10 @@ hpx_option(
   ADVANCED
   CATEGORY "Build Targets"
 )
+# the condition libs/core/thrust builds the module under
+if(HPX_WITH_THRUST AND (HPX_WITH_CUDA OR HPX_WITH_HIP))
+  hpx_add_config_define(HPX_HAVE_THRUST)
+endif()
 
 # ## HPX STDEXEC configuration ##
 

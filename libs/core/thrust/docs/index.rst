@@ -76,6 +76,63 @@ Asynchronous Execution with Futures
         
     }
 
+Serialization
+=============
+
+``hpx/thrust/serialization/host_vector.hpp``,
+``hpx/thrust/serialization/universal_vector.hpp`` and
+``hpx/thrust/serialization/device_vector.hpp`` make ``thrust::host_vector``,
+``thrust::universal_vector`` and ``thrust::device_vector`` serializable, e.g.
+as action arguments.
+
+* ``host_vector`` and ``universal_vector`` are serialized from their own
+  memory, like a ``std::vector`` (zero-copy chunks included).
+* ``device_vector``: data at or above the zero-copy threshold is sent as a
+  zero-copy chunk of the device memory itself if the parcelport moves device
+  memory itself, otherwise through pinned host staging buffers with
+  asynchronous copies. Smaller data is copied into the archive. The data must
+  be complete (the kernels writing it finished) when the vector is
+  serialized. A ``device_vector`` whose memory is pinned host memory (see
+  below) is sent from and received into its own memory, without staging
+  copies.
+
+Pooled Memory
+=============
+
+``hpx/thrust/allocator.hpp`` provides ``hpx::thrust::pooled_allocator<T>``
+and ``hpx::thrust::device_vector<T>``, a ``thrust::device_vector`` using it.
+Allocating device or pinned host memory takes long, and the network has to
+register every new buffer before it moves data from or into it. The allocator
+takes memory from pools that keep deallocated memory for reuse, so buffers are
+allocated and registered once. Deallocated memory is reused right away: no
+device work may use it anymore when its vector is destroyed.
+
+The configuration entry ``hpx.thrust.memory`` (or the environment variable
+``HPX_THRUST_MEMORY``) selects the memory:
+
+``device`` (the default)
+   Device memory.
+
+``pinned``
+   Pinned (page-locked) host memory. The network sends it from and receives
+   it into its place, without staging copies, but device kernels work on it
+   slower than on device memory, also on integrated GPUs (measured on an
+   NVIDIA GB10).
+
+Each pool keeps at most ``hpx.thrust.max_cached`` (``HPX_THRUST_MAX_CACHED``)
+bytes for reuse (by default an eighth of the device's memory, at least 256 MiB
+of pinned memory).
+``hpx::thrust::release_cached_memory()`` frees the kept memory; the pools do
+that themselves if an allocation runs out of memory.
+
+.. code-block:: c++
+
+    #include <hpx/thrust/allocator.hpp>
+
+    hpx::thrust::device_vector<double> v(1 << 20);
+    // the same as
+    thrust::device_vector<double, hpx::thrust::pooled_allocator<double>> w;
+
 Build Requirements
 ==================
 
