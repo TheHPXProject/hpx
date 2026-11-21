@@ -104,6 +104,7 @@ namespace hpx::serialization {
                 serialization::binary_filter* filter = nullptr;
                 *this >> detail::raw_ptr(filter);
                 buffer_->set_filter(filter);
+                filtered_ = true;
             }
         }
 
@@ -261,9 +262,25 @@ namespace hpx::serialization {
 #endif
         // NOLINTEND(bugprone-multi-level-implicit-pointer-conversion)
 
+        // data below this size was copied into the archive, larger data may
+        // come in a zero-copy chunk
+        [[nodiscard]] std::size_t get_zero_copy_serialization_threshold()
+            const noexcept
+        {
+            return buffer_->get_zero_copy_serialization_threshold();
+        }
+
         [[nodiscard]] constexpr std::size_t bytes_read() const noexcept
         {
             return current_pos();
+        }
+
+        // Whether the data comes through a filter (e.g. decompression): the
+        // filter writes all of it on the host, also the data of zero-copy
+        // chunks.
+        [[nodiscard]] constexpr bool is_filtered() const noexcept
+        {
+            return filtered_;
         }
 
         // this function is needed to avoid a MSVC linker error
@@ -290,9 +307,38 @@ namespace hpx::serialization {
             size_ += buffer_->load_binary(expected, address, count);
         }
 
+        /// Reads \a count bytes written by save_binary_chunk into the memory
+        /// at \a address.
+        ///
+        /// With \a allow_zero_copy_receive (and an archive whose chunks the
+        /// networking layer fills in after de-serialization, see
+        /// serialization::detail::allow_zero_copy_receive), nothing is copied
+        /// here: the chunk is pointed at \a address, and the networking layer
+        /// places the data there only after this function (and the load()
+        /// that calls it) has returned. The memory at \a address must stay
+        /// valid until then and must not be read before. A load() that uses
+        /// the data (or that can't receive it into its final place, e.g.
+        /// device memory) receives it into a staging buffer instead and
+        /// registers the step that completes the object with
+        /// serialization::detail::post_receive_actions: a parcel runs these
+        /// steps once its data has arrived, and its action only after the
+        /// last of them has finished. Without \a allow_zero_copy_receive (and
+        /// for data below the zero-copy threshold, which isn't sent as a
+        /// chunk) the data is complete when this function returns.
+        ///
+        /// \param expected The type of the data, checked by archives with
+        ///                 type checking.
+        /// \param address  Where the data goes.
+        /// \param count    The number of bytes.
+        /// \param allow_zero_copy_receive Whether the data may arrive at
+        ///                 \a address after this function has returned.
+        /// \param memory   Whether \a address refers to device memory: the
+        ///                 networking layer receives into it then (see
+        ///                 serialization_chunk::is_device_memory).
         void load_binary_chunk(detail::fundamental_types expected,
             void* address, std::size_t const count,
-            bool const allow_zero_copy_receive)
+            bool const allow_zero_copy_receive,
+            chunk_memory const memory = chunk_memory::host)
         {
             if (HPX_UNLIKELY(count == 0))
                 return;
@@ -304,18 +350,21 @@ namespace hpx::serialization {
 
             if (HPX_UNLIKELY(disable_data_chunking()))
             {
+                // device memory must not be written on the host
+                HPX_ASSERT(memory == chunk_memory::host);
                 size_ += buffer_->load_binary(expected, address, count);
             }
             else
             {
                 size_ += buffer_->load_binary_chunk(expected, address, count,
-                    allow_zero_copy_receive &&
-                        !disable_receive_data_chunking());
+                    allow_zero_copy_receive && !disable_receive_data_chunking(),
+                    memory);
             }
         }
 
     private:
         std::unique_ptr<erased_input_container> buffer_;
+        bool filtered_ = false;
     };
 }    // namespace hpx::serialization
 

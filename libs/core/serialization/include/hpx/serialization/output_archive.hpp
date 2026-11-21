@@ -161,6 +161,7 @@ namespace hpx::serialization {
             {
                 *this << detail::raw_ptr(filter);
                 buffer_->set_filter(filter);
+                filtered_ = true;
             }
         }
 
@@ -179,9 +180,25 @@ namespace hpx::serialization {
             return size_;
         }
 
+        // Whether the data goes through a filter (e.g. compression): the
+        // filter reads all of it on the host, also the data of zero-copy
+        // chunks.
+        [[nodiscard]] constexpr bool is_filtered() const noexcept
+        {
+            return filtered_;
+        }
+
         [[nodiscard]] std::size_t get_num_chunks() const noexcept
         {
             return buffer_->get_num_chunks();
+        }
+
+        // data below this size is copied into the archive, larger data is
+        // referenced by a zero-copy chunk (if chunking is enabled)
+        [[nodiscard]] std::size_t get_zero_copy_serialization_threshold()
+            const noexcept
+        {
+            return buffer_->get_zero_copy_serialization_threshold();
         }
 
         // this function is needed to avoid a MSVC linker error
@@ -371,8 +388,32 @@ namespace hpx::serialization {
             size_ += buffer_->save_binary(t, address, count);
         }
 
+        /// Writes \a count bytes at \a address as a zero-copy chunk, or copies
+        /// them into the archive (as save_binary does) if the archive collects
+        /// no chunks.
+        ///
+        /// A zero-copy chunk refers to the memory instead of copying it: the
+        /// memory must stay valid and unchanged until the chunks of the
+        /// archive have been sent (for a parcel: until the parcel has been
+        /// sent). The memory of the objects a parcel holds (its arguments and
+        /// what they own) lives that long. The memory of a temporary object a
+        /// serialize() function creates while it runs doesn't: once freed (or
+        /// given back to a memory pool), it may be reused before it is sent,
+        /// and the receiver would get other data, without an error. Such data
+        /// must be copied into the archive (save_binary), be owned by the
+        /// object being serialized, or be kept alive by the parcel (see
+        /// serialization::detail::preprocess_keep_alive).
+        ///
+        /// \param t       The type of the data, checked by archives with type
+        ///                checking.
+        /// \param address The data.
+        /// \param count   The number of bytes.
+        /// \param memory  Whether \a address refers to device memory: the
+        ///                chunk is marked (see
+        ///                serialization_chunk::is_device_memory).
         void save_binary_chunk(detail::fundamental_types t, void const* address,
-            std::size_t const count)
+            std::size_t const count,
+            chunk_memory const memory = chunk_memory::host)
         {
             if (HPX_UNLIKELY(count == 0))
                 return;
@@ -384,17 +425,20 @@ namespace hpx::serialization {
 
             if (HPX_UNLIKELY(disable_data_chunking()))
             {
+                // device memory must not be copied on the host
+                HPX_ASSERT(memory == chunk_memory::host);
                 size_ += buffer_->save_binary(t, address, count);
             }
             else
             {
                 // the size might grow if optimizations are not used
-                size_ += buffer_->save_binary_chunk(t, address, count);
+                size_ += buffer_->save_binary_chunk(t, address, count, memory);
             }
         }
 
     private:
         std::unique_ptr<erased_output_container> buffer_;
+        bool filtered_ = false;
     };
 }    // namespace hpx::serialization
 

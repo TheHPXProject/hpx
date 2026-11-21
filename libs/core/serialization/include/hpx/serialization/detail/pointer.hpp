@@ -17,6 +17,7 @@
 #include <hpx/serialization/detail/polymorphic_id_factory.hpp>
 #include <hpx/serialization/detail/polymorphic_intrusive_factory.hpp>
 #include <hpx/serialization/detail/polymorphic_nonintrusive_factory.hpp>
+#include <hpx/serialization/detail/preprocess_keep_alive.hpp>
 #include <hpx/serialization/macros.hpp>
 #include <hpx/serialization/serialization_fwd.hpp>
 #include <hpx/serialization/string.hpp>
@@ -25,6 +26,7 @@
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <new>
 #include <string>
 #include <type_traits>
 #include <typeinfo>
@@ -38,8 +40,105 @@ namespace hpx::serialization::detail {
     // to be copy-constructible
     using ptr_helper_ptr = std::unique_ptr<ptr_helper>;
 
+    // A reference to an object whose address the output pointer tracker
+    // records. The tracker keeps the object alive for as long as it records
+    // the address: an object that died during serialization (e.g. a
+    // temporary a serialize() function created) could otherwise be replaced
+    // by another one at the same address, which would then be written as a
+    // back-reference to the first.
+    //
+    // It holds a copy of the smart pointer in place (a std::shared_ptr,
+    // boost::shared_ptr or intrusive pointer fits), so keeping the object
+    // alive costs a reference count increment, but no allocation.
+    HPX_CXX_CORE_EXPORT class kept_pointer
+    {
+        // moves the pointer from 'from' to 'to' (if 'to' isn't nullptr) and
+        // destroys it in 'from'
+        using manage_type = void (*)(void* to, void* from) noexcept;
+
+    public:
+        kept_pointer() = default;
+
+        template <typename Pointer>
+        explicit kept_pointer(Pointer const& ptr) noexcept(
+            std::is_nothrow_copy_constructible_v<Pointer>)
+        {
+            static_assert(sizeof(Pointer) <= sizeof(storage_) &&
+                    alignof(Pointer) <= alignof(void*),
+                "the smart pointer is too large to be kept in place");
+            static_assert(std::is_nothrow_move_constructible_v<Pointer>,
+                "the smart pointer must be moved without exceptions");
+
+            ::new (static_cast<void*>(storage_)) Pointer(ptr);
+            manage_ = &manage<Pointer>;
+        }
+
+        kept_pointer(kept_pointer const&) = delete;
+        kept_pointer& operator=(kept_pointer const&) = delete;
+
+        kept_pointer(kept_pointer&& rhs) noexcept
+          : manage_(std::exchange(rhs.manage_, nullptr))
+        {
+            if (manage_ != nullptr)
+            {
+                manage_(storage_, rhs.storage_);
+            }
+        }
+
+        kept_pointer& operator=(kept_pointer&& rhs) noexcept
+        {
+            if (this != &rhs)
+            {
+                reset();
+                manage_ = std::exchange(rhs.manage_, nullptr);
+                if (manage_ != nullptr)
+                {
+                    manage_(storage_, rhs.storage_);
+                }
+            }
+            return *this;
+        }
+
+        ~kept_pointer()
+        {
+            reset();
+        }
+
+    private:
+        template <typename Pointer>
+        static void manage(void* to, void* from) noexcept
+        {
+            auto* p = std::launder(static_cast<Pointer*>(from));
+            if (to != nullptr)
+            {
+                ::new (to) Pointer(HPX_MOVE(*p));
+            }
+            std::destroy_at(p);
+        }
+
+        void reset() noexcept
+        {
+            if (manage_ != nullptr)
+            {
+                manage_(nullptr, storage_);
+                manage_ = nullptr;
+            }
+        }
+
+        alignas(void*) unsigned char storage_[2 * sizeof(void*)] = {};
+        manage_type manage_ = nullptr;
+    };
+
+    // the position of a tracked object in the archive, and its reference
+    HPX_CXX_CORE_EXPORT struct tracked_output_pointer
+    {
+        std::uint64_t pos;
+        kept_pointer keep_alive;
+    };
+
     using input_pointer_tracker = std::map<std::uint64_t, ptr_helper_ptr>;
-    using output_pointer_tracker = std::map<void const*, std::uint64_t>;
+    using output_pointer_tracker =
+        std::map<void const*, tracked_output_pointer>;
 }    // namespace hpx::serialization::detail
 
 namespace hpx::util {
@@ -75,6 +174,15 @@ namespace hpx::serialization {
     [[nodiscard]] HPX_CORE_EXPORT detail::ptr_helper& tracked_pointer(
         input_archive& ar, std::uint64_t pos);
 
+    // Returns the position the object at 'pos' was written at, or -1 if it
+    // wasn't written yet: then it records the position and keeps the object
+    // alive through 'keep_alive' until the archive is reset or destroyed.
+    HPX_CXX_CORE_EXPORT [[nodiscard]] HPX_CORE_EXPORT std::uint64_t
+    track_pointer(
+        output_archive& ar, void const* pos, detail::kept_pointer keep_alive);
+
+    // The same without keeping the object alive, for binaries built against
+    // the headers of earlier versions.
     HPX_CXX_CORE_EXPORT [[nodiscard]] HPX_CORE_EXPORT std::uint64_t
     track_pointer(output_archive& ar, void const* pos);
 
@@ -238,6 +346,68 @@ namespace hpx::serialization {
                     intrusive_polymorphic, usual>>;
         };
 
+        // Preprocessing: the keep-alive buffers created while the object a
+        // tracked pointer points to is serialized know that they are part of
+        // it (see preprocess_keep_alive).
+        template <typename Archive>
+        class keep_alive_enclosing
+        {
+        public:
+            keep_alive_enclosing(Archive const& ar, void const* object)
+              : keep_alive_(ar.is_preprocessing() ?
+                        ar.template try_get_extra_data<
+                            preprocess_keep_alive>() :
+                        nullptr)
+            {
+                if (keep_alive_ != nullptr)
+                {
+                    keep_alive_->enter(object);
+                }
+            }
+
+            keep_alive_enclosing(keep_alive_enclosing const&) = delete;
+            keep_alive_enclosing(keep_alive_enclosing&&) = delete;
+            keep_alive_enclosing& operator=(
+                keep_alive_enclosing const&) = delete;
+            keep_alive_enclosing& operator=(keep_alive_enclosing&&) = delete;
+
+            ~keep_alive_enclosing()
+            {
+                if (keep_alive_ != nullptr)
+                {
+                    keep_alive_->leave();
+                }
+            }
+
+        private:
+            preprocess_keep_alive* keep_alive_;
+        };
+
+        // The object at 'object', written at 'pos', is written as a
+        // back-reference. Preprocessing drops the keep-alive buffers an
+        // earlier round has created for the objects it contains here. In the
+        // real pass, if an earlier parcel of the same message has written it,
+        // these buffers are not sent.
+        template <typename Archive>
+        void skip_keep_alive_of_back_reference(
+            Archive const& ar, std::uint64_t const pos, void const* object)
+        {
+            auto* keep_alive =
+                ar.template try_get_extra_data<preprocess_keep_alive>();
+            if (keep_alive == nullptr)
+            {
+                return;
+            }
+            if (ar.is_preprocessing())
+            {
+                keep_alive->drop_back_reference(object);
+            }
+            else if (pos < keep_alive->parcel_start())
+            {
+                keep_alive->skip_back_reference(object);
+            }
+        }
+
         // forwarded serialize pointer functions
         template <typename Pointer>
         HPX_FORCEINLINE void serialize_pointer_tracked(
@@ -248,13 +418,20 @@ namespace hpx::serialization {
             if (valid)
             {
                 std::uint64_t const cur_pos = current_pos(ar);
-                std::uint64_t const pos = track_pointer(ar, ptr.get());
+                std::uint64_t const pos =
+                    track_pointer(ar, ptr.get(), detail::kept_pointer(ptr));
                 ar << pos;
                 if (pos == static_cast<std::uint64_t>(-1))
                 {
                     ar << cur_pos;
+                    keep_alive_enclosing<output_archive> const enclosing(
+                        ar, ptr.get());
                     detail::pointer_output_dispatcher<Pointer>::type::call(
                         ar, ptr);
+                }
+                else
+                {
+                    skip_keep_alive_of_back_reference(ar, pos, ptr.get());
                 }
             }
         }

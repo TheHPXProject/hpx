@@ -11,6 +11,7 @@ set(tests
     serialization_builtins
     serialization_chrono
     serialization_complex
+    serialization_chunk_memory
     serialization_custom_constructor
     serialization_deque
     serialization_error_code
@@ -20,6 +21,7 @@ set(tests
     serialization_multimap
     serialization_set
     serialization_multiset
+    serialization_post_receive_steps
     serialization_simple
     serialization_size_limits
     serialization_smart_ptr

@@ -208,6 +208,12 @@ namespace hpx::serialization {
             return chunker_.get_num_chunks();
         }
 
+        [[nodiscard]] std::size_t get_zero_copy_serialization_threshold()
+            const noexcept override
+        {
+            return zero_copy_serialization_threshold_;
+        }
+
         void reset() override
         {
             chunker_.reset();
@@ -268,10 +274,13 @@ namespace hpx::serialization {
         }
 
         std::size_t save_binary_chunk(detail::fundamental_types const t,
-            void const* address, std::size_t const count) override
+            void const* address, std::size_t const count,
+            chunk_memory const memory) override
         {
             if (count < zero_copy_serialization_threshold_)
             {
+                // device memory must not be copied on the host
+                HPX_ASSERT(memory == chunk_memory::host);
                 // fall back to serialization_chunk-less archive, return the
                 // number of bytes the container has grown
                 return this->output_container::save_binary(t, address, count);
@@ -300,7 +309,8 @@ namespace hpx::serialization {
 
             // add a new serialization_chunk referring to the external buffer
             // (immutable on the save path; see #812)
-            chunker_.push_back(create_const_pointer_chunk(address, count));
+            chunker_.push_back(
+                create_const_pointer_chunk(address, count, memory));
 
             // the container did grow only if the type information needed to
             // be stored
@@ -417,7 +427,8 @@ namespace hpx::serialization {
         }
 
         std::size_t save_binary_chunk(detail::fundamental_types t,
-            void const* address, std::size_t count) override
+            void const* address, std::size_t count,
+            chunk_memory memory) override
         {
             // Once the filter is set, the data goes through it: the reader
             // reads it from the filtered stream (input_container::
@@ -425,11 +436,14 @@ namespace hpx::serialization {
             if (filter_ != nullptr ||
                 count < this->zero_copy_serialization_threshold_)
             {
-                // fall back to serialization_chunk-less archive
+                // fall back to serialization_chunk-less archive; device
+                // memory must not be copied on the host
+                HPX_ASSERT(memory == chunk_memory::host);
                 return this->filtered_output_container::save_binary(
                     t, address, count);
             }
-            return this->base_type::save_binary_chunk(t, address, count);
+            return this->base_type::save_binary_chunk(
+                t, address, count, memory);
         }
 
     protected:

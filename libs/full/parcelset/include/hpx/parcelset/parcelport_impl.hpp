@@ -109,6 +109,51 @@ namespace hpx::parcelset {
                 HPX_PARCEL_MAX_CONNECTIONS_PER_LOCALITY);
         }
 
+        // A parcelport that can send device memory directly (e.g. MPI built
+        // with CUDA or ROCm support) says so by providing
+        // connection_handler_traits<>::send_device_memory(ini), one that can
+        // receive into device memory directly by providing
+        // connection_handler_traits<>::receive_device_memory(ini). The two
+        // are separate: on some systems the network card reads device memory
+        // much slower than it writes into it, there staging the data on the
+        // sending side but receiving it directly is faster.
+        template <typename Traits>
+        using send_device_memory_t = decltype(Traits::send_device_memory(
+            std::declval<util::runtime_configuration const&>()));
+
+        static bool send_device_memory(util::runtime_configuration const& ini)
+        {
+            using traits = connection_handler_traits<ConnectionHandler>;
+            if constexpr (hpx::util::is_detected_v<send_device_memory_t,
+                              traits>)
+            {
+                return traits::send_device_memory(ini);
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        template <typename Traits>
+        using receive_device_memory_t = decltype(Traits::receive_device_memory(
+            std::declval<util::runtime_configuration const&>()));
+
+        static bool receive_device_memory(
+            util::runtime_configuration const& ini)
+        {
+            using traits = connection_handler_traits<ConnectionHandler>;
+            if constexpr (hpx::util::is_detected_v<receive_device_memory_t,
+                              traits>)
+            {
+                return traits::receive_device_memory(ini);
+            }
+            else
+            {
+                return false;
+            }
+        }
+
         static std::size_t zero_copy_serialization_threshold(
             util::runtime_configuration const& ini)
         {
@@ -188,6 +233,21 @@ namespace hpx::parcelset {
                 archive_flags_ = archive_flags_ |
                     serialization::archive_flags::disable_receive_data_chunking;
             }
+
+            // zero-copy chunks may refer to device memory if the parcelport
+            // sends device memory itself
+            if (this->allow_zero_copy_optimizations() &&
+                send_device_memory(ini) && this->use_device_memory())
+            {
+                archive_flags_ = archive_flags_ |
+                    serialization::archive_flags::enable_device_chunks;
+            }
+
+            // zero-copy chunks may be received into device memory if the
+            // parcelport receives device memory itself
+            receive_device_memory_ =
+                this->allow_zero_copy_receive_optimizations() &&
+                receive_device_memory(ini) && this->use_device_memory();
         }
 
         parcelport_impl(parcelport_impl const&) = delete;
@@ -200,6 +260,13 @@ namespace hpx::parcelset {
         ~parcelport_impl() override
         {
             connection_cache_.clear();
+        }
+
+        // whether zero-copy chunks may be received into device memory
+        // directly (see receive_device_memory)
+        [[nodiscard]] constexpr bool receives_device_memory() const noexcept
+        {
+            return receive_device_memory_;
         }
 
         bool can_bootstrap() const override
@@ -275,7 +342,8 @@ namespace hpx::parcelset {
             // needs to be kept alive as long as there are futures not ready
             // or GIDs to be split. This is necessary to preserve the identity
             // of the 'this' pointer.
-            detail::parcel_await_apply(HPX_MOVE(p), HPX_MOVE(f), archive_flags_,
+            detail::parcel_await_apply(
+                HPX_MOVE(p), HPX_MOVE(f), archive_flags_,
                 [this, dest](parcel&& p, write_handler_type&& f) {
                     if (connection_handler_traits<
                             ConnectionHandler>::send_immediate_parcels::value &&
@@ -289,7 +357,8 @@ namespace hpx::parcelset {
                         enqueue_parcel(dest, HPX_MOVE(p), HPX_MOVE(f));
                         get_connection_and_send_parcels(dest);
                     }
-                });
+                },
+                this->get_zero_copy_serialization_threshold());
         }
 
         void put_parcels(locality const& dest, std::vector<parcel> parcels,
@@ -333,8 +402,8 @@ namespace hpx::parcelset {
             // needs to be kept alive as long as there are futures not ready
             // or GIDs to be split. This is necessary to preserve the identity
             // of the 'this' pointer.
-            detail::parcels_await_apply(HPX_MOVE(parcels), HPX_MOVE(handlers),
-                archive_flags_,
+            detail::parcels_await_apply(
+                HPX_MOVE(parcels), HPX_MOVE(handlers), archive_flags_,
                 [this, dest](std::vector<parcel>&& parcels,
                     std::vector<write_handler_type>&& handlers) {
                     if (connection_handler_traits<
@@ -350,7 +419,8 @@ namespace hpx::parcelset {
                             dest, HPX_MOVE(parcels), HPX_MOVE(handlers));
                         get_connection_and_send_parcels(dest);
                     }
-                });
+                },
+                this->get_zero_copy_serialization_threshold());
         }
 
         void send_early_parcel(locality const& dest, parcel p) override
@@ -1114,6 +1184,7 @@ namespace hpx::parcelset {
         using mutex_type = hpx::spinlock;
 
         int archive_flags_;
+        bool receive_device_memory_ = false;
         hpx::util::atomic_count operations_in_flight_;
 
         std::atomic<std::size_t> num_thread_;
