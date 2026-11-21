@@ -176,6 +176,21 @@ namespace hpx::parcelset {
         data_->set_split_gids(HPX_MOVE(split_gids));
     }
 
+    parcel::keep_alive_type const& parcel::keep_alive() const
+    {
+        return data_->keep_alive();
+    }
+
+    void parcel::set_keep_alive(keep_alive_type&& keep_alive) const
+    {
+        data_->set_keep_alive(HPX_MOVE(keep_alive));
+    }
+
+    void parcel::on_receive_complete(hpx::move_only_function<void()> f) const
+    {
+        data_->on_receive_complete(HPX_MOVE(f));
+    }
+
     std::size_t parcel::num_chunks() const
     {
         return data_->num_chunks();

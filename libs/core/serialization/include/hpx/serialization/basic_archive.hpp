@@ -41,7 +41,12 @@ namespace hpx::serialization {
         archive_is_saving = 0x00080000,
         archive_is_preprocessing = 0x00100000,
         enable_type_checking = 0x00200000,
-        all_archive_flags = 0x002fe000    // all of the above
+        // zero-copy chunks may refer to device memory: the parcelport that
+        // sends the archive sends device memory itself (the receiving
+        // locality decides itself where it receives them, see
+        // detail::allow_device_receive)
+        enable_device_chunks = 0x00400000,
+        all_archive_flags = 0x006fe000    // all of the above
     };
 
     HPX_CXX_CORE_EXPORT constexpr archive_flags operator|(
@@ -76,8 +81,9 @@ namespace hpx::serialization {
 
     namespace detail {
 
-        enum class fundamental_types : std::uint8_t
-        {
+        // the type information save_binary, save_binary_chunk, load_binary
+        // and load_binary_chunk take
+        HPX_CXX_CORE_EXPORT enum class fundamental_types : std::uint8_t {
             none = static_cast<std::uint8_t>(~0x0),
             unknown = 0,
             bool_ = 1,
@@ -278,6 +284,17 @@ namespace hpx::serialization {
             return disable_data_chunking() ||
                 static_cast<bool>(
                     flags_ & archive_flags::disable_receive_data_chunking);
+        }
+
+        // Zero-copy chunks may refer to device memory (data below the
+        // zero-copy threshold is copied into the archive as usual). The
+        // parcelport sets this only if it uses zero-copy chunks; it doesn't
+        // depend on disable_data_chunking(), which the preprocessing archive
+        // always reports (it has no chunk list).
+        [[nodiscard]] constexpr bool enable_device_chunks() const noexcept
+        {
+            return static_cast<bool>(
+                flags_ & archive_flags::enable_device_chunks);
         }
 
         [[nodiscard]] constexpr std::uint32_t flags() const noexcept

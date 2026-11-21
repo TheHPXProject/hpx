@@ -439,11 +439,12 @@ namespace hpx {
                 HPX_MOVE(gid), complement_addr<action_type_>(addr),
                 action_type_(), policy);
 
-            parcelset::detail::parcel_await_apply(HPX_MOVE(p),
-                parcelset::write_handler_type(), 0,
-                [](parcelset::parcel&& p, parcelset::write_handler_type&&) {
-                    hpx::parcelset::sync_put_parcel(HPX_MOVE(p));
-                });
+            // The parcelport preprocesses the parcel (waits for futures,
+            // splits credits, prepares host copies of device memory) with its
+            // own archive flags, as for the asynchronous post. A pass here
+            // without them would copy device memory to the host that the
+            // parcelport may send directly.
+            hpx::parcelset::sync_put_parcel(HPX_MOVE(p));
 
             return false;    // destination is remote
         }
