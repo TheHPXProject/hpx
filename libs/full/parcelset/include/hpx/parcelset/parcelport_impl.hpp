@@ -279,7 +279,7 @@ namespace hpx::parcelset {
                 [this, dest](parcel&& p, write_handler_type&& f) {
                     if (connection_handler_traits<
                             ConnectionHandler>::send_immediate_parcels::value &&
-                        can_send_immediate_impl())
+                        can_send_immediate_impl(dest))
                     {
                         send_immediate_impl(dest, &f, &p, 1);
                     }
@@ -339,7 +339,7 @@ namespace hpx::parcelset {
                     std::vector<write_handler_type>&& handlers) {
                     if (connection_handler_traits<
                             ConnectionHandler>::send_immediate_parcels::value &&
-                        can_send_immediate_impl())
+                        can_send_immediate_impl(dest))
                     {
                         send_immediate_impl(dest, handlers.data(),
                             parcels.data(), parcels.size());
@@ -547,6 +547,34 @@ namespace hpx::parcelset {
                               ConnectionHandler>::send_immediate_parcels::value)
             {
                 return connection_handler().can_send_immediate();
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        // Whether a parcel to the given destination may be sent right away.
+        // A connection handler that sends parcels immediately may refuse it
+        // for a busy destination (can_send_immediate(locality const&)): the
+        // parcels to it are then queued, and trigger_pending_work() sends
+        // them together from the background work once the destination is
+        // free again.
+        bool can_send_immediate_impl(locality const& dest)
+        {
+            if constexpr (connection_handler_traits<
+                              ConnectionHandler>::send_immediate_parcels::value)
+            {
+                if constexpr (requires(ConnectionHandler& ch) {
+                                  ch.can_send_immediate(dest);
+                              })
+                {
+                    return connection_handler().can_send_immediate(dest);
+                }
+                else
+                {
+                    return connection_handler().can_send_immediate();
+                }
             }
             else
             {
@@ -932,7 +960,14 @@ namespace hpx::parcelset {
                     ConnectionHandler>::send_immediate_parcels::value &&
                 can_send_immediate_impl())
             {
-                send_immediate_impl(locality_id, nullptr, nullptr, 0);
+                // A parcelport that sends immediately may still report a
+                // destination as busy: its parcels then stay queued and are
+                // sent together (one message) by a later background work
+                // call, once the destination is free again.
+                if (can_send_immediate_impl(locality_id))
+                {
+                    send_immediate_impl(locality_id, nullptr, nullptr, 0);
+                }
                 return;
             }
 
