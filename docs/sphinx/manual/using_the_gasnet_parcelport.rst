@@ -166,6 +166,59 @@ Launch one locality per GASNet process: the parcelport does not support more
 than one |hpx| locality in a process. The number of worker threads of a
 locality is set as usual with ``--hpx:threads``.
 
+A launcher that binds each process to a single core makes all worker threads of
+a locality share that core. Open MPI's ``mpiexec`` does that by default for
+small numbers of processes; pass ``--bind-to none`` to it (``hpxrun.py`` does
+this for ``-r gasnet``) and let |hpx| bind the worker threads.
+
+How parcels are sent
+--------------------
+
+The worker threads of a locality drive the network from their background work:
+they send queued messages, check for pages that arrived, and decode received
+messages. The parcelport starts no threads of its own for this unless
+``hpx.parcel.gasnet.worker_progress`` is ``0``.
+
+Each pair of localities has a ring of pages for each direction, and only one
+message is in flight to a destination at a time. A parcel to a destination
+that nothing is being sent to goes out immediately as a message of its own.
+While a message to a destination is in flight, further parcels to it are
+queued, and once the destination is free, all queued parcels are encoded into
+one message and sent together. Isolated parcels so get the lowest latency, and
+many parcels to one destination are sent in few messages.
+``hpx.parcel.gasnet.sendimm=0`` queues every parcel instead, as the other
+parcelports do by default.
+
+How parcels are received
+------------------------
+
+A worker thread that finds a complete message from a source decodes it and
+runs the actions of its parcels on the same thread. Before it does that, it
+releases the source, so that the next message from that source can be received
+while the actions run. An action may suspend or wait for further messages
+without stopping the network.
+
+While the runtime starts up, the worker threads don't run yet. A thread of the
+parcelport drives the network until the runtime tells the parcelport that its
+bootstrap is complete, and the worker threads take over from then on.
+
+Worker threads or I/O threads
+-----------------------------
+
+Worker progress gives the lowest latency, since no thread hands the messages
+over to another one. Between two localities on one node, a round trip took about
+19 microseconds with worker progress, 33 to 42 microseconds with I/O threads,
+and 41 to 51 microseconds with the TCP parcelport. With worker progress the
+network makes progress only while worker threads run their background work,
+between two tasks or while they are idle. A worker thread that runs a long task
+without suspending does not drive the network in the meantime. Applications with
+such tasks should run enough worker threads, or use I/O threads
+(``hpx.parcel.gasnet.worker_progress=0``), each of which needs a core of its
+own.
+
+Runtime settings
+----------------
+
 The following settings configure the parcelport at runtime. ``mtu``, ``slots``
 and ``checksum`` are part of the wire protocol and must be the same on all
 localities; at startup the parcelport compares them across all localities
@@ -200,10 +253,23 @@ unless ``hpx.parcel.gasnet.uniform_check`` is ``0``.
 
 .. option:: --hpx:ini=hpx.parcel.gasnet.worker_progress=<n>
 
-   Which threads make progress on the network: ``0`` (the default) only the
-   parcelport's I/O threads, ``1`` all worker threads, ``n`` > 1 the worker
-   threads ``0`` to ``n-1``. Progress from worker threads is known to hang some
-   runs with several threads per locality.
+   Which threads make progress on the network: ``1`` (the default) all worker
+   threads, ``n`` > 1 the worker threads ``0`` to ``n-1``, ``0`` dedicated I/O
+   threads of the parcelport instead of the worker threads. The I/O threads
+   poll the network continuously, each on its own core.
+
+.. option:: --hpx:ini=hpx.parcel.gasnet.io_pool_size=<n>
+
+   Number of I/O threads with ``worker_progress=0``; each of them serves a part
+   of the source localities. The default value is ``2``. Without I/O threads
+   (``worker_progress`` not ``0``) the setting has no effect.
+
+.. option:: --hpx:ini=hpx.parcel.gasnet.sendimm=<0|1>
+
+   ``1`` (the default) sends a parcel immediately if nothing is being sent to
+   its destination, and queues it otherwise; the queued parcels to a
+   destination are sent together in one message once it is free (see
+   :ref:`run_gasnet_pp`). ``0`` queues all parcels.
 
 .. option:: --hpx:ini=hpx.parcel.gasnet.progress_interval=<n>
 
