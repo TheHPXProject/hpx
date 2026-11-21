@@ -127,13 +127,65 @@ job from that heap, so large jobs or a large ``mtu`` need a larger heap.
 
    $ hpxrun.py ./my_hpx_application -l 4 -t 8 -p openshmem -r oshrun
 
-This runs ``oshrun -n <localities> --mca osc ucx -x SMA_SYMMETRIC_SIZE=<size>
--x UCX_TLS=<transports>`` with the settings shown above. The heap size is taken
+This runs ``oshrun -n <localities> --bind-to none --mca osc ucx -x
+SMA_SYMMETRIC_SIZE=<size> -x UCX_TLS=<transports>`` with the settings shown
+above. ``--bind-to none`` keeps ``oshrun`` from binding each process to a single
+core, which would make all worker threads of a locality share it; pass it also
+when starting ``oshrun`` by hand. The heap size is taken
 from ``SMA_SYMMETRIC_SIZE`` in the environment of ``hpxrun.py`` and defaults to
 ``1G``. The UCX transports are taken from ``UCX_TLS`` and default to
 ``sm,self``, the shared-memory transports, which work only within one node: set
 ``UCX_TLS`` (for example to ``all``) for runs across nodes. Set
 ``HPXRUN_OSHRUN`` to use another ``oshrun`` executable.
+
+How parcels are sent
+--------------------
+
+The worker threads of a locality drive the network from their background work:
+they send queued messages, check for pages that arrived, and decode received
+messages. The parcelport starts no threads of its own for this unless
+``hpx.parcel.openshmem.worker_progress`` is ``0``. If the OpenSHMEM runtime
+provides only ``SHMEM_THREAD_SERIALIZED``, one worker thread at a time does
+this, and the others skip it while it does.
+
+Each pair of localities has a ring of pages for each direction, and only one
+message is in flight to a destination at a time. A parcel to a destination
+that nothing is being sent to goes out immediately as a message of its own.
+While a message to a destination is in flight, further parcels to it are
+queued, and once the destination is free, all queued parcels are encoded into
+one message and sent together. Isolated parcels so get the lowest latency, and
+many parcels to one destination are sent in few messages.
+``hpx.parcel.openshmem.sendimm=0`` queues every parcel instead, as the other
+parcelports do by default.
+
+How parcels are received
+------------------------
+
+A worker thread that finds a complete message from a source decodes it and
+runs the actions of its parcels on the same thread. Before it does that, it
+releases the source, so that the next message from that source can be received
+while the actions run. An action may suspend or wait for further messages
+without stopping the network. With ``SHMEM_THREAD_SERIALIZED`` the thread
+first leaves the section in which it uses the OpenSHMEM runtime, so that other
+threads can drive the network while the actions run.
+
+While the runtime starts up, the worker threads don't run yet. A thread of the
+parcelport drives the network until the runtime tells the parcelport that its
+bootstrap is complete, and the worker threads take over from then on.
+
+Worker threads or I/O threads
+-----------------------------
+
+Worker progress gives the lowest latency, since no thread hands the messages
+over to another one. With worker progress the network makes progress only while
+worker threads run their background work, between two tasks or while they are
+idle. A worker thread that runs a long task without suspending does not drive
+the network in the meantime. Applications with such tasks should run enough
+worker threads, or use I/O threads (``hpx.parcel.openshmem.worker_progress=0``),
+each of which needs a core of its own.
+
+Runtime settings
+----------------
 
 The following settings configure the parcelport at runtime. ``mtu``, ``slots``
 and ``checksum`` are part of the wire protocol and must be the same on all
@@ -180,8 +232,23 @@ localities.
 
 .. option:: --hpx:ini=hpx.parcel.openshmem.worker_progress=<0|1>
 
-   Let worker threads make progress on the network, in addition to the
-   parcelport's I/O threads. The default value is ``0``.
+   ``1`` (the default): the worker threads make progress on the network.
+   ``0``: dedicated I/O threads of the parcelport do instead; they poll the
+   network continuously, each on its own core.
+
+.. option:: --hpx:ini=hpx.parcel.openshmem.io_pool_size=<n>
+
+   Number of I/O threads with ``worker_progress=0``; each of them serves a part
+   of the source localities. The default value is ``2``; if the OpenSHMEM
+   runtime provides only ``SHMEM_THREAD_SERIALIZED``, a single one is used.
+   Without I/O threads (``worker_progress=1``) the setting has no effect.
+
+.. option:: --hpx:ini=hpx.parcel.openshmem.sendimm=<0|1>
+
+   ``1`` (the default) sends a parcel immediately if nothing is being sent to
+   its destination, and queues it otherwise; the queued parcels to a
+   destination are sent together in one message once it is free. ``0`` queues
+   all parcels.
 
 .. option:: --hpx:ini=hpx.parcel.openshmem.progress_interval=<n>
 
