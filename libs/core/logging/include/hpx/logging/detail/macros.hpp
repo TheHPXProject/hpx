@@ -138,7 +138,7 @@ HPX_DEFINE_LOG(g_l, logger_type)
     ::hpx::util::logging::logger* HPX_PP_CAT(NAME, _logger)()                  \
     {                                                                          \
         static ::hpx::util::logging::logger l(                                 \
-            hpx::util::logging::level::LEVEL);                                 \
+            ::hpx::util::logging::level::LEVEL);                               \
         return &l;                                                             \
     }
 
