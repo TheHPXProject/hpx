@@ -224,8 +224,7 @@ void test_scheduler(int argc, char* argv[],
                         {
                             first_pu = &p;
                         }
-                        rp.add_resource(
-                            shared_high_priority ? *first_pu : p, "work");
+                        rp.add_resource(p, "work");
                         ++threads_added;
                     }
                 }
