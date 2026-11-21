@@ -62,12 +62,49 @@ if(HPX_WITH_CUDA AND NOT TARGET Cuda::cuda)
       set(HPX_WITH_GPUBLAS OFF)
     endif()
   endif()
+
+  # Building with clang as the CUDA compiler on Windows is experimental and
+  # requires these minimal versions (see building_hpx.rst)
+  if(WIN32 AND CMAKE_CUDA_COMPILER_ID STREQUAL "Clang")
+    if(CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 22.1)
+      hpx_error(
+        "Building HPX with CUDA on Windows requires clang 22.1 or newer, found ${CMAKE_CUDA_COMPILER_VERSION}"
+      )
+    endif()
+    if(CUDAToolkit_VERSION VERSION_LESS 13.1)
+      hpx_error(
+        "Building HPX with CUDA on Windows requires CUDA 13.1 or newer, found ${CUDAToolkit_VERSION}"
+      )
+    endif()
+    # the CCCL of the CUDA toolkit (cuda::std::aligned_alloc doesn't compile
+    # with clang on Windows before CCCL 3.1)
+    find_package(
+      CCCL CONFIG QUIET PATHS "${CUDAToolkit_TARGET_DIR}/lib/cmake"
+      NO_DEFAULT_PATH
+    )
+    if(NOT CCCL_FOUND OR CCCL_VERSION VERSION_LESS 3.1)
+      hpx_error(
+        "Building HPX with CUDA on Windows requires CCCL 3.1 or newer, found ${CCCL_VERSION}"
+      )
+    endif()
+  endif()
+
   # Flag not working for CLANG CUDA
   target_compile_features(Cuda::cuda INTERFACE cuda_std_${CMAKE_CUDA_STANDARD})
   set_target_properties(
     Cuda::cuda PROPERTIES INTERFACE_POSITION_INDEPENDENT_CODE ON
   )
   hpx_info("Using CUDA C++${CMAKE_CUDA_STANDARD}")
+
+  if(WIN32)
+    # the CUDA headers (libcu++, used by stdexec) break if windows.h defines min
+    # and max as macros, whatever the compiler; the compile definition reaches
+    # dependent targets also if they include windows.h before any HPX header
+    if(NOT HPX_FIND_PACKAGE)
+      hpx_add_config_cond_define(NOMINMAX)
+    endif()
+    target_compile_definitions(Cuda::cuda INTERFACE NOMINMAX)
+  endif()
 
   if(NOT HPX_WITH_CLANG_CUDA)
     if(NOT MSVC)
@@ -76,14 +113,6 @@ if(HPX_WITH_CUDA AND NOT TARGET Cuda::cuda)
       )
     else()
       # Windows
-
-      # the CUDA headers (libcu++, used by stdexec) break if windows.h defines
-      # min and max as macros; the compile definition reaches dependent targets
-      # also if they include windows.h before any HPX header
-      if(NOT HPX_FIND_PACKAGE)
-        hpx_add_config_cond_define(NOMINMAX)
-      endif()
-      target_compile_definitions(Cuda::cuda INTERFACE NOMINMAX)
       set(CUDA_PROPAGATE_HOST_FLAGS OFF)
       target_compile_options(
         Cuda::cuda
