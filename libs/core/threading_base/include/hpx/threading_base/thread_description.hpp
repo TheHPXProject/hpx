@@ -253,6 +253,23 @@ namespace hpx::threads {
         std::ostream&, thread_description const&);
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT std::string as_string(
         thread_description const& desc);
+
+    namespace detail {
+
+        // With HPX_HAVE_THREAD_DESCRIPTION_FULL an unnamed task is described
+        // by its function's address, which get_description() would return as
+        // a string. Code that needs a name gets fallback instead.
+        HPX_CXX_CORE_EXPORT constexpr char const* get_description_or(
+            thread_description const& desc,
+            [[maybe_unused]] char const* fallback) noexcept
+        {
+#if defined(HPX_HAVE_THREAD_DESCRIPTION_FULL)
+            if (desc.kind() == thread_description::data_type::address)
+                return fallback;
+#endif
+            return desc.get_description();
+        }
+    }    // namespace detail
 }    // namespace hpx::threads
 
 namespace hpx::threads {
