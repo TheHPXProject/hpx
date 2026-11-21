@@ -14,7 +14,10 @@ concurrency:
 
 jobs:
   build:
-    runs-on: windows-2022
+    # the standard library of Visual Studio 2022 (MSVC 14.44) doesn't compile
+    # with clang in CUDA mode: std::lerp(long double) calls an fma() that is
+    # ambiguous in the device compilation
+    runs-on: windows-2025-vs2026
 
     steps:
     - uses: actions/checkout@v7
@@ -33,7 +36,7 @@ jobs:
         cuda: '13.3.1'
         method: 'network'
         sub-packages: '["nvcc", "crt", "nvvm", "cudart", "thrust", "cublas", "cublas_dev", "curand", "curand_dev"]'
-    # the clang of Visual Studio 2022 is too old for CUDA 13: unpack the LLVM
+    # a fixed clang, independent of the runner image: unpack the LLVM
     # release archive (a .tar.xz) so that bin is directly in LLVM_PATH
     - name: Install clang
       shell: bash
