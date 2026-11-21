@@ -11,6 +11,8 @@
 #include <hpx/modules/util.hpp>
 #include <hpx/openshmem_base/openshmem_environment.hpp>
 
+#include <asio/ip/host_name.hpp>
+
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
@@ -140,9 +142,12 @@ namespace hpx::util {
         return provided_thread_level_ >= SHMEM_THREAD_MULTIPLE;
     }
 
+    // The name of the host: localities on the same host share its cores
+    // (see runtime_distributed::assign_cores), so it must not be unique per
+    // PE.
     std::string openshmem_environment::get_processor_name()
     {
-        return std::to_string(shmem_my_pe());
+        return asio::ip::host_name();
     }
 }    // namespace hpx::util
 
