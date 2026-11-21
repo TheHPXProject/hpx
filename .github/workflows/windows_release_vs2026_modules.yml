@@ -22,6 +22,8 @@ jobs:
       get-cmake: true
       vcpkg: true
       msvc-dev-env: true
+      # module interfaces can only be used by the compiler that wrote them
+      match-msvc-toolset: true
       configure: |
         cmake . -Bbuild -GNinja \
             -DCMAKE_BUILD_TYPE=Release \
@@ -52,5 +54,7 @@ jobs:
       exclude-files: >-
         .github/workflows/exclude.targets
         .github/workflows/tests.examples.targets
+      # tests MSVC 19.52 doesn't compile
+      exclude-regex-files: .github/workflows/msvc.exclude.regex
       # the default timeout of ctest, as in the other Windows workflows
       ctest-timeout: "1500"

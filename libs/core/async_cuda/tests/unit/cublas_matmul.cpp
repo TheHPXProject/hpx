@@ -42,6 +42,13 @@
 #include <sstream>
 #include <utility>
 #include <vector>
+
+// CUDA 13.5 overloads cudaMemcpyAsync (a function template taking
+// cudaMemcpyAttributes), so it can't be passed by name to the executors, which
+// take a pointer to the CUDA function
+constexpr cudaError_t (*memcpy_async)(void*, void const*, std::size_t,
+    cudaMemcpyKind, cudaStream_t) = &cudaMemcpyAsync;
+
 //
 std::mt19937 gen;
 
@@ -148,10 +155,10 @@ void matrixMultiply(hpx::cuda::experimental::cublas_executor& cublas,
 
     // adding async copy operations into the stream before cublas calls puts
     // the copies in the queue before the matrix operations.
-    hpx::post(cublas, cudaMemcpyAsync, d_A, h_A.data(), size_A * sizeof(T),
+    hpx::post(cublas, memcpy_async, d_A, h_A.data(), size_A * sizeof(T),
         cudaMemcpyHostToDevice);
 
-    auto copy_future = hpx::async(cublas, cudaMemcpyAsync, d_B, h_B.data(),
+    auto copy_future = hpx::async(cublas, memcpy_async, d_B, h_B.data(),
         size_B * sizeof(T), cudaMemcpyHostToDevice);
 
     // we can call get_future multiple times on the cublas helper.
@@ -197,8 +204,8 @@ void matrixMultiply(hpx::cuda::experimental::cublas_executor& cublas,
     auto matrix_finished = cublas.get_future();
 
     // when the matrix operations complete, copy the result to the host
-    auto copy_finished = hpx::async(cublas, cudaMemcpyAsync, h_CUBLAS.data(),
-        d_C, size_C * sizeof(T), cudaMemcpyDeviceToHost);
+    auto copy_finished = hpx::async(cublas, memcpy_async, h_CUBLAS.data(), d_C,
+        size_C * sizeof(T), cudaMemcpyDeviceToHost);
 
     // attach a continuation to the cublas future
     auto new_future = matrix_finished.then([&](cublas_future&&) {

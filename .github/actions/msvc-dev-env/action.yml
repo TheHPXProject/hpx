@@ -7,6 +7,17 @@
 # Sets up the environment of the Visual Studio developer command prompt (as
 # vcvarsall.bat does) for the following steps of the job, so that the Ninja
 # generator finds the compiler, the linker, and the Windows SDK.
+#
+# With 'toolset', the environment uses that MSVC toolset (for instance the one
+# a build archive was made with: C++20 module interfaces can only be used by
+# the compiler that wrote them). If no installed Visual Studio has it, the
+# Build Tools of the Visual Studio release 'vs-version' are installed next to
+# it, from the fixed-version bootstrapper the release history lists.
+#
+# 'check-install' checks, without installing anything, that the Build Tools of
+# the release the environment comes from could be installed that way, and
+# warns if not (a new Visual Studio version, or a changed release history
+# page): this action then needs updating.
 
 name: 'Set up the MSVC developer environment'
 description: 'Export the environment of vcvarsall.bat to the following steps'
@@ -16,35 +27,161 @@ inputs:
     description: 'Target architecture passed to vcvarsall.bat'
     required: false
     default: 'x64'
+  toolset:
+    description: 'MSVC toolset version to use (VCToolsVersion, for instance 14.51.36231); empty: the default one'
+    required: false
+    default: ''
+  vs-version:
+    description: 'Visual Studio release with that toolset (for instance 18.11.4), installed if needed'
+    required: false
+    default: ''
+  check-install:
+    description: 'Warn if the Build Tools of the release the environment comes from could not be installed by this action'
+    required: false
+    default: 'false'
+
+outputs:
+  toolset:
+    description: 'The MSVC toolset version of the environment (VCToolsVersion)'
+    value: ${{ steps.vcvars.outputs.toolset }}
+  vs-version:
+    description: 'The Visual Studio release the toolset comes from'
+    value: ${{ steps.vcvars.outputs.vs-version }}
 
 runs:
   using: "composite"
   steps:
     - name: Export the vcvarsall.bat environment
+      id: vcvars
       shell: pwsh
+      env:
+        TOOLSET: ${{ inputs.toolset }}
+        VS_VERSION: ${{ inputs.vs-version }}
+        CHECK_INSTALL: ${{ inputs.check-install }}
       run: |
+        # The fixed-version Build Tools bootstrapper of a Visual Studio
+        # release, from its release history: @{ url; reason } with the URL, or
+        # the reason why there is none.
+        function Find-BuildTools([string] $release) {
+          # Visual Studio 2022 is version 17, 2026 is 18
+          $year = @{ '17' = '2022'; '18' = '2026' }[$release.Split('.')[0]]
+          if (-not $year) {
+            return @{ reason = "Visual Studio '$release' has no known release history" }
+          }
+          $history = "https://learn.microsoft.com/en-us/visualstudio/releases/$year/release-history"
+          # bounded: the build goes on with a warning if the page isn't read
+          # within 60 seconds (the timeout of HttpClient covers the whole
+          # request, Invoke-WebRequest limits only the waits between reads)
+          $client = [System.Net.Http.HttpClient]::new()
+          $client.Timeout = [TimeSpan]::FromSeconds(60)
+          try {
+            $page = $client.GetStringAsync($history).GetAwaiter().GetResult()
+          } catch {
+            return @{ reason = "$history can't be read: $_" }
+          } finally {
+            $client.Dispose()
+          }
+          # the row of the release, of the Stable (2026) or Current (2022)
+          # channel the runner images use if there are several (e.g. LTSC);
+          # the version may be followed by a note, e.g. '17.14.41 (September
+          # 2026)'
+          $version = [regex]::Escape($release)
+          $url = $null
+          foreach ($row in [regex]::Matches($page, '<tr>.*?</tr>', 'Singleline')) {
+            if ($row.Value -match "<td[^>]*>\s*$version(\s*\([^<]*\))?\s*</td>" -and
+                $row.Value -match '(?i)href="([^"]+/vs_buildtools\.exe)"') {
+              $candidate = $Matches[1]
+              $stable = $row.Value -match '<td[^>]*>\s*(Stable|Current)\s*</td>'
+              if (-not $url -or $stable) { $url = $candidate }
+              if ($stable) { break }
+            }
+          }
+          if (-not $url) {
+            return @{ reason = "$history has no Build Tools of Visual Studio $release" }
+          }
+          return @{ url = $url }
+        }
+
         $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
         $vs = & $vswhere -latest -products * `
           -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
           -property installationPath
         if (-not $vs) { throw "no Visual Studio with the C++ tools found" }
+
+        $vcvars_ver = ''
+        if ($env:TOOLSET) {
+          $has_toolset = {
+            param($path)
+            Test-Path (Join-Path $path "VC\Tools\MSVC\$env:TOOLSET")
+          }
+          if (-not (& $has_toolset $vs)) {
+            $vs = & $vswhere -all -products * -property installationPath |
+              Where-Object { & $has_toolset $_ } | Select-Object -First 1
+          }
+          if (-not $vs) {
+            # the Build Tools of the release that has the toolset
+            $build_tools = Find-BuildTools $env:VS_VERSION
+            if (-not $build_tools.url) {
+              throw "MSVC toolset $env:TOOLSET isn't installed: $($build_tools.reason) (.github/actions/msvc-dev-env needs updating)"
+            }
+
+            Write-Output "Installing the Build Tools of Visual Studio $env:VS_VERSION for MSVC toolset $env:TOOLSET"
+            $bootstrapper = Join-Path $env:RUNNER_TEMP 'vs_BuildTools.exe'
+            Invoke-WebRequest -UseBasicParsing $build_tools.url -OutFile $bootstrapper
+            $vs = Join-Path $env:RUNNER_TEMP "BuildTools-$env:VS_VERSION"
+            $setup = Start-Process -FilePath $bootstrapper -Wait -PassThru -ArgumentList @(
+              '--quiet', '--wait', '--norestart', '--nocache',
+              '--installPath', "`"$vs`"",
+              '--add', 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64')
+            # 3010: success, a restart is needed (not for the C++ tools)
+            if ($setup.ExitCode -ne 0 -and $setup.ExitCode -ne 3010) {
+              throw "installing the Build Tools failed ($($setup.ExitCode))"
+            }
+            if (-not (& $has_toolset $vs)) {
+              throw "the Build Tools of Visual Studio $env:VS_VERSION don't have MSVC toolset $env:TOOLSET"
+            }
+          }
+          $vcvars_ver = "-vcvars_ver=$env:TOOLSET"
+        }
         $vcvars = Join-Path $vs 'VC\Auxiliary\Build\vcvarsall.bat'
 
         # the variables before and after running vcvarsall.bat
         $before = @{}
         Get-ChildItem env: | ForEach-Object { $before[$_.Name] = $_.Value }
-        $after = cmd /c "`"$vcvars`" ${{ inputs.arch }} >nul && set"
+        $after = cmd /c "`"$vcvars`" ${{ inputs.arch }} $vcvars_ver >nul && set"
         if ($LASTEXITCODE -ne 0) { throw "vcvarsall.bat failed" }
 
         # export the variables vcvarsall.bat added or changed
+        $toolset = ''
         foreach ($line in $after) {
           if ($line -match '^([^=]+)=(.*)$') {
             $name = $Matches[1]
             $value = $Matches[2]
+            if ($name -eq 'VCToolsVersion') { $toolset = $value }
             if ($before[$name] -ne $value) {
               "$name=$value" >> $env:GITHUB_ENV
             }
           }
         }
+        if ($env:TOOLSET -and $toolset -ne $env:TOOLSET) {
+          throw "the environment has MSVC toolset $toolset instead of $env:TOOLSET"
+        }
+        $instances = & $vswhere -all -prerelease -products * -format json |
+          ConvertFrom-Json
+        $vs_version = ($instances | Where-Object { $_.installationPath -eq $vs } |
+          Select-Object -First 1).catalog.productDisplayVersion
+        "toolset=$toolset" >> $env:GITHUB_OUTPUT
+        "vs-version=$vs_version" >> $env:GITHUB_OUTPUT
 
-        cmd /c "`"$vcvars`" ${{ inputs.arch }} >nul && where cl && cl 2>&1 | findstr Version"
+        # alert (without failing) if a later job could not install this
+        # environment's toolset
+        if ($env:CHECK_INSTALL -eq 'true') {
+          $build_tools = Find-BuildTools "$vs_version"
+          if ($build_tools.url) {
+            Write-Output "The Build Tools of Visual Studio $vs_version can be installed from $($build_tools.url)"
+          } else {
+            Write-Output "::warning title=.github/actions/msvc-dev-env needs updating::Jobs with another MSVC toolset couldn't install toolset ${toolset}: $($build_tools.reason)"
+          }
+        }
+
+        cmd /c "`"$vcvars`" ${{ inputs.arch }} $vcvars_ver >nul && where cl && cl 2>&1 | findstr Version"

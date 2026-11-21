@@ -185,3 +185,25 @@ if(HPX_WITH_NETWORKING)
     ARGS "--phase=pre-startup" "--failing-locality=1"
   )
 endif()
+
+# a component created on another locality from a CUDA (or HIP) translation unit;
+# stdexec can't be compiled by nvcc with MSVC as the host compiler
+if(HPX_WITH_NETWORKING
+   AND (HPX_WITH_CUDA OR HPX_WITH_HIP)
+   AND NOT (MSVC AND CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA")
+)
+  set(sources create_component_nvcc.cu)
+  source_group("Source Files" FILES ${sources})
+
+  add_hpx_executable(
+    create_component_nvcc_test INTERNAL_FLAGS
+    SOURCES ${sources}
+    EXCLUDE_FROM_ALL
+    HPX_PREFIX ${HPX_BUILD_PREFIX}
+    FOLDER "Tests/Regressions/Modules/Full/RuntimeDistributed"
+  )
+
+  add_hpx_regression_test(
+    "modules.runtime_distributed" create_component_nvcc LOCALITIES 2
+  )
+endif()

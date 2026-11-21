@@ -41,6 +41,13 @@
 #include <string>
 #include <utility>
 #include <vector>
+
+// CUDA 13.5 overloads cudaMemcpyAsync (a function template taking
+// cudaMemcpyAttributes), so it can't be passed by name to the executors, which
+// take a pointer to the CUDA function
+constexpr cudaError_t (*memcpy_async)(void*, void const*, std::size_t,
+    cudaMemcpyKind, cudaStream_t) = &cudaMemcpyAsync;
+
 //
 std::mt19937 gen;
 
@@ -90,11 +97,11 @@ void matrixMultiply(
         cudaMalloc((void**) &d_C, size_C * sizeof(T)));
 
     // copy A to device, no future
-    hpx::post(cublas, cudaMemcpyAsync, d_A, h_A.data(), size_A * sizeof(T),
+    hpx::post(cublas, memcpy_async, d_A, h_A.data(), size_A * sizeof(T),
         cudaMemcpyHostToDevice);
 
     // copy B to device on same stream as A, get a future back
-    auto copy_future = hpx::async(cublas, cudaMemcpyAsync, d_B, h_B.data(),
+    auto copy_future = hpx::async(cublas, memcpy_async, d_B, h_B.data(),
         size_B * sizeof(T), cudaMemcpyHostToDevice);
 
     // print out somethine when copy completes and wait for it
