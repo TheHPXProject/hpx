@@ -76,4 +76,22 @@ namespace test {
     // 'device_receive': the parcelport can receive into device memory.
     received receive(message& m, bool zero_copy_receive, load_type const& load,
         bool device_receive = false);
+
+    // what filtered_round_trip saw
+    struct filtered
+    {
+        // whether both archives said they are filtered
+        bool saved_filtered = false;
+        bool loaded_filtered = false;
+
+        // the chunks referring to device memory
+        std::size_t device_chunks = 0;
+    };
+
+    // Serializes with save() into an archive with the given flags and a
+    // filter that passes the data through unchanged (as a compressor does,
+    // it reads and writes all data of the archive on the host), and
+    // de-serializes it with load().
+    filtered filtered_round_trip(
+        std::uint32_t flags, save_type const& save, load_type const& load);
 }    // namespace test
