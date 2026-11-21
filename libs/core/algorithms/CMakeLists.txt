@@ -248,6 +248,7 @@ if(HPX_WITH_DATAPAR)
       hpx/parallel/datapar/find.hpp
       hpx/parallel/datapar/generate.hpp
       hpx/parallel/datapar/handle_local_exceptions.hpp
+      hpx/parallel/datapar/is_heap.hpp
       hpx/parallel/datapar/iterator_helpers.hpp
       hpx/parallel/datapar/lexicographical_compare.hpp
       hpx/parallel/datapar/loop.hpp
