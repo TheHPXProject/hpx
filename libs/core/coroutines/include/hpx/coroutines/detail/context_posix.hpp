@@ -96,10 +96,10 @@ namespace hpx::threads::coroutines::detail ::posix::pth {
         pth_uctx_make(*(ctx), static_cast<char*>(stack), (size), nullptr,      \
             (startfunc), (startarg), (exitto)))
 #define HPX_COROUTINE_SWAP_CONTEXT(from, to)                                   \
-    hpx::threads::coroutines::detail::posix::pth::check_(pth_uctx_switch(      \
-        *(from), *(to))) #define HPX_COROUTINE_DESTROY_CONTEXT(ctx)            \
-        hpx::threads::coroutines::detail::posix::pth::check_(                  \
-            pth_uctx_destroy(ctx))
+    hpx::threads::coroutines::detail::posix::pth::check_(                      \
+        pth_uctx_switch(*(from), *(to)))
+#define HPX_COROUTINE_DESTROY_CONTEXT(ctx)                                     \
+    hpx::threads::coroutines::detail::posix::pth::check_(pth_uctx_destroy(ctx))
 
 #else    // generic Posix platform (e.g. OS X >= 10.5)
 
