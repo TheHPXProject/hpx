@@ -345,7 +345,9 @@ namespace hpx::threads {
 
         std::swap(description_, value);
 
-        hpx::tracing::rename_region(description_.get_description());
+        // With HPX_HAVE_THREAD_DESCRIPTION_FULL the description can be an
+        // address, which must not be read as a name.
+        hpx::tracing::rename_region(get_safe_description(description_));
 
         return value;
     }
@@ -577,16 +579,19 @@ namespace hpx::threads {
     }
 
 #if defined(HPX_HAVE_TRACY)
+    // With HPX_HAVE_THREAD_DESCRIPTION_FULL an unnamed task is described by
+    // its function's address. Reading that as a name gives the zone the bytes
+    // stored at the address, so such tasks are named <unknown> instead.
     tracing::region_init_data get_region_init_data(thread_data const* thrdptr)
     {
-        return {thrdptr->get_description().get_description(),
+        return {thread_data::get_safe_description(thrdptr->get_description()),
             thrdptr->get_thread_phase(), thrdptr->is_stackless()};
     }
 
     tracing::fiber_region_init_data get_fiber_region_init_data(
         thread_data const* thrdptr)
     {
-        return {thrdptr->get_description().get_description(),
+        return {thread_data::get_safe_description(thrdptr->get_description()),
             thrdptr->get_fiber_name(), thrdptr->is_stackless()};
     }
 #elif defined(HPX_HAVE_ITTNOTIFY) && HPX_HAVE_ITTNOTIFY != 0
