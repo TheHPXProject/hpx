@@ -8,6 +8,7 @@
 
 #include <hpx/algorithm.hpp>
 #include <hpx/chrono.hpp>
+#include <hpx/datapar.hpp>
 #include <hpx/format.hpp>
 #include <hpx/init.hpp>
 #include <hpx/modules/testing.hpp>
@@ -85,11 +86,21 @@ int hpx_main(hpx::program_options::variables_map& vm)
     hpx::util::perftests_report("hpx::is_heap", "seq", test_count,
         [&] { (void) hpx::is_heap(seq, std::begin(v), std::end(v)); });
 
+#if defined(HPX_HAVE_DATAPAR)
+    hpx::util::perftests_report("hpx::is_heap", "simd", test_count,
+        [&] { (void) hpx::is_heap(simd, std::begin(v), std::end(v)); });
+#endif
+
     hpx::util::perftests_report("hpx::is_heap", "par", test_count,
         [&] { (void) hpx::is_heap(par, std::begin(v), std::end(v)); });
 
     hpx::util::perftests_report("hpx::is_heap", "par_unseq", test_count,
         [&] { (void) hpx::is_heap(par_unseq, std::begin(v), std::end(v)); });
+
+#if defined(HPX_HAVE_DATAPAR)
+    hpx::util::perftests_report("hpx::is_heap", "par_simd", test_count,
+        [&] { (void) hpx::is_heap(par_simd, std::begin(v), std::end(v)); });
+#endif
 
     hpx::util::perftests_print_times();
 
