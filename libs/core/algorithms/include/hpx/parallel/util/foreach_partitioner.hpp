@@ -66,7 +66,7 @@ namespace hpx::parallel::util::detail {
 
             return execution::bulk_async_execute(policy.executor(),
                 partitioner_iteration<Result, F>{HPX_FORWARD(F, f), iterations},
-                reshape(HPX_MOVE(shape)));
+                reshape(HPX_MOVE(shape), cores));
         }
         else if constexpr (!invokes_testing_function)
         {

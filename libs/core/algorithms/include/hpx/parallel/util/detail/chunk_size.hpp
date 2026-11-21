@@ -454,11 +454,13 @@ namespace hpx::parallel::util::detail {
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename Future,
         typename F1, typename FwdIter, typename Stride = std::size_t>
     decltype(auto) get_bulk_iteration_shape(std::true_type, ExPolicy& policy,
-        std::vector<Future>& workitems, F1&& f1, FwdIter& begin,
+        std::vector<Future>& /* workitems */, F1&& /* f1 */, FwdIter& begin,
         std::size_t& count, std::size_t& cores, Stride s = Stride(1))
     {
+        // variable chunk sizes don't run a testing function, so no work items
+        // are created here
         return get_bulk_iteration_shape_variable(
-            policy, workitems, HPX_FORWARD(F1, f1), begin, count, cores, s);
+            policy, begin, count, cores, s);
     }
 
     ///////////////////////////////////////////////////////////////////////////
