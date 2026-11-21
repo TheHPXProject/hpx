@@ -62,7 +62,7 @@ void test_is_heap_contiguous(ExPolicy policy, std::size_t size)
     // Invalid heap (break at various positions if size >= 3)
     if (size >= 3)
     {
-        for (std::size_t break_pos : {1ul, size / 2, size - 1})
+        for (std::size_t break_pos : {std::size_t(1), size / 2, size - 1})
         {
             std::vector<int> c(size);
             std::iota(std::begin(c), std::end(c), 0);
@@ -152,6 +152,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
 
     std::cout << "using seed: " << seed << std::endl;
     std::srand(seed);
+    gen.seed(seed);
 
     is_heap_test();
     is_heap_test_contiguous();

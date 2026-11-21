@@ -80,82 +80,104 @@ namespace hpx::parallel::detail {
                 }
                 else
                 {
-                    auto count = detail::distance(first, last);
-                    if (count <= 1)
+                    constexpr bool has_subtraction_distance =
+                        (std::is_same_v<Iter, Sent> &&
+                            std::random_access_iterator<Iter>) ||
+                        std::sized_sentinel_for<Sent, Iter>;
+
+                    if constexpr (!has_subtraction_distance)
                     {
-                        return last;
+                        using base_policy_type =
+                            decltype(hpx::execution::experimental::to_non_simd(
+                                std::declval<ExPolicy>()));
+                        return sequential_is_heap_until<base_policy_type>(first,
+                            last, HPX_FORWARD(Comp, comp),
+                            HPX_FORWARD(Proj, proj));
                     }
-
-                    Iter second = first + 1;
-                    --count;
-                    std::size_t base_idx = 0;
-                    Iter it = second;
-
-                    while (count >= static_cast<decltype(count)>(num_lanes))
+                    else
                     {
-                        vector_type parent_vec{};
-                        for (std::size_t e = 0; e != num_lanes; ++e)
+                        auto count = detail::distance(first, last);
+                        if (count <= 1)
                         {
-                            value_type const parent_val =
-                                *(first + (base_idx + e) / 2);
-                            traits::set(parent_vec, e, parent_val);
+                            std::advance(first, count);
+                            return first;
                         }
 
-                        auto child_vec = traits::vector_pack_load<vector_type,
-                            value_type>::unaligned(it);
-
-                        int offset = -1;
-                        if constexpr (std::is_same_v<hpx::identity,
-                                          std::decay_t<Proj>>)
-                        {
-                            auto mask = HPX_INVOKE(comp, parent_vec, child_vec);
-                            offset = traits::find_first_of(mask);
-                        }
-                        else
-                        {
-                            auto mask =
-                                HPX_INVOKE(comp, HPX_INVOKE(proj, parent_vec),
-                                    HPX_INVOKE(proj, child_vec));
-                            offset = traits::find_first_of(mask);
-                        }
-
-                        if (offset != -1)
-                        {
-                            std::advance(it, offset);
-                            return it;
-                        }
-
-                        std::advance(it, num_lanes);
-                        base_idx += num_lanes;
-                        count -= num_lanes;
-                    }
-
-                    while (count != 0)
-                    {
-                        if constexpr (std::is_same_v<hpx::identity,
-                                          std::decay_t<Proj>>)
-                        {
-                            if (HPX_INVOKE(comp, *(first + base_idx / 2), *it))
-                            {
-                                return it;
-                            }
-                        }
-                        else
-                        {
-                            if (HPX_INVOKE(comp,
-                                    HPX_INVOKE(proj, *(first + base_idx / 2)),
-                                    HPX_INVOKE(proj, *it)))
-                            {
-                                return it;
-                            }
-                        }
-
-                        ++it;
-                        ++base_idx;
+                        Iter second = first + 1;
                         --count;
-                    }
+                        std::size_t base_idx = 0;
+                        Iter it = second;
 
-                    return it;
+                        while (count >= static_cast<decltype(count)>(num_lanes))
+                        {
+                            vector_type parent_vec{};
+                            for (std::size_t e = 0; e != num_lanes; ++e)
+                            {
+                                value_type const parent_val =
+                                    *(first + (base_idx + e) / 2);
+                                traits::set(parent_vec, e, parent_val);
+                            }
+
+                            auto child_vec =
+                                traits::vector_pack_load<vector_type,
+                                    value_type>::unaligned(it);
+
+                            int offset = -1;
+                            if constexpr (std::is_same_v<hpx::identity,
+                                              std::decay_t<Proj>>)
+                            {
+                                auto mask =
+                                    HPX_INVOKE(comp, parent_vec, child_vec);
+                                offset = traits::find_first_of(mask);
+                            }
+                            else
+                            {
+                                auto mask = HPX_INVOKE(comp,
+                                    HPX_INVOKE(proj, parent_vec),
+                                    HPX_INVOKE(proj, child_vec));
+                                offset = traits::find_first_of(mask);
+                            }
+
+                            if (offset != -1)
+                            {
+                                std::advance(it, offset);
+                                return it;
+                            }
+
+                            std::advance(it, num_lanes);
+                            base_idx += num_lanes;
+                            count -= num_lanes;
+                        }
+
+                        while (count != 0)
+                        {
+                            if constexpr (std::is_same_v<hpx::identity,
+                                              std::decay_t<Proj>>)
+                            {
+                                if (HPX_INVOKE(
+                                        comp, *(first + base_idx / 2), *it))
+                                {
+                                    return it;
+                                }
+                            }
+                            else
+                            {
+                                if (HPX_INVOKE(comp,
+                                        HPX_INVOKE(
+                                            proj, *(first + base_idx / 2)),
+                                        HPX_INVOKE(proj, *it)))
+                                {
+                                    return it;
+                                }
+                            }
+
+                            ++it;
+                            ++base_idx;
+                            --count;
+                        }
+
+                        return it;
+                    }
                 }
             }
         }
