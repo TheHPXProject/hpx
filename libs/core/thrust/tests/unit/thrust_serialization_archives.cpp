@@ -56,9 +56,19 @@ namespace test {
             // one archive for all rounds, as parcel_await uses: its extra
             // data keeps the buffers and the futures that were pending
             // between the rounds
-            hpx::serialization::detail::preprocess_container data;
-            hpx::serialization::output_archive archive(data, flags, nullptr,
-                nullptr, HPX_ZERO_COPY_SERIALIZATION_THRESHOLD);
+            struct state
+            {
+                explicit state(std::uint32_t const flags)
+                  : archive(data, flags, nullptr, nullptr,
+                        HPX_ZERO_COPY_SERIALIZATION_THRESHOLD)
+                {
+                }
+
+                hpx::serialization::detail::preprocess_container data;
+                hpx::serialization::output_archive archive;
+            };
+            auto s = std::make_unique<state>(flags);
+            hpx::serialization::output_archive& archive = s->archive;
 
             // as a parcel does: keeps the buffers alive
             auto& keep_alive = archive.get_extra_data<
@@ -66,6 +76,38 @@ namespace test {
             while (true)
             {
                 archive.reset();
+
+                // What waits for the futures a round registers is set up
+                // before they are registered. If waiting can't be set up
+                // nevertheless, the archive the futures notify is kept
+                // (lost) instead of destroyed.
+                hpx::promise<void> ready;
+                hpx::future<void> f = ready.get_future();
+                auto const wait = [&]() {
+                    try
+                    {
+                        auto* futures = archive.try_get_extra_data<
+                            hpx::serialization::detail::preprocess_futures>();
+                        if (futures == nullptr || !futures->has_futures())
+                        {
+                            return false;
+                        }
+                        (*futures)([&ready]() { ready.set_value(); });
+                    }
+                    catch (...)
+                    {
+                        (void) s.release();
+                        throw;
+                    }
+
+                    // the waiting thread may be woken before the future is
+                    // ready
+                    while (!f.is_ready())
+                    {
+                        f.wait();
+                    }
+                    return true;
+                };
 
                 // not inside a handler while waiting: this thread may
                 // continue on another OS thread, which doesn't know the
@@ -83,44 +125,23 @@ namespace test {
                 {
                     // futures registered before the error notify the
                     // archive's extra data: keep the archive until they are
-                    // ready, then pass the error on
-                    if (auto* futures = archive.try_get_extra_data<
-                            hpx::serialization::detail::preprocess_futures>();
-                        futures != nullptr && futures->has_futures())
+                    // ready, then pass the error of save() on
+                    try
                     {
-                        try
-                        {
-                            hpx::promise<void> ready;
-                            hpx::future<void> f = ready.get_future();
-                            (*futures)([&ready]() { ready.set_value(); });
-
-                            // the waiting thread may be woken before the
-                            // future is ready
-                            while (!f.is_ready())
-                            {
-                                f.wait();
-                            }
-                        }
-                        // NOLINTNEXTLINE(bugprone-empty-catch)
-                        catch (...)
-                        {
-                            // the error of save() is passed on instead
-                        }
+                        (void) wait();
+                    }
+                    // NOLINTNEXTLINE(bugprone-empty-catch)
+                    catch (...)
+                    {
                     }
                     std::rethrow_exception(error);
                 }
 
-                auto* futures = archive.try_get_extra_data<
-                    hpx::serialization::detail::preprocess_futures>();
-                if (futures == nullptr || !futures->has_futures())
+                // another round once the futures are ready
+                if (!wait())
                 {
                     return keep_alive.move_buffers();
                 }
-
-                // another round once the futures are ready
-                hpx::promise<void> ready;
-                hpx::future<void> f = ready.get_future();
-                (*futures)([&ready]() { ready.set_value(); });
                 f.get();
             }
         }
