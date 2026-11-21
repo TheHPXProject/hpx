@@ -12,6 +12,8 @@
 #include <hpx/modules/runtime_configuration.hpp>
 #include <hpx/modules/util.hpp>
 
+#include <asio/ip/host_name.hpp>
+
 #include <algorithm>
 #include <atomic>
 #include <bit>
@@ -348,9 +350,12 @@ namespace hpx::util {
         return static_cast<int>(gex_System_QueryJobSize());
     }
 
+    // The name of the host: localities on the same host share its cores
+    // (see runtime_distributed::assign_cores), so it must not be unique per
+    // rank.
     std::string gasnet_environment::get_processor_name()
     {
-        return std::to_string(rank());
+        return asio::ip::host_name();
     }
 
     gex_Client_t gasnet_environment::client() noexcept
