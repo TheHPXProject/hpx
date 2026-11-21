@@ -1,4 +1,5 @@
 //  Copyright (c) 2026 Hartmut Kaiser
+//  Copyright (c) 2026 Divyanshi Talreja
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -9,7 +10,8 @@
 // worker of a pool waits until the pool is stopping and the other worker has
 // left, then schedules a normal and a bound task on the queues of that worker
 // and a low priority task (which some schedulers run only on the worker that
-// has left). The last worker to leave has to run all of them, otherwise the
+// has left). For shared-priority scheduling, it also stages a high-priority
+// task on a queue whose owning worker has left. The last worker runs them, or
 // pool never becomes idle and the runtime waits for them forever at exit. The
 // static scheduler never steals: it has to put the tasks on the queue of the
 // producer's worker instead. The test runs once for each scheduler.
@@ -17,7 +19,9 @@
 #include <hpx/execution.hpp>
 #include <hpx/init.hpp>
 #include <hpx/modules/resource_partitioner.hpp>
+#include <hpx/modules/schedulers.hpp>
 #include <hpx/modules/testing.hpp>
+#include <hpx/modules/thread_pools.hpp>
 #include <hpx/modules/threading_base.hpp>
 #include <hpx/thread.hpp>
 
@@ -27,6 +31,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <utility>
@@ -40,6 +45,7 @@ namespace {
     std::atomic<bool> left_work_posted(false);
     std::atomic<int> left_work_done(0);
     char const* scheduler_name = "";
+    bool shared_high_priority = false;
 
     template <typename F>
     bool yield_until(F&& f)
@@ -95,6 +101,22 @@ namespace {
             pool, hpx::threads::thread_priority::low);
         hpx::post(low_exec, [] { ++left_work_done; });
 
+        if (shared_high_priority)
+        {
+            hpx::threads::thread_init_data high_data;
+            high_data.priority = hpx::threads::thread_priority::high;
+            high_data.schedulehint = hpx::threads::thread_schedule_hint(
+                static_cast<std::int16_t>(other));
+            high_data.func = [](hpx::threads::thread_restart_state) {
+                ++left_work_done;
+                return hpx::threads::thread_result_type{
+                    hpx::threads::thread_schedule_state::terminated, {}};
+            };
+            high_data.scheduler_base = pool->get_scheduler();
+            high_data.scheduler_base->create_thread(
+                high_data, nullptr, hpx::throws);
+        }
+
         left_work_posted = true;
     }
 }    // namespace
@@ -106,7 +128,7 @@ int hpx_main()
     hpx::execution::parallel_executor exec(pool,
         hpx::threads::thread_priority::bound,
         hpx::threads::thread_stacksize::default_,
-        hpx::threads::thread_schedule_hint(0));
+        hpx::threads::thread_schedule_hint(shared_high_priority ? 1 : 0));
     hpx::post(exec, &producer, pool);
 
     // stop the pool only once the producer runs: a stopping worker doesn't
@@ -119,7 +141,9 @@ int hpx_main()
         pool->stop(l, false);
     }
 
-    bool const done = yield_until([] { return left_work_done.load() == 3; });
+    int const expected = shared_high_priority ? 4 : 3;
+    bool const done =
+        yield_until([expected] { return left_work_done.load() == expected; });
     HPX_TEST(left_work_posted);
     HPX_TEST(done);
 
@@ -130,7 +154,7 @@ int hpx_main()
         std::cerr
             << scheduler_name
             << ": the tasks left on a stopped worker's queues were not run ("
-            << left_work_done.load() << " of 3 done)\n";
+            << left_work_done.load() << " of " << expected << " done)\n";
         std::_Exit(hpx::util::report_errors());
     }
 
@@ -144,6 +168,8 @@ void test_scheduler(int argc, char* argv[],
     left_work_posted = false;
     left_work_done = 0;
     scheduler_name = name;
+    shared_high_priority =
+        scheduler == hpx::resource::scheduling_policy::shared_priority;
 
     hpx::program_options::options_description desc(
         "Usage: " HPX_APPLICATION_STRING " [options]");
@@ -159,7 +185,29 @@ void test_scheduler(int argc, char* argv[],
     init_args.rp_mode = hpx::resource::partitioner_mode::allow_oversubscription;
     init_args.rp_callback = [scheduler](hpx::resource::partitioner& rp,
                                 hpx::program_options::variables_map const&) {
-        rp.create_thread_pool("work", scheduler);
+        if (scheduler == hpx::resource::scheduling_policy::shared_priority)
+        {
+            using scheduler_type =
+                hpx::threads::policies::shared_priority_queue_scheduler<>;
+            rp.create_thread_pool("work",
+                [](hpx::threads::thread_pool_init_parameters init,
+                    hpx::threads::policies::thread_queue_init_parameters
+                        queue_init)
+                    -> std::unique_ptr<hpx::threads::thread_pool_base> {
+                    scheduler_type::init_parameter_type scheduler_init(
+                        init.num_threads_, {2, 1, 1}, init.affinity_data_,
+                        queue_init);
+                    auto scheduler =
+                        std::make_unique<scheduler_type>(scheduler_init);
+                    return std::make_unique<hpx::threads::detail::
+                            scheduled_thread_pool<scheduler_type>>(
+                        std::move(scheduler), init);
+                });
+        }
+        else
+        {
+            rp.create_thread_pool("work", scheduler);
+        }
 
         // two workers for the pool "work", the rest stays in the default pool
         std::size_t threads_added = 0;
@@ -172,9 +220,12 @@ void test_scheduler(int argc, char* argv[],
                 {
                     if (threads_added < 2)
                     {
-                        rp.add_resource(p, "work");
                         if (first_pu == nullptr)
+                        {
                             first_pu = &p;
+                        }
+                        rp.add_resource(
+                            shared_high_priority ? *first_pu : p, "work");
                         ++threads_added;
                     }
                 }
