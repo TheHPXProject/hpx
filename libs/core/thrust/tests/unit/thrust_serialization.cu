@@ -207,6 +207,12 @@ namespace {
             if (!r.destinations.empty())
             {
                 HPX_TEST_EQ(r.destinations[0] == destination, direct);
+
+                // the parcelport must know that it writes to device memory
+                // (the test's copy would work with either)
+                bool const to_device = direct && !is_pinned(destination);
+                HPX_TEST_EQ(
+                    r.device_destinations, std::size_t(to_device ? 1 : 0));
             }
             HPX_TEST_EQ(r.steps, std::size_t(direct ? 0 : 1));
         }
