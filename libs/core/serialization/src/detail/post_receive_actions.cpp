@@ -9,7 +9,6 @@
 #include <hpx/serialization/detail/post_receive_actions.hpp>
 
 #include <cstddef>
-#include <cstdint>
 #include <exception>
 #include <functional>
 #include <memory>
@@ -24,8 +23,9 @@ namespace hpx::util {
     extra_data_id_type extra_data_helper<
         serialization::detail::post_receive_actions>::id() noexcept
     {
-        static std::uint8_t id = 0;
-        return &id;
+        static extra_data_id_type const id =
+            hpx::util::detail::next_extra_data_id();
+        return id;
     }
 }    // namespace hpx::util
 
