@@ -10,6 +10,7 @@
 
 #include <hpx/config.hpp>
 #include <hpx/init.hpp>
+#include <hpx/modules/async_cuda.hpp>
 #include <hpx/modules/program_options.hpp>
 #include <hpx/modules/runtime_local.hpp>
 #include <hpx/modules/serialization.hpp>
@@ -20,6 +21,7 @@
 #include <thrust/reduce.h>
 #include <thrust/sequence.h>
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -178,6 +180,63 @@ namespace {
     }
 }    // namespace
 
+namespace {
+
+    // holds up the stream it is queued on until 'go' is set
+    void hold_stream(cudaStream_t, cudaError_t, void* go)
+    {
+        auto const& flag = *static_cast<std::atomic<bool> const*>(go);
+        while (!flag.load())
+        {
+        }
+    }
+
+    // A block given back while a read of it is still queued is reused (or
+    // freed) once the read has finished, also without another allocation:
+    // the next deallocation gives it back. With hpx.thrust.max_cached=0 (as
+    // in hpx_main_restarted) it is freed then.
+    void test_deferred_without_allocation()
+    {
+        std::size_t const bytes = std::size_t(1) << 20;
+        void* read = hpx::thrust::detail::pool_allocate(
+            bytes, hpx::thrust::memory_kind::pinned);
+        void* other = hpx::thrust::detail::pool_allocate(
+            bytes, hpx::thrust::memory_kind::pinned);
+
+        cudaStream_t stream = nullptr;
+        hpx::cuda::experimental::check_cuda_error(
+            cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking));
+        std::atomic<bool> go(false);
+        {
+            // the stream goes on also if the test fails on the way
+            struct release_stream
+            {
+                std::atomic<bool>& go;
+                cudaStream_t stream;
+
+                ~release_stream()
+                {
+                    go = true;
+                    (void) cudaStreamSynchronize(stream);
+                    (void) cudaStreamDestroy(stream);
+                }
+            } const guard{go, stream};
+
+            hpx::cuda::experimental::check_cuda_error(
+                cudaStreamAddCallback(stream, &hold_stream, &go, 0));
+
+            // the read is queued behind the held up callback
+            hpx::thrust::detail::pool_note_read(read, stream);
+            hpx::thrust::detail::pool_deallocate(read, bytes);
+            HPX_TEST(hpx::thrust::detail::is_pinned_host_memory(read));
+        }
+
+        // nothing is cached: the finished block is freed now
+        hpx::thrust::detail::pool_deallocate(other, bytes);
+        HPX_TEST(!hpx::thrust::detail::is_pinned_host_memory(read));
+    }
+}    // namespace
+
 // the memory kind of the first runtime (see hpx_main_restarted)
 hpx::thrust::memory_kind first_kind = hpx::thrust::memory_kind::device;
 
@@ -207,6 +266,7 @@ int hpx_main_restarted(hpx::program_options::variables_map&)
                     ::thrust::raw_pointer_cast(v.data())),
         expected == hpx::thrust::memory_kind::pinned);
 
+    test_deferred_without_allocation();
     return hpx::local::finalize();
 }
 

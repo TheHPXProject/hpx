@@ -61,6 +61,11 @@ namespace {
     std::unique_ptr<hpx::promise<void>> gate_promise;
     hpx::shared_future<void> gate;
 
+    // The zero-copy threshold of all parcels and archives of this test (the
+    // configured default may be larger than the large payloads): 16 ints are
+    // below it, 64 Ki ints above.
+    constexpr std::size_t test_threshold = 4096;
+
     void close_gate()
     {
         gate_promise = std::make_unique<hpx::promise<void>>();
@@ -285,11 +290,15 @@ struct failing_later_argument
     template <typename Archive>
     void serialize(Archive&, unsigned)
     {
-        if (gate.valid() && gate.is_ready())
+        if (own_gate.valid() && own_gate.is_ready())
         {
             throw std::runtime_error("failing_later_argument");
         }
     }
+
+    // the gate of the test that created it: a later test may replace the
+    // global one while this argument is still serialized
+    hpx::shared_future<void> own_gate = gate;
 };
 
 void check_failing_later(delayed_data const&, failing_later_argument const&) {}
@@ -512,7 +521,8 @@ namespace {
             [&promise](hpx::parcelset::parcel&& preprocessed,
                 hpx::parcelset::write_handler_type&&) {
                 promise.set_value(HPX_MOVE(preprocessed));
-            });
+            },
+            test_threshold);
 
         // the parcel is handed on only after its data has been produced
         HPX_TEST_EQ(f.is_ready(), !pending);
@@ -555,7 +565,7 @@ namespace {
         message m;
         {
             hpx::serialization::output_archive archive(
-                m.data, flags, &m.chunks);
+                m.data, flags, &m.chunks, nullptr, test_threshold);
             for (hpx::parcelset::parcel const& p : ps)
             {
                 if (auto const& keep_alive = p.keep_alive();
@@ -741,8 +751,7 @@ namespace {
     {
         std::size_t const actions_before = actions_run;
         std::size_t const created_before = buffers_created;
-        bool const large =
-            size * sizeof(int) >= HPX_ZERO_COPY_SERIALIZATION_THRESHOLD;
+        bool const large = size * sizeof(int) >= test_threshold;
 
         message m;
         {
@@ -985,7 +994,7 @@ namespace {
         std::vector<serialization_chunk> chunks;
         {
             hpx::serialization::output_archive archive(
-                buffer, archive_flags(true), &chunks);
+                buffer, archive_flags(true), &chunks, nullptr, test_threshold);
             archive << delayed_data{size, 7, {}};
         }
         HPX_TEST(chunks.empty() ||
@@ -1026,7 +1035,8 @@ namespace {
                     hpx::parcelset::write_handler_type&&) {
                     // nothing is sent
                     HPX_TEST(false);
-                });
+                },
+                test_threshold);
         }
         catch (std::exception const& e)
         {
@@ -1061,6 +1071,7 @@ namespace {
     // write handler.
     void test_failing_resumed_serialization()
     {
+        std::size_t const alive_before = buffers_alive;
         close_gate();
 
         // shared with the handler, which may run after a timeout of the test
@@ -1084,20 +1095,26 @@ namespace {
             [](hpx::parcelset::parcel&&, hpx::parcelset::write_handler_type&&) {
                 // nothing is sent
                 HPX_TEST(false);
-            });
+            },
+            test_threshold);
 
         // the first round waits for the data
         HPX_TEST(!handled);
 
+        // the error reaches the handler, and the failed archive releases its
+        // buffer (maybe only after the handler ran): the next tests expect
+        // no buffers alive
         open_gate();
         for (auto const deadline =
                  std::chrono::steady_clock::now() + std::chrono::seconds(30);
-            !handled && std::chrono::steady_clock::now() < deadline;)
+            (!handled || buffers_alive != alive_before) &&
+            std::chrono::steady_clock::now() < deadline;)
         {
             hpx::this_thread::yield();
         }
         HPX_TEST(handled);
         HPX_TEST(failed);
+        HPX_TEST_EQ(buffers_alive.load(), alive_before);
     }
 }    // namespace
 
