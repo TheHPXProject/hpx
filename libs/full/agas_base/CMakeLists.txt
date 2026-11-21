@@ -82,6 +82,7 @@ add_hpx_module(
     hpx_actions
     hpx_actions_base
     hpx_async_distributed
+    hpx_components
     hpx_components_base
     hpx_naming
     hpx_naming_base
