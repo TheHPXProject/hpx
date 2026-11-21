@@ -61,8 +61,10 @@ namespace test {
     // what the receiving side did
     struct received
     {
-        // where the networking layer placed the zero-copy chunks
+        // where the networking layer placed the zero-copy chunks, and how
+        // many of them the de-serialization said are device memory
         std::vector<void*> destinations;
+        std::size_t device_destinations = 0;
 
         // the steps the de-serialization deferred until the data had arrived
         std::size_t steps = 0;

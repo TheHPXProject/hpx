@@ -277,6 +277,10 @@ namespace test {
                 continue;
             }
             r.destinations.push_back(c.data());
+            if (c.memory_ == hpx::serialization::chunk_memory::device)
+            {
+                ++r.device_destinations;
+            }
             copy(c.data(), m.chunk_data[i].data(), c.size());
         }
 
