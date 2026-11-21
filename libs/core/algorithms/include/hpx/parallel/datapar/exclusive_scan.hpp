@@ -93,7 +93,8 @@ namespace hpx::parallel::detail {
                         for (std::size_t i = 0; i != num_lanes; ++i)
                         {
                             *dest++ = temp;
-                            init = HPX_INVOKE(op, init, traits::get(v, i));
+                            value_type const val = traits::get(v, i);
+                            init = HPX_INVOKE(op, init, val);
                             temp = init;
                         }
 
@@ -103,8 +104,8 @@ namespace hpx::parallel::detail {
 
                     while (first != last)
                     {
-                        *dest++ = temp;
                         init = HPX_INVOKE(op, init, *first);
+                        *dest++ = temp;
                         temp = init;
                         ++first;
                     }
@@ -171,7 +172,8 @@ namespace hpx::parallel::detail {
                         for (std::size_t i = 0; i != num_lanes; ++i)
                         {
                             *dest++ = temp;
-                            init = HPX_INVOKE(op, init, traits::get(v, i));
+                            value_type const val = traits::get(v, i);
+                            init = HPX_INVOKE(op, init, val);
                             temp = init;
                         }
 
@@ -181,8 +183,8 @@ namespace hpx::parallel::detail {
 
                     while (count-- != 0)
                     {
-                        *dest++ = temp;
                         init = HPX_INVOKE(op, init, *first);
+                        *dest++ = temp;
                         temp = init;
                         ++first;
                     }

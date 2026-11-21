@@ -91,7 +91,8 @@ namespace hpx::parallel::detail {
 
                         for (std::size_t i = 0; i != num_lanes; ++i)
                         {
-                            init = HPX_INVOKE(op, init, traits::get(v, i));
+                            value_type const val = traits::get(v, i);
+                            init = HPX_INVOKE(op, init, val);
                             *dest++ = init;
                         }
 
@@ -180,7 +181,8 @@ namespace hpx::parallel::detail {
 
                         for (std::size_t i = 0; i != num_lanes; ++i)
                         {
-                            init = HPX_INVOKE(op, init, traits::get(v, i));
+                            value_type const val = traits::get(v, i);
+                            init = HPX_INVOKE(op, init, val);
                             *dest++ = init;
                         }
 
