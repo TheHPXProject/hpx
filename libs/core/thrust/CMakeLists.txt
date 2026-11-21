@@ -17,15 +17,27 @@ if(HPX_WITH_HIP)
 endif()
 
 set(thrust_headers
-    hpx/thrust/policy.hpp hpx/thrust/thrust_headers.hpp
-    hpx/thrust/algorithms.hpp hpx/thrust/detail/algorithm_map.hpp
+    hpx/thrust/allocator.hpp
+    hpx/thrust/memory.hpp
+    hpx/thrust/policy.hpp
+    hpx/thrust/thrust_headers.hpp
+    hpx/thrust/algorithms.hpp
+    hpx/thrust/detail/algorithm_map.hpp
+    hpx/thrust/serialization/detail/device_staging.hpp
+    hpx/thrust/serialization/detail/host_accessible.hpp
+    hpx/thrust/serialization/device_vector.hpp
+    hpx/thrust/serialization/host_vector.hpp
+    hpx/thrust/serialization/universal_vector.hpp
 )
 
 # cmake-format: off
 set(thrust_compat_headers)
 # cmake-format: on
 
-set(thrust_sources)
+# pools of device and pinned host memory (hpx::thrust::pooled_allocator), moves
+# thrust::device_vector data through the archives (pinned staging buffers,
+# asynchronous copies)
+set(thrust_sources memory_pool.cpp detail/device_staging.cpp)
 
 include(HPX_AddModule)
 add_hpx_module(
@@ -41,11 +53,16 @@ add_hpx_module(
     hpx_algorithms
     hpx_async_cuda
     hpx_concepts
+    hpx_errors
     hpx_execution
     hpx_execution_base
     hpx_executors
     hpx_functional
     hpx_futures
+    hpx_lcos_local
+    hpx_runtime_local
+    hpx_serialization
+    hpx_synchronization
     hpx_threading_base
   CMAKE_SUBDIRS examples tests
 )
