@@ -253,7 +253,6 @@ namespace hpx::parallel {
                 Sent last, Comp&& comp, Proj&& proj)
             {
                 using result = util::detail::algorithm_result<ExPolicy, bool>;
-                using type = std::iterator_traits<Iter>::value_type;
                 using difference_type =
                     std::iterator_traits<Iter>::difference_type;
                 constexpr bool has_scheduler_executor =
@@ -365,7 +364,6 @@ namespace hpx::parallel {
                 Sent last, Comp comp, Proj proj)
             {
                 using result = util::detail::algorithm_result<ExPolicy, Iter>;
-                using type = std::iterator_traits<Iter>::value_type;
                 using difference_type =
                     std::iterator_traits<Iter>::difference_type;
                 constexpr bool has_scheduler_executor =
