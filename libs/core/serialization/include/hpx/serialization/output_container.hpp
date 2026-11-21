@@ -208,6 +208,12 @@ namespace hpx::serialization {
             return chunker_.get_num_chunks();
         }
 
+        [[nodiscard]] std::size_t get_zero_copy_serialization_threshold()
+            const noexcept override
+        {
+            return zero_copy_serialization_threshold_;
+        }
+
         void reset() override
         {
             chunker_.reset();
