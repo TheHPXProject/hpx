@@ -13,10 +13,12 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <mutex>
 #include <string>
 #include <unordered_set>
+#include <utility>
 
 #include <tracy/Tracy.hpp>
 #include <tracy/TracyC.h>
@@ -55,6 +57,27 @@ namespace hpx::tracy {
     void emit_appinfo(char const* text, std::size_t size) noexcept
     {
         TracyCAppInfo(text, size);
+    }
+
+    char const* fiber_name(char const* description, void const* id) noexcept
+    {
+        // Tracy reads the name later from its own thread, without this lock.
+        // That is safe: a string in the set is never changed, moved or freed,
+        // even when the set grows.
+        struct names_type
+        {
+            std::mutex mtx;
+            std::unordered_set<std::string> names;
+        };
+        static names_type* const names = new names_type;
+
+        char suffix[32];
+        std::snprintf(suffix, sizeof(suffix), "_%p", id);
+        std::string name(description);
+        name += suffix;
+
+        std::lock_guard<std::mutex> l(names->mtx);
+        return names->names.insert(std::move(name)).first->c_str();
     }
 
     namespace detail {
