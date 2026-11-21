@@ -503,7 +503,7 @@ generators always compile CUDA sources with nvcc.
    Building |hpx| with CUDA on Windows is experimental. It requires:
 
    * clang 22.1 or newer (as included with Visual Studio 2026),
-   * CUDA 13.1 or newer, with CCCL 3.1 or newer,
+   * CUDA 13.4 or newer, with CCCL 3.4 or newer,
    * the standard library and Windows SDK of Visual Studio 2026, as far as the CUDA version
      supports them (the standard library of Visual Studio 2022, MSVC 14.44, doesn't compile with
      clang in CUDA mode),

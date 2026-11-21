@@ -71,20 +71,22 @@ if(HPX_WITH_CUDA AND NOT TARGET Cuda::cuda)
         "Building HPX with CUDA on Windows requires clang 22.1 or newer, found ${CMAKE_CUDA_COMPILER_VERSION}"
       )
     endif()
-    if(CUDAToolkit_VERSION VERSION_LESS 13.1)
+    if(CUDAToolkit_VERSION VERSION_LESS 13.4)
       hpx_error(
-        "Building HPX with CUDA on Windows requires CUDA 13.1 or newer, found ${CUDAToolkit_VERSION}"
+        "Building HPX with CUDA on Windows requires CUDA 13.4 or newer, found ${CUDAToolkit_VERSION}"
       )
     endif()
-    # the CCCL of the CUDA toolkit (cuda::std::aligned_alloc doesn't compile
-    # with clang on Windows before CCCL 3.1)
+    # the CCCL of the CUDA toolkit: cuda::std::aligned_alloc doesn't compile
+    # with clang on Windows before CCCL 3.1, and before CCCL 3.4
+    # cuda::std::basic_string_view has host-only deduction guides, which clang
+    # rejects in CUDA mode
     find_package(
       CCCL CONFIG QUIET PATHS "${CUDAToolkit_TARGET_DIR}/lib/cmake"
       NO_DEFAULT_PATH
     )
-    if(NOT CCCL_FOUND OR CCCL_VERSION VERSION_LESS 3.1)
+    if(NOT CCCL_FOUND OR CCCL_VERSION VERSION_LESS 3.4)
       hpx_error(
-        "Building HPX with CUDA on Windows requires CCCL 3.1 or newer, found ${CCCL_VERSION}"
+        "Building HPX with CUDA on Windows requires CCCL 3.4 or newer, found ${CCCL_VERSION}"
       )
     endif()
   endif()

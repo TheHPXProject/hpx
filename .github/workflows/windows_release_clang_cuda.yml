@@ -28,14 +28,46 @@ jobs:
     # the runner has no GPU, so this job only builds the CUDA code, with clang
     # as the C++ and CUDA compiler (cmake/toolchains/Windows-Clang-CUDA.cmake);
     # clang needs the CUDA headers (including the curand ones its CUDA runtime
-    # wrapper includes), libraries, libdevice and ptxas, the Thrust
-    # integration needs CUDA 13.1 or newer
+    # wrapper includes), libraries, libdevice and ptxas, and CCCL 3.4 or newer
+    # (CUDA 13.4 or newer); the components are unpacked from NVIDIA's
+    # redistributable archives, which have the layout of a CUDA installation
     - name: Install CUDA
-      uses: Jimver/cuda-toolkit@v0.2.36
-      with:
-        cuda: '13.3.1'
-        method: 'network'
-        sub-packages: '["nvcc", "crt", "nvvm", "cudart", "thrust", "cublas", "cublas_dev", "curand", "curand_dev"]'
+      shell: python
+      run: |
+          import hashlib, json, os, shutil, urllib.request, zipfile
+
+          base = "https://developer.download.nvidia.com/compute/cuda/redist/"
+          components = ["cuda_nvcc", "cuda_cudart", "cuda_crt", "libnvvm",
+                        "cccl", "libcurand", "libcublas"]
+          temp = os.environ["RUNNER_TEMP"]
+          root = os.path.join(temp, "cuda").replace("\\", "/")
+
+          with urllib.request.urlopen(base + "redistrib_13.5.0.json") as r:
+              manifest = json.load(r)
+          for component in components:
+              entry = manifest[component]["windows-x86_64"]
+              archive = os.path.join(temp, component + ".zip")
+              urllib.request.urlretrieve(base + entry["relative_path"], archive)
+              sha256 = hashlib.sha256()
+              with open(archive, "rb") as f:
+                  for chunk in iter(lambda: f.read(1 << 20), b""):
+                      sha256.update(chunk)
+              if sha256.hexdigest() != entry["sha256"]:
+                  raise SystemExit(f"{component}: checksum mismatch")
+              # strip the archive's top-level directory
+              with zipfile.ZipFile(archive) as z:
+                  for member in z.infolist():
+                      path = member.filename.split("/", 1)
+                      if member.is_dir() or len(path) < 2:
+                          continue
+                      target = os.path.join(root, path[1])
+                      os.makedirs(os.path.dirname(target), exist_ok=True)
+                      with z.open(member) as src, open(target, "wb") as dst:
+                          shutil.copyfileobj(src, dst)
+              os.remove(archive)
+              print(component, manifest[component]["version"])
+          with open(os.environ["GITHUB_ENV"], "a") as f:
+              f.write(f"CUDA_PATH={root}\n")
     # a fixed clang, independent of the runner image: unpack the LLVM
     # release archive (a .tar.xz) so that bin is directly in LLVM_PATH
     - name: Install clang
