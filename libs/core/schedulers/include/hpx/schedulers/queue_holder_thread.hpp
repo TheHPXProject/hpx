@@ -700,7 +700,8 @@ namespace hpx::threads::policies {
         {
             // only take from BP queue if we are not stealing
             if (!stealing && bp_queue_ &&
-                bp_queue_->get_next_thread(thrd, stealing, check_new))
+                bp_queue_->get_next_thread(
+                    thrd, stealing, check_new && owns_bp_queue()))
             {
                 tq_deb.debug(debug::str<>("next_thread_BP"),
                     queue_data_print(this),
@@ -710,7 +711,8 @@ namespace hpx::threads::policies {
             }
 
             if (hp_queue_ &&
-                hp_queue_->get_next_thread(thrd, stealing, check_new))
+                hp_queue_->get_next_thread(
+                    thrd, stealing, check_new && owns_hp_queue()))
             {
                 tq_deb.debug(debug::str<>("get_next_thread_HP"),
                     queue_data_print(this),

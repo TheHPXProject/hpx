@@ -6,6 +6,7 @@
 
 #include <hpx/future.hpp>
 #include <hpx/init.hpp>
+#include <hpx/modules/executors.hpp>
 #include <hpx/modules/program_options.hpp>
 #include <hpx/modules/resource_partitioner.hpp>
 #include <hpx/modules/schedulers.hpp>
@@ -23,6 +24,7 @@ int hpx_main()
 {
     constexpr std::size_t num_creators = 8;
     constexpr std::size_t threads_per_creator = 10000;
+    constexpr std::size_t num_high_tasks = 1024;
 
     std::atomic<std::size_t> completed{0};
     std::vector<hpx::future<void>> creators;
@@ -45,6 +47,25 @@ int hpx_main()
     }
     HPX_TEST_EQ(completed.load(), num_creators * threads_per_creator);
 
+    std::atomic<std::size_t> high_completed{0};
+    hpx::execution::parallel_executor high_executor(
+        hpx::threads::thread_priority::high,
+        hpx::threads::thread_stacksize::default_,
+        hpx::threads::thread_schedule_hint(1));
+    std::vector<hpx::future<void>> high_tasks;
+    high_tasks.reserve(num_high_tasks);
+    for (std::size_t i = 0; i != num_high_tasks; ++i)
+    {
+        high_tasks.push_back(
+            hpx::async(high_executor, [&] { ++high_completed; }));
+    }
+    hpx::wait_all(high_tasks);
+    for (auto& task : high_tasks)
+    {
+        task.get();
+    }
+    HPX_TEST_EQ(high_completed.load(), high_tasks.size());
+
     return hpx::local::finalize();
 }
 
@@ -52,13 +73,16 @@ int main(int argc, char* argv[])
 {
     hpx::program_options::options_description desc("Test options");
     desc.add_options()("shared-normal-queue",
-        "share one normal-priority queue between two workers");
+        "share one normal-priority queue between two workers")(
+        "shared-high-queue",
+        "share one high-priority queue between two workers");
 
     hpx::local::init_params init_args;
     init_args.desc_cmdline = desc;
     init_args.rp_callback = [](hpx::resource::partitioner& rp,
                                 hpx::program_options::variables_map const& vm) {
-        if (vm.count("shared-normal-queue") == 0)
+        if (vm.count("shared-normal-queue") == 0 &&
+            vm.count("shared-high-queue") == 0)
         {
             rp.create_thread_pool(
                 "default", hpx::resource::scheduling_policy::shared_priority);
@@ -68,12 +92,15 @@ int main(int argc, char* argv[])
         using scheduler_type =
             hpx::threads::policies::shared_priority_queue_scheduler<>;
         rp.create_thread_pool("default",
-            [](hpx::threads::thread_pool_init_parameters init,
+            [share_high = vm.count("shared-high-queue") != 0](
+                hpx::threads::thread_pool_init_parameters init,
                 hpx::threads::policies::thread_queue_init_parameters queue_init)
                 -> std::unique_ptr<hpx::threads::thread_pool_base> {
                 scheduler_type::init_parameter_type scheduler_init(
-                    init.num_threads_, {1, 2, 1}, init.affinity_data_,
-                    queue_init);
+                    init.num_threads_,
+                    share_high ? hpx::threads::policies::core_ratios{2, 1, 1} :
+                                 hpx::threads::policies::core_ratios{1, 2, 1},
+                    init.affinity_data_, queue_init);
                 auto scheduler =
                     std::make_unique<scheduler_type>(scheduler_init);
                 return std::make_unique<hpx::threads::detail::
