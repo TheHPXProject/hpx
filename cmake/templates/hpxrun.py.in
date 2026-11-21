@@ -207,7 +207,7 @@ def run_none(cmd, localities, nodes, verbose):
 
 # Run with mpiexec
 # This is executing mpiexec with the "-np" option set to the number of localities
-def run_mpi(cmd, localities, verbose):
+def run_mpi(cmd, localities, verbose, launcher_args=()):
     mpiexec = '@MPIEXEC@'
     if mpiexec == '':
         mpiexec = '@MPIEXEC_EXECUTABLE@'
@@ -216,7 +216,8 @@ def run_mpi(cmd, localities, verbose):
         msg += 'Please rerun CMake with HPX_PARCELPORT_MPI=True.'
         print(msg, file=sys.stderr)
         sys.exit(1)
-    exec_cmd = [mpiexec, '@MPIEXEC_NUMPROC_FLAG@', str(localities)] + cmd
+    exec_cmd = [mpiexec, '@MPIEXEC_NUMPROC_FLAG@', str(localities)] + \
+        list(launcher_args) + cmd
     if verbose:
         print('Executing command: ' + ' '.join(exec_cmd))
     subproc(exec_cmd)
@@ -227,7 +228,9 @@ def run_gasnet(cmd, localities, verbose):
     # control selected by the host launcher, not by PSHM-era GASNet-1
     # environment variables.  The MPI conduit bootstraps under mpiexec.
     os.environ['GASNET_QUIET'] = 'yes'
-    run_mpi(cmd, localities, verbose)
+    # The parcelport's io threads never sleep: a launcher that binds each
+    # process to one core makes them and the HPX worker threads share it.
+    run_mpi(cmd, localities, verbose, ['--bind-to', 'none'])
 
 
 def run_gasnet_smp(cmd, localities, verbose):
