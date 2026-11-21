@@ -26,13 +26,10 @@
 
 #include "thrust_serialization.hpp"
 
-#include <algorithm>
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
 #include <new>
 #include <optional>
-#include <stdexcept>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -43,62 +40,6 @@ static_assert(hpx::serialization::detail::is_universal_allocator_v<int,
     ::thrust::universal_vector<int>::allocator_type>);
 static_assert(!hpx::serialization::detail::is_universal_allocator_v<int,
     ::thrust::device_allocator<int>>);
-
-// A filter that passes the data through unchanged (e.g. like a compressor,
-// it reads and writes all data of the archive on the host).
-struct identity_filter : hpx::serialization::binary_filter
-{
-    void set_max_length(std::size_t const size) override
-    {
-        buffer_.reserve(size);
-    }
-
-    void save(void const* src, std::size_t const src_count) override
-    {
-        char const* begin = static_cast<char const*>(src);
-        buffer_.insert(buffer_.end(), begin, begin + src_count);
-    }
-
-    bool flush(
-        void* dst, std::size_t const dst_count, std::size_t& written) override
-    {
-        written = (std::min) (dst_count, buffer_.size() - current_);
-        std::memcpy(dst, buffer_.data() + current_, written);
-        current_ += written;
-        return current_ == buffer_.size();
-    }
-
-    std::size_t init_data(void const* buffer, std::size_t const size,
-        std::size_t const buffer_size) override
-    {
-        char const* begin = static_cast<char const*>(buffer);
-        buffer_.assign(begin, begin + size);
-        current_ = 0;
-        return buffer_size;
-    }
-
-    void load(void* dst, std::size_t const dst_count) override
-    {
-        HPX_TEST(current_ + dst_count <= buffer_.size());
-        if (current_ + dst_count > buffer_.size())
-        {
-            throw std::runtime_error("identity_filter: too little data");
-        }
-        std::memcpy(dst, buffer_.data() + current_, dst_count);
-        current_ += dst_count;
-    }
-
-    template <typename Archive>
-    void serialize(Archive&, unsigned)
-    {
-    }
-
-    HPX_SERIALIZATION_POLYMORPHIC(identity_filter, override);
-
-private:
-    std::vector<char> buffer_;
-    std::size_t current_ = 0;
-};
 
 namespace {
 
@@ -456,51 +397,36 @@ namespace {
         }
     }
 
-    // the elements of a device_vector are sent as raw bytes: an archive with
-    // another byte order is rejected when saving, as when loading (only
-    // with HPX_SERIALIZATION_WITH_SUPPORTS_ENDIANESS archives can have one)
     // A filter reads and writes all data on the host: a device_vector in a
     // filtered archive is sent and received through host memory, also if the
     // archive may refer to device memory and zero-copy chunks are on.
     void test_filtered_archive()
     {
-        using hpx::serialization::archive_flags;
-
         std::size_t const size = 65536;
         ::thrust::host_vector<int> const expected = values<int>(size);
         ::thrust::device_vector<int> const v(expected);
+        ::thrust::device_vector<int> w;
 
-        std::vector<char> buffer;
-        std::vector<hpx::serialization::serialization_chunk> chunks;
-        identity_filter filter;
         std::uint32_t const flags = test::archive_flags(true, true) |
-            static_cast<std::uint32_t>(archive_flags::enable_compression);
+            static_cast<std::uint32_t>(
+                hpx::serialization::archive_flags::enable_compression);
+        test::filtered const r = test::filtered_round_trip(
+            flags, [&v](hpx::serialization::output_archive& ar) { ar << v; },
+            [&w](hpx::serialization::input_archive& ar) { ar >> w; });
 
-        std::size_t written = 0;
-        {
-            hpx::serialization::output_archive ar(buffer, flags, &chunks,
-                &filter, HPX_ZERO_COPY_SERIALIZATION_THRESHOLD);
-            HPX_TEST(ar.is_filtered());
-            ar << v;
-            ar.flush();
-            written = ar.bytes_written();
-        }
+        HPX_TEST(r.saved_filtered);
+        HPX_TEST(r.loaded_filtered);
 
         // no chunk refers to the device memory
-        for (auto const& chunk : chunks)
-        {
-            HPX_TEST(chunk.memory_ != hpx::serialization::chunk_memory::device);
-        }
-
-        hpx::serialization::input_archive ar(buffer, written, &chunks);
-        HPX_TEST(ar.is_filtered());
-        ::thrust::device_vector<int> w;
-        ar >> w;
+        HPX_TEST_EQ(r.device_chunks, std::size_t(0));
 
         HPX_TEST_EQ(w.size(), size);
         HPX_TEST(::thrust::host_vector<int>(w) == expected);
     }
 
+    // the elements of a device_vector are sent as raw bytes: an archive with
+    // another byte order is rejected when saving, as when loading (only
+    // with HPX_SERIALIZATION_WITH_SUPPORTS_ENDIANESS archives can have one)
     void test_other_byte_order()
     {
 #if defined(HPX_SERIALIZATION_HAVE_SUPPORTS_ENDIANESS)
