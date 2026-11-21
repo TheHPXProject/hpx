@@ -1039,16 +1039,19 @@ namespace hpx::threads::policies {
 
             auto& d = data_[num_thread].data_;
 
-            // Give bound and normal work a turn if boosted tasks keep filling
-            // the high-priority queue. Bound work cannot be stolen, and a
-            // single worker cannot make progress without this check.
+            // After 16 high-priority threads, try bound and normal work first.
+            // This also prevents starvation under a steady high-priority load.
+            // Bound work cannot be stolen by another worker.
             constexpr std::uint8_t max_consecutive_high_priority_tasks = 16;
-            bool const try_other_first = d.consecutive_high_priority_tasks_ >=
-                max_consecutive_high_priority_tasks;
-            bool from_other = try_other_first &&
-                (get_thread(d.bound_queue_, thrd) ||
-                    get_thread(d.queue_, thrd));
-            if (!from_other && num_thread < num_high_priority_queues_ &&
+            auto const get_other_thread = [&] {
+                return get_thread(d.bound_queue_, thrd) ||
+                    get_thread(d.queue_, thrd);
+            };
+
+            bool const found = d.consecutive_high_priority_tasks_ >=
+                    max_consecutive_high_priority_tasks &&
+                get_other_thread();
+            if (!found && num_thread < num_high_priority_queues_ &&
                 get_thread(d.high_priority_queue_, thrd))
             {
                 if (d.consecutive_high_priority_tasks_ <
@@ -1060,13 +1063,7 @@ namespace hpx::threads::policies {
                 return true;
             }
 
-            if (!try_other_first)
-            {
-                from_other = get_thread(d.bound_queue_, thrd) ||
-                    get_thread(d.queue_, thrd);
-            }
-
-            if (from_other)
+            if (found || get_other_thread())
             {
                 d.consecutive_high_priority_tasks_ = 0;
 
