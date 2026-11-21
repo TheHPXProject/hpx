@@ -338,10 +338,21 @@ namespace hpx::serialization {
 
         void flush() override
         {
+            // a filter is set only if the archive enables compression
+            if (filter_ == nullptr)
+            {
+                this->base_type::flush();
+                return;
+            }
+
             std::size_t written = 0;
 
-            if (access_traits::size(this->cont_) < this->current_)
-                access_traits::resize(this->cont_, this->current_);
+            // access_traits::resize grows the container by the given amount
+            if (std::size_t const size = access_traits::size(this->cont_);
+                size < this->current_)
+            {
+                access_traits::resize(this->cont_, this->current_ - size);
+            }
 
             this->current_ = start_compressing_at_;
 
@@ -355,14 +366,17 @@ namespace hpx::serialization {
                 if (flushed)
                     break;
 
-                // resize container
-                std::size_t const size = access_traits::size(this->cont_);
-                access_traits::resize(this->cont_, 2 * size);
+                // double the size of the container
+                access_traits::resize(
+                    this->cont_, access_traits::size(this->cont_));
 
             } while (true);
 
-            // truncate container
-            access_traits::resize(this->cont_, this->current_);
+            // truncate the container to the filtered data
+            if constexpr (requires { this->cont_.resize(this->current_); })
+            {
+                this->cont_.resize(this->current_);
+            }
         }
 
         void set_filter(binary_filter* filter) override
@@ -379,21 +393,22 @@ namespace hpx::serialization {
         {
             HPX_ASSERT(count != 0);
 
+            // During construction the filter is not set yet: the archive
+            // header (which tells the reader about the filter) is stored
+            // unfiltered.
+            if (filter_ == nullptr)
+            {
+                return this->base_type::save_binary(t, address, count);
+            }
+
             std::size_t type_info_size = 0;
             if (t != detail::fundamental_types::none)
             {
-                if (filter_ != nullptr)
-                {
-                    filter_->save(&t, sizeof(t));
-                }
+                filter_->save(&t, sizeof(t));
                 type_info_size = sizeof(t);
             }
 
-            // during construction the filter may not have been set yet
-            if (filter_ != nullptr)
-            {
-                filter_->save(address, count);
-            }
+            filter_->save(address, count);
 
             count += type_info_size;
             this->current_ += count;
@@ -404,7 +419,11 @@ namespace hpx::serialization {
         std::size_t save_binary_chunk(detail::fundamental_types t,
             void const* address, std::size_t count) override
         {
-            if (count < this->zero_copy_serialization_threshold_)
+            // Once the filter is set, the data goes through it: the reader
+            // reads it from the filtered stream (input_container::
+            // load_binary_chunk), a chunk would bypass the filter.
+            if (filter_ != nullptr ||
+                count < this->zero_copy_serialization_threshold_)
             {
                 // fall back to serialization_chunk-less archive
                 return this->filtered_output_container::save_binary(
