@@ -236,8 +236,16 @@ def run_oshrun(cmd, localities, verbose):
     # The parcelport's io threads never sleep: binding each process to one
     # core (the launcher's default) makes them and the HPX worker threads
     # share it.
+    # With the default base address of the symmetric heap, Open MPI maps it
+    # where rank 0's mapping landed, and a rank that finds that address taken
+    # aborts SHMEM_INIT. Asking for address 0 makes the ranks compare their
+    # mappings and fall back to Open MPI's default address together instead.
+    # An address given in the environment is left alone.
+    heap_base = []
+    if 'OMPI_MCA_sshmem_base_start_address' not in os.environ:
+        heap_base = ['--mca', 'sshmem_base_start_address', '0']
     exec_cmd = [oshrun, '-n', str(localities), '--bind-to', 'none',
-                '--mca', 'osc', 'ucx',
+                '--mca', 'osc', 'ucx'] + heap_base + [
                 '-x', 'SMA_SYMMETRIC_SIZE=' + sma_symmetric_size,
                 '-x', 'UCX_TLS=' + ucx_tls] + cmd
     if verbose:

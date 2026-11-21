@@ -138,6 +138,16 @@ from ``SMA_SYMMETRIC_SIZE`` in the environment of ``hpxrun.py`` and defaults to
 ``UCX_TLS`` (for example to ``all``) for runs across nodes. Set
 ``HPXRUN_OSHRUN`` to use another ``oshrun`` executable.
 
+``hpxrun.py`` also passes ``--mca sshmem_base_start_address 0``. With the
+default setting, Open MPI maps the symmetric heap of all processes at the
+address where it landed in the first one, and a process that finds that
+address taken in its own address space aborts in ``SHMEM_INIT`` (``Failed to
+negotiate base segment address``). This happens in a few percent of the runs.
+With ``0``, the processes compare their mappings first and fall back together
+to Open MPI's default address if they don't match. Pass the same option when
+starting ``oshrun`` by hand; ``hpxrun.py`` leaves it out if
+``OMPI_MCA_sshmem_base_start_address`` is set in the environment.
+
 How parcels are sent
 --------------------
 
