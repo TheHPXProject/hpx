@@ -30,6 +30,7 @@
 #include <hpx/modules/type_support.hpp>
 #include <hpx/modules/util.hpp>
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
@@ -44,6 +45,57 @@
 #include <vector>
 
 namespace hpx::threads {
+
+    namespace {
+
+        // Waits until busy() returned false required_count times in a row,
+        // or until abs_time (if given) has passed. The waiter has to let the
+        // threads it waits for run. A yield puts an HPX thread back into the
+        // queue for its own priority, and the schedulers pick a thread with a
+        // high priority (as the shutdown actions have) before any thread with
+        // a normal priority. On a single worker a yielding waiter would then
+        // starve the threads it waits for, so an HPX thread suspends for a
+        // short time instead.
+        template <typename Predicate>
+        bool wait_while_busy(Predicate&& busy, std::size_t const required_count,
+            std::chrono::steady_clock::time_point const* abs_time)
+        {
+            bool const is_hpx_thread = threads::get_self_ptr() != nullptr;
+
+            std::size_t count = 0;
+            for (std::size_t k = 0; /**/; ++k)
+            {
+                if (abs_time != nullptr &&
+                    *abs_time <= std::chrono::steady_clock::now())
+                {
+                    return false;
+                }
+
+                if (!busy())
+                {
+                    if (++count > required_count)
+                    {
+                        return true;
+                    }
+                }
+                else
+                {
+                    count = 0;
+                    if (is_hpx_thread)
+                    {
+                        hpx::execution_base::this_thread::sleep_for(
+                            std::chrono::microseconds(100),
+                            "threadmanager::wait");
+                    }
+                    else
+                    {
+                        hpx::execution_base::this_thread::yield_k(
+                            k, "threadmanager::wait");
+                    }
+                }
+            }
+        }
+    }    // namespace
 
     namespace detail {
         static void check_num_high_priority_queues(
@@ -1703,8 +1755,8 @@ namespace hpx::threads {
     {
         auto const shutdown_check_count = util::get_entry_as<std::size_t>(
             rtcfg_, "hpx.shutdown_check_count", 10);
-        hpx::util::detail::yield_while_count(
-            [this]() { return is_busy(); }, shutdown_check_count);
+        wait_while_busy(
+            [this]() { return is_busy(); }, shutdown_check_count, nullptr);
     }
 
     bool threadmanager::wait_for(
@@ -1712,8 +1764,13 @@ namespace hpx::threads {
     {
         auto const shutdown_check_count = util::get_entry_as<std::size_t>(
             rtcfg_, "hpx.shutdown_check_count", 10);
-        return hpx::util::detail::yield_while_count_timeout(
-            [this]() { return is_busy(); }, shutdown_check_count, rel_time);
+        // A zero duration means no timeout.
+        bool const use_timeout =
+            rel_time.value() != std::chrono::steady_clock::duration(0);
+        std::chrono::steady_clock::time_point const abs_time =
+            rel_time.from_now();
+        return wait_while_busy([this]() { return is_busy(); },
+            shutdown_check_count, use_timeout ? &abs_time : nullptr);
     }
 
     void threadmanager::suspend() const
