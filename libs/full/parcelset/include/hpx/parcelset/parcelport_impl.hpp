@@ -220,6 +220,15 @@ namespace hpx::parcelset {
             return success;
         }
 
+        // Early parcel handling is finished: from now on the background work
+        // sends the parcels queued for a busy destination (see
+        // can_send_immediate_impl). A connection handler that overrides this
+        // has to call it.
+        void initialized() override
+        {
+            initialized_.store(true, std::memory_order_release);
+        }
+
         void flush_parcels() override
         {
             // We suspend our thread, which will make progress on the network
@@ -562,7 +571,9 @@ namespace hpx::parcelset {
         // for a busy destination (can_send_immediate(locality const&)): the
         // parcels to it are then queued, and trigger_pending_work() sends
         // them together from the background work once the destination is
-        // free again.
+        // free again. Until the parcelport is initialized (bootstrap is
+        // over), nothing would send queued parcels: the worker threads don't
+        // run yet, so the (early) parcels are always sent right away then.
         bool can_send_immediate_impl(locality const& dest)
         {
             if constexpr (connection_handler_traits<
@@ -572,6 +583,10 @@ namespace hpx::parcelset {
                                   ch.can_send_immediate(dest);
                               })
                 {
+                    if (!initialized_.load(std::memory_order_acquire))
+                    {
+                        return connection_handler().can_send_immediate();
+                    }
                     return connection_handler().can_send_immediate(dest);
                 }
                 else
@@ -1156,6 +1171,9 @@ namespace hpx::parcelset {
 
         std::atomic<std::size_t> num_thread_;
         std::size_t const max_background_thread_;
+
+        // set once early parcel handling is finished (see initialized)
+        std::atomic<bool> initialized_ = false;
     };
 }    // namespace hpx::parcelset
 

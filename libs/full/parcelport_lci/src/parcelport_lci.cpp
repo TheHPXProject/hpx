@@ -92,6 +92,7 @@ namespace hpx::parcelset::policies::lci {
             join_prg_thread_if_running();
         }
         is_initialized = true;
+        base_type::initialized();
     }
 
     // Start the handling of connections.
