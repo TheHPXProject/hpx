@@ -23,11 +23,11 @@
 // helper macro allowing to prepend file name and line number to a generated
 // exception
 #define HPX_THROW_STD_EXCEPTION(except, func)                                  \
-    hpx::detail::throw_exception(except, func, __FILE__, __LINE__) /**/
+    ::hpx::detail::throw_exception(except, func, __FILE__, __LINE__) /**/
 
-#define HPX_RETHROW_EXCEPTION(e, f) hpx::detail::rethrow_exception(e, f) /**/
+#define HPX_RETHROW_EXCEPTION(e, f) ::hpx::detail::rethrow_exception(e, f) /**/
 
-#define HPX_RETHROWS_IF(ec, e, f) hpx::detail::rethrows_if(ec, e, f) /**/
+#define HPX_RETHROWS_IF(ec, e, f) ::hpx::detail::rethrows_if(ec, e, f) /**/
 
 ///////////////////////////////////////////////////////////////////////////////
 #define HPX_GET_EXCEPTION(...)                                                 \
@@ -39,10 +39,10 @@
         __VA_ARGS__))                                                          \
 /**/
 #define HPX_GET_EXCEPTION_3(errcode, f, msg)                                   \
-    HPX_GET_EXCEPTION_4(errcode, hpx::throwmode::plain, f, msg)                \
+    HPX_GET_EXCEPTION_4(errcode, ::hpx::throwmode::plain, f, msg)              \
 /**/
 #define HPX_GET_EXCEPTION_4(errcode, mode, f, msg)                             \
-    hpx::detail::get_exception(errcode, msg, mode, f, __FILE__, __LINE__) /**/
+    ::hpx::detail::get_exception(errcode, msg, mode, f, __FILE__, __LINE__) /**/
 
 ///////////////////////////////////////////////////////////////////////////////
 #define HPX_THROW_IN_CURRENT_FUNC(errcode, msg)                                \
@@ -64,7 +64,7 @@
 
 ///////////////////////////////////////////////////////////////////////////////
 #define HPX_THROW_THREAD_INTERRUPTED_EXCEPTION()                               \
-    hpx::detail::throw_thread_interrupted_exception() /**/
+    ::hpx::detail::throw_thread_interrupted_exception() /**/
 /// \endcond
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -97,8 +97,8 @@
 /// \endcode
 ///
 #define HPX_THROW_EXCEPTION(errcode, f, ...)                                   \
-    hpx::detail::throw_exception(                                              \
-        errcode, hpx::util::format(__VA_ARGS__), f, __FILE__, __LINE__) /**/
+    ::hpx::detail::throw_exception(                                            \
+        errcode, ::hpx::util::format(__VA_ARGS__), f, __FILE__, __LINE__) /**/
 
 ///////////////////////////////////////////////////////////////////////////////
 /// \def HPX_THROW_EXCEPTION_MODE(errcode, throwmode, f, msg)
@@ -129,8 +129,8 @@
 /// \endcode
 ///
 #define HPX_THROW_EXCEPTION_MODE(errcode, mode, f, ...)                        \
-    hpx::detail::throw_exception(errcode, hpx::util::format(__VA_ARGS__), f,   \
-        __FILE__, __LINE__, mode) /**/
+    ::hpx::detail::throw_exception(errcode, ::hpx::util::format(__VA_ARGS__),  \
+        f, __FILE__, __LINE__, mode) /**/
 
 ///////////////////////////////////////////////////////////////////////////////
 /// \def HPX_THROW_BAD_ALLOC(f, msg)
@@ -161,7 +161,7 @@
 /// \endcode
 ///
 #define HPX_THROW_BAD_ALLOC(f)                                                 \
-    hpx::detail::throw_bad_alloc_exception(f, __FILE__, __LINE__) /**/
+    ::hpx::detail::throw_bad_alloc_exception(f, __FILE__, __LINE__) /**/
 
 /// \def HPX_THROWS_IF(ec, errcode, f, msg)
 /// \brief Either throw a hpx::exception or initialize \a hpx::error_code from
@@ -179,7 +179,7 @@
 /// holds the error message the new exception should encapsulate.
 ///
 #define HPX_THROWS_IF(ec, errcode, f, ...)                                     \
-    hpx::detail::throws_if(ec, errcode, hpx::util::format(__VA_ARGS__), f,     \
+    ::hpx::detail::throws_if(ec, errcode, ::hpx::util::format(__VA_ARGS__), f, \
         __FILE__, __LINE__) /**/
 
 /// \def HPX_THROWS_BAD_ALLOC_IF(ec, f)
@@ -193,7 +193,7 @@
 /// instance \p ec is initialized instead.
 ///
 #define HPX_THROWS_BAD_ALLOC_IF(ec, f)                                         \
-    hpx::detail::throws_bad_alloc_if(ec, f, __FILE__, __LINE__) /**/
+    ::hpx::detail::throws_bad_alloc_if(ec, f, __FILE__, __LINE__) /**/
 
 ////////////////////////////////////////////////////////////////////////////////
 // From hpx/errors/define_error_info.hpp

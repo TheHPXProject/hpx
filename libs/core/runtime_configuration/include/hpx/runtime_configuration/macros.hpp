@@ -28,12 +28,12 @@
 /// components.
 #define HPX_REGISTER_COMMANDLINE_REGISTRY(RegistryType, componentname)         \
     HPX_PLUGIN_EXPORT(HPX_PLUGIN_COMPONENT_PREFIX,                             \
-        hpx::components::component_commandline_base, RegistryType,             \
+        ::hpx::components::component_commandline_base, RegistryType,           \
         componentname, commandline_options)                                    \
 /**/
 #define HPX_REGISTER_COMMANDLINE_REGISTRY_DYNAMIC(RegistryType, componentname) \
     HPX_PLUGIN_EXPORT_DYNAMIC(HPX_PLUGIN_COMPONENT_PREFIX,                     \
-        hpx::components::component_commandline_base, RegistryType,             \
+        ::hpx::components::component_commandline_base, RegistryType,           \
         componentname, commandline_options)                                    \
 /**/
 
@@ -48,7 +48,7 @@
 #define HPX_REGISTER_COMMANDLINE_OPTIONS_DYNAMIC()                             \
     HPX_PLUGIN_EXPORT_LIST_DYNAMIC(                                            \
         HPX_PLUGIN_COMPONENT_PREFIX, commandline_options)                      \
-/**/
+    /**/
 
 ////////////////////////////////////////////////////////////////////////////////
 // from hpx/runtime_configuration/component_factory_base.hpp
@@ -91,13 +91,13 @@
 /// This macro has to be used for each of the components.
 #define HPX_REGISTER_COMPONENT_REGISTRY(RegistryType, componentname)           \
     HPX_PLUGIN_EXPORT(HPX_PLUGIN_COMPONENT_PREFIX,                             \
-        hpx::components::component_registry_base, RegistryType, componentname, \
-        registry)                                                              \
+        ::hpx::components::component_registry_base, RegistryType,              \
+        componentname, registry)                                               \
 /**/
 #define HPX_REGISTER_COMPONENT_REGISTRY_DYNAMIC(RegistryType, componentname)   \
     HPX_PLUGIN_EXPORT_DYNAMIC(HPX_PLUGIN_COMPONENT_PREFIX,                     \
-        hpx::components::component_registry_base, RegistryType, componentname, \
-        registry)                                                              \
+        ::hpx::components::component_registry_base, RegistryType,              \
+        componentname, registry)                                               \
 /**/
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -120,7 +120,7 @@
 /// component analog (HPX_REGISTER_COMPONENT_REGISTRY).
 #define HPX_REGISTER_PLUGIN_BASE_REGISTRY(PluginType, name)                    \
     HPX_PLUGIN_EXPORT(HPX_PLUGIN_PLUGIN_PREFIX,                                \
-        hpx::plugins::plugin_registry_base, PluginType, name, plugin)          \
+        ::hpx::plugins::plugin_registry_base, PluginType, name, plugin)        \
     /**/
 
 /// This macro is used to define the required Hpx.Plugin entry points. This
@@ -140,7 +140,7 @@
 // from hpx/runtime_configuration/static_factory_data.hpp
 
 #define HPX_DECLARE_FACTORY_STATIC(name, base)                                 \
-    extern "C" HPX_PLUGIN_EXPORT_API std::map<std::string, hpx::any_nonser>*   \
+    extern "C" HPX_PLUGIN_EXPORT_API std::map<std::string, ::hpx::any_nonser>* \
         HPX_PLUGIN_API                                                         \
         HPX_PLUGIN_LIST_NAME(name, base)() /**/
 
@@ -155,9 +155,9 @@
         {                                                                      \
             HPX_PP_CAT(init_registry_module_static_, name)()                   \
             {                                                                  \
-                hpx::components::static_factory_load_data_type data =          \
+                ::hpx::components::static_factory_load_data_type data =        \
                     HPX_DEFINE_FACTORY_STATIC(HPX_COMPONENT_NAME, name, base); \
-                hpx::components::init_registry_module(data);                   \
+                ::hpx::components::init_registry_module(data);                 \
             }                                                                  \
         } HPX_PP_CAT(module_data_, __LINE__);                                  \
     }                                                                          \
@@ -171,9 +171,9 @@
         {                                                                      \
             HPX_PP_CAT(init_registry_factory_static_, componentname)()         \
             {                                                                  \
-                hpx::components::static_factory_load_data_type data =          \
+                ::hpx::components::static_factory_load_data_type data =        \
                     HPX_DEFINE_FACTORY_STATIC(componentname, name, base);      \
-                hpx::components::init_registry_factory(data);                  \
+                ::hpx::components::init_registry_factory(data);                \
             }                                                                  \
         } HPX_PP_CAT(componentname, HPX_PP_CAT(_factory_data_, __LINE__));     \
     }                                                                          \
@@ -187,9 +187,9 @@
         {                                                                      \
             HPX_PP_CAT(init_registry_module_commandline_, name)()              \
             {                                                                  \
-                hpx::components::static_factory_load_data_type data =          \
+                ::hpx::components::static_factory_load_data_type data =        \
                     HPX_DEFINE_FACTORY_STATIC(HPX_COMPONENT_NAME, name, base); \
-                hpx::components::init_registry_commandline(data);              \
+                ::hpx::components::init_registry_commandline(data);            \
             }                                                                  \
         } HPX_PP_CAT(module_commandline_data_, __LINE__);                      \
     }                                                                          \
@@ -203,9 +203,9 @@
         {                                                                      \
             HPX_PP_CAT(init_registry_module_startup_shutdown_, name)()         \
             {                                                                  \
-                hpx::components::static_factory_load_data_type data =          \
+                ::hpx::components::static_factory_load_data_type data =        \
                     HPX_DEFINE_FACTORY_STATIC(HPX_COMPONENT_NAME, name, base); \
-                hpx::components::init_registry_startup_shutdown(data);         \
+                ::hpx::components::init_registry_startup_shutdown(data);       \
             }                                                                  \
         } HPX_PP_CAT(module_startup_shutdown_data_, __LINE__);                 \
     }                                                                          \
@@ -222,9 +222,9 @@
         {                                                                      \
             HPX_PP_CAT(init_registry_plugin_module_static_, name)()            \
             {                                                                  \
-                hpx::components::static_factory_load_data_type data =          \
+                ::hpx::components::static_factory_load_data_type data =        \
                     HPX_DEFINE_FACTORY_STATIC(HPX_PLUGIN_NAME, name, base);    \
-                hpx::components::init_registry_plugin_module(data);            \
+                ::hpx::components::init_registry_plugin_module(data);          \
             }                                                                  \
         } HPX_PP_CAT(plugin_module_data_, __LINE__);                           \
     }                                                                          \
@@ -238,9 +238,9 @@
         {                                                                      \
             HPX_PP_CAT(init_registry_plugin_factory_static_, pluginname)()     \
             {                                                                  \
-                hpx::components::static_factory_load_data_type data =          \
+                ::hpx::components::static_factory_load_data_type data =        \
                     HPX_DEFINE_FACTORY_STATIC(pluginname, name, base);         \
-                hpx::components::init_registry_plugin_factory(data);           \
+                ::hpx::components::init_registry_plugin_factory(data);         \
             }                                                                  \
         } HPX_PP_CAT(pluginname, HPX_PP_CAT(_plugin_factory_data_, __LINE__)); \
     }                                                                          \

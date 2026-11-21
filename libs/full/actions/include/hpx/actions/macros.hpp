@@ -36,11 +36,11 @@
 #define HPX_DEFINE_GET_ACTION_NAME_TRACING(action, actionname)                 \
     namespace hpx::actions::detail {                                           \
         template <>                                                            \
-        HPX_ALWAYS_EXPORT hpx::tracing::annotation_handle const&               \
+        HPX_ALWAYS_EXPORT ::hpx::tracing::annotation_handle const&             \
         get_action_name_tracing</**/ action>() noexcept                        \
         {                                                                      \
-            static hpx::tracing::annotation_handle sh =                        \
-                hpx::tracing::create_annotation_handle(                        \
+            static ::hpx::tracing::annotation_handle sh =                      \
+                ::hpx::tracing::create_annotation_handle(                      \
                     HPX_PP_STRINGIZE(actionname));                             \
             return sh;                                                         \
         }                                                                      \
@@ -50,7 +50,7 @@
 #define HPX_REGISTER_ACTION_DECLARATION_NO_DEFAULT_GUID_TRACING(action)        \
     namespace hpx::actions::detail {                                           \
         template <>                                                            \
-        HPX_ALWAYS_EXPORT hpx::tracing::annotation_handle const&               \
+        HPX_ALWAYS_EXPORT ::hpx::tracing::annotation_handle const&             \
         get_action_name_tracing</**/ action>() noexcept;                       \
     }                                                                          \
     /**/

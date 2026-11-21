@@ -63,14 +63,14 @@
     (!!(expr) ? void() :                                                       \
                 ::hpx::assertion::detail::handle_assert(                       \
                     HPX_CURRENT_SOURCE_LOCATION(), HPX_PP_STRINGIZE(expr),     \
-                    hpx::util::format(__VA_ARGS__))) /**/
+                    ::hpx::util::format(__VA_ARGS__))) /**/
 
 #define HPX_ASSERT_LOCKED_(l, expr, ...)                                       \
     (!!(expr) ? void() :                                                       \
                 ((l).unlock(),                                                 \
                     ::hpx::assertion::detail::handle_assert(                   \
                         HPX_CURRENT_SOURCE_LOCATION(), HPX_PP_STRINGIZE(expr), \
-                        hpx::util::format(__VA_ARGS__)))) /**/
+                        ::hpx::util::format(__VA_ARGS__)))) /**/
 
 #if defined(HPX_DEBUG)
 #if defined(HPX_COMPUTE_DEVICE_CODE)
