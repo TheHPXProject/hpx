@@ -382,11 +382,16 @@ namespace hpx::execution::experimental::detail {
 
     ///////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT template <typename OperationState, typename F,
-        typename Shape>
+        typename Shape, typename Receiver>
     struct bulk_receiver
     {
         using receiver_concept = hpx::execution::experimental::receiver_t;
         OperationState* op_state;
+
+        using env_type = decltype(hpx::execution::experimental::get_env(
+            std::declval<std::decay_t<Receiver> const&>()));
+
+        env_type get_env() const noexcept;
 
         template <typename E>
         void set_error(E&& e) & noexcept
@@ -884,9 +889,10 @@ namespace hpx::execution::experimental::detail {
 
             using operation_state_type =
                 hpx::execution::experimental::connect_result_t<Sender,
-                    bulk_receiver<operation_state, F, Shape>>;
+                    bulk_receiver<operation_state, F, Shape, Receiver>>;
 
             thread_pool_policy_scheduler<Policy> scheduler;
+            HPX_NO_UNIQUE_ADDRESS std::decay_t<Receiver> receiver;
             operation_state_type op_state;
             std::size_t first_thread;
             std::size_t num_worker_threads;
@@ -902,7 +908,6 @@ namespace hpx::execution::experimental::detail {
 
             HPX_NO_UNIQUE_ADDRESS std::decay_t<Shape> shape;
             HPX_NO_UNIQUE_ADDRESS std::decay_t<F> f;
-            HPX_NO_UNIQUE_ADDRESS std::decay_t<Receiver> receiver;
             hpx::util::cache_aligned_data<std::atomic<std::size_t>>
                 tasks_remaining;
 
@@ -919,9 +924,10 @@ namespace hpx::execution::experimental::detail {
                 Shape_&& shape, F_&& f, hpx::threads::mask_type pumask,
                 Receiver_&& receiver)
               : scheduler(HPX_FORWARD(Scheduler_, scheduler_))
+              , receiver(HPX_FORWARD(Receiver_, receiver))
               , op_state(hpx::execution::experimental::connect(
                     HPX_FORWARD(Sender_, sender),
-                    bulk_receiver<operation_state, F, Shape>{this}))
+                    bulk_receiver<operation_state, F, Shape, Receiver>{this}))
               , first_thread(scheduler.query(
                     hpx::execution::experimental::get_first_core_t{}))
               , num_worker_threads(scheduler.query(
@@ -932,7 +938,6 @@ namespace hpx::execution::experimental::detail {
               , queues(num_worker_threads)
               , shape(HPX_FORWARD(Shape_, shape))
               , f(HPX_FORWARD(F_, f))
-              , receiver(HPX_FORWARD(Receiver_, receiver))
             {
                 tasks_remaining.data_.store(
                     num_worker_threads, std::memory_order_relaxed);
@@ -968,6 +973,14 @@ namespace hpx::execution::experimental::detail {
                 shape, f, pu_mask, HPX_FORWARD(Receiver, receiver)};
         }
     };
+
+    template <typename OperationState, typename F, typename Shape,
+        typename Receiver>
+    inline auto bulk_receiver<OperationState, F, Shape, Receiver>::get_env()
+        const noexcept -> env_type
+    {
+        return hpx::execution::experimental::get_env(op_state->receiver);
+    }
 }    // namespace hpx::execution::experimental::detail
 
 // Bulk operations are customized through the domain system in

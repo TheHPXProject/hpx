@@ -6,6 +6,7 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 #include <hpx/modules/execution.hpp>
+#include <hpx/modules/synchronization.hpp>
 #include <hpx/modules/testing.hpp>
 
 #include "algorithm_test_utils.hpp"
@@ -36,6 +37,74 @@ struct custom_bulk_operation
             throw std::runtime_error("error");
         }
         ++call_operator_count;
+    }
+};
+
+inline constexpr struct custom_bulk_query_t final : ex::forwarding_query_t
+{
+    template <typename Env>
+        requires(requires(Env const& e, custom_bulk_query_t q) { e.query(q); })
+    constexpr decltype(auto) operator()(Env const& e) const noexcept
+    {
+        return e.query(*this);
+    }
+} custom_bulk_query{};
+
+template <typename F>
+struct env_query_sender
+{
+    using sender_concept = ex::sender_t;
+
+    template <typename Env>
+    static consteval auto get_completion_signatures() noexcept
+    {
+        return ex::completion_signatures<ex::set_value_t()>{};
+    }
+
+    F f;
+
+    template <typename Receiver>
+    struct operation_state
+    {
+        using operation_state_concept = ex::operation_state_t;
+        HPX_NO_UNIQUE_ADDRESS std::decay_t<Receiver> receiver;
+        F f;
+
+        void start() & noexcept
+        {
+            auto env = ex::get_env(receiver);
+            f(env);
+            ex::set_value(HPX_MOVE(receiver));
+        }
+    };
+
+    template <typename Receiver>
+    auto connect(Receiver&& r) &&
+    {
+        return operation_state<Receiver>{HPX_FORWARD(Receiver, r), f};
+    }
+};
+
+struct test_env_receiver
+{
+    using receiver_concept = ex::receiver_t;
+
+    std::atomic<bool>& set_value_called;
+    hpx::stop_token stop_token;
+
+    void set_value() && noexcept
+    {
+        set_value_called = true;
+    }
+
+    void set_stopped() && noexcept {}
+
+    void set_error(std::exception_ptr) && noexcept {}
+
+    auto get_env() const noexcept
+    {
+        return ex::make_env(ex::prop(custom_bulk_query, 42),
+            ex::prop(ex::get_stop_token, stop_token));
     }
 };
 
@@ -337,6 +406,35 @@ int main()
         HPX_TEST(!overload_called);
         HPX_TEST(custom_bulk_call_operator_called);
         HPX_TEST_EQ(custom_bulk_call_count, 3);
+    }
+
+    // Receiver environment forwarding through bulk
+    {
+        std::atomic<bool> env_queried{false};
+        std::atomic<bool> receiver_called{false};
+        std::atomic<int> bulk_count{0};
+        hpx::stop_source stop_source;
+
+        auto upstream = env_query_sender{[&](auto env) {
+            env_queried = true;
+            // 1. Custom forwarding query is visible upstream of bulk
+            HPX_TEST_EQ(custom_bulk_query(env), 42);
+            // 2. Standard queries (get_stop_token) propagate properly
+            HPX_TEST_EQ(ex::get_stop_token(env).stop_possible(), true);
+        }};
+
+        auto s = ex::bulk(std::move(upstream), 10, [&](int i) {
+            HPX_TEST_EQ(i, bulk_count);
+            ++bulk_count;
+        });
+
+        auto r = test_env_receiver{receiver_called, stop_source.get_token()};
+        auto os = ex::connect(std::move(s), std::move(r));
+        ex::start(os);
+
+        HPX_TEST(env_queried);
+        HPX_TEST_EQ(bulk_count, 10);
+        HPX_TEST(receiver_called);
     }
 
     return hpx::util::report_errors();
