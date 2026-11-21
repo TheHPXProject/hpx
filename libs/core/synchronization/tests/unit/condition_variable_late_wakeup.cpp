@@ -105,6 +105,9 @@ void test_round(bool notify_all)
     f.get();
 }
 
+// Exercise notification around a timed wait and check the next suspension.
+// This does not force a pause between observing the first suspension and
+// waking the waiter, so it is not a deterministic reproducer of #7916.
 void test_timed_round(bool notify_all)
 {
     mutex_type mtx;
