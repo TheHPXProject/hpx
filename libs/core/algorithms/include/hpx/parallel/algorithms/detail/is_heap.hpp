@@ -1,5 +1,3 @@
-//  Copyright (c) 2017 Taeguk Kwon
-//  Copyright (c) 2020-2026 Hartmut Kaiser
 //  Copyright (c) 2026 Mohammad Izaan
 //
 //  SPDX-License-Identifier: BSL-1.0
