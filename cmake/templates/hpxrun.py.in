@@ -233,7 +233,11 @@ def run_oshrun(cmd, localities, verbose):
     oshrun = os.environ.get('HPXRUN_OSHRUN', 'oshrun')
     sma_symmetric_size = os.environ.get('SMA_SYMMETRIC_SIZE', '1G')
     ucx_tls = os.environ.get('UCX_TLS', 'sm,self')
-    exec_cmd = [oshrun, '-n', str(localities), '--mca', 'osc', 'ucx',
+    # The parcelport's io threads never sleep: binding each process to one
+    # core (the launcher's default) makes them and the HPX worker threads
+    # share it.
+    exec_cmd = [oshrun, '-n', str(localities), '--bind-to', 'none',
+                '--mca', 'osc', 'ucx',
                 '-x', 'SMA_SYMMETRIC_SIZE=' + sma_symmetric_size,
                 '-x', 'UCX_TLS=' + ucx_tls] + cmd
     if verbose:

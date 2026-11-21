@@ -493,9 +493,11 @@ namespace hpx::parcelset {
                 }
             }
 
+            // the host name: the localities on one host are assigned
+            // different cores by it
             std::string get_locality_name() const override
             {
-                return std::to_string(my_pe_);
+                return util::openshmem_environment::get_processor_name();
             }
 
             std::shared_ptr<sender_connection> create_connection(
