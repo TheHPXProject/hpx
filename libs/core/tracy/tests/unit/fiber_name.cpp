@@ -13,7 +13,9 @@
 #include <hpx/modules/testing.hpp>
 #include <hpx/modules/tracy.hpp>
 
+#include <cstddef>
 #include <cstdio>
+#include <cstring>
 #include <string>
 
 int main()
@@ -59,6 +61,26 @@ int main()
     // suffix now, so it still names one thread object.
     std::string const long_name(200, 'x');
     HPX_TEST_EQ(text(key(long_name.c_str(), id)), long_name + suffix);
+
+    // Tracy can't send a name of 64 KB or more, so a very long description
+    // is cut to the cap in tracy.cpp, but the suffix stays whole.
+    std::size_t const cap = 256;
+    std::size_t const suffix_size = std::strlen(suffix);
+    std::string const long_a = std::string(100000, 'y') + "a";
+    std::string const long_b = std::string(100000, 'y') + "b";
+    void const* la = key(long_a.c_str(), id);
+    void const* lb = key(long_b.c_str(), id);
+    std::string const text_a = text(la);
+    HPX_TEST_LTE(text_a.size(), cap + suffix_size);
+    HPX_TEST_EQ(text_a.compare(0, 100, long_a, 0, 100), 0);
+    HPX_TEST_EQ(
+        text_a.compare(text_a.size() - suffix_size, suffix_size, suffix), 0);
+
+    // Descriptions that differ only after the cut are still different tasks,
+    // and a cut name stays the same for the same description.
+    HPX_TEST_NEQ(la, lb);
+    HPX_TEST_NEQ(text_a, text(lb));
+    HPX_TEST_EQ(la, key(long_a.c_str(), id));
 
     return hpx::util::report_errors();
 }
