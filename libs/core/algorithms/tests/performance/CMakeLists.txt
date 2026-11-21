@@ -32,8 +32,15 @@ set(benchmarks
 )
 
 if(HPX_WITH_DATAPAR)
-  list(APPEND benchmarks benchmark_copy_if benchmark_search benchmark_search_n
-       benchmark_lexicographical_compare
+  list(
+    APPEND
+    benchmarks
+    benchmark_copy_if
+    benchmark_exclusive_scan
+    benchmark_inclusive_scan
+    benchmark_search
+    benchmark_search_n
+    benchmark_lexicographical_compare
   )
 endif()
 

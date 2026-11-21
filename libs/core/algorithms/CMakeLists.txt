@@ -29,9 +29,11 @@ set(algorithms_headers
     hpx/parallel/algorithms/detail/dispatch.hpp
     hpx/parallel/algorithms/detail/distance.hpp
     hpx/parallel/algorithms/detail/equal.hpp
+    hpx/parallel/algorithms/detail/exclusive_scan.hpp
     hpx/parallel/algorithms/detail/fill.hpp
     hpx/parallel/algorithms/detail/find.hpp
     hpx/parallel/algorithms/detail/generate.hpp
+    hpx/parallel/algorithms/detail/inclusive_scan.hpp
     hpx/parallel/algorithms/detail/indirect.hpp
     hpx/parallel/algorithms/detail/insertion_sort.hpp
     hpx/parallel/algorithms/detail/iota.hpp
@@ -243,10 +245,12 @@ if(HPX_WITH_DATAPAR)
       hpx/parallel/datapar/copy_if.hpp
       hpx/parallel/datapar/elements_per_call.hpp
       hpx/parallel/datapar/equal.hpp
+      hpx/parallel/datapar/exclusive_scan.hpp
       hpx/parallel/datapar/fill.hpp
       hpx/parallel/datapar/find.hpp
       hpx/parallel/datapar/generate.hpp
       hpx/parallel/datapar/handle_local_exceptions.hpp
+      hpx/parallel/datapar/inclusive_scan.hpp
       hpx/parallel/datapar/iterator_helpers.hpp
       hpx/parallel/datapar/lexicographical_compare.hpp
       hpx/parallel/datapar/loop.hpp

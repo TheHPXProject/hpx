@@ -17,10 +17,12 @@
 #include <hpx/parallel/datapar/copy_if.hpp>
 #include <hpx/parallel/datapar/elements_per_call.hpp>
 #include <hpx/parallel/datapar/equal.hpp>
+#include <hpx/parallel/datapar/exclusive_scan.hpp>
 #include <hpx/parallel/datapar/fill.hpp>
 #include <hpx/parallel/datapar/find.hpp>
 #include <hpx/parallel/datapar/generate.hpp>
 #include <hpx/parallel/datapar/handle_local_exceptions.hpp>
+#include <hpx/parallel/datapar/inclusive_scan.hpp>
 #include <hpx/parallel/datapar/iterator_helpers.hpp>
 #include <hpx/parallel/datapar/lexicographical_compare.hpp>
 #include <hpx/parallel/datapar/loop.hpp>
