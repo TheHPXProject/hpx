@@ -525,10 +525,7 @@ namespace hpx::parcelset::policies::openshmem {
             return true;
         }
 
-        // All pages consumed: hand the message to HPX.  Runs on a transport
-        // io thread, which is not an HPX worker: pass -1 ("unknown thread",
-        // as the TCP parcelport does) so received actions are not scheduled
-        // with a worker-thread hint they do not own.
+        // All pages consumed: keep the message for dispatch_received.
         bool finish_message() noexcept
         {
             if (stage_ != stream_stage::done)
@@ -550,6 +547,37 @@ namespace hpx::parcelset::policies::openshmem {
                 return true;
             }
 
+            // Dispatched by the receiver once this connection is done and
+            // the reservation of its source is released (see
+            // dispatch_received).
+            has_received_ = true;
+            state_ = connection_state::decoded;
+            return true;
+        }
+
+    public:
+        // Hand the received message to HPX. Called by the receiver after
+        // this connection is done and the reservation of its source is
+        // released: running an action may suspend the calling thread (if it
+        // is an HPX thread), and nothing must be held then that keeps further
+        // parcels from that source from being received, as the action may be
+        // waiting for one of them. Pass -1 ("unknown thread", as the TCP
+        // parcelport does) so received actions are not scheduled with a
+        // worker-thread hint they do not own.
+        void dispatch_received() noexcept
+        {
+            if (!has_received_)
+                return;
+            has_received_ = false;
+
+            if (detail::g_discard_received.load(std::memory_order_acquire))
+            {
+                parcels_.clear();
+                buffer_ = buffer_type{};
+                chunk_buffers_.clear();
+                return;
+            }
+
             // A parcel can complete while the runtime is already shutting
             // down (e.g. a late AGAS credit decrement): scheduling its action
             // then throws "runtime is being shut down".  Letting that escape
@@ -561,22 +589,17 @@ namespace hpx::parcelset::policies::openshmem {
                 {
                     hpx::parcelset::handle_received_parcels(
                         HPX_MOVE(parcels_), static_cast<std::size_t>(-1));
-                    buffer_ = buffer_type{};
                 }
                 else
                 {
-                    std::vector<parcel> parcels =
-                        hpx::parcelset::decode_parcels(*pp_, HPX_MOVE(buffer_),
-                            static_cast<std::size_t>(-1));
                     hpx::parcelset::handle_received_parcels(
-                        HPX_MOVE(parcels), static_cast<std::size_t>(-1));
-                    chunk_buffers_.clear();
+                        hpx::parcelset::decode_parcels(*pp_, HPX_MOVE(buffer_),
+                            static_cast<std::size_t>(-1)),
+                        static_cast<std::size_t>(-1));
                 }
             }
             catch (...)
             {
-                parcels_.clear();
-                chunk_buffers_.clear();
                 if (std::getenv("OPENSHMEM_PP_VERBOSE") != nullptr)
                 {
                     std::fprintf(stderr,
@@ -586,11 +609,12 @@ namespace hpx::parcelset::policies::openshmem {
                         mailboxes_.my_pe(), src_);
                 }
             }
-
-            state_ = connection_state::decoded;
-            return true;
+            parcels_.clear();
+            buffer_ = buffer_type{};
+            chunk_buffers_.clear();
         }
 
+    private:
         connection_state state_;
         int src_;
         mailbox_array& mailboxes_;
@@ -607,6 +631,7 @@ namespace hpx::parcelset::policies::openshmem {
         bool dropped_ = false;
         std::vector<parcelset::parcel> parcels_;
         std::vector<std::unique_ptr<char[]>> chunk_buffers_;
+        bool has_received_ = false;    // a message waits for dispatch_received
         std::uint32_t expected_chunks_;
         std::uint32_t received_chunks_;
 

@@ -7,6 +7,7 @@
 #include <hpx/config.hpp>
 
 #if defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_PARCELPORT_OPENSHMEM)
+#include <hpx/parcelport_openshmem/sender.hpp>
 #include <hpx/parcelport_openshmem/sender_connection.hpp>
 #include <hpx/parcelset/parcel_buffer.hpp>
 #include <hpx/serialization/serialization_chunk.hpp>
@@ -162,10 +163,19 @@ namespace hpx::parcelset::policies::openshmem {
         return true;
     }
 
+    void sender_connection::enqueue()
+    {
+        sender_->add(shared_from_this());
+    }
+
     void sender_connection::finish() noexcept
     {
+        // The handlers may reuse this connection right away (async_write),
+        // so they are moved out before they are called.
         error_code ec;
-        handler_(ec);
+        handler_type handler;
+        std::swap(handler, handler_);
+        handler(ec);
 
         hpx::move_only_function<void(error_code const&,
             parcelset::locality const&, std::shared_ptr<sender_connection>)>

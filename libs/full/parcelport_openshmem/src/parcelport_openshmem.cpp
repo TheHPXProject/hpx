@@ -40,6 +40,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <thread>
 #include <type_traits>
@@ -253,9 +254,13 @@ namespace hpx::parcelset {
                 mailboxes_.set_remote_delivery(
                     hpx::util::get_entry_as<int>(
                         ini, "hpx.parcel.openshmem.remote_delivery", 0) != 0);
+                // 1 (default): the HPX worker threads progress the transport
+                // from their background work; 0: dedicated io drivers.
                 worker_progress_ =
                     hpx::util::get_entry_as<int>(
-                        ini, "hpx.parcel.openshmem.worker_progress", 0) != 0;
+                        ini, "hpx.parcel.openshmem.worker_progress", 1) != 0;
+                send_immediate_ = hpx::util::get_entry_as<int>(ini,
+                                      "hpx.parcel.openshmem.sendimm", 1) != 0;
 
                 if (uniform_check(ini))
                 {
@@ -380,6 +385,28 @@ namespace hpx::parcelset {
                 // SHMEM_THREAD_SERIALIZED, in which case concurrent drivers
                 // would be illegal.  Clamp to a single driver in that case so
                 // the spin loop below stays valid under either thread model.
+                // With worker progress (the default) the HPX worker threads
+                // drive the transport from their background work, no io
+                // driver is started and every worker scans all sources (one
+                // arena).  Under SHMEM_THREAD_SERIALIZED only one of them at a
+                // time is inside shmem_* (see progress_gated()).
+                if (worker_progress_)
+                {
+                    // The worker threads don't run yet while the runtime
+                    // starts (AGAS bootstrap), so one io driver progresses the
+                    // transport until the runtime is up, as in the MPI
+                    // parcelport.
+                    arena_count_ = 1;
+#if ASIO_VERSION >= 103400
+                    ::asio::post(io_service_pool_.get_io_service(0),
+                        hpx::bind(&parcelport::io_startup_work, this));
+#else
+                    io_service_pool_.get_io_service(0).post(
+                        hpx::bind(&parcelport::io_startup_work, this));
+#endif
+                    return true;
+                }
+
                 arena_count_ = io_service_pool_.size();
                 if (!util::openshmem_environment::thread_multiple())
                 {
@@ -452,7 +479,17 @@ namespace hpx::parcelset {
                                      "proceeding with shutdown\n";
                         break;
                     }
-                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                    // without io drivers nothing else may be left to drain
+                    // the queues: drive progress here
+                    if (worker_progress_)
+                    {
+                        progress_gated(0, parcelport_background_mode::all);
+                    }
+                    else
+                    {
+                        std::this_thread::sleep_for(
+                            std::chrono::milliseconds(1));
+                    }
                 }
 
                 if (util::openshmem_environment::thread_multiple())
@@ -540,13 +577,40 @@ namespace hpx::parcelset {
                 return has_work;
             }
 
-            // All shmem_* calls happen here (and in the io_service drivers).
-            // Under SHMEM_THREAD_MULTIPLE any HPX thread may drive progress;
-            // under SHMEM_THREAD_SERIALIZED only the single driver installed by
-            // do_run() may, so this path stays disabled and all progress
-            // happens on that driver.  The thread processes the send queue and
-            // the receive arena selected by its OS-thread identifier
-            // (num_thread modulo the io pool size).
+            // progress() for any thread: under SHMEM_THREAD_SERIALIZED the
+            // threads must not be inside shmem_* at the same time, so a thread
+            // that finds another one driving progress returns right away.
+            // The received messages are dispatched after the gate is released
+            // (see receiver::dispatch_received).
+            bool progress_gated(
+                std::size_t arena_idx, parcelport_background_mode mode)
+            {
+                bool has_work = false;
+                if (util::openshmem_environment::thread_multiple())
+                {
+                    has_work = progress(arena_idx, mode);
+                }
+                else
+                {
+                    std::unique_lock l(serialized_mtx_, std::try_to_lock);
+                    if (l.owns_lock())
+                    {
+                        has_work = progress(arena_idx, mode);
+                    }
+                }
+
+                // outside of the gate: an action may suspend this thread
+                if (mode & parcelport_background_mode::receive)
+                {
+                    has_work = receiver_.dispatch_received() || has_work;
+                }
+                return has_work;
+            }
+
+            // All shmem_* calls happen here (and in the io_service drivers
+            // with worker_progress = 0).  Under SHMEM_THREAD_MULTIPLE any
+            // number of worker threads drive progress at the same time; under
+            // SHMEM_THREAD_SERIALIZED one at a time (progress_gated()).
             bool background_work(
                 std::size_t num_thread, parcelport_background_mode mode)
             {
@@ -555,15 +619,9 @@ namespace hpx::parcelset {
                     return false;
                 }
 
-                // Only the dedicated io drivers progress the transport by
-                // default.  Letting every HPX worker thread (48 per node on
-                // buran) enter the transport serialises them on the
-                // conduit's global lock and slows everything down.
+                // With worker_progress = 0 the io drivers progress the
+                // transport instead.
                 if (!worker_progress_)
-                {
-                    return false;
-                }
-                if (!util::openshmem_environment::thread_multiple())
                 {
                     return false;
                 }
@@ -582,7 +640,7 @@ namespace hpx::parcelset {
                         arena_count_ == 0 ? 0 : num_thread % arena_count_;
                     try
                     {
-                        has_work = progress(arena_idx, mode);
+                        has_work = progress_gated(arena_idx, mode);
                     }
                     catch (...)
                     {
@@ -595,9 +653,27 @@ namespace hpx::parcelset {
                 return has_work;
             }
 
-            constexpr bool can_send_immediate() const noexcept
+            // Bootstrap is over: the worker threads take over the progress
+            // from the startup driver (see io_startup_work).
+            void initialized() override
             {
-                return true;
+                startup_done_.store(true, std::memory_order_release);
+                base_type::initialized();
+            }
+
+            bool can_send_immediate() const noexcept
+            {
+                return send_immediate_;
+            }
+
+            // Hybrid: a parcel goes out right away only if nothing is being
+            // sent to its destination; otherwise it is queued by the
+            // parcelport_impl, and the parcels queued for a destination are
+            // sent together once it is free (option sendimm=0 always queues).
+            bool can_send_immediate(parcelset::locality const& dest)
+            {
+                return send_immediate_ &&
+                    !sender_.busy(dest.get<locality>().rank());
             }
 
             mailbox_array const& get_mailboxes() const noexcept
@@ -636,6 +712,38 @@ namespace hpx::parcelset {
             }
 
         private:
+            // Progress during bootstrap, until the worker threads take over
+            // (worker_progress = 1). The runtime calls initialized() once
+            // the early parcels are handled, before the workers start.
+            void io_startup_work()
+            {
+                drivers_running_.fetch_add(1, std::memory_order_relaxed);
+                try
+                {
+                    std::size_t k = 0;
+                    while (!startup_done_.load(std::memory_order_acquire) &&
+                        !stopped_.load(std::memory_order_acquire))
+                    {
+                        if (progress_gated(0, parcelport_background_mode::all))
+                        {
+                            k = 0;
+                        }
+                        else
+                        {
+                            util::detail::yield_k(++k,
+                                "hpx::parcelset::policies::openshmem::"
+                                "parcelport::io_startup_work");
+                        }
+                    }
+                }
+                catch (...)
+                {
+                    drivers_running_.fetch_sub(1, std::memory_order_relaxed);
+                    throw;
+                }
+                drivers_running_.fetch_sub(1, std::memory_order_relaxed);
+            }
+
             void io_service_work(std::size_t arena_idx)
             {
                 // Deliberate hot spin (no OS yield).  The receiver arena scan
@@ -655,6 +763,7 @@ namespace hpx::parcelset {
                     while (!stopped_.load(std::memory_order_acquire))
                     {
                         progress(arena_idx, parcelport_background_mode::all);
+                        receiver_.dispatch_received();
                     }
                 }
                 catch (...)
@@ -668,7 +777,11 @@ namespace hpx::parcelset {
             util::runtime_configuration const& ini_;
 
             std::atomic<bool> stopped_;
-            bool worker_progress_ = false;
+            bool worker_progress_ = true;
+            bool send_immediate_ = true;
+            std::atomic<bool> startup_done_ = false;
+            // serializes progress() under SHMEM_THREAD_SERIALIZED
+            std::mutex serialized_mtx_;
             std::atomic<std::size_t> drivers_running_{0};
             std::atomic<std::size_t> workers_in_progress_{0};
 
@@ -755,16 +868,21 @@ struct hpx::traits::plugin_config_data<
                // Max source PEs probed per receive-scan pass (0 = all).
                // Bounds the per-pass remote round-trip cost at large n.
                "scan_window = 8\n"
-               // 1 lets every HPX worker thread progress the transport too.
-               // Off by default: with a thread-multiple runtime it hangs the
-               // partitioned_vector min/max element tests.
-               "worker_progress = 0\n"
+               // 1 (default): the HPX worker threads progress the transport
+               // from their background work; 0: dedicated io drivers instead
+               // (io_pool_size of them).
+               "worker_progress = 1\n"
+               // 1: send a parcel right away if nothing is being sent to its
+               // destination, otherwise queue it and send the queued parcels
+               // together once the destination is free (default); 0: queue
+               // all parcels.
+               "sendimm = 1\n"
                // 1 restores the legacy per-peer remote delivery fetches
                "remote_delivery = 0\n"
                // local progress every Nth scan (1 = every scan, 0 = never)
                "progress_interval = 16\n"
                // 1 prints io-thread timing/page statistics when stopping
-               // Number of io_service threads driving progress.  The base
+               // Number of io drivers with worker_progress = 0.  The base
                // parcelport reads hpx.parcel.<pp>.io_pool_size (default 2).
                "io_pool_size = 2\n";
     }

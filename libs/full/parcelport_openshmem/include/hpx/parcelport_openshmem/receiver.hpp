@@ -92,10 +92,38 @@ namespace hpx::parcelset::policies::openshmem {
             }
             else
             {
-                std::unique_lock l(active_mtx_);
-                active_connections_.erase(src);
-                pending_.fetch_sub(1, std::memory_order_acq_rel);
+                {
+                    std::unique_lock l(active_mtx_);
+                    active_connections_.erase(src);
+                    pending_.fetch_sub(1, std::memory_order_acq_rel);
+                }
+
+                // dispatched by dispatch_received, outside of the gate
+                std::unique_lock l(received_mtx_);
+                received_.push_back(HPX_MOVE(connection));
             }
+        }
+
+        // Hand the messages received so far to HPX. Called without the
+        // SHMEM_THREAD_SERIALIZED gate held and after the reservations of
+        // their sources are released: running an action may suspend the
+        // calling thread (if it is an HPX thread), and nothing must be held
+        // then that keeps further parcels from being received, as the action
+        // may be waiting for one of them.
+        bool dispatch_received() noexcept
+        {
+            connection_list received;
+            {
+                std::unique_lock l(received_mtx_, std::try_to_lock);
+                if (!l.owns_lock() || received_.empty())
+                    return false;
+                std::swap(received, received_);
+            }
+            for (auto& connection : received)
+            {
+                connection->dispatch_received();
+            }
+            return true;
         }
 
         connection_ptr accept(
@@ -141,6 +169,9 @@ namespace hpx::parcelset::policies::openshmem {
 
         std::mutex active_mtx_;
         std::set<int> active_connections_;
+
+        std::mutex received_mtx_;
+        connection_list received_;    // done, waiting for dispatch_received
         std::atomic<int> pending_{0};
     };
 }    // namespace hpx::parcelset::policies::openshmem

@@ -80,6 +80,11 @@ namespace hpx::parcelset::policies::openshmem {
             postprocess_handler_ = HPX_MOVE(parcel_postprocess);
 
             prepare();
+
+            // The queued (not send-immediate) path hands the connection over
+            // here, so it has to be queued for progress.
+            if (postprocess_handler_)
+                enqueue();
         }
 
         // Non-blocking send driver.  Sends as many chunks as credit allows in
@@ -93,6 +98,7 @@ namespace hpx::parcelset::policies::openshmem {
         bool poll_send() noexcept;
 
     private:
+        void enqueue();
         void prepare() noexcept;
         std::size_t stage_chunk(
             std::uint32_t chunk_idx, unsigned char* buffer) noexcept;
