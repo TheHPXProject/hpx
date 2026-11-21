@@ -712,7 +712,7 @@ namespace hpx::threads::policies {
 
             if (hp_queue_ &&
                 hp_queue_->get_next_thread(
-                    thrd, stealing, check_new, owns_hp_queue()))
+                    thrd, stealing, check_new, !stealing && owns_hp_queue()))
             {
                 tq_deb.debug(debug::str<>("get_next_thread_HP"),
                     queue_data_print(this),
