@@ -150,12 +150,12 @@ namespace {
         extra_data moved(std::move(data));
         HPX_TEST(moved.try_get<item<0>>() == &a);
         HPX_TEST(moved.try_get<item<1>>() == &b);
-        // NOLINTNEXTLINE(bugprone-use-after-move)
+        // the moved-from object is empty and can be used again
+        // NOLINTBEGIN(bugprone-use-after-move)
         HPX_TEST(data.try_get<item<0>>() == nullptr);
-
-        // the moved-from object can be used again
         data.get<item<2>>();
         HPX_TEST(data.try_get<item<2>>() != nullptr);
+        // NOLINTEND(bugprone-use-after-move)
 
         // move assignment destroys the items of the target first
         destroyed.clear();
