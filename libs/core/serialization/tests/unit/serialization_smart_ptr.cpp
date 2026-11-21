@@ -87,6 +87,36 @@ void test_unique()
     HPX_TEST_EQ(*op2, *ip);
 }
 
+void test_shared_null_clears_target()
+{
+    std::shared_ptr<int> const null_ptr;
+    std::shared_ptr<int> target(new int(4));
+    {
+        std::vector<char> buffer;
+        hpx::serialization::output_archive oarchive(buffer);
+        oarchive << null_ptr;
+
+        hpx::serialization::input_archive iarchive(buffer);
+        iarchive >> target;
+    }
+    HPX_TEST(!target);
+}
+
+void test_unique_null_clears_target()
+{
+    std::unique_ptr<int> const null_ptr;
+    std::unique_ptr<int> target(new int(4));
+    {
+        std::vector<char> buffer;
+        hpx::serialization::output_archive oarchive(buffer);
+        oarchive << null_ptr;
+
+        hpx::serialization::input_archive iarchive(buffer);
+        iarchive >> target;
+    }
+    HPX_TEST(!target);
+}
+
 #if defined(HPX_SERIALIZATION_HAVE_BOOST_TYPES)
 struct A
 {
@@ -150,6 +180,8 @@ int main()
 {
     test_shared();
     test_unique();
+    test_shared_null_clears_target();
+    test_unique_null_clears_target();
 #if defined(HPX_SERIALIZATION_HAVE_BOOST_TYPES)
     test_boost_shared();
     test_intrusive();
