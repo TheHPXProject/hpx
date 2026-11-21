@@ -24,6 +24,7 @@
 #include <deque>
 #include <iterator>
 #include <list>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <set>
@@ -59,12 +60,31 @@ namespace hpx::parcelset::policies::gasnet {
         }
 
         // Enqueue a connection to be driven by any progress thread.
-        // Safe to call from any HPX thread.
+        // Safe to call from any HPX thread.  A connection whose
+        // destination is free takes its reservation right away and becomes
+        // steppable; otherwise it waits in its destination's queue until the
+        // connection holding the reservation hands it over (per-destination
+        // order is kept, and background_work never scans).
         void add(connection_ptr const& ptr)
         {
             pending_.fetch_add(1, std::memory_order_acq_rel);
             std::unique_lock l(connections_mtx_);
-            connections_.push_back(ptr);
+            if (busy_dsts_.insert(ptr->dst()).second)
+            {
+                ptr->reserved_dst_ = true;
+                connections_.push_back(ptr);
+            }
+            else
+            {
+                waiting_[ptr->dst()].push_back(ptr);
+            }
+        }
+
+        // True while a transfer to the destination is in flight or waiting.
+        bool busy(int dst)
+        {
+            std::unique_lock l(connections_mtx_);
+            return busy_dsts_.count(dst) != 0;
         }
 
         // True if the progress thread still has queued work to empty (used
@@ -95,55 +115,46 @@ namespace hpx::parcelset::policies::gasnet {
             connection_ptr connection;
             {
                 std::unique_lock l(connections_mtx_);
-
-                std::size_t const n = connections_.size();
-                for (std::size_t i = 0; i < n && !connection; ++i)
+                if (connections_.empty())
                 {
-                    connection_ptr c = HPX_MOVE(connections_.front());
-                    connections_.pop_front();
-
-                    // Steppable if it already owns its destination
-                    // reservation, or its destination is not reserved by
-                    // another, still in-flight connection.
-                    if (c->reserved_dst_ || !busy_dsts_.count(c->dst()))
-                    {
-                        if (!c->reserved_dst_)
-                        {
-                            busy_dsts_.insert(c->dst());
-                            c->reserved_dst_ = true;
-                        }
-                        connection = HPX_MOVE(c);
-                    }
-                    else
-                    {
-                        connections_.push_back(HPX_MOVE(c));
-                    }
+                    return false;
                 }
-            }
-
-            if (!connection)
-            {
-                return false;
+                connection = HPX_MOVE(connections_.front());
+                connections_.pop_front();
             }
 
             // poll_send() transfers as many chunks as the transport admits in
-            // this call and never blocks (each chunk needs one region, and
-            // only one region per destination may be in flight).  A finished
-            // connection releases its destination reservation; one that still
-            // has chunks in flight is re-queued with the reservation held.
+            // this call and never blocks.  A finished connection hands its
+            // destination reservation to the next connection waiting for
+            // that destination (or releases it); one that still has chunks
+            // in flight is re-queued with the reservation held.
             in_flight_.fetch_add(1, std::memory_order_relaxed);
             bool const finished = connection->poll_send();
             in_flight_.fetch_sub(1, std::memory_order_relaxed);
+
+            std::unique_lock l(connections_mtx_);
             if (finished)
             {
-                std::unique_lock l(connections_mtx_);
-                busy_dsts_.erase(connection->dst());
+                int const dst = connection->dst();
                 connection->reserved_dst_ = false;
+                auto it = waiting_.find(dst);
+                if (it != waiting_.end())
+                {
+                    connection_ptr next = HPX_MOVE(it->second.front());
+                    it->second.pop_front();
+                    if (it->second.empty())
+                        waiting_.erase(it);
+                    next->reserved_dst_ = true;
+                    connections_.push_back(HPX_MOVE(next));
+                }
+                else
+                {
+                    busy_dsts_.erase(dst);
+                }
                 pending_.fetch_sub(1, std::memory_order_acq_rel);
                 return true;
             }
 
-            std::unique_lock l(connections_mtx_);
             connections_.push_back(HPX_MOVE(connection));
             return true;
         }
@@ -191,6 +202,10 @@ namespace hpx::parcelset::policies::gasnet {
         // Destinations currently reserved by an in-flight connection (part
         // of the single-flight protocol).  Guarded by connections_mtx_.
         std::set<int> busy_dsts_;
+        // Connections waiting for their destination's
+        // reservation, per destination, in order.  Guarded by
+        // connections_mtx_.
+        std::map<int, connection_list> waiting_;
         std::atomic<int> in_flight_{0};
         std::atomic<int> pending_{0};
     };

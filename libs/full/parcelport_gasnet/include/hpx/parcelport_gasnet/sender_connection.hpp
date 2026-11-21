@@ -80,6 +80,11 @@ namespace hpx::parcelset::policies::gasnet {
             postprocess_handler_ = HPX_MOVE(parcel_postprocess);
 
             prepare();
+
+            // The queued (non send-immediate) path hands the
+            // connection over here, so it has to be queued for progress.
+            if (postprocess_handler_)
+                enqueue();
         }
 
         // Non-blocking send driver.  Sends as many chunks as the transport
@@ -96,6 +101,7 @@ namespace hpx::parcelset::policies::gasnet {
         bool poll_send() noexcept;
 
     private:
+        void enqueue();
         void prepare() noexcept;
         std::size_t stage_chunk(
             std::uint32_t chunk_idx, unsigned char* buffer) noexcept;

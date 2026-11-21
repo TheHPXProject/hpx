@@ -123,9 +123,15 @@ namespace hpx::parcelset::policies::gasnet {
             }
             else
             {
-                std::unique_lock l(active_mtx_);
-                active_connections_.erase(src);
-                pending_.fetch_sub(1, std::memory_order_acq_rel);
+                {
+                    std::unique_lock l(active_mtx_);
+                    active_connections_.erase(src);
+                    pending_.fetch_sub(1, std::memory_order_acq_rel);
+                }
+
+                // Only now that the source is free again: the parcels'
+                // actions may suspend this thread (see dispatch_received).
+                connection->dispatch_received();
             }
         }
 

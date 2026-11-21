@@ -7,6 +7,7 @@
 #include <hpx/config.hpp>
 
 #if defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_PARCELPORT_GASNET)
+#include <hpx/parcelport_gasnet/sender.hpp>
 #include <hpx/parcelport_gasnet/sender_connection.hpp>
 #include <hpx/parcelset/parcel_buffer.hpp>
 #include <hpx/serialization/serialization_chunk.hpp>
@@ -194,10 +195,17 @@ namespace hpx::parcelset::policies::gasnet {
         return true;
     }
 
+    void sender_connection::enqueue()
+    {
+        sender_->add(shared_from_this());
+    }
+
     void sender_connection::finish() noexcept
     {
         error_code ec;
-        handler_(ec);
+        handler_type handler;
+        std::swap(handler, handler_);
+        handler(ec);
 
         hpx::move_only_function<void(error_code const&,
             parcelset::locality const&, std::shared_ptr<sender_connection>)>

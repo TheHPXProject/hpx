@@ -27,6 +27,7 @@
 #include <hpx/parcelport_gasnet/sender.hpp>
 #include <hpx/parcelport_gasnet/sender_connection.hpp>
 #include <hpx/parcelset/parcelport_impl.hpp>
+
 #include <hpx/plugin_factories/parcelport_factory.hpp>
 
 #include <asio/io_context.hpp>
@@ -204,13 +205,14 @@ namespace hpx::parcelset {
                 receiver_.set_poll_interval(
                     static_cast<std::uint32_t>(hpx::util::get_entry_as<int>(
                         ini, "hpx.parcel.gasnet.progress_interval", 1)));
-                // 0: only the io drivers progress (default); 1: every worker
-                // thread; N>1: worker threads 0..N-1 only.  Progress from HPX
-                // worker threads is opt-in: it is known to hang multi-threaded
-                // runs (the partitioned_vector min/max_element tests with 4
-                // threads per locality); the cause is not understood yet.
+                // 1: every worker thread progresses the transport from its
+                // background work (default); N>1: worker threads 0..N-1 only;
+                // 0: only the io drivers.
                 worker_progress_ = hpx::util::get_entry_as<int>(
-                    ini, "hpx.parcel.gasnet.worker_progress", 0);
+                    ini, "hpx.parcel.gasnet.worker_progress", 1);
+                // 0 uses HPX's queued, coalescing send path
+                send_immediate_ = hpx::util::get_entry_as<int>(
+                                      ini, "hpx.parcel.gasnet.sendimm", 1) != 0;
             }
 
             parcelport(parcelport const&) = delete;
@@ -337,6 +339,26 @@ namespace hpx::parcelset {
                 // loop and scans only its arena (a disjoint range of source
                 // PEs).  No clamping to a single driver is needed (unlike the
                 // OpenSHMEM port under SHMEM_THREAD_SERIALIZED).
+                // With worker progress (the default) the HPX
+                // worker threads drive the transport from their background
+                // work; no io driver is started and every worker scans all
+                // sources (one arena).
+                if (worker_progress_ > 0)
+                {
+                    // The worker threads don't run yet during bootstrap, so one
+                    // io driver progresses the transport until the runtime
+                    // calls initialized(), as in the LCI parcelport.
+                    arena_count_ = 1;
+#if ASIO_VERSION >= 103400
+                    ::asio::post(io_service_pool_.get_io_service(0),
+                        hpx::bind(&parcelport::io_startup_work, this));
+#else
+                    io_service_pool_.get_io_service(0).post(
+                        hpx::bind(&parcelport::io_startup_work, this));
+#endif
+                    return true;
+                }
+
                 arena_count_ = io_service_pool_.size();
 
                 for (std::size_t i = 0; i < arena_count_; ++i)
@@ -401,7 +423,17 @@ namespace hpx::parcelset {
                         mailboxes_.dump_state();
                         break;
                     }
-                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                    // without io drivers nothing else may be left to drain
+                    // the queues: drive progress here
+                    if (worker_progress_ > 0)
+                    {
+                        progress(0, parcelport_background_mode::all);
+                    }
+                    else
+                    {
+                        std::this_thread::sleep_for(
+                            std::chrono::milliseconds(1));
+                    }
                 }
 
                 // Final collective barrier before the drivers stop and the
@@ -520,9 +552,27 @@ namespace hpx::parcelset {
                 return progress(arena_idx, mode);
             }
 
-            constexpr bool can_send_immediate() const noexcept
+            // Bootstrap is over: the worker threads take over the progress
+            // from the startup driver (see io_startup_work).
+            void initialized() override
             {
-                return true;
+                startup_done_.store(true, std::memory_order_release);
+                base_type::initialized();
+            }
+
+            bool can_send_immediate() const noexcept
+            {
+                return send_immediate_;
+            }
+
+            // Hybrid: a parcel goes out right away only if nothing is being
+            // sent to its destination; otherwise it is queued by the
+            // parcelport_impl, and the parcels queued for a destination are
+            // sent together once it is free (option sendimm=0 always queues).
+            bool can_send_immediate(parcelset::locality const& dest)
+            {
+                return send_immediate_ &&
+                    !sender_.busy(dest.get<locality>().rank());
             }
 
             mailbox_array const& get_mailboxes() const noexcept
@@ -561,6 +611,28 @@ namespace hpx::parcelset {
             }
 
         private:
+            // Progress during bootstrap, until the worker threads take over
+            // (worker_progress > 0). The runtime calls initialized() once
+            // the early parcels are handled, before the workers start.
+            void io_startup_work()
+            {
+                std::size_t k = 0;
+                while (!startup_done_.load(std::memory_order_acquire) &&
+                    !stopped_.load(std::memory_order_acquire))
+                {
+                    if (progress(0, parcelport_background_mode::all))
+                    {
+                        k = 0;
+                    }
+                    else
+                    {
+                        util::detail::yield_k(++k,
+                            "hpx::parcelset::policies::gasnet::parcelport::"
+                            "io_startup_work");
+                    }
+                }
+            }
+
             void io_service_work(std::size_t arena_idx)
             {
                 // Deliberate hot spin (no OS yield).  The receiver arena scan
@@ -600,6 +672,8 @@ namespace hpx::parcelset {
                 std::atomic<std::size_t>& counter_;
             };
             int worker_progress_ = 0;
+            bool send_immediate_ = true;
+            std::atomic<bool> startup_done_ = false;
 
             std::size_t num_pes_;
             std::size_t my_pe_;
@@ -666,11 +740,17 @@ struct hpx::traits::plugin_config_data<
                // An empty that keeps transferring pages waits as long as it
                // needs; only a genuine stall terminates early.
                "stop_timeout = 30\n"
-               // 0: only the io drivers progress the transport (default).
-               // 1: every HPX worker thread does too, N>1: worker threads
-               // 0..N-1 only.  Known to hang multi-threaded runs, see the
-               // parcelport constructor.
-               "worker_progress = 0\n"
+               // 1: the HPX worker threads progress the transport from their
+               // background work (default), N>1: worker threads 0..N-1 only,
+               // 0: dedicated io drivers instead (io_pool_size of them).
+               "worker_progress = 1\n"
+               // Number of io drivers with worker_progress = 0.
+               "io_pool_size = 2\n"
+               // 1: send a parcel right away if nothing is being sent to its
+               // destination, otherwise queue it and send the queued parcels
+               // together once the destination is free (default); 0: queue
+               // all parcels.
+               "sendimm = 1\n"
                // AM poll every Nth receive pass (1 = every pass)
                "progress_interval = 1\n"
                // CRC32 guard over received pages.  Leave on unless profiling

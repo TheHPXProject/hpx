@@ -543,7 +543,7 @@ namespace hpx::parcelset::policies::gasnet {
             return true;
         }
 
-        // All pages consumed: hand the message to HPX.
+        // All pages consumed: keep the message for dispatch_received.
         bool finish_message() noexcept
         {
             if (stage_ != stream_stage::done)
@@ -566,36 +566,10 @@ namespace hpx::parcelset::policies::gasnet {
             }
             else
             {
-                // A parcel can complete while the runtime is already shutting
-                // down (e.g. a late AGAS credit decrement): scheduling its
-                // action then throws.  Letting that escape this noexcept
-                // function would terminate the process, so drop the message
-                // instead; during shutdown nobody can use it anyway.
-                try
-                {
-                    if (optimized_)
-                    {
-                        hpx::parcelset::handle_received_parcels(
-                            HPX_MOVE(parcels_), static_cast<std::size_t>(-1));
-                        buffer_ = buffer_type{};
-                    }
-                    else
-                    {
-                        std::vector<parcel> parcels =
-                            hpx::parcelset::decode_parcels(*pp_,
-                                HPX_MOVE(buffer_),
-                                static_cast<std::size_t>(-1));
-                        hpx::parcelset::handle_received_parcels(
-                            HPX_MOVE(parcels), static_cast<std::size_t>(-1));
-                        chunk_buffers_.clear();
-                    }
-                }
-                catch (...)
-                {
-                    report_drop("dispatching a parcel");
-                    parcels_.clear();
-                    chunk_buffers_.clear();
-                }
+                // Dispatched by the receiver once this connection is done
+                // and the reservation of its source is released (see
+                // dispatch_received).
+                has_received_ = true;
             }
 
             // The final page's credit-return region is still in flight; wait
@@ -606,9 +580,60 @@ namespace hpx::parcelset::policies::gasnet {
             post_credit_state_ =
                 failed_ ? connection_state::failed : connection_state::decoded;
             state_ = connection_state::reaping_credit;
-            return false;
+            return reap_credit();
         }
 
+    public:
+        // Hand the received message to HPX. Called by the receiver after
+        // this connection is done and the reservation of its source is
+        // released: running an action may suspend the calling thread (if it
+        // is an HPX thread), and nothing must be held then that keeps further
+        // parcels from that source from being received, as the action may be
+        // waiting for one of them.
+        void dispatch_received() noexcept
+        {
+            if (!has_received_)
+                return;
+            has_received_ = false;
+
+            if (detail::g_discard_received.load(std::memory_order_acquire))
+            {
+                parcels_.clear();
+                buffer_ = buffer_type{};
+                chunk_buffers_.clear();
+                return;
+            }
+
+            // A parcel can complete while the runtime is already shutting
+            // down (e.g. a late AGAS credit decrement): scheduling its
+            // action then throws.  Letting that escape this noexcept
+            // function would terminate the process, so drop the message
+            // instead; during shutdown nobody can use it anyway.
+            try
+            {
+                if (optimized_)
+                {
+                    hpx::parcelset::handle_received_parcels(
+                        HPX_MOVE(parcels_), static_cast<std::size_t>(-1));
+                }
+                else
+                {
+                    hpx::parcelset::handle_received_parcels(
+                        hpx::parcelset::decode_parcels(*pp_, HPX_MOVE(buffer_),
+                            static_cast<std::size_t>(-1)),
+                        static_cast<std::size_t>(-1));
+                }
+            }
+            catch (...)
+            {
+                report_drop("dispatching a parcel");
+            }
+            parcels_.clear();
+            buffer_ = buffer_type{};
+            chunk_buffers_.clear();
+        }
+
+    private:
         // A message is dropped silently only while the runtime is shutting
         // down (a late parcel, e.g. an AGAS credit decrement, can no longer
         // be dispatched then).  A failure at any other time is logged and
@@ -671,6 +696,7 @@ namespace hpx::parcelset::policies::gasnet {
         bool optimized_ = false;
         bool dropped_ = false;
         bool failed_ = false;
+        bool has_received_ = false;    // a message waits for dispatch_received
         std::vector<parcelset::parcel> parcels_;
         std::vector<std::unique_ptr<char[]>> chunk_buffers_;
         std::uint32_t expected_chunks_;
