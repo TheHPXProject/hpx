@@ -10,7 +10,9 @@ if(NOT HPX_WITH_NETWORKING)
   return()
 endif()
 
-set(tests put_parcels set_parcel_write_handler zero_copy_parcel)
+set(tests optimistic_archive put_parcels set_parcel_write_handler
+          zero_copy_parcel
+)
 
 set(put_parcels_PARAMETERS LOCALITIES 2)
 set(set_parcel_write_handler_PARAMETERS LOCALITIES 2)
