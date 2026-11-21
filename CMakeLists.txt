@@ -2148,9 +2148,6 @@ if(WIN32)
   if(MSVC)
     hpx_add_target_compile_option(-Ox PUBLIC CONFIGURATIONS Release)
 
-    # even VS2017 has an ICE when compiling with -Ob2
-    hpx_add_target_compile_option(-Ob1 PUBLIC CONFIGURATIONS Release)
-
     # VS2012 and above has a special flag for improving the debug experience by
     # adding more symbol information to the build (-d2Zi)
     hpx_add_target_compile_option(-d2Zi+ PUBLIC CONFIGURATIONS RelWithDebInfo)
