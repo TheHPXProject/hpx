@@ -1,5 +1,4 @@
-//  Copyright (c) 2013-2015 Thomas Heller
-//  Copyright (c) 2023 Tactical Computing Labs, LLC (Christopher Taylor)
+//  Copyright (c) 2023-2026 Christopher Taylor
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -18,76 +17,152 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <cstdlib>
 #include <string>
+#include <vector>
 
 #include <hpx/config/warnings_prefix.hpp>
 
-namespace hpx { namespace util {
+namespace hpx::util {
 
+    // Wrapper around the GASNet-EX client lifetime and the registered
+    // segment shared by every locality, plus the small set of RMA
+    // primitives the gasnet parcelport builds on.
+    //
+    // All RMA helpers funnel through gex_RMA_* on the primordial team
+    // created by gex_Client_Init().  GASNet does not order two puts to the
+    // same target, so the parcelport publishes the credit word that makes a
+    // data page visible only after the data put has completed (except on the
+    // smp conduit, where a put is a local memcpy).
     struct HPX_CORE_EXPORT gasnet_environment
     {
         static bool check_gasnet_environment(runtime_configuration const& cfg);
 
-        static int init(int* argc, char*** argv, int const minimal,
-            int const required, int& provided);
         static void init(int* argc, char*** argv, runtime_configuration& cfg);
-        static void finalize();
+        static void finalize() noexcept;
 
-        static bool enabled();
-        static bool multi_threaded();
-        static bool has_called_init();
+        // Number of in-flight pages per (sender, receiver) pair, and the
+        // geometry of the mailbox the parcelport carves out of the segment.
+        // The segment attached in init() is sized from these, so that the
+        // parcelport does not pin more memory than its mailbox needs.
+        static constexpr std::size_t default_slots_per_dst = 8;
 
-        static int rank();
-        static int size();
+        static std::size_t slots(runtime_configuration const& cfg);
+        static std::size_t mtu(runtime_configuration const& cfg,
+            std::size_t num_pes, std::size_t slots);
+
+        // Bytes of the mailbox: tx and rx page rings, the produced and
+        // consumed credit matrices, and one scratch word per PE.
+        static constexpr std::size_t symmetric_bytes(
+            std::size_t npes, std::size_t slots, std::size_t mtu) noexcept
+        {
+            return 2 * npes * slots * mtu +
+                2 * npes * npes * sizeof(std::uint32_t) +
+                npes * sizeof(std::uint32_t);
+        }
+
+        static bool enabled() noexcept;
+        static bool has_called_init() noexcept;
+
+        static int rank() noexcept;
+        static int size() noexcept;
 
         static std::string get_processor_name();
 
-        static bool gettable(int const node, void* start, size_t const len);
+        // GESNet-EX objects handed back by gex_Client_Init().
+        static gex_Client_t client() noexcept;
+        static gex_EP_t ep() noexcept;
+        static gex_TM_t tm() noexcept;
 
-        static void put(std::uint8_t* addr, int const rank, std::uint8_t* raddr,
-            std::size_t const size);
+        // The single registered segment attached on every locality in
+        // init().  Its base address and size are identical in *semantics* on
+        // every PE (the same carve is applied at offset 0 on each PE), but
+        // the base addresses generally differ between locality address
+        // spaces.  Remote RMA targets are computed as
+        // remote_segment_addr(rank) + local_offset.
+        static gex_Segment_t segment() noexcept;
+        static void* segment_addr() noexcept;
+        static std::size_t segment_size() noexcept;
 
-        static void get(std::uint8_t* addr, int const rank, std::uint8_t* raddr,
-            std::size_t const size);
+        // Largest size (bytes) gex_Segment_Attach() accepts on this runtime
+        // (the attached segment is smaller, see init()).
+        static std::size_t max_local_segment_size() noexcept;
 
-        struct HPX_CORE_EXPORT scoped_lock
-        {
-            scoped_lock();
-            scoped_lock(scoped_lock const&) = delete;
-            scoped_lock& operator=(scoped_lock const&) = delete;
-            ~scoped_lock();
-            void unlock();
-        };
+        // Base address of the segment attached by 'rank' in that rank's own
+        // address space (queried once during init() via
+        // gex_EP_QueryBoundSegmentNB()).  May be nullptr if unavailable.
+        static void* remote_segment_addr(int rank) noexcept;
 
-        struct HPX_CORE_EXPORT scoped_try_lock
-        {
-            scoped_try_lock();
-            scoped_try_lock(scoped_try_lock const&) = delete;
-            scoped_try_lock& operator=(scoped_try_lock const&) = delete;
-            ~scoped_try_lock();
-            void unlock();
-            bool locked;
-        };
+        // Collective barrier (gex_Coll_BarrierNB + gex_Event_Wait) over the
+        // primordial team.
+        static void barrier() noexcept;
 
-        typedef hpx::spinlock mutex_type;
+        // RMA: blocking put of 'nbytes' from local 'laddr' to remote
+        // 'raddr' on 'rank'.
+        static void put(
+            int rank, void* raddr, void const* laddr, std::size_t nbytes);
 
-    public:
-        static hpx::spinlock pollingLock;
-        static hpx::mutex mtx_;
+        // RMA: blocking get of 'nbytes' from remote 'raddr' on 'rank' into
+        // local 'laddr'.
+        static void get(
+            int rank, void* laddr, void const* raddr, std::size_t nbytes);
+
+        // Data-only batch of n pages, non-blocking: the caller publishes the
+        // credit with put_uint32_nb() once the returned event has completed.
+        // Needed on every conduit that does not order two puts to the same
+        // target, i.e. all but smp.  All 'laddr' pages must stay untouched
+        // until the returned event completes.
+        static gex_Event_t put_batch_nb(int rank, std::size_t n,
+            void* const* raddr, void const* const* laddr,
+            std::size_t const* nbytes);
+
+        // n data puts followed by the 4-byte credit word, all in one NBI
+        // access region.  Only valid where puts are performed in issue order
+        // (smp conduit).  All 'laddr' pages and 'credit_laddr' must stay
+        // untouched until the returned event completes.
+        static gex_Event_t put_batch_and_credit_nb(int rank, std::size_t n,
+            void* const* raddr, void const* const* laddr,
+            std::size_t const* nbytes, void* credit_raddr,
+            void const* credit_laddr);
+
+        // Non-blocking 4-byte put (the receiver's credit-return path).
+        // Returns the put's local-completion event; 'laddr' must keep its
+        // value until poll_event() reports the event complete.
+        static gex_Event_t put_uint32_nb(
+            int rank, void* raddr, void const* laddr);
+
+        // Blocking 4-byte put (used off the transport progress path).
+        static void put_uint32(int rank, void* raddr, std::uint32_t value);
+
+        // Non-blocking completion probe for the events returned by the
+        // non-blocking puts above.  Returns true once the operation has
+        // completed (the event is then consumed), false while it is still in
+        // flight.  Never blocks.
+        static bool poll_event(gex_Event_t ev) noexcept;
+
+        // Drive the conduit's network progress.  Needed on conduits where
+        // remote RMA is serviced by active messages (e.g. mpi-conduit across
+        // nodes): a PE that only scans its local segment must still poll.
+        static void poll() noexcept;
+
+        using mutex_type = hpx::spinlock;
+        using scoped_lock = std::unique_lock<mutex_type>;
+
+    private:
+        static mutex_type mtx_;
 
         static bool enabled_;
         static bool has_called_init_;
-        static int provided_threading_flag_;
 
-        static int is_initialized_;
-
-        static hpx::mutex dshm_mut;
-        static int init_val_;
-        static hpx::mutex* segment_mutex;
-        static gasnet_seginfo_t* segments;
+        static gex_Client_t client_;
+        static gex_EP_t ep_;
+        static gex_TM_t tm_;
+        static gex_Segment_t segment_;
+        static void* segment_addr_;
+        static std::size_t segment_size_;
+        static std::vector<void*> remote_segment_addrs_;
+        static std::size_t max_local_segment_size_;
     };
-}}    // namespace hpx::util
+}    // namespace hpx::util
 
 #include <hpx/config/warnings_suffix.hpp>
 
@@ -97,12 +172,12 @@ namespace hpx { namespace util {
 
 #include <hpx/config/warnings_prefix.hpp>
 
-namespace hpx { namespace util {
+namespace hpx::util {
     struct HPX_CORE_EXPORT gasnet_environment
     {
         static bool check_gasnet_environment(runtime_configuration const& cfg);
     };
-}}    // namespace hpx::util
+}    // namespace hpx::util
 
 #include <hpx/config/warnings_suffix.hpp>
 
