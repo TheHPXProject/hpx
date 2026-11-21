@@ -1,4 +1,5 @@
 //  Copyright (c) 2007-2014 Hartmut Kaiser
+//  Copyright (c) 2026 Divyanshi Talreja
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -70,6 +71,7 @@ void test(hpx::id_type there)
 
     // verify for remote component
     HPX_TEST_EQ(hpx::get_colocation_id(hpx::launch::sync, t1.get_id()), there);
+    HPX_TEST_EQ(hpx::get_colocation_id(t1.get_id()).get(), there);
 
     HPX_TEST_EQ(
         hpx::async<test_colocation_action>(hpx::colocated(t1.get_id())).get(),
@@ -80,6 +82,7 @@ void test(hpx::id_type there)
 
     // verify for remote locality
     HPX_TEST_EQ(hpx::get_colocation_id(hpx::launch::sync, there), there);
+    HPX_TEST_EQ(hpx::get_colocation_id(there).get(), there);
 
     HPX_TEST_EQ(
         hpx::async<test_colocation_action>(hpx::colocated(there)).get(), there);
