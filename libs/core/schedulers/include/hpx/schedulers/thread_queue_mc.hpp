@@ -74,10 +74,10 @@ namespace hpx::threads::policies {
         // New work items are taken from the queue owned by 'addfrom' and
         // added to the pending queue of this thread holder
         //
-        // This is not thread safe, only the thread owning the holder should
-        // call this function
-        std::size_t add_new(
-            std::int64_t add_count, thread_queue_type* addfrom, bool stealing)
+        // Only the thread owning the holder may reuse its free lists. Other
+        // callers can convert staged work with fresh thread objects.
+        std::size_t add_new(std::int64_t add_count, thread_queue_type* addfrom,
+            bool stealing, bool use_free_list = true)
         {
             if (addfrom->new_tasks_count_.data_.load(
                     std::memory_order_relaxed) == 0)
@@ -93,7 +93,7 @@ namespace hpx::threads::policies {
                 threads::thread_init_data& data = task;
                 threads::thread_id_ref_type tid;
 
-                holder_->create_thread_object(tid, data, true);
+                holder_->create_thread_object(tid, data, use_free_list);
                 holder_->add_to_thread_map(tid.noref());
 
                 // Decrement only after thread_map_count_ has been incremented
@@ -250,7 +250,7 @@ namespace hpx::threads::policies {
         /// Return the next thread to be executed, return false if none is
         /// available
         bool get_next_thread(threads::thread_id_ref_type& thrd, bool other_end,
-            bool check_new = false) HPX_HOT
+            bool check_new = false, bool use_free_list = true) HPX_HOT
         {
             std::int64_t const work_items_count_count =
                 work_items_count_.data_.load(std::memory_order_relaxed);
@@ -266,7 +266,8 @@ namespace hpx::threads::policies {
                     debug::threadinfo<threads::thread_id_ref_type*>(&thrd));
                 return true;
             }
-            if (check_new && add_new(32, this, false) > 0)    //-V112
+            if (check_new &&
+                add_new(32, this, false, use_free_list) > 0)    //-V112
             {
                 // use check_now false to prevent infinite recursion
                 return get_next_thread(thrd, other_end, false);
