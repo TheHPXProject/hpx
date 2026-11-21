@@ -62,7 +62,7 @@ set(type_support_compat_headers
 )
 # cmake-format: on
 
-set(type_support_sources)
+set(type_support_sources extra_data.cpp)
 
 include(HPX_AddModule)
 add_hpx_module(
