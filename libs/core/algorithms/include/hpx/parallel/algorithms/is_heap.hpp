@@ -222,6 +222,7 @@ namespace hpx {
 #include <hpx/algorithms/traits/projected.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
+#include <hpx/parallel/algorithms/detail/is_heap.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/task_size_argument.hpp>
 #include <hpx/parallel/util/adapt_placement_mode.hpp>
@@ -243,83 +244,6 @@ namespace hpx::parallel {
     ///////////////////////////////////////////////////////////////////////////
     // is_heap
     namespace detail {
-
-        HPX_CXX_CORE_EXPORT template <typename Iter, typename Sent,
-            typename Comp, typename Proj>
-        constexpr Iter sequential_is_heap_until(
-            Iter first, Sent last, Comp&& comp, Proj&& proj)
-        {
-            Iter child = first;
-            if (child == last)
-            {
-                return child;
-            }
-
-            while (true)
-            {
-                ++child;
-                if (child == last ||
-                    HPX_INVOKE(comp, HPX_INVOKE(proj, *first),
-                        HPX_INVOKE(proj, *child)))
-                {
-                    break;
-                }
-
-                ++child;
-                if (child == last ||
-                    HPX_INVOKE(comp, HPX_INVOKE(proj, *first),
-                        HPX_INVOKE(proj, *child)))
-                {
-                    break;
-                }
-
-                ++first;
-            }
-
-            return child;
-        }
-
-        HPX_CXX_CORE_EXPORT template <typename Iter, typename Sent,
-            typename Comp>
-        constexpr Iter sequential_is_heap_until(
-            Iter first, Sent last, Comp&& comp, hpx::identity)
-        {
-            Iter child = first;
-            if (child == last)
-            {
-                return child;
-            }
-
-            while (true)
-            {
-                ++child;
-                if (child == last || HPX_INVOKE(comp, *first, *child))
-                {
-                    break;
-                }
-
-                ++child;
-                if (child == last || HPX_INVOKE(comp, *first, *child))
-                {
-                    break;
-                }
-
-                ++first;
-            }
-
-            return child;
-        }
-
-        // sequential is_heap with projection function
-        HPX_CXX_CORE_EXPORT template <typename Iter, typename Sent,
-            typename Comp, typename Proj>
-        constexpr bool sequential_is_heap(
-            Iter first, Sent last, Comp&& comp, Proj&& proj)
-        {
-            return sequential_is_heap_until(first, last,
-                       HPX_FORWARD(Comp, comp),
-                       HPX_FORWARD(Proj, proj)) == last;
-        }
 
         struct is_heap_helper
         {
@@ -370,41 +294,13 @@ namespace hpx::parallel {
                 auto const size =
                     task_size_of_iteration<task_size_argument_t<Iter, Proj>,
                         task_size_argument_t<Iter, Proj>>(comp, first);
-                // Note: replacing the invoke() with HPX_INVOKE()
-                // below makes gcc generate errors
+
                 auto f1 = [tok, first, comp = HPX_FORWARD(Comp, comp),
                               proj = HPX_FORWARD(Proj, proj)](Iter it,
                               std::size_t part_size,
                               std::size_t base_idx) mutable -> void {
-                    bool cancelled = false;
-                    util::loop_idx_n<policy_type>(base_idx, it, part_size, tok,
-                        [&cancelled, first, &comp, &proj](type const& v,
-                            std::size_t const i) mutable -> void {
-                            if constexpr (std::is_same_v<hpx::identity,
-                                              std::decay_t<Proj>>)
-                            {
-                                HPX_UNUSED(proj);
-                                if (!cancelled &&
-                                    hpx::invoke(comp, *(first + i / 2), v))
-                                {
-                                    cancelled = true;
-                                }
-                            }
-                            else
-                            {
-                                if (!cancelled &&
-                                    hpx::invoke(comp,
-                                        hpx::invoke(proj, *(first + i / 2)),
-                                        hpx::invoke(proj, v)))
-                                {
-                                    cancelled = true;
-                                }
-                            }
-                        });
-                    if (cancelled)
-                    {
-                        tok.cancel(0);
-                    }
+                    sequential_is_heap_until<policy_type>(
+                        first, base_idx, it, part_size, tok, comp, proj);
                 };
 
                 auto f2 = [tok, count](auto&&... data) mutable -> bool {
@@ -442,8 +338,8 @@ namespace hpx::parallel {
             static constexpr bool sequential(
                 ExPolicy&&, Iter first, Sent last, Comp&& comp, Proj&& proj)
             {
-                return sequential_is_heap(first, last, HPX_FORWARD(Comp, comp),
-                    HPX_FORWARD(Proj, proj));
+                return sequential_is_heap<ExPolicy>(first, last,
+                    HPX_FORWARD(Comp, comp), HPX_FORWARD(Proj, proj));
             }
 
             template <typename ExPolicy, typename Iter, typename Sent,
@@ -512,45 +408,12 @@ namespace hpx::parallel {
                 auto const size =
                     task_size_of_iteration<task_size_argument_t<Iter, Proj>,
                         task_size_argument_t<Iter, Proj>>(comp, first);
-                // Note: replacing the invoke() with HPX_INVOKE()
-                // below makes gcc generate errors
                 auto f1 = [tok, first, comp = HPX_FORWARD(Comp, comp),
                               proj = HPX_FORWARD(Proj, proj)](Iter it,
                               std::size_t part_size,
                               std::size_t base_idx) mutable {
-                    std::size_t cancelled = static_cast<std::size_t>(-1);
-                    util::loop_idx_n<policy_type>(base_idx, it, part_size, tok,
-                        [&cancelled, first, &comp, &proj](
-                            type const& v, std::size_t const i) -> void {
-                            if constexpr (std::is_same_v<hpx::identity,
-                                              std::decay_t<Proj>>)
-                            {
-                                HPX_UNUSED(proj);
-                                if (cancelled == static_cast<std::size_t>(-1))
-                                {
-                                    if (hpx::invoke(comp, *(first + i / 2), v))
-                                    {
-                                        cancelled = i;
-                                    }
-                                }
-                            }
-                            else
-                            {
-                                if (cancelled == static_cast<std::size_t>(-1))
-                                {
-                                    if (hpx::invoke(comp,
-                                            hpx::invoke(proj, *(first + i / 2)),
-                                            hpx::invoke(proj, v)))
-                                    {
-                                        cancelled = i;
-                                    }
-                                }
-                            }
-                        });
-                    if (cancelled != static_cast<std::size_t>(-1))
-                    {
-                        tok.cancel(cancelled);
-                    }
+                    sequential_is_heap_until<policy_type>(
+                        first, base_idx, it, part_size, tok, comp, proj);
                 };
 
                 auto f2 = [tok, second](auto&&... data) mutable -> Iter {
@@ -590,7 +453,7 @@ namespace hpx::parallel {
             static constexpr Iter sequential(
                 ExPolicy&&, Iter first, Sent last, Comp&& comp, Proj&& proj)
             {
-                return sequential_is_heap_until(first, last,
+                return sequential_is_heap_until<ExPolicy>(first, last,
                     HPX_FORWARD(Comp, comp), HPX_FORWARD(Proj, proj));
             }
 
