@@ -9,6 +9,8 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 set(plugin_factories_headers
     hpx/plugin_factories/binary_filter_factory.hpp
     hpx/plugin_factories/binary_filter_factory_base.hpp
+    hpx/plugin_factories/device_conduit_factory.hpp
+    hpx/plugin_factories/device_conduit_factory_base.hpp
     hpx/plugin_factories/macros.hpp
     hpx/plugin_factories/message_handler_factory.hpp
     hpx/plugin_factories/message_handler_factory_base.hpp
@@ -35,7 +37,9 @@ set(plugin_factories_compat_headers
 )
 # cmake-format: on
 
-set(plugin_factories_sources parcelport_factory_base.cpp)
+set(plugin_factories_sources device_conduit_factory_base.cpp
+                             parcelport_factory_base.cpp
+)
 
 include(HPX_AddModule)
 add_hpx_module(

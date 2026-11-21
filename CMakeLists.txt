@@ -138,6 +138,7 @@ unset(HPX_ENABLED_MODULES CACHE)
 unset(HPX_CORE_ENABLED_MODULES CACHE)
 unset(HPX_FULL_ENABLED_MODULES CACHE)
 unset(HPX_STATIC_PARCELPORT_PLUGINS CACHE)
+unset(HPX_STATIC_DEVICE_CONDUIT_PLUGINS CACHE)
 
 # ##############################################################################
 # Set up dummy compiler flags targets
@@ -664,6 +665,10 @@ hpx_option(
   ADVANCED
   CATEGORY "Build Targets"
 )
+# the condition libs/core/thrust builds the module under
+if(HPX_WITH_THRUST AND (HPX_WITH_CUDA OR HPX_WITH_HIP))
+  hpx_add_config_define(HPX_HAVE_THRUST)
+endif()
 
 # ## HPX STDEXEC configuration ##
 
@@ -1522,6 +1527,19 @@ if(HPX_WITH_NETWORKING)
   )
   if(HPX_WITH_PARCELPORT_TCP)
     hpx_add_config_define(HPX_HAVE_PARCELPORT_TCP)
+  endif()
+
+  # device conduits move device memory between localities below the parcelports
+  # (hpx::parcelset::device_conduit)
+  hpx_option(
+    HPX_WITH_DEVICE_CONDUIT_UCX
+    BOOL
+    "Enable the UCX based device conduit (uses the UCX of the MPI library if it is UCX based; set UCX_ROOT otherwise)."
+    OFF
+    CATEGORY "Parcelport"
+  )
+  if(HPX_WITH_DEVICE_CONDUIT_UCX)
+    hpx_add_config_define(HPX_HAVE_DEVICE_CONDUIT_UCX)
   endif()
   hpx_option(
     HPX_WITH_PARCELPORT_COUNTERS BOOL
@@ -2848,6 +2866,11 @@ add_hpx_pseudo_target(core)
 # ##############################################################################
 # collect names of static parcelports
 set(HPX_STATIC_PARCELPORT_PLUGINS
+    ""
+    CACHE INTERNAL "" FORCE
+)
+# collect names of the device conduits compiled into HPX
+set(HPX_STATIC_DEVICE_CONDUIT_PLUGINS
     ""
     CACHE INTERNAL "" FORCE
 )

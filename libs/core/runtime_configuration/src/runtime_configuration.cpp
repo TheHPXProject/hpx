@@ -222,6 +222,15 @@ namespace hpx::util {
                 HPX_PP_EXPAND(HPX_TRACING_SAMPLE_RATE)) "}",
 #endif
 
+#if defined(HPX_HAVE_THRUST)
+            // memory of hpx::thrust::pooled_allocator: device or pinned;
+            // bytes each of its pools keeps for reuse (empty: an eighth of
+            // the device's memory)
+            "[hpx.thrust]",
+            "memory = ${HPX_THRUST_MEMORY:device}",
+            "max_cached = ${HPX_THRUST_MAX_CACHED}",
+#endif
+
 #if defined(HPX_HAVE_NETWORKING)
             // by default, enable networking
             "[hpx.parcel]",

@@ -177,3 +177,20 @@
     /**/
 
 #endif
+
+///////////////////////////////////////////////////////////////////////////////
+// from libs/plugin_factories/device_conduit_factory.hpp
+// A conduit compiled into HPX: defines device_conduit_<name>_factory_init,
+// which the generated list of compiled-in conduits calls (see the parcelports
+// module, HPX_STATIC_DEVICE_CONDUIT_PLUGINS).
+#define HPX_REGISTER_DEVICE_CONDUIT(Conduit, name)                             \
+    template struct hpx::plugins::device_conduit_factory<Conduit>;             \
+    HPX_EXPORT hpx::plugins::device_conduit_factory_base* HPX_PP_CAT(          \
+        HPX_PP_CAT(device_conduit_, name), _factory_init)(                     \
+        std::vector<hpx::plugins::device_conduit_factory_base*> & factories)   \
+    {                                                                          \
+        static hpx::plugins::device_conduit_factory<Conduit> factory(          \
+            factories);                                                        \
+        return &factory;                                                       \
+    }                                                                          \
+    /**/

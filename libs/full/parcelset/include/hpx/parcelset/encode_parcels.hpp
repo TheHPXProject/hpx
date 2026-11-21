@@ -23,6 +23,7 @@
 #include <hpx/modules/serialization.hpp>
 #include <hpx/modules/timing.hpp>
 
+#include <hpx/parcelset/device_conduit.hpp>
 #include <hpx/parcelset/parcel.hpp>
 #include <hpx/parcelset/parcelset_fwd.hpp>
 
@@ -200,6 +201,13 @@ namespace hpx::parcelset {
                 buffer.data_.reserve(arg_size);
                 buffer.chunks_.reserve(num_chunks);
 
+                // a device conduit moves the device memory of the parcels if
+                // it reaches their destination (the same for all of them)
+                std::uint32_t const destination =
+                    ps[0].destination_locality_id();
+                archive_flags = archive_flags |
+                    static_cast<int>(detail::device_conduit_flags(destination));
+
                 // mark start of serialization
 #if defined(HPX_HAVE_PARCELPORT_COUNTERS)
                 hpx::chrono::high_resolution_timer const timer;
@@ -215,6 +223,16 @@ namespace hpx::parcelset {
                         archive_flags, &buffer.chunks_, filter.get(),
                         pp.get_zero_copy_serialization_threshold());
 
+                    // the conduit keeps the parcels (and the memory they
+                    // refer to) alive until it has sent their device data
+                    if (archive.enable_device_transport())
+                    {
+                        detail::attach_device_conduit_sender(archive,
+                            destination,
+                            std::make_shared<std::vector<parcel>>(
+                                ps, ps + parcels_sent));
+                    }
+
                     if (num_parcels != static_cast<std::size_t>(-1))
                         archive << parcels_sent;    //-V128
 
@@ -228,12 +246,36 @@ namespace hpx::parcelset {
 #endif
                         LPT_(debug) << ps[i];
 
-                        auto split_gids_map = ps[i].move_split_gids();
-                        if (!split_gids_map.empty())
+                        // The split credits of this parcel: also a parcel
+                        // without any returns the credits an earlier parcel
+                        // left unused (e.g. of ids written as back-references
+                        // to an earlier parcel of this message).
+                        auto split_gids = ps[i].move_split_gids();
+                        if (!split_gids.empty() ||
+                            archive.try_get_extra_data<
+                                serialization::detail::preprocess_gid_types>())
                         {
-                            auto& split_gids = archive.get_extra_data<
-                                serialization::detail::preprocess_gid_types>();
-                            split_gids.set_split_gids(HPX_MOVE(split_gids_map));
+                            archive
+                                .get_extra_data<serialization::detail::
+                                        preprocess_gid_types>()
+                                .set_split_gids(HPX_MOVE(split_gids));
+                        }
+
+                        // The keep-alive buffers of this parcel, matched to
+                        // its objects by position: they replace those of an
+                        // earlier parcel of this message. Objects recorded
+                        // before this parcel's start belong to the earlier
+                        // parcels.
+                        if (auto const& keep_alive = ps[i].keep_alive();
+                            !keep_alive.empty() ||
+                            archive.try_get_extra_data<
+                                serialization::detail::preprocess_keep_alive>())
+                        {
+                            archive
+                                .get_extra_data<serialization::detail::
+                                        preprocess_keep_alive>()
+                                .set_buffers(
+                                    keep_alive, archive.bytes_written());
                         }
 
                         archive << ps[i];

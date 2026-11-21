@@ -1509,6 +1509,42 @@ namespace hpx::lcos::detail {
         serialization::output_archive& ar,
         hpx::lcos::detail::future_data_refcnt_base& state);
 
+    // Preprocessing: the keep-alive buffers of the objects the value of a
+    // future holds are inserted where the future is if it wasn't ready in
+    // the previous preprocessing round (see preprocess_keep_alive).
+    HPX_CXX_CORE_EXPORT class keep_alive_future
+    {
+    public:
+        keep_alive_future(
+            serialization::output_archive const& ar, void const* state)
+          : keep_alive_(ar.is_preprocessing() ?
+                    ar.try_get_extra_data<
+                        serialization::detail::preprocess_keep_alive>() :
+                    nullptr)
+        {
+            if (keep_alive_ != nullptr && !keep_alive_->enter_future(state))
+            {
+                keep_alive_ = nullptr;
+            }
+        }
+
+        keep_alive_future(keep_alive_future const&) = delete;
+        keep_alive_future(keep_alive_future&&) = delete;
+        keep_alive_future& operator=(keep_alive_future const&) = delete;
+        keep_alive_future& operator=(keep_alive_future&&) = delete;
+
+        ~keep_alive_future()
+        {
+            if (keep_alive_ != nullptr)
+            {
+                keep_alive_->leave_future();
+            }
+        }
+
+    private:
+        serialization::detail::preprocess_keep_alive* keep_alive_;
+    };
+
     HPX_CXX_CORE_EXPORT template <typename Future>
     void serialize_future(
         serialization::output_archive& ar, Future& f, unsigned)
@@ -1522,6 +1558,12 @@ namespace hpx::lcos::detail {
 
                 shared_state->execute_deferred();
 
+                // the value is serialized in the next round
+                if (auto* keep_alive = ar.try_get_extra_data<
+                        serialization::detail::preprocess_keep_alive>())
+                {
+                    keep_alive->future_pending(shared_state.get());
+                }
                 preprocess_future(ar, *shared_state);
             }
             else
@@ -1542,10 +1584,12 @@ namespace hpx::lcos::detail {
                 using value_type =
                     hpx::traits::future_traits<Future>::result_type;
 
-                value_type const& value =
-                    *(hpx::traits::future_access<Future>::get_shared_state(f)
-                            ->get_result());
+                auto const& shared_state =
+                    hpx::traits::future_access<Future>::get_shared_state(f);
+                value_type const& value = *shared_state->get_result();
 
+                [[maybe_unused]] keep_alive_future const keep_alive(
+                    ar, shared_state.get());
                 if constexpr (!std::is_default_constructible_v<value_type>)
                 {
                     using serialization::detail::save_construct_data;

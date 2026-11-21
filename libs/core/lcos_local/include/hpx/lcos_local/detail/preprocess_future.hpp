@@ -110,7 +110,18 @@ namespace hpx::serialization::detail {
                 }
             }
 
-            future_data.set_on_completed([this]() { this->trigger(); });
+            try
+            {
+                future_data.set_on_completed([this]() { this->trigger(); });
+            }
+            catch (...)
+            {
+                // nothing will trigger for this future: take it out of the
+                // count again (counted here or, without increment_count, by
+                // the caller), so that the remaining ones can complete
+                decrement_future_count();
+                throw;
+            }
         }
 
         void increment_future_count()
