@@ -933,8 +933,8 @@ namespace hpx::execution::experimental::detail {
 #define HPX_STATIC_ASSERT_ON_PARAMETERS_AMBIGUITY(func)                        \
     static_assert(                                                             \
         parameters_type_counter<                                               \
-            HPX_PP_CAT(hpx::execution::experimental::detail::has_, func) <     \
-            hpx::util::decay_unwrap_t<Params>>::value... > ::value <= 1,       \
+            HPX_PP_CAT(::hpx::execution::experimental::detail::has_, func) <   \
+            ::hpx::util::decay_unwrap_t<Params>>::value... > ::value <= 1,     \
         "Passing more than one executor parameters type "                      \
         "exposing " HPX_PP_STRINGIZE(func) " is not possible") /**/
 

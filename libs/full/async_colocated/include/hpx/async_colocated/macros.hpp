@@ -14,18 +14,20 @@
 // from async_colocated.hpp
 #define HPX_REGISTER_ASYNC_COLOCATED_DECLARATION(Action, Name)                 \
     HPX_UTIL_REGISTER_UNIQUE_FUNCTION_DECLARATION(                             \
-        void(hpx::id_type, hpx::id_type),                                      \
-        (hpx::util::functional::detail::async_continuation_impl<               \
-            typename hpx::detail::async_colocated_bound_action<Action>::type,  \
-            hpx::util::unused_type>),                                          \
+        void(::hpx::id_type, ::hpx::id_type),                                  \
+        (::hpx::util::functional::detail::async_continuation_impl<             \
+            typename ::hpx::detail::async_colocated_bound_action<              \
+                Action>::type,                                                 \
+            ::hpx::util::unused_type>),                                        \
         Name)                                                                  \
     /**/
 
 #define HPX_REGISTER_ASYNC_COLOCATED(Action, Name)                             \
-    HPX_UTIL_REGISTER_UNIQUE_FUNCTION(void(hpx::id_type, hpx::id_type),        \
-        (hpx::util::functional::detail::async_continuation_impl<               \
-            typename hpx::detail::async_colocated_bound_action<Action>::type,  \
-            hpx::util::unused_type>),                                          \
+    HPX_UTIL_REGISTER_UNIQUE_FUNCTION(void(::hpx::id_type, ::hpx::id_type),    \
+        (::hpx::util::functional::detail::async_continuation_impl<             \
+            typename ::hpx::detail::async_colocated_bound_action<              \
+                Action>::type,                                                 \
+            ::hpx::util::unused_type>),                                        \
         Name)                                                                  \
     /**/
 

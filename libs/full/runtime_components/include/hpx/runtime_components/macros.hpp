@@ -156,7 +156,7 @@
     HPX_ASSERT_COMPONENT_NOT_REGISTERED_ELSEWHERE(ComponentType::type_holder)  \
     HPX_DEFINE_COMPONENT_MODULE_NAME(ComponentType)                            \
     using componentname##_component_registry_type =                            \
-        hpx::components::component_registry<ComponentType, state>;             \
+        ::hpx::components::component_registry<ComponentType, state>;           \
     HPX_REGISTER_COMPONENT_REGISTRY(                                           \
         componentname##_component_registry_type, componentname)                \
     template struct hpx::components::component_registry<ComponentType, state>; \
@@ -168,8 +168,8 @@
 // sources of the module, for HPX_COMPONENT_STRING to have its value there.
 #define HPX_DEFINE_COMPONENT_MODULE_NAME(ComponentType)                        \
     template <>                                                                \
-    HPX_ALWAYS_EXPORT char const*                                              \
-    hpx::components::get_component_module_name<ComponentType>() noexcept       \
+    HPX_ALWAYS_EXPORT char const* ::hpx::components::                          \
+        get_component_module_name<ComponentType>() noexcept                    \
     {                                                                          \
         return HPX_COMPONENT_STRING;                                           \
     }                                                                          \
@@ -195,7 +195,7 @@
     HPX_ASSERT_COMPONENT_NOT_REGISTERED_ELSEWHERE(ComponentType::type_holder)  \
     HPX_DEFINE_COMPONENT_MODULE_NAME(ComponentType)                            \
     using componentname##_component_registry_type =                            \
-        hpx::components::component_registry<ComponentType, state>;             \
+        ::hpx::components::component_registry<ComponentType, state>;           \
     HPX_REGISTER_COMPONENT_REGISTRY_DYNAMIC(                                   \
         componentname##_component_registry_type, componentname)                \
     template struct hpx::components::component_registry<ComponentType, state>; \
