@@ -118,6 +118,12 @@ namespace hpx::serialization {
             }
         }
 
+        [[nodiscard]] std::size_t get_zero_copy_serialization_threshold()
+            const noexcept override
+        {
+            return zero_copy_serialization_threshold_;
+        }
+
         std::size_t load_binary(detail::fundamental_types const expected,
             void* address, std::size_t count) override
         {
@@ -215,13 +221,16 @@ namespace hpx::serialization {
 
         std::size_t load_binary_chunk(detail::fundamental_types const expected,
             void* address, std::size_t const count,
-            bool const allow_zero_copy_receive) override
+            bool const allow_zero_copy_receive,
+            chunk_memory const memory) override
         {
             HPX_ASSERT(static_cast<std::int64_t>(count) >= 0);
 
             if (chunks_ == nullptr ||
                 count < zero_copy_serialization_threshold_ || filter_)
             {
+                // device memory must not be written on the host
+                HPX_ASSERT(memory == chunk_memory::host);
                 // fall back to serialization_chunk-less archive
                 return this->input_container::load_binary(
                     expected, address, count);
@@ -259,9 +268,12 @@ namespace hpx::serialization {
                 // where the data will be placed by the networking layer.
                 HPX_ASSERT(buffer == nullptr);
                 buffer = address;
+                (*chunks_)[current_chunk_].memory_ = memory;
             }
             else
             {
+                // device memory must not be written on the host
+                HPX_ASSERT(memory == chunk_memory::host);
                 // Unfortunately we can't implement a zero-copy policy on
                 // the receiving end as the parcelport doesn't support this.
                 // The memory was already allocated by the serialization

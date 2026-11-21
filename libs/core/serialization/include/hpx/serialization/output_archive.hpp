@@ -13,6 +13,7 @@
 #include <hpx/assert.hpp>
 #include <hpx/serialization/access.hpp>
 #include <hpx/serialization/basic_archive.hpp>
+#include <hpx/serialization/detail/device_chunk_transport.hpp>
 #include <hpx/serialization/detail/polymorphic_nonintrusive_factory.hpp>
 #include <hpx/serialization/detail/raw_ptr.hpp>
 #include <hpx/serialization/output_container.hpp>
@@ -161,6 +162,7 @@ namespace hpx::serialization {
             {
                 *this << detail::raw_ptr(filter);
                 buffer_->set_filter(filter);
+                filtered_ = true;
             }
         }
 
@@ -179,9 +181,25 @@ namespace hpx::serialization {
             return size_;
         }
 
+        // Whether the data goes through a filter (e.g. compression): the
+        // filter reads all of it on the host, also the data of zero-copy
+        // chunks.
+        [[nodiscard]] constexpr bool is_filtered() const noexcept
+        {
+            return filtered_;
+        }
+
         [[nodiscard]] std::size_t get_num_chunks() const noexcept
         {
             return buffer_->get_num_chunks();
+        }
+
+        // data below this size is copied into the archive, larger data is
+        // referenced by a zero-copy chunk (if chunking is enabled)
+        [[nodiscard]] std::size_t get_zero_copy_serialization_threshold()
+            const noexcept
+        {
+            return buffer_->get_zero_copy_serialization_threshold();
         }
 
         // this function is needed to avoid a MSVC linker error
@@ -371,8 +389,32 @@ namespace hpx::serialization {
             size_ += buffer_->save_binary(t, address, count);
         }
 
+        /// Writes \a count bytes at \a address as a zero-copy chunk, or copies
+        /// them into the archive (as save_binary does) if the archive collects
+        /// no chunks.
+        ///
+        /// A zero-copy chunk refers to the memory instead of copying it: the
+        /// memory must stay valid and unchanged until the chunks of the
+        /// archive have been sent (for a parcel: until the parcel has been
+        /// sent). The memory of the objects a parcel holds (its arguments and
+        /// what they own) lives that long. The memory of a temporary object a
+        /// serialize() function creates while it runs doesn't: once freed (or
+        /// given back to a memory pool), it may be reused before it is sent,
+        /// and the receiver would get other data, without an error. Such data
+        /// must be copied into the archive (save_binary), be owned by the
+        /// object being serialized, or be kept alive by the parcel (see
+        /// serialization::detail::preprocess_keep_alive).
+        ///
+        /// \param t       The type of the data, checked by archives with type
+        ///                checking.
+        /// \param address The data.
+        /// \param count   The number of bytes.
+        /// \param memory  Whether \a address refers to device memory: the
+        ///                chunk is marked (see
+        ///                serialization_chunk::is_device_memory).
         void save_binary_chunk(detail::fundamental_types t, void const* address,
-            std::size_t const count)
+            std::size_t const count,
+            chunk_memory const memory = chunk_memory::host)
         {
             if (HPX_UNLIKELY(count == 0))
                 return;
@@ -382,19 +424,58 @@ namespace hpx::serialization {
                 t = detail::fundamental_types::none;
             }
 
+            if (HPX_UNLIKELY(enable_device_transport()) &&
+                save_with_device_transport(address, count, memory))
+            {
+                return;
+            }
+
             if (HPX_UNLIKELY(disable_data_chunking()))
             {
+                // device memory must not be copied on the host
+                HPX_ASSERT(memory == chunk_memory::host);
                 size_ += buffer_->save_binary(t, address, count);
             }
             else
             {
                 // the size might grow if optimizations are not used
-                size_ += buffer_->save_binary_chunk(t, address, count);
+                size_ += buffer_->save_binary_chunk(t, address, count, memory);
             }
         }
 
     private:
+        // With a device transport, each zero-copy chunk starts with a marker:
+        // 1 if the transport moves its data (device memory), the archive then
+        // holds the transport's descriptor instead of the chunk, 0 for a
+        // chunk as usual. Returns whether the transport moves the data.
+        bool save_with_device_transport(void const* address,
+            std::size_t const count, chunk_memory const memory)
+        {
+            auto const* transport =
+                try_get_extra_data<detail::device_transport>();
+            bool const use_transport = memory == chunk_memory::device &&
+                (is_preprocessing() ||
+                    (transport != nullptr && transport->transport));
+
+            save(static_cast<std::uint8_t>(use_transport ? 1 : 0));
+            if (!use_transport)
+            {
+                return false;
+            }
+
+            // the preprocessing pass only counts the bytes
+            detail::device_chunk_descriptor descriptor;
+            if (!is_preprocessing())
+            {
+                descriptor = transport->transport->send(address, count);
+            }
+            save(descriptor.source);
+            save(descriptor.tag);
+            return true;
+        }
+
         std::unique_ptr<erased_output_container> buffer_;
+        bool filtered_ = false;
     };
 }    // namespace hpx::serialization
 

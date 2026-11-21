@@ -40,6 +40,26 @@ foreach(parcelport ${HPX_STATIC_PARCELPORT_PLUGINS})
   )
 endforeach()
 
+# the device conduits compiled into HPX (HPX_STATIC_DEVICE_CONDUIT_PLUGINS, the
+# names given to HPX_REGISTER_DEVICE_CONDUIT)
+set(device_conduit_export_declarations)
+set(device_conduit_init_definitions)
+
+foreach(conduit ${HPX_STATIC_DEVICE_CONDUIT_PLUGINS})
+  set(device_conduit_export_declarations
+      "${device_conduit_export_declarations}HPX_EXPORT hpx::plugins::device_conduit_factory_base *\n"
+  )
+  set(device_conduit_export_declarations
+      "${device_conduit_export_declarations}    device_conduit_${conduit}_factory_init(\n"
+  )
+  set(device_conduit_export_declarations
+      "${device_conduit_export_declarations}        std::vector<hpx::plugins::device_conduit_factory_base *>& factories);\n"
+  )
+  set(device_conduit_init_definitions
+      "${device_conduit_init_definitions}        device_conduit_${conduit}_factory_init(factories);\n"
+  )
+endforeach()
+
 include(HPX_ConfigureIfChanged)
 hpx_configure_if_changed(
   INPUT "${CMAKE_CURRENT_SOURCE_DIR}/cmake/templates/static_parcelports.hpp.in"

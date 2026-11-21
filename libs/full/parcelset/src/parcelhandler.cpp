@@ -34,6 +34,7 @@
 #include <hpx/modules/naming_base.hpp>
 #include <hpx/modules/parcelset_base.hpp>
 #include <hpx/modules/plugin_factories.hpp>
+#include <hpx/parcelset/device_conduit.hpp>
 #include <hpx/parcelset/init_parcelports.hpp>
 #include <hpx/parcelset/message_handler_fwd.hpp>
 #include <hpx/parcelset/parcelhandler.hpp>
@@ -221,7 +222,11 @@ namespace hpx::parcelset {
         LPROGRESS_;
     }
 
-    parcelhandler::~parcelhandler() = default;
+    parcelhandler::~parcelhandler()
+    {
+        // the parcelports are stopped, nothing is sent anymore
+        detail::reset_device_conduit();
+    }
 
     void parcelhandler::set_notification_policies(
         util::runtime_configuration const& cfg, threads::threadmanager* tm,
@@ -239,6 +244,9 @@ namespace hpx::parcelset {
                 std::shared_ptr<parcelport> pp(factory->create(cfg, notifier));
                 attach_parcelport(pp);
             }
+
+            // the conduit moving device memory below the parcelports
+            detail::init_device_conduit(cfg);
         }
     }
 
@@ -292,6 +300,21 @@ namespace hpx::parcelset {
         }
 
         return {};
+    }
+
+    void parcelhandler::on_start_thread(std::size_t const local_thread_num,
+        std::size_t const global_thread_num, char const* pool_name,
+        char const* postfix) const
+    {
+        // the parcelports are attached before any of the runtime's threads
+        // start (set_notification_policies), parcelports that fail to
+        // initialize are removed while the threads of others may run
+        std::lock_guard<std::mutex> l(pports_mtx_);
+        for (auto const& pp : pports_)
+        {
+            pp.second->on_start_thread(
+                local_thread_num, global_thread_num, pool_name, postfix);
+        }
     }
 
     void parcelhandler::initialize()
@@ -351,6 +374,9 @@ namespace hpx::parcelset {
                 {
                     std::cerr << "  " << it->second->type() << "\n";
                     it->second->stop();
+
+                    // not while it is stopped, stop() joins its threads
+                    std::lock_guard<std::mutex> l(pports_mtx_);
                     pports_.erase(it);
                 }
             }
@@ -1655,6 +1681,10 @@ namespace hpx::parcelset {
                 "endian_out = ${HPX_PARCEL_ENDIAN_OUT:little}");
         ini_defs.emplace_back(
             "array_optimization = ${HPX_PARCEL_ARRAY_OPTIMIZATION:1}");
+        // moves zero-copy chunks of device memory between localities, see
+        // hpx::parcelset::device_conduit
+        ini_defs.emplace_back(
+            "device_conduit = ${HPX_PARCEL_DEVICE_CONDUIT:none}");
         ini_defs.emplace_back(
             "zero_copy_optimization = ${HPX_PARCEL_ZERO_COPY_OPTIMIZATION:"
             "$[hpx.parcel.array_optimization]}");
@@ -1679,6 +1709,13 @@ namespace hpx::parcelset {
 
         for (plugins::parcelport_factory_base* f :
             parcelhandler::get_parcelport_factories())
+        {
+            f->get_plugin_info(ini_defs);
+        }
+
+        // the device conduits
+        for (plugins::device_conduit_factory_base* f :
+            detail::get_device_conduit_factories())
         {
             f->get_plugin_info(ini_defs);
         }
