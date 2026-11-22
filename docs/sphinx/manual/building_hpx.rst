@@ -76,6 +76,11 @@ used CMake options.
    Enable support for CUDA. Use ``CMAKE_CUDA_COMPILER`` to set the CUDA compiler. This is a standard
    |cmake|_ variable, like ``CMAKE_CXX_COMPILER``.
 
+   |hpx|'s sender/receiver support is based on stdexec, which supports clang and nvc++ as CUDA
+   compilers, but not nvcc. |hpx| applies its own patches to the stdexec version it fetches, which
+   lets nvcc compile the |hpx| headers on a best-effort basis, but not with MSVC as the host
+   compiler. On Windows, use clang as the CUDA compiler instead, see :ref:`windows_cuda`.
+
 .. option:: HPX_WITH_PARCELPORT_MPI
 
    Enable the MPI parcelport. This enables the use of MPI for the networking operations in the HPX runtime.
@@ -264,6 +269,8 @@ Some of the available presets include:
 * ``debug``: Debug build with symbols and debug-optimized settings.
 * ``performance``: Build optimized for performance analysis with APEX profiling.
 * ``cuda``: Build with CUDA support (requires CUDA toolkit).
+* ``windows-clang-cuda``: Build with CUDA support on Windows, using clang as the C++ and CUDA
+  compiler (experimental, see :ref:`windows_cuda`).
 * ``sycl``: Build with SYCL support (requires compatible compiler).
 * ``sanitizer-address``: Build with AddressSanitizer enabled.
 
@@ -478,3 +485,75 @@ To build |hpx| under Windows 10 x64 with Visual Studio 2015:
   .. figure:: ../_static/images/vs_build_output.png
 
      Visual Studio build output.
+
+.. _windows_cuda:
+
+Building with CUDA on Windows (experimental)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+nvcc can't compile the |hpx| headers that use stdexec (the sender/receiver support, and with it
+the CUDA executors and the Thrust integration) with MSVC as the host compiler. On Windows, |hpx|
+can instead be built with clang as the CUDA compiler. |cmake|_ requires the same clang front end
+for all languages, so clang (``clang++``, with its GNU-like command line) compiles the C++ sources
+too, using the MSVC ABI and standard library. This requires the Ninja generator: the Visual Studio
+generators always compile CUDA sources with nvcc.
+
+.. warning::
+
+   Building |hpx| with CUDA on Windows is experimental. It requires:
+
+   * clang 22.1 or newer (as included with Visual Studio 2026),
+   * CUDA 13.4 or newer, with CCCL 3.4 or newer,
+   * the standard library and Windows SDK of Visual Studio 2026, as far as the CUDA version
+     supports them (the standard library of Visual Studio 2022, MSVC 14.44, doesn't compile with
+     clang in CUDA mode),
+   * Ninja.
+
+   |cmake|_ checks the versions of clang, CUDA and CCCL.
+
+The toolchain file ``cmake/toolchains/Windows-Clang-CUDA.cmake`` selects the compilers: by default
+the newest clang of an LLVM installation or a Visual Studio installation (set ``HPX_CLANG_ROOT`` to
+the directory containing ``bin/clang.exe`` to choose another one), and the CUDA toolkit given by
+``CUDAToolkit_ROOT`` or the ``CUDA_PATH`` environment variable. Configure and build |hpx| from a
+Visual Studio developer command prompt (x64), which provides the standard library and the Windows
+SDK:
+
+.. code-block:: bat
+
+   cmake -G Ninja -S hpx -B build ^
+       -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/Windows-Clang-CUDA.cmake ^
+       -DHPX_WITH_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=89
+   cmake --build build
+
+The ``windows-clang-cuda`` preset does the same (``cmake --preset windows-clang-cuda``). Set
+``CMAKE_CUDA_ARCHITECTURES`` to the architecture of your GPU (89 in the example above), the default
+is 75. The value ``native`` doesn't work with clang on Windows.
+
+When the dependencies come from vcpkg, use vcpkg's toolchain file and let it load the |hpx| one:
+
+.. code-block:: bat
+
+   -DCMAKE_TOOLCHAIN_FILE=<vcpkg>/scripts/buildsystems/vcpkg.cmake ^
+   -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=%CD%/hpx/cmake/toolchains/Windows-Clang-CUDA.cmake
+
+To build in Visual Studio, open the |hpx| source directory as a folder (*File > Open > Folder*),
+which uses ``CMakePresets.json``, and select the ``windows-clang-cuda`` configuration. Local
+settings go into a ``CMakeUserPresets.json`` next to it, for example:
+
+.. code-block:: json
+
+   {
+       "version": 4,
+       "configurePresets": [
+           {
+               "name": "my-windows-clang-cuda",
+               "inherits": "windows-clang-cuda",
+               "toolchainFile": "C:/vcpkg/scripts/buildsystems/vcpkg.cmake",
+               "cacheVariables": {
+                   "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/Windows-Clang-CUDA.cmake",
+                   "VCPKG_TARGET_TRIPLET": "x64-windows",
+                   "CMAKE_CUDA_ARCHITECTURES": "89"
+               }
+           }
+       ]
+   }

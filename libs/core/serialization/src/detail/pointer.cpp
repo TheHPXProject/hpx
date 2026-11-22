@@ -23,15 +23,17 @@ namespace hpx::util {
     extra_data_id_type extra_data_helper<
         serialization::detail::input_pointer_tracker>::id() noexcept
     {
-        static std::uint8_t id = 0;
-        return &id;
+        static extra_data_id_type const id =
+            hpx::util::detail::next_extra_data_id();
+        return id;
     }
 
     extra_data_id_type extra_data_helper<
         serialization::detail::output_pointer_tracker>::id() noexcept
     {
-        static std::uint8_t id = 0;
-        return &id;
+        static extra_data_id_type const id =
+            hpx::util::detail::next_extra_data_id();
+        return id;
     }
 
     void
@@ -63,16 +65,26 @@ namespace hpx::serialization {
         return *it->second;
     }
 
-    std::uint64_t track_pointer(output_archive& ar, void const* pos)
+    std::uint64_t track_pointer(
+        output_archive& ar, void const* pos, detail::kept_pointer keep_alive)
     {
         auto& tracker = ar.get_extra_data<detail::output_pointer_tracker>();
 
         auto const it = tracker.find(pos);
         if (it == tracker.end())
         {
-            tracker.emplace(std::make_pair(pos, ar.bytes_written()));
+            // the object stays alive while its address is recorded, so no
+            // other object can appear at that address in this archive
+            tracker.emplace(pos,
+                detail::tracked_output_pointer{
+                    ar.bytes_written(), HPX_MOVE(keep_alive)});
             return static_cast<std::uint64_t>(-1);
         }
-        return it->second;
+        return it->second.pos;
+    }
+
+    std::uint64_t track_pointer(output_archive& ar, void const* pos)
+    {
+        return track_pointer(ar, pos, detail::kept_pointer());
     }
 }    // namespace hpx::serialization

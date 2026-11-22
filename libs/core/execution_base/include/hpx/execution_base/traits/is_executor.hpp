@@ -217,7 +217,7 @@ namespace hpx::parallel::execution {
             name) " is deprecated, use "                                       \
                   "hpx::execution::experimental::" HPX_PP_STRINGIZE(           \
                       name) " instead") =                                      \
-        hpx::execution::experimental::name<T, Enable> /**/
+        ::hpx::execution::experimental::name<T, Enable> /**/
 
     HPX_IS_EXECUTOR_DEPRECATED(is_one_way_executor);
     HPX_IS_EXECUTOR_DEPRECATED(is_never_blocking_one_way_executor);

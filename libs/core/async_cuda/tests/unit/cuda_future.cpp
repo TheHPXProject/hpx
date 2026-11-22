@@ -19,6 +19,12 @@
 #include <utility>
 #include <vector>
 
+// CUDA 13.5 overloads cudaMemcpyAsync (a function template taking
+// cudaMemcpyAttributes), so it can't be passed by name to the executors, which
+// take a pointer to the CUDA function
+constexpr cudaError_t (*memcpy_async)(void*, void const*, std::size_t,
+    cudaMemcpyKind, cudaStream_t) = &cudaMemcpyAsync;
+
 // -------------------------------------------------------------------------
 // This example uses the normal C++ compiler to compile all the HPX stuff
 // but the cuda functions go in their own .cu file and are compiled with
@@ -76,9 +82,9 @@ int test_saxpy(hpx::cuda::experimental::cuda_executor& cudaexec)
 
     // copy both arrays from cpu to gpu, putting both copies onto the stream
     // no need to get a future back yet
-    hpx::post(cudaexec, cudaMemcpyAsync, d_A, h_A, N * sizeof(float),
+    hpx::post(cudaexec, memcpy_async, d_A, h_A, N * sizeof(float),
         cudaMemcpyHostToDevice);
-    hpx::post(cudaexec, cudaMemcpyAsync, d_B, h_B, N * sizeof(float),
+    hpx::post(cudaexec, memcpy_async, d_B, h_B, N * sizeof(float),
         cudaMemcpyHostToDevice);
 
     unsigned int threads = 256;
@@ -91,7 +97,7 @@ int test_saxpy(hpx::cuda::experimental::cuda_executor& cudaexec)
 
     // finally, perform a copy from the gpu back to the cpu all on the same stream
     // grab a future to when this completes
-    auto cuda_future = hpx::async(cudaexec, cudaMemcpyAsync, h_B, d_B,
+    auto cuda_future = hpx::async(cudaexec, memcpy_async, h_B, d_B,
         N * sizeof(float), cudaMemcpyDeviceToHost);
 
     // we can add a continuation to the memcpy future, so that when the

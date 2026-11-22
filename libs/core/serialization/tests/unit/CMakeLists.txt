@@ -14,11 +14,13 @@ set(tests
     serialization_custom_constructor
     serialization_deque
     serialization_error_code
+    serialization_filtered_chunks
     serialization_list
     serialization_map
     serialization_multimap
     serialization_set
     serialization_multiset
+    serialization_post_receive_steps
     serialization_simple
     serialization_size_limits
     serialization_smart_ptr

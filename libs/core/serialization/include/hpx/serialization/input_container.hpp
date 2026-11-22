@@ -118,6 +118,12 @@ namespace hpx::serialization {
             }
         }
 
+        [[nodiscard]] std::size_t get_zero_copy_serialization_threshold()
+            const noexcept override
+        {
+            return zero_copy_serialization_threshold_;
+        }
+
         std::size_t load_binary(detail::fundamental_types const expected,
             void* address, std::size_t count) override
         {

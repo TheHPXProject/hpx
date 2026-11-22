@@ -15,13 +15,13 @@
 /// Hpx.Plugin. This macro has to be used for each of the components.
 #define HPX_REGISTER_STARTUP_SHUTDOWN_REGISTRY(RegistryType, componentname)    \
     HPX_PLUGIN_EXPORT(HPX_PLUGIN_COMPONENT_PREFIX,                             \
-        hpx::components::component_startup_shutdown_base, RegistryType,        \
+        ::hpx::components::component_startup_shutdown_base, RegistryType,      \
         componentname, startup_shutdown)                                       \
 /**/
 #define HPX_REGISTER_STARTUP_SHUTDOWN_REGISTRY_DYNAMIC(                        \
     RegistryType, componentname)                                               \
     HPX_PLUGIN_EXPORT_DYNAMIC(HPX_PLUGIN_COMPONENT_PREFIX,                     \
-        hpx::components::component_startup_shutdown_base, RegistryType,        \
+        ::hpx::components::component_startup_shutdown_base, RegistryType,      \
         componentname, startup_shutdown)                                       \
 /**/
 

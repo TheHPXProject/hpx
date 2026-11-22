@@ -214,6 +214,154 @@ void test_when_all_vector_lifecycle()
     }
 }
 
+struct move_only_receiver
+{
+    using receiver_concept = ex::receiver_t;
+
+    std::unique_ptr<int> token = std::make_unique<int>(123);
+    std::atomic<bool>& called;
+
+    explicit move_only_receiver(std::atomic<bool>& called) noexcept
+      : called(called)
+    {
+    }
+
+    move_only_receiver(move_only_receiver&&) = default;
+    move_only_receiver& operator=(move_only_receiver&&) = default;
+    move_only_receiver(move_only_receiver const&) = delete;
+    move_only_receiver& operator=(move_only_receiver const&) = delete;
+
+    void set_value(std::vector<int> const& v) && noexcept
+    {
+        HPX_TEST_EQ(*token, 123);
+        HPX_TEST_EQ(v.size(), std::size_t(1));
+        HPX_TEST_EQ(v[0], 100);
+        called = true;
+    }
+
+    template <typename E>
+    void set_error(E&&) && noexcept
+    {
+        HPX_TEST(false);
+    }
+
+    void set_stopped() && noexcept
+    {
+        HPX_TEST(false);
+    }
+
+    ex::empty_env get_env() const noexcept
+    {
+        return {};
+    }
+};
+
+struct stopped_receiver
+{
+    using receiver_concept = ex::receiver_t;
+
+    hpx::stop_source const& stop_source;
+    std::atomic<bool>& set_stopped_called;
+
+    auto get_env() const noexcept
+    {
+        return ex::prop(ex::get_stop_token, stop_source.get_token());
+    }
+
+    template <typename... Ts>
+    void set_value(Ts&&...) && noexcept
+    {
+        HPX_TEST(false);
+    }
+
+    template <typename E>
+    void set_error(E&&) && noexcept
+    {
+        HPX_TEST(false);
+    }
+
+    void set_stopped() && noexcept
+    {
+        set_stopped_called = true;
+    }
+};
+
+void test_when_all_vector_lvalue_connect()
+{
+    // Normal receiver connecting an lvalue when_all_vector sender
+    {
+        std::atomic<bool> set_value_called{false};
+        auto s = ex::when_all_vector(std::vector{ex::just(42), ex::just(43)});
+
+        static_assert(ex::is_sender_v<decltype(s)>);
+        static_assert(ex::is_sender_in_v<decltype(s)&, ex::empty_env>);
+
+        auto f = [](std::vector<int> const& v) {
+            HPX_TEST_EQ(v.size(), std::size_t(2));
+            HPX_TEST_EQ(v[0], 42);
+            HPX_TEST_EQ(v[1], 43);
+        };
+        auto r = callback_receiver<decltype(f)>{f, set_value_called};
+        auto os = ex::connect(s, std::move(r));
+        ex::start(os);
+        HPX_TEST(set_value_called);
+
+        // Verify the lvalue sender was not consumed and can be connected again
+        set_value_called = false;
+        auto r2 = callback_receiver<decltype(f)>{f, set_value_called};
+        auto os2 = ex::connect(s, std::move(r2));
+        ex::start(os2);
+        HPX_TEST(set_value_called);
+    }
+
+    // Move-only receiver connecting an lvalue when_all_vector sender
+    {
+        std::atomic<bool> set_value_called{false};
+        auto s = ex::when_all_vector(std::vector{ex::just(100)});
+
+        auto os = ex::connect(s, move_only_receiver{set_value_called});
+        ex::start(os);
+        HPX_TEST(set_value_called);
+    }
+}
+
+void test_when_all_vector_stopped_propagation()
+{
+    auto s = ex::when_all_vector(std::vector{ex::just(42)});
+
+    // P2300: when_all must always advertise set_stopped_t()
+    static_assert(ex::sends_stopped<decltype(s)>);
+    static_assert(ex::sends_stopped<decltype(s), ex::empty_env>);
+
+    // Connecting and starting with an already-stopped stop token triggers
+    // set_stopped
+    {
+        hpx::stop_source stop_source;
+        stop_source.request_stop();    // Pre-request stop
+
+        std::atomic<bool> set_stopped_called{false};
+
+        auto os = ex::connect(
+            std::move(s), stopped_receiver{stop_source, set_stopped_called});
+        ex::start(os);
+        HPX_TEST(set_stopped_called);
+    }
+
+    // Connecting a named lvalue receiver with a pre-stopped stop token
+    {
+        hpx::stop_source stop_source;
+        stop_source.request_stop();
+
+        std::atomic<bool> set_stopped_called{false};
+        auto s2 = ex::when_all_vector(std::vector{ex::just(42)});
+
+        stopped_receiver r{stop_source, set_stopped_called};
+        auto os = ex::connect(std::move(s2), r);
+        ex::start(os);
+        HPX_TEST(set_stopped_called);
+    }
+}
+
 int main()
 {
     // Success path
@@ -226,8 +374,8 @@ int main()
 
         check_value_types<hpx::variant<hpx::tuple<>>>(s);
         check_error_types<hpx::variant<std::exception_ptr>>(s);
-        // In P2300 just does not send stopped so this does not either
-        check_sends_stopped<false>(s);
+        // In P2300 when_all always advertises set_stopped
+        check_sends_stopped<true>(s);
 
         auto f = [] {};
         auto r = callback_receiver<decltype(f)>{f, set_value_called};
@@ -245,7 +393,7 @@ int main()
 
         check_value_types<hpx::variant<hpx::tuple<std::vector<int>>>>(s);
         check_error_types<hpx::variant<std::exception_ptr>>(s);
-        check_sends_stopped<false>(s);
+        check_sends_stopped<true>(s);
 
         auto f = [](std::vector<int> v) {
             HPX_TEST_EQ(v.size(), std::size_t(0));
@@ -265,7 +413,7 @@ int main()
 
         check_value_types<hpx::variant<hpx::tuple<std::vector<int>>>>(s);
         check_error_types<hpx::variant<std::exception_ptr>>(s);
-        check_sends_stopped<false>(s);
+        check_sends_stopped<true>(s);
 
         auto f = [](std::vector<int> v) {
             HPX_TEST_EQ(v.size(), std::size_t(1));
@@ -288,7 +436,7 @@ int main()
 
         check_value_types<hpx::variant<hpx::tuple<std::vector<int>>>>(s);
         check_error_types<hpx::variant<std::exception_ptr>>(s);
-        check_sends_stopped<false>(s);
+        check_sends_stopped<true>(s);
 
         auto f = [](std::vector<int> v) {
             HPX_TEST_EQ(v.size(), std::size_t(1));
@@ -310,7 +458,7 @@ int main()
 
         check_value_types<hpx::variant<hpx::tuple<std::vector<int>>>>(s);
         check_error_types<hpx::variant<std::exception_ptr>>(s);
-        check_sends_stopped<false>(s);
+        check_sends_stopped<true>(s);
 
         auto f = [](std::vector<int> v) {
             HPX_TEST_EQ(v.size(), std::size_t(3));
@@ -387,7 +535,7 @@ int main()
 
         check_value_types<hpx::variant<hpx::tuple<>>>(s);
         check_error_types<hpx::variant<std::exception_ptr>>(s);
-        check_sends_stopped<false>(s);
+        check_sends_stopped<true>(s);
 
         auto f = []() {};
         auto r = callback_receiver<decltype(f)>{f, set_value_called};
@@ -406,7 +554,7 @@ int main()
 
         check_value_types<hpx::variant<hpx::tuple<>>>(s);
         check_error_types<hpx::variant<std::exception_ptr>>(s);
-        check_sends_stopped<false>(s);
+        check_sends_stopped<true>(s);
 
         auto f = []() {};
         auto r = callback_receiver<decltype(f)>{f, set_value_called};
@@ -585,7 +733,7 @@ int main()
 
         check_value_types<hpx::variant<hpx::tuple<std::vector<double>>>>(s);
         check_error_types<hpx::variant<std::exception_ptr>>(s);
-        check_sends_stopped<false>(s);
+        check_sends_stopped<true>(s);
 
         auto r = error_callback_receiver<check_exception_ptr>{
             check_exception_ptr{}, set_error_called};
@@ -604,7 +752,7 @@ int main()
 
         check_value_types<hpx::variant<hpx::tuple<>>>(s);
         check_error_types<hpx::variant<std::exception_ptr>>(s);
-        check_sends_stopped<false>(s);
+        check_sends_stopped<true>(s);
 
         auto r = error_callback_receiver<check_exception_ptr>{
             check_exception_ptr{}, set_error_called};
@@ -709,6 +857,8 @@ int main()
         ex::when_all_vector(std::vector{my_namespace::my_sender{}}));
 
     test_when_all_vector_lifecycle();
+    test_when_all_vector_lvalue_connect();
+    test_when_all_vector_stopped_propagation();
 
     return hpx::util::report_errors();
 }

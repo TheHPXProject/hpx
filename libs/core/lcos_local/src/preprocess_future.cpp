@@ -9,8 +9,6 @@
 #include <hpx/modules/serialization.hpp>
 #include <hpx/modules/type_support.hpp>
 
-#include <cstdint>
-
 namespace hpx::util {
 
     // This is explicitly instantiated to ensure that the id is stable across
@@ -18,8 +16,9 @@ namespace hpx::util {
     extra_data_id_type
     extra_data_helper<serialization::detail::preprocess_futures>::id() noexcept
     {
-        static std::uint8_t id = 0;
-        return &id;
+        static extra_data_id_type const id =
+            hpx::util::detail::next_extra_data_id();
+        return id;
     }
 }    // namespace hpx::util
 

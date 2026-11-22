@@ -300,7 +300,7 @@ namespace hpx::parallel::detail {
 
         segments.push_back(HPX_MOVE(captures));
         return result::get(dataflow(
-            [=](std::vector<hpx::future<void>>&& operations)
+            [=](std::vector<hpx::future<void>>&& operations) mutable
                 -> util::in_out_result<SegIter, OutIter> {
                 (void) hpx::wait_all_nothrow(operations);
                 std::list<std::exception_ptr> errors;

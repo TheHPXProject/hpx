@@ -36,7 +36,7 @@
 // matching the component analog (HPX_REGISTER_COMPONENT_FACTORY).
 #define HPX_REGISTER_PLUGIN_FACTORY_BASE(FactoryType, pluginname)              \
     HPX_PLUGIN_EXPORT(HPX_PLUGIN_PLUGIN_PREFIX,                                \
-        hpx::plugins::plugin_factory_base, FactoryType, pluginname, factory)   \
+        ::hpx::plugins::plugin_factory_base, FactoryType, pluginname, factory) \
     HPX_INIT_REGISTRY_PLUGIN_FACTORY_STATIC(                                   \
         HPX_PLUGIN_PLUGIN_PREFIX, pluginname, factory)                         \
 /**/
@@ -61,7 +61,7 @@
 // factories.
 #define HPX_REGISTER_BINARY_FILTER_FACTORY_BASE(FactoryType, pluginname)       \
     HPX_PLUGIN_EXPORT(HPX_PLUGIN_PLUGIN_PREFIX,                                \
-        hpx::plugins::plugin_factory_base, FactoryType, pluginname, factory)   \
+        ::hpx::plugins::plugin_factory_base, FactoryType, pluginname, factory) \
     HPX_INIT_REGISTRY_PLUGIN_FACTORY_STATIC(                                   \
         HPX_PLUGIN_PLUGIN_PREFIX, pluginname, factory)                         \
     /**/
@@ -72,9 +72,9 @@
 // Hpx.Plugin.
 #define HPX_REGISTER_BINARY_FILTER_FACTORY(BinaryFilter, pluginname)           \
     HPX_REGISTER_BINARY_FILTER_FACTORY_BASE(                                   \
-        hpx::plugins::binary_filter_factory<BinaryFilter>, pluginname)         \
+        ::hpx::plugins::binary_filter_factory<BinaryFilter>, pluginname)       \
     HPX_DEF_UNIQUE_PLUGIN_NAME(                                                \
-        hpx::plugins::binary_filter_factory<BinaryFilter>, pluginname)         \
+        ::hpx::plugins::binary_filter_factory<BinaryFilter>, pluginname)       \
     template struct hpx::plugins::binary_filter_factory<BinaryFilter>;         \
     HPX_REGISTER_PLUGIN_REGISTRY_2(BinaryFilter, pluginname)                   \
     /**/
@@ -108,7 +108,7 @@
     inline constexpr char __##pluginname##_section[] = pluginsection;          \
     inline constexpr char __##pluginname##_suffix[] = pluginsuffix;            \
     using __##pluginname##_plugin_registry_type =                              \
-        hpx::plugins::plugin_registry<PluginType, __##pluginname##_string,     \
+        ::hpx::plugins::plugin_registry<PluginType, __##pluginname##_string,   \
             __##pluginname##_section, __##pluginname##_suffix>;                \
     HPX_REGISTER_PLUGIN_BASE_REGISTRY(                                         \
         __##pluginname##_plugin_registry_type, pluginname)                     \
@@ -127,19 +127,19 @@
 // Hpx.Plugin.
 #define HPX_REGISTER_PARCELPORT_(Parcelport, pluginname, pp)                   \
     using HPX_PP_CAT(pluginname, _plugin_factory_type) =                       \
-        hpx::plugins::parcelport_factory<Parcelport>;                          \
+        ::hpx::plugins::parcelport_factory<Parcelport>;                        \
     HPX_DEF_UNIQUE_PLUGIN_NAME(                                                \
         HPX_PP_CAT(pluginname, _plugin_factory_type), pp)                      \
     template <>                                                                \
-    HPX_ALWAYS_EXPORT char const*                                              \
-    hpx::plugins::get_parcelport_module_name<Parcelport>() noexcept            \
+    HPX_ALWAYS_EXPORT char const* ::hpx::plugins::get_parcelport_module_name<  \
+        Parcelport>() noexcept                                                 \
     {                                                                          \
         return HPX_PLUGIN_STRING;                                              \
     }                                                                          \
     template struct hpx::plugins::parcelport_factory<Parcelport>;              \
-    HPX_EXPORT hpx::plugins::parcelport_factory_base* HPX_PP_CAT(              \
+    HPX_EXPORT ::hpx::plugins::parcelport_factory_base* HPX_PP_CAT(            \
         pluginname, _factory_init)(                                            \
-        std::vector<hpx::plugins::parcelport_factory_base*> & factories)       \
+        std::vector<::hpx::plugins::parcelport_factory_base*> & factories)     \
     {                                                                          \
         static HPX_PP_CAT(pluginname, _plugin_factory_type)                    \
             factory(factories);                                                \
@@ -158,7 +158,7 @@
 // factories.
 #define HPX_REGISTER_MESSAGE_HANDLER_FACTORY_BASE(FactoryType, pluginname)     \
     HPX_PLUGIN_EXPORT(HPX_PLUGIN_PLUGIN_PREFIX,                                \
-        hpx::plugins::plugin_factory_base, FactoryType, pluginname, factory)   \
+        ::hpx::plugins::plugin_factory_base, FactoryType, pluginname, factory) \
     HPX_INIT_REGISTRY_PLUGIN_FACTORY_STATIC(                                   \
         HPX_PLUGIN_PLUGIN_PREFIX, pluginname, factory)                         \
     /**/
@@ -169,9 +169,9 @@
 // Hpx.Plugin.
 #define HPX_REGISTER_MESSAGE_HANDLER_FACTORY(MessageHandler, pluginname)       \
     HPX_REGISTER_MESSAGE_HANDLER_FACTORY_BASE(                                 \
-        hpx::plugins::message_handler_factory<MessageHandler>, pluginname)     \
+        ::hpx::plugins::message_handler_factory<MessageHandler>, pluginname)   \
     HPX_DEF_UNIQUE_PLUGIN_NAME(                                                \
-        hpx::plugins::message_handler_factory<MessageHandler>, pluginname)     \
+        ::hpx::plugins::message_handler_factory<MessageHandler>, pluginname)   \
     template struct hpx::plugins::message_handler_factory<MessageHandler>;     \
     HPX_REGISTER_PLUGIN_REGISTRY_2(MessageHandler, pluginname)                 \
     /**/

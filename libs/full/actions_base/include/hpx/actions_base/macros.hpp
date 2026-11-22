@@ -44,9 +44,9 @@
 
 // Macros usable to refer to an action given the function to expose
 #define HPX_MAKE_ACTION(func)                                                  \
-    hpx::actions::make_action<decltype(&func), &func> /**/ /**/
+    ::hpx::actions::make_action<decltype(&func), &func> /**/ /**/
 #define HPX_MAKE_DIRECT_ACTION(func)                                           \
-    hpx::actions::make_direct_action<decltype(&func), &func> /**/ /**/
+    ::hpx::actions::make_direct_action<decltype(&func), &func> /**/ /**/
 
 ///////////////////////////////////////////////////////////////////////////////
 /// \def HPX_DECLARE_ACTION(func, name)
@@ -411,8 +411,8 @@
 /// derived_type is the action and macros like HPX_ACTION_HAS_PRIORITY apply.
 #define HPX_DEFINE_COMPONENT_ACTION_3(component, func, name)                   \
     struct name                                                                \
-      : hpx::actions::reflect_component_action<^^component::func,              \
-            typename hpx::actions::detail::reflect_component_action_base<      \
+      : ::hpx::actions::reflect_component_action<^^component::func,            \
+            typename ::hpx::actions::detail::reflect_component_action_base<    \
                 ^^component::func>::component_type,                            \
             name>                                                              \
     {                                                                          \
@@ -420,7 +420,7 @@
 #else
 #define HPX_DEFINE_COMPONENT_ACTION_3(component, func, name)                   \
     struct name                                                                \
-      : hpx::actions::make_action_t<decltype(&component::func),                \
+      : ::hpx::actions::make_action_t<decltype(&component::func),              \
             &component::func, name>                                            \
     {                                                                          \
     }; /**/
@@ -443,8 +443,8 @@
 #if defined(HPX_HAVE_CXX26_REFLECTION)
 #define HPX_DEFINE_COMPONENT_DIRECT_ACTION_3(component, func, name)            \
     struct name                                                                \
-      : hpx::actions::reflect_component_direct_action<^^component::func,       \
-            typename hpx::actions::detail::reflect_component_action_base<      \
+      : ::hpx::actions::reflect_component_direct_action<^^component::func,     \
+            typename ::hpx::actions::detail::reflect_component_action_base<    \
                 ^^component::func>::component_type,                            \
             name>                                                              \
     {                                                                          \
@@ -452,7 +452,7 @@
 #else
 #define HPX_DEFINE_COMPONENT_DIRECT_ACTION_3(component, func, name)            \
     struct name                                                                \
-      : hpx::actions::make_direct_action_t<decltype(&component::func),         \
+      : ::hpx::actions::make_direct_action_t<decltype(&component::func),       \
             &component::func, name>                                            \
     {                                                                          \
     };                                                                         \
@@ -531,12 +531,12 @@
 /// reflect_action<^^func> instead of make_action_t. This eliminates the
 /// need for HPX_REGISTER_ACTION while keeping the same user-facing syntax.
 #define HPX_DEFINE_PLAIN_ACTION_3(Prefix, func, name)                          \
-    Prefix using name = hpx::actions::reflect_action<^^func>;                  \
+    Prefix using name = ::hpx::actions::reflect_action<^^func>;                \
     /**/
 #elif defined(__NVCC__) || defined(__CUDACC__)
 #define HPX_DEFINE_PLAIN_ACTION_3(Prefix, func, name)                          \
     Prefix struct name                                                         \
-      : hpx::actions::make_action<                                             \
+      : ::hpx::actions::make_action<                                           \
             typename std::add_pointer<                                         \
                 typename std::remove_pointer<decltype(&func)>::type>::type,    \
             &func, name>::type                                                 \
@@ -545,7 +545,7 @@
 #else
 #define HPX_DEFINE_PLAIN_ACTION_3(Prefix, func, name)                          \
     Prefix struct name                                                         \
-      : hpx::actions::make_action_t<decltype(&func), &func, name>              \
+      : ::hpx::actions::make_action_t<decltype(&func), &func, name>            \
     {                                                                          \
     } /**/
 #endif
@@ -561,12 +561,12 @@
 
 #if defined(HPX_HAVE_CXX26_REFLECTION)
 #define HPX_DEFINE_PLAIN_DIRECT_ACTION_3(Prefix, func, name)                   \
-    Prefix using name = hpx::actions::reflect_direct_action<^^func>;           \
+    Prefix using name = ::hpx::actions::reflect_direct_action<^^func>;         \
     /**/
 #else
 #define HPX_DEFINE_PLAIN_DIRECT_ACTION_3(Prefix, func, name)                   \
     Prefix struct name                                                         \
-      : hpx::actions::make_direct_action_t<decltype(&func), &func, name>       \
+      : ::hpx::actions::make_direct_action_t<decltype(&func), &func, name>     \
     {                                                                          \
     } /**/
 #endif
@@ -764,5 +764,5 @@
 ///
 /// \note Requires HPX_WITH_CXX26_REFLECTION=ON
 #define HPX_ACTION(func, name)                                                 \
-    using name = hpx::actions::reflect_action<^^func>; /**/
+    using name = ::hpx::actions::reflect_action<^^func>; /**/
 #endif    // HPX_HAVE_CXX26_REFLECTION

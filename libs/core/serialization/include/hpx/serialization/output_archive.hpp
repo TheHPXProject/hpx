@@ -184,6 +184,14 @@ namespace hpx::serialization {
             return buffer_->get_num_chunks();
         }
 
+        // data below this size is copied into the archive, larger data is
+        // referenced by a zero-copy chunk (if chunking is enabled)
+        [[nodiscard]] std::size_t get_zero_copy_serialization_threshold()
+            const noexcept
+        {
+            return buffer_->get_zero_copy_serialization_threshold();
+        }
+
         // this function is needed to avoid a MSVC linker error
         [[nodiscard]] constexpr std::size_t current_pos() const noexcept
         {
@@ -371,6 +379,26 @@ namespace hpx::serialization {
             size_ += buffer_->save_binary(t, address, count);
         }
 
+        /// Writes \a count bytes at \a address as a zero-copy chunk, or copies
+        /// them into the archive (as save_binary does) if the archive collects
+        /// no chunks.
+        ///
+        /// A zero-copy chunk refers to the memory instead of copying it: the
+        /// memory must stay valid and unchanged until the chunks of the
+        /// archive have been sent (for a parcel: until the parcel has been
+        /// sent). The memory of the objects a parcel holds (its arguments and
+        /// what they own) lives that long. The memory of a temporary object a
+        /// serialize() function creates while it runs doesn't: once freed (or
+        /// given back to a memory pool), it may be reused before it is sent,
+        /// and the receiver would get other data, without an error. Such data
+        /// must be copied into the archive (save_binary), be owned by the
+        /// object being serialized, or be kept alive by the parcel (see
+        /// serialization::detail::preprocess_keep_alive).
+        ///
+        /// \param t       The type of the data, checked by archives with type
+        ///                checking.
+        /// \param address The data.
+        /// \param count   The number of bytes.
         void save_binary_chunk(detail::fundamental_types t, void const* address,
             std::size_t const count)
         {

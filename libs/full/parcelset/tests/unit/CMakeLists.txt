@@ -10,9 +10,15 @@ if(NOT HPX_WITH_NETWORKING)
   return()
 endif()
 
-set(tests optimistic_archive put_parcels set_parcel_write_handler
+set(tests optimistic_archive put_parcels set_parcel_write_handler temporary_ids
           zero_copy_parcel
 )
+
+# parcels keep buffers for their zero-copy chunks only with thrust (the
+# serialization of device memory)
+if(HPX_WITH_THRUST AND (HPX_WITH_CUDA OR HPX_WITH_HIP))
+  list(APPEND tests delayed_serialization)
+endif()
 
 set(put_parcels_PARAMETERS LOCALITIES 2)
 set(set_parcel_write_handler_PARAMETERS LOCALITIES 2)

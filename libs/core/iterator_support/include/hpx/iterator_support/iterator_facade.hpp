@@ -660,7 +660,7 @@ namespace hpx::util {
         typename Pointer1, typename Derived2, typename T2, typename Category2, \
         typename Reference2, typename Distance2, typename Pointer2>            \
     HPX_HOST_DEVICE prefix                                                     \
-        typename hpx::util::detail::enable_operator_equal_interoperable<       \
+        typename ::hpx::util::detail::enable_operator_equal_interoperable<     \
             Derived1, Derived2, result_type>::type                             \
         operator op(iterator_facade<Derived1, T1, Category1, Reference1,       \
                         Distance1, Pointer1> const& lhs,                       \
@@ -674,8 +674,8 @@ namespace hpx::util {
         typename Pointer1, typename Derived2, typename T2, typename Category2, \
         typename Reference2, typename Distance2, typename Pointer2>            \
     HPX_HOST_DEVICE prefix                                                     \
-        typename hpx::util::detail::enable_operator_interoperable_ex<Derived1, \
-            Derived2, result_type,                                             \
+        typename ::hpx::util::detail::enable_operator_interoperable_ex<        \
+            Derived1, Derived2, result_type,                                   \
             cond<typename Derived1::iterator_category,                         \
                 typename Derived2::iterator_category>>::type                   \
         operator op(iterator_facade<Derived1, T1, Category1, Reference1,       \

@@ -30,13 +30,13 @@
 #define HPX_REGISTER_CHANNEL_DECLARATION_2(type, name)                         \
     using HPX_PP_CAT(__channel_, name) = ::hpx::lcos::server::channel<type>;   \
     HPX_REGISTER_ACTION_DECLARATION(                                           \
-        hpx::lcos::server::channel<type>::get_generation_action,               \
+        ::hpx::lcos::server::channel<type>::get_generation_action,             \
         HPX_PP_CAT(__channel_get_generation_action_, name))                    \
     HPX_REGISTER_ACTION_DECLARATION(                                           \
-        hpx::lcos::server::channel<type>::set_generation_action,               \
+        ::hpx::lcos::server::channel<type>::set_generation_action,             \
         HPX_PP_CAT(__channel_set_generation_action_, name))                    \
     HPX_REGISTER_ACTION_DECLARATION(                                           \
-        hpx::lcos::server::channel<type>::close_action,                        \
+        ::hpx::lcos::server::channel<type>::close_action,                      \
         HPX_PP_CAT(__channel_close_action_, name))                             \
     /**/
 
@@ -60,11 +60,11 @@
         HPX_PP_CAT(__channel_component_, name),                                \
         HPX_PP_STRINGIZE(HPX_PP_CAT(__base_lco_with_value_channel_, name)))    \
     HPX_REGISTER_ACTION(                                                       \
-        hpx::lcos::server::channel<type>::get_generation_action,               \
+        ::hpx::lcos::server::channel<type>::get_generation_action,             \
         HPX_PP_CAT(__channel_get_generation_action_, name))                    \
     HPX_REGISTER_ACTION(                                                       \
-        hpx::lcos::server::channel<type>::set_generation_action,               \
+        ::hpx::lcos::server::channel<type>::set_generation_action,             \
         HPX_PP_CAT(__channel_set_generation_action_, name))                    \
-    HPX_REGISTER_ACTION(hpx::lcos::server::channel<type>::close_action,        \
+    HPX_REGISTER_ACTION(::hpx::lcos::server::channel<type>::close_action,      \
         HPX_PP_CAT(__channel_close_action_, name))                             \
     /**/

@@ -14,6 +14,7 @@
 
 #include <hpx/parcelset/parcelset_fwd.hpp>
 
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 
@@ -22,16 +23,19 @@ namespace hpx::parcelset::detail {
     HPX_CXX_EXPORT using put_parcel_type = hpx::move_only_function<void(
         parcelset::parcel&&, write_handler_type&&)>;
 
+    // zero_copy_serialization_threshold: the one of the parcelport that will
+    // send the parcel (0: the default)
     HPX_CXX_EXPORT void HPX_EXPORT parcel_await_apply(parcelset::parcel&& p,
-        write_handler_type&& f, std::uint32_t archive_flags,
-        put_parcel_type pp);
+        write_handler_type&& f, std::uint32_t archive_flags, put_parcel_type pp,
+        std::size_t zero_copy_serialization_threshold = 0);
 
     HPX_CXX_EXPORT using put_parcels_type = hpx::move_only_function<void(
         std::vector<parcelset::parcel>&&, std::vector<write_handler_type>&&)>;
 
     HPX_CXX_EXPORT void HPX_EXPORT parcels_await_apply(
         std::vector<parcelset::parcel>&& p, std::vector<write_handler_type>&& f,
-        std::uint32_t archive_flags, put_parcels_type pp);
+        std::uint32_t archive_flags, put_parcels_type pp,
+        std::size_t zero_copy_serialization_threshold = 0);
 }    // namespace hpx::parcelset::detail
 
 #endif
