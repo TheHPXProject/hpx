@@ -243,13 +243,21 @@ namespace hpx::parcelset {
                                 .set_split_gids(HPX_MOVE(split_gids));
                         }
 
+                        // The keep-alive buffers of this parcel, matched to
+                        // its objects by position: they replace those of an
+                        // earlier parcel of this message. Objects recorded
+                        // before this parcel's start belong to the earlier
+                        // parcels.
                         if (auto const& keep_alive = ps[i].keep_alive();
-                            !keep_alive.empty())
+                            !keep_alive.empty() ||
+                            archive.try_get_extra_data<
+                                serialization::detail::preprocess_keep_alive>())
                         {
                             archive
                                 .get_extra_data<serialization::detail::
                                         preprocess_keep_alive>()
-                                .add_buffers(keep_alive);
+                                .set_buffers(
+                                    keep_alive, archive.bytes_written());
                         }
 
                         archive << ps[i];

@@ -34,7 +34,9 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <exception>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <system_error>
@@ -58,6 +60,11 @@ namespace {
     // preprocessing always finds them pending.
     std::unique_ptr<hpx::promise<void>> gate_promise;
     hpx::shared_future<void> gate;
+
+    // The zero-copy threshold of all parcels and archives of this test (the
+    // configured default may be larger than the large payloads): 16 ints are
+    // below it, 64 Ki ints above.
+    constexpr std::size_t test_threshold = 4096;
 
     void close_gate()
     {
@@ -150,28 +157,32 @@ struct delayed_data
         keep_alive_buffer const* buffer = nullptr;
         if (bytes >= ar.get_zero_copy_serialization_threshold())
         {
-            // only archives that keep the buffers alive (parcels) have it
+            // only archives that keep the buffers alive (parcels) have it;
+            // the buffers are matched to the objects by position
             auto* keep_alive = ar.try_get_extra_data<preprocess_keep_alive>();
-            if (keep_alive != nullptr)
+            if (keep_alive != nullptr && !ar.is_preprocessing())
             {
-                buffer = keep_alive->find(this);
+                buffer = &keep_alive->get_next(bytes);
             }
-            if (buffer == nullptr && keep_alive != nullptr &&
-                ar.is_preprocessing())
+            else if (keep_alive != nullptr)
             {
-                // the first preprocessing round of this parcel; the parcel
-                // waits for the buffer once it keeps it
-                auto produced = std::make_shared<produced_buffer>(size, first);
-                auto state = hpx::traits::future_access<
-                    hpx::future<void>>::get_shared_state(produced->ready);
-                void const* data = produced->values->data();
-                keep_alive->add(
-                    this, keep_alive_buffer{HPX_MOVE(produced), data, bytes});
-                if (!state->is_ready())
+                buffer = keep_alive->next(bytes);
+                if (buffer == nullptr)
                 {
-                    hpx::lcos::detail::preprocess_future(ar, *state);
+                    // the first preprocessing round of this parcel; the
+                    // parcel waits for the buffer once it keeps it
+                    auto produced =
+                        std::make_shared<produced_buffer>(size, first);
+                    auto state = hpx::traits::future_access<
+                        hpx::future<void>>::get_shared_state(produced->ready);
+                    void const* data = produced->values->data();
+                    buffer = &keep_alive->add(
+                        keep_alive_buffer{HPX_MOVE(produced), data, bytes});
+                    if (!state->is_ready())
+                    {
+                        hpx::lcos::detail::preprocess_future(ar, *state);
+                    }
                 }
-                buffer = keep_alive->find(this);
             }
         }
 
@@ -271,6 +282,182 @@ struct failing_argument
 void check_failing(delayed_data const&, failing_argument const&) {}
 HPX_PLAIN_ACTION(check_failing)
 
+// An argument that serializes in the first preprocessing round and fails in
+// the next one, which runs once the data of the argument before it has been
+// produced (the gate is open).
+struct failing_later_argument
+{
+    template <typename Archive>
+    void serialize(Archive&, unsigned)
+    {
+        if (own_gate.valid() && own_gate.is_ready())
+        {
+            throw std::runtime_error("failing_later_argument");
+        }
+    }
+
+    // the gate of the test that created it: a later test may replace the
+    // global one while this argument is still serialized
+    hpx::shared_future<void> own_gate = gate;
+};
+
+void check_failing_later(delayed_data const&, failing_later_argument const&) {}
+HPX_PLAIN_ACTION(check_failing_later)
+// Two delayed_data serialized one after the other from the same storage, as
+// temporaries a serialize() function creates on the fly: each must get its own
+// buffer although both have the same address.
+struct delayed_pair
+{
+    std::size_t size = 0;
+    int first = 0;
+    int second = 0;
+    delayed_data received_first;
+    delayed_data received_second;
+
+    void save(hpx::serialization::output_archive& ar, unsigned) const
+    {
+        ar << size << first << second;
+
+        std::optional<delayed_data> temporary;
+        temporary.emplace(delayed_data{size, first, {}});
+        ar << *temporary;
+        temporary.emplace(delayed_data{size, second, {}});
+        ar << *temporary;
+    }
+
+    void load(hpx::serialization::input_archive& ar, unsigned)
+    {
+        ar >> size >> first >> second >> received_first >> received_second;
+    }
+
+    HPX_SERIALIZATION_SPLIT_MEMBER()
+};
+
+void check_pair(delayed_pair const& data)
+{
+    if (data.received_first.first == data.first &&
+        data.received_first.values_match() &&
+        data.received_second.first == data.second &&
+        data.received_second.values_match())
+    {
+        ++actions_passed;
+    }
+    ++actions_run;
+}
+HPX_PLAIN_ACTION(check_pair)
+
+// An object shared with other parcels of the same message and one of its own:
+// the parcels after the first one write the shared object as a back-reference.
+struct shared_and_own
+{
+    std::shared_ptr<delayed_data> shared;
+    delayed_data own;
+
+    template <typename Archive>
+    void serialize(Archive& ar, unsigned)
+    {
+        ar & shared & own;
+    }
+};
+
+void check_shared(shared_and_own const& data)
+{
+    if (data.shared && data.shared->values_match() && data.own.values_match())
+    {
+        ++actions_passed;
+    }
+    ++actions_run;
+}
+HPX_PLAIN_ACTION(check_shared)
+
+// An object in a future that isn't ready when the parcel is preprocessed
+// first, before another one of the same size: the buffer of the second one is
+// created first, the one of the first is created only in the next round.
+void check_future_first(
+    hpx::future<delayed_data> pending, delayed_data const& second)
+{
+    delayed_data const first = pending.get();
+    if (first.first == 11 && first.values_match() && second.first == 22 &&
+        second.values_match())
+    {
+        ++actions_passed;
+    }
+    ++actions_run;
+}
+HPX_PLAIN_ACTION(check_future_first)
+
+// The same future twice, not ready at its first occurrence when the parcel is
+// preprocessed first, but at its second one (reveal makes it ready in
+// between), followed by another object: the next round inserts the buffer of
+// the first occurrence only, the second one and the object after it keep the
+// buffers created for them.
+std::unique_ptr<hpx::promise<delayed_data>> reveal_promise;
+
+struct reveal
+{
+    void save(hpx::serialization::output_archive& ar, unsigned) const
+    {
+        if (ar.is_preprocessing() && reveal_promise)
+        {
+            auto const promise = HPX_MOVE(reveal_promise);
+            promise->set_value(delayed_data{65536, 11, {}});
+        }
+    }
+
+    void load(hpx::serialization::input_archive&, unsigned) {}
+
+    HPX_SERIALIZATION_SPLIT_MEMBER()
+};
+
+void check_future_twice(hpx::shared_future<delayed_data> const& first,
+    reveal const&, hpx::shared_future<delayed_data> const& second,
+    delayed_data const& other)
+{
+    if (first.get().first == 11 && first.get().values_match() &&
+        second.get().first == 11 && second.get().values_match() &&
+        other.first == 33 && other.values_match())
+    {
+        ++actions_passed;
+    }
+    ++actions_run;
+}
+HPX_PLAIN_ACTION(check_future_twice)
+
+// An object shared by the value of a future that isn't ready when the parcel
+// is preprocessed first and the argument after it, followed by another object
+// of the same size: in the next round the shared object is written first in
+// the future's value, and the argument after it is a back-reference.
+void check_moved_first(hpx::future<std::shared_ptr<delayed_data>> pending,
+    std::shared_ptr<delayed_data> const& shared, delayed_data const& other)
+{
+    std::shared_ptr<delayed_data> const first = pending.get();
+    if (first == shared && first && first->first == 11 &&
+        first->values_match() && other.first == 22 && other.values_match())
+    {
+        ++actions_passed;
+    }
+    ++actions_run;
+}
+HPX_PLAIN_ACTION(check_moved_first)
+
+// A parent whose child refers back to it before an object of its own: the
+// back-reference is part of a cycle, the buffer after it belongs to the child.
+// (Only sent: a cycle of tracked pointers can't be loaded.)
+struct cycle_node
+{
+    std::shared_ptr<cycle_node> other;
+    delayed_data data;
+
+    template <typename Archive>
+    void serialize(Archive& ar, unsigned)
+    {
+        ar & other & data;
+    }
+};
+
+void check_cycle(std::shared_ptr<cycle_node> const&) {}
+HPX_PLAIN_ACTION(check_cycle)
+
 ///////////////////////////////////////////////////////////////////////////////
 namespace {
 
@@ -316,26 +503,39 @@ namespace {
     // what parcelset::detail::parcel_await_apply hands to the parcelport
     // 'pending': the parcel waits for produced data, which stays pending
     // until the gate is opened
-    hpx::parcelset::parcel preprocess(hpx::parcelset::parcel&& p,
-        std::uint32_t const flags, bool const pending)
+    hpx::parcelset::parcel preprocess_with_closed_gate(
+        hpx::parcelset::parcel&& p, std::uint32_t const flags,
+        bool const pending)
     {
-        close_gate();
-
         hpx::promise<hpx::parcelset::parcel> promise;
         hpx::future<hpx::parcelset::parcel> f = promise.get_future();
         hpx::parcelset::detail::parcel_await_apply(
             HPX_MOVE(p),
-            [](std::error_code const&, hpx::parcelset::parcel const&) {}, flags,
+            [&promise](
+                std::error_code const& ec, hpx::parcelset::parcel const&) {
+                // a failing preprocessing round
+                promise.set_exception(
+                    std::make_exception_ptr(std::system_error(ec)));
+            },
+            flags,
             [&promise](hpx::parcelset::parcel&& preprocessed,
                 hpx::parcelset::write_handler_type&&) {
                 promise.set_value(HPX_MOVE(preprocessed));
-            });
+            },
+            test_threshold);
 
         // the parcel is handed on only after its data has been produced
         HPX_TEST_EQ(f.is_ready(), !pending);
 
         open_gate();
         return f.get();
+    }
+
+    hpx::parcelset::parcel preprocess(hpx::parcelset::parcel&& p,
+        std::uint32_t const flags, bool const pending)
+    {
+        close_gate();
+        return preprocess_with_closed_gate(HPX_MOVE(p), flags, pending);
     }
 
     // what a parcelport sends: the archive and the contents of its zero-copy
@@ -347,20 +547,36 @@ namespace {
         std::vector<std::vector<char>> chunk_data;
     };
 
+    message encode(std::vector<hpx::parcelset::parcel> const& ps,
+        std::uint32_t const flags);
+
     message encode(hpx::parcelset::parcel const& p, std::uint32_t const flags)
     {
+        return encode(std::vector<hpx::parcelset::parcel>{p}, flags);
+    }
+
+    // the parcels of one message, as encode_parcels does it: each parcel goes
+    // into the same archive with its keep-alive buffers
+    message encode(std::vector<hpx::parcelset::parcel> const& ps,
+        std::uint32_t const flags)
+    {
+        using hpx::serialization::detail::preprocess_keep_alive;
+
         message m;
         {
             hpx::serialization::output_archive archive(
-                m.data, flags, &m.chunks);
-            if (auto const& keep_alive = p.keep_alive(); !keep_alive.empty())
+                m.data, flags, &m.chunks, nullptr, test_threshold);
+            for (hpx::parcelset::parcel const& p : ps)
             {
-                archive
-                    .get_extra_data<
-                        hpx::serialization::detail::preprocess_keep_alive>()
-                    .add_buffers(keep_alive);
+                if (auto const& keep_alive = p.keep_alive();
+                    !keep_alive.empty() ||
+                    archive.try_get_extra_data<preprocess_keep_alive>())
+                {
+                    archive.get_extra_data<preprocess_keep_alive>().set_buffers(
+                        keep_alive, archive.bytes_written());
+                }
+                archive << p;
             }
-            archive << p;
             archive.flush();
             m.data.resize(archive.bytes_written());
         }
@@ -377,6 +593,36 @@ namespace {
             m.chunk_data.emplace_back(data, data + c.size());
         }
         return m;
+    }
+
+    // Receives the parcels of a message without zero-copy receive and
+    // schedules their actions.
+    void decode_message(message& m, std::size_t const count)
+    {
+        std::vector<serialization_chunk> chunks;
+        for (std::size_t i = 0; i != m.chunks.size(); ++i)
+        {
+            serialization_chunk const& c = m.chunks[i];
+            if (c.type_ == chunk_type::chunk_type_index)
+            {
+                chunks.push_back(c);
+            }
+            else
+            {
+                chunks.push_back(hpx::serialization::create_pointer_chunk(
+                    static_cast<void*>(m.chunk_data[i].data()), c.size()));
+            }
+        }
+
+        hpx::serialization::input_archive archive(
+            m.data, m.data.size(), &chunks);
+        for (std::size_t i = 0; i != count; ++i)
+        {
+            hpx::parcelset::parcel p;
+            bool deferred_schedule = false;
+            HPX_TEST(!p.load_schedule(archive, 0, deferred_schedule));
+            HPX_TEST(!deferred_schedule);
+        }
     }
 
     // Receives the message and schedules the parcel's action once its data
@@ -463,9 +709,15 @@ namespace {
         step_gate_promise = std::make_unique<hpx::promise<void>>();
         step_gate = step_gate_promise->get_future().share();
 
+        // the step must have finished when the action is scheduled: check
+        // it right there, before the action can run
+        std::size_t const steps_expected = steps_before + (deferred ? 1 : 0);
+        std::atomic<std::size_t> steps_at_schedule(0);
+
         hpx::promise<void> scheduled;
         hpx::future<void> f = scheduled.get_future();
-        p.on_receive_complete([&p, &scheduled]() {
+        p.on_receive_complete([&p, &scheduled, &steps_at_schedule]() {
+            steps_at_schedule = steps_run.load();
             p.schedule_action();
             scheduled.set_value();
         });
@@ -479,7 +731,8 @@ namespace {
         step_gate_promise->set_value();
         f.get();
 
-        HPX_TEST_EQ(steps_run.load(), steps_before + (deferred ? 1 : 0));
+        HPX_TEST_EQ(steps_at_schedule.load(), steps_expected);
+        HPX_TEST_EQ(steps_run.load(), steps_expected);
         return deferred;
     }
 
@@ -498,8 +751,7 @@ namespace {
     {
         std::size_t const actions_before = actions_run;
         std::size_t const created_before = buffers_created;
-        bool const large =
-            size * sizeof(int) >= HPX_ZERO_COPY_SERIALIZATION_THRESHOLD;
+        bool const large = size * sizeof(int) >= test_threshold;
 
         message m;
         {
@@ -532,6 +784,207 @@ namespace {
         wait_for_actions(actions_before + 1);
     }
 
+    // Two buffers for objects serialized from the same address, both pending
+    // in the first preprocessing round: each object gets its own buffer (the
+    // buffers are matched by position, not by address).
+    void test_same_address(bool const zero_copy)
+    {
+        std::size_t const actions_before = actions_run;
+        std::size_t const created_before = buffers_created;
+        std::size_t const size = 65536;
+
+        message m;
+        {
+            std::uint32_t const flags = archive_flags(zero_copy);
+            hpx::parcelset::parcel p =
+                preprocess(make_action_parcel<check_pair_action>(&check_pair,
+                               delayed_pair{size, 42, 4242, {}, {}}),
+                    flags, true);
+            HPX_TEST_EQ(buffers_created - created_before, std::size_t(2));
+
+            m = encode(p, flags);
+            HPX_TEST_EQ(buffers_alive.load(), std::size_t(2));
+        }
+        HPX_TEST_EQ(buffers_alive.load(), std::size_t(0));
+
+        HPX_TEST(!decode(m, false));
+        wait_for_actions(actions_before + 1);
+    }
+
+    // Parcels preprocessed separately and sent in one message, all holding
+    // the same object before one of their own of the same size: each parcel
+    // has a buffer for the shared object, but the later parcels write it as a
+    // back-reference to the first one. Their own objects must still get the
+    // buffers created for them, not the one of the shared object.
+    void test_shared_in_message(bool const zero_copy)
+    {
+        std::size_t const actions_before = actions_run;
+        std::size_t const created_before = buffers_created;
+        std::size_t const size = 65536;
+        std::size_t const parcels = 3;
+
+        message m;
+        {
+            std::uint32_t const flags = archive_flags(zero_copy);
+            auto shared =
+                std::make_shared<delayed_data>(delayed_data{size, 7, {}});
+
+            std::vector<hpx::parcelset::parcel> ps;
+            for (std::size_t i = 0; i != parcels; ++i)
+            {
+                ps.push_back(preprocess(
+                    make_action_parcel<check_shared_action>(&check_shared,
+                        shared_and_own{shared,
+                            delayed_data{
+                                size, 100 * static_cast<int>(i + 1), {}}}),
+                    flags, true));
+            }
+            HPX_TEST_EQ(buffers_created - created_before, 2 * parcels);
+
+            m = encode(ps, flags);
+        }
+        HPX_TEST_EQ(buffers_alive.load(), std::size_t(0));
+
+        decode_message(m, parcels);
+        wait_for_actions(actions_before + parcels);
+    }
+
+    // A future argument that is ready only after the first preprocessing
+    // round holds an object of the same size as the argument after it: its
+    // buffer, created in the second round, goes before the one created for
+    // that argument in the first round.
+    void test_pending_future(bool const zero_copy)
+    {
+        std::size_t const actions_before = actions_run;
+        std::size_t const created_before = buffers_created;
+        std::size_t const size = 65536;
+
+        message m;
+        {
+            std::uint32_t const flags = archive_flags(zero_copy);
+            close_gate();
+            hpx::future<delayed_data> pending = gate.then(
+                [size](auto&&) { return delayed_data{size, 11, {}}; });
+            hpx::parcelset::parcel p = preprocess_with_closed_gate(
+                make_action_parcel<check_future_first_action>(
+                    &check_future_first, HPX_MOVE(pending),
+                    delayed_data{size, 22, {}}),
+                flags, true);
+            HPX_TEST_EQ(buffers_created - created_before, std::size_t(2));
+
+            m = encode(p, flags);
+        }
+        HPX_TEST_EQ(buffers_alive.load(), std::size_t(0));
+
+        HPX_TEST(!decode(m, false));
+        wait_for_actions(actions_before + 1);
+    }
+
+    // A future serialized twice is pending only at its first occurrence in
+    // the first preprocessing round: the second round creates a buffer for
+    // that occurrence only.
+    void test_future_twice(bool const zero_copy)
+    {
+        std::size_t const actions_before = actions_run;
+        std::size_t const created_before = buffers_created;
+
+        message m;
+        {
+            std::uint32_t const flags = archive_flags(zero_copy);
+            close_gate();
+            reveal_promise = std::make_unique<hpx::promise<delayed_data>>();
+            hpx::shared_future<delayed_data> const pending =
+                reveal_promise->get_future().share();
+            hpx::parcelset::parcel p = preprocess_with_closed_gate(
+                make_action_parcel<check_future_twice_action>(
+                    &check_future_twice, pending, reveal{}, pending,
+                    delayed_data{2 * 65536, 33, {}}),
+                flags, true);
+            HPX_TEST(!reveal_promise);
+
+            // the second occurrence and the object after it in the first
+            // round, the first occurrence in the second one
+            HPX_TEST_EQ(buffers_created - created_before, std::size_t(3));
+            HPX_TEST_EQ(p.keep_alive().size(), std::size_t(3));
+
+            m = encode(p, flags);
+        }
+        HPX_TEST_EQ(buffers_alive.load(), std::size_t(0));
+
+        HPX_TEST(!decode(m, false));
+        wait_for_actions(actions_before + 1);
+    }
+
+    // The first occurrence of a shared object moves into the value of a
+    // future that is ready only after the first preprocessing round: the
+    // buffer the first round created at its former position isn't used, the
+    // object after it still gets its own.
+    void test_moved_into_future(bool const zero_copy)
+    {
+        std::size_t const actions_before = actions_run;
+        std::size_t const created_before = buffers_created;
+        std::size_t const size = 65536;
+
+        message m;
+        {
+            std::uint32_t const flags = archive_flags(zero_copy);
+            auto shared =
+                std::make_shared<delayed_data>(delayed_data{size, 11, {}});
+            close_gate();
+            hpx::future<std::shared_ptr<delayed_data>> pending =
+                gate.then([shared](auto&&) { return shared; });
+            hpx::parcelset::parcel p = preprocess_with_closed_gate(
+                make_action_parcel<check_moved_first_action>(&check_moved_first,
+                    HPX_MOVE(pending), shared, delayed_data{size, 22, {}}),
+                flags, true);
+            // the shared object's buffer of the first round is dropped
+            HPX_TEST_EQ(buffers_created - created_before, std::size_t(3));
+            HPX_TEST_EQ(p.keep_alive().size(), std::size_t(2));
+
+            m = encode(p, flags);
+        }
+        HPX_TEST_EQ(buffers_alive.load(), std::size_t(0));
+
+        HPX_TEST(!decode(m, false));
+        wait_for_actions(actions_before + 1);
+    }
+
+    // A back-reference in a cycle (the child refers to its parent, which is
+    // still being serialized) leaves the buffer of the child's object that
+    // follows it in place in the later preprocessing rounds: it is created
+    // once and used by the real pass.
+    void test_cycle()
+    {
+        std::size_t const created_before = buffers_created;
+        std::size_t const size = 65536;
+
+        auto parent = std::make_shared<cycle_node>();
+        auto child = std::make_shared<cycle_node>();
+        parent->other = child;
+        child->other = parent;
+        child->data = delayed_data{size, 33, {}};
+
+        {
+            std::uint32_t const flags = archive_flags(true);
+            hpx::parcelset::parcel p = preprocess(
+                make_action_parcel<check_cycle_action>(&check_cycle, parent),
+                flags, true);
+            HPX_TEST_EQ(buffers_created - created_before, std::size_t(1));
+            HPX_TEST_EQ(p.keep_alive().size(), std::size_t(1));
+
+            // the real pass finds the buffer where the child's object is
+            message const m = encode(p, flags);
+            HPX_TEST_EQ(std::count_if(m.chunks.begin(), m.chunks.end(),
+                            [](serialization_chunk const& c) {
+                                return c.type_ != chunk_type::chunk_type_index;
+                            }),
+                std::ptrdiff_t(1));
+        }
+        HPX_TEST_EQ(buffers_alive.load(), std::size_t(0));
+
+        child->other.reset();
+    }
+
     // without a parcel nothing is preprocessed, the values go inline
     void test_archive(std::size_t const size)
     {
@@ -541,7 +994,7 @@ namespace {
         std::vector<serialization_chunk> chunks;
         {
             hpx::serialization::output_archive archive(
-                buffer, archive_flags(true), &chunks);
+                buffer, archive_flags(true), &chunks, nullptr, test_threshold);
             archive << delayed_data{size, 7, {}};
         }
         HPX_TEST(chunks.empty() ||
@@ -563,8 +1016,8 @@ namespace {
 namespace {
 
     // Serializing a parcel fails after an argument has registered data that
-    // is still being produced: the error is passed on only once that data
-    // is ready, the archive tracking it must not go away before.
+    // is still being produced: the error is passed on right away, and the
+    // archive tracking that data is kept until the data is ready.
     void test_failing_serialization()
     {
         std::size_t const alive_before = buffers_alive;
@@ -582,7 +1035,8 @@ namespace {
                     hpx::parcelset::write_handler_type&&) {
                     // nothing is sent
                     HPX_TEST(false);
-                });
+                },
+                test_threshold);
         }
         catch (std::exception const& e)
         {
@@ -598,7 +1052,10 @@ namespace {
 
         // and released once the data is ready
         open_gate();
-        for (int i = 0; i != 100000 && buffers_alive != alive_before; ++i)
+        for (auto const deadline =
+                 std::chrono::steady_clock::now() + std::chrono::seconds(30);
+            buffers_alive != alive_before &&
+            std::chrono::steady_clock::now() < deadline;)
         {
             hpx::this_thread::yield();
         }
@@ -607,9 +1064,64 @@ namespace {
     }
 }    // namespace
 
+namespace {
+
+    // A later preprocessing round fails: it runs from the continuation of
+    // the data the first round waits for, the error must reach the parcel's
+    // write handler.
+    void test_failing_resumed_serialization()
+    {
+        std::size_t const alive_before = buffers_alive;
+        close_gate();
+
+        // shared with the handler, which may run after a timeout of the test
+        struct state
+        {
+            std::atomic<bool> handled = false;
+            std::atomic<bool> failed = false;
+        };
+        auto const result = std::make_shared<state>();
+        std::atomic<bool> const& handled = result->handled;
+        std::atomic<bool> const& failed = result->failed;
+
+        hpx::parcelset::detail::parcel_await_apply(
+            make_action_parcel<check_failing_later_action>(&check_failing_later,
+                delayed_data{65536, 7, {}}, failing_later_argument{}),
+            [result](std::error_code const& ec, hpx::parcelset::parcel const&) {
+                result->failed = static_cast<bool>(ec);
+                result->handled = true;
+            },
+            archive_flags(true),
+            [](hpx::parcelset::parcel&&, hpx::parcelset::write_handler_type&&) {
+                // nothing is sent
+                HPX_TEST(false);
+            },
+            test_threshold);
+
+        // the first round waits for the data
+        HPX_TEST(!handled);
+
+        // the error reaches the handler, and the failed archive releases its
+        // buffer (maybe only after the handler ran): the next tests expect
+        // no buffers alive
+        open_gate();
+        for (auto const deadline =
+                 std::chrono::steady_clock::now() + std::chrono::seconds(30);
+            (!handled || buffers_alive != alive_before) &&
+            std::chrono::steady_clock::now() < deadline;)
+        {
+            hpx::this_thread::yield();
+        }
+        HPX_TEST(handled);
+        HPX_TEST(failed);
+        HPX_TEST_EQ(buffers_alive.load(), alive_before);
+    }
+}    // namespace
+
 int hpx_main(hpx::program_options::variables_map&)
 {
     test_failing_serialization();
+    test_failing_resumed_serialization();
 
     // 16 ints go inline, 64 Ki ints (256 KiB) as a zero-copy chunk
     for (std::size_t const size : {std::size_t(16), std::size_t(65536)})
@@ -619,6 +1131,17 @@ int hpx_main(hpx::program_options::variables_map&)
         test_parcel(size, false, false);
         test_archive(size);
     }
+    test_same_address(true);
+    test_same_address(false);
+    test_shared_in_message(true);
+    test_shared_in_message(false);
+    test_pending_future(true);
+    test_pending_future(false);
+    test_future_twice(true);
+    test_future_twice(false);
+    test_moved_into_future(true);
+    test_moved_into_future(false);
+    test_cycle();
     // the gate's shared state goes away while the runtime is still there
     gate = hpx::shared_future<void>();
     gate_promise.reset();

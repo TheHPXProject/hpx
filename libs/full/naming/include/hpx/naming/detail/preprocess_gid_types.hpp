@@ -20,6 +20,7 @@
 #include <hpx/naming/credit_handling.hpp>
 
 #include <cstddef>
+#include <exception>
 #include <map>
 #include <mutex>
 #include <type_traits>
@@ -77,6 +78,7 @@ namespace hpx::serialization::detail {
             HPX_ASSERT_OWNS_LOCK(l);
 
             index_.clear();
+            split_error_ = nullptr;
 
             // If there are gids left then several parcels got preprocessed
             // separately, but serialized into the same archive (an id was
@@ -104,7 +106,7 @@ namespace hpx::serialization::detail {
 
                 for (auto const& gid : gids)
                 {
-                    naming::decrement_refcnt(gid);
+                    return_credit(gid);
                 }
             }
         }
@@ -118,7 +120,16 @@ namespace hpx::serialization::detail {
             naming::gid_type const stripped =
                 naming::detail::get_stripped_gid(id);
 
-            std::lock_guard<mutex_type> l(mtx_);
+            std::unique_lock<mutex_type> l(mtx_);
+
+            // a credit split of an earlier round failed: the parcel can't be
+            // sent (thrown without holding the lock)
+            if (split_error_)
+            {
+                std::exception_ptr const error = split_error_;
+                l.unlock();
+                std::rethrow_exception(error);
+            }
 
             entries& e = index_[stripped];
             if (e.round != round_)
@@ -158,31 +169,63 @@ namespace hpx::serialization::detail {
             naming::decrement_refcnt(split_gid);
         }
 
+        // Preprocessing: splitting a credit asynchronously failed. The next
+        // preprocessing round reports the (first) error.
+        void set_split_error(std::exception_ptr error) noexcept
+        {
+            std::lock_guard<mutex_type> l(mtx_);
+            if (!split_error_)
+            {
+                split_error_ = HPX_MOVE(error);
+            }
+        }
+
         // The real pass: a split gid for the managed id 'id'.
         [[nodiscard]] naming::gid_type take(naming::gid_type const& id)
         {
             naming::gid_type const stripped =
                 naming::detail::get_stripped_gid(id);
 
-            std::lock_guard<mutex_type> l(mtx_);
-            auto const it = index_.find(stripped);
-            for (entries* e = it != index_.end() ? &it->second : nullptr;
-                e != nullptr && e->taken != e->positions.size(); ++e->taken)
+            // the exceptions are thrown without holding the lock (creating
+            // them may suspend the thread)
+            bool other_id = false;
             {
-                auto& entry = split_gids_[e->positions[e->taken]];
-                if (entry.second == naming::invalid_gid)
+                std::lock_guard<mutex_type> l(mtx_);
+                auto const it = index_.find(stripped);
+                for (entries* e = it != index_.end() ? &it->second : nullptr;
+                    e != nullptr && e->taken != e->positions.size(); ++e->taken)
                 {
-                    continue;
+                    auto& entry = split_gids_[e->positions[e->taken]];
+                    if (entry.second == naming::invalid_gid)
+                    {
+                        continue;
+                    }
+                    ++e->taken;
+                    if (naming::detail::get_stripped_gid(entry.second) ==
+                        stripped)
+                    {
+                        // the credit of the entry, all other bits of the
+                        // id (e.g. whether it may be cached)
+                        naming::gid_type result =
+                            std::exchange(entry.second, naming::invalid_gid);
+                        result.set_msb((result.get_msb() &
+                                           naming::gid_type::credit_bits_mask) |
+                            (id.get_msb() &
+                                ~(naming::gid_type::credit_bits_mask |
+                                    naming::gid_type::is_locked_mask)));
+                        return result;
+                    }
+                    other_id = true;
+                    break;
                 }
-                ++e->taken;
-                if (naming::detail::get_stripped_gid(entry.second) != stripped)
-                {
-                    HPX_THROW_EXCEPTION(hpx::error::serialization_error,
-                        "preprocess_gid_types::take",
-                        "the split credit for a managed id of this parcel "
-                        "belongs to another id");
-                }
-                return std::exchange(entry.second, naming::invalid_gid);
+            }
+
+            if (other_id)
+            {
+                HPX_THROW_EXCEPTION(hpx::error::serialization_error,
+                    "preprocess_gid_types::take",
+                    "the split credit for a managed id of this parcel "
+                    "belongs to another id");
             }
 
             HPX_THROW_EXCEPTION(hpx::error::serialization_error,
@@ -219,7 +262,33 @@ namespace hpx::serialization::detail {
             }
         }
 
+        // Returns the credits of split gids that won't be sent (those the
+        // credit split hasn't produced yet have none).
+        static void return_credits(split_gids_type const& gids) noexcept
+        {
+            for (auto const& entry : gids)
+            {
+                if (entry.second != naming::invalid_gid)
+                {
+                    return_credit(entry.second);
+                }
+            }
+        }
+
     private:
+        static void return_credit(naming::gid_type const& gid) noexcept
+        {
+            try
+            {
+                naming::decrement_refcnt(gid);
+            }
+            // NOLINTNEXTLINE(bugprone-empty-catch)
+            catch (...)
+            {
+                // the credit is lost, the component stays alive
+            }
+        }
+
         // The entries of one gid: preprocessing matches them in this order
         // (those up to 'matched' are matched in round 'round'), the real pass
         // takes them in this order (up to 'taken').
@@ -234,6 +303,7 @@ namespace hpx::serialization::detail {
         mutable mutex_type mtx_ = mutex_type("preprocess_gid_types");
         split_gids_type split_gids_;
         std::map<naming::gid_type, entries> index_;    // by gid
+        std::exception_ptr split_error_;
         std::size_t round_ = 0;    // the current preprocessing round
     };
 }    // namespace hpx::serialization::detail

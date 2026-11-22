@@ -13,8 +13,10 @@
 #include <hpx/thrust/memory.hpp>
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cstddef>
+#include <cstdint>
 #include <exception>
 #include <iterator>
 #include <limits>
@@ -145,7 +147,18 @@ namespace hpx::thrust {
                 throw std::bad_alloc();
             }
 
+            // also gives back the blocks whose deferred reads have finished
+            // since: they don't wait for the next allocation, which may
+            // never come
             void deallocate(void* p, std::size_t const size_class) noexcept
+            {
+                reclaim_deferred();
+                give_back(p, size_class);
+            }
+
+            // keeps the block 'p' for reuse within the cache limit, frees it
+            // otherwise
+            void give_back(void* p, std::size_t const size_class) noexcept
             {
                 try
                 {
@@ -183,7 +196,7 @@ namespace hpx::thrust {
                 (void) cudaEventDestroy(event);
                 if (error == cudaSuccess)
                 {
-                    deallocate(p, size_class);
+                    give_back(p, size_class);
                 }
 
                 // Otherwise the reads may not have finished: the block is
@@ -308,25 +321,38 @@ namespace hpx::thrust {
             // reads have finished: those blocks stay deferred.
             void reclaim_deferred() noexcept
             {
+                // one pass over the deferred blocks collects (up to) a batch
+                // of finished ones, which are given back without holding the
+                // lock; another pass only if the batch was full
                 while (true)
                 {
-                    deferred_block b{};
+                    std::array<deferred_block, 64> finished{};
+                    std::size_t count = 0;
                     {
                         std::lock_guard<hpx::spinlock_no_backoff> l(mtx_);
-                        auto const it = std::find_if(deferred_.begin(),
-                            deferred_.end(), [](deferred_block const& d) {
-                                return cudaEventQuery(d.event) == cudaSuccess;
-                            });
-                        if (it == deferred_.end())
+                        for (std::size_t i = 0;
+                            i != deferred_.size() && count != finished.size();)
                         {
-                            return;
+                            if (cudaEventQuery(deferred_[i].event) !=
+                                cudaSuccess)
+                            {
+                                ++i;
+                                continue;
+                            }
+                            finished[count++] = deferred_[i];
+                            deferred_[i] = deferred_.back();
+                            deferred_.pop_back();
                         }
-                        b = *it;
-                        *it = deferred_.back();
-                        deferred_.pop_back();
                     }
-                    (void) cudaEventDestroy(b.event);
-                    deallocate(b.p, b.size_class);
+                    for (std::size_t i = 0; i != count; ++i)
+                    {
+                        (void) cudaEventDestroy(finished[i].event);
+                        give_back(finished[i].p, finished[i].size_class);
+                    }
+                    if (count != finished.size())
+                    {
+                        return;
+                    }
                 }
             }
 
@@ -411,13 +437,29 @@ namespace hpx::thrust {
         }
 
         // The default memory kind while the runtime runs (the configuration
-        // is complete only then), else unknown_kind.
-        constexpr int unknown_kind = -1;
+        // is complete only then), else unknown_kind, with the generation of
+        // the runtime it was read in: forgetting it when the runtime stops
+        // starts a new generation, so that a lookup that read the stopped
+        // runtime's configuration can't cache it afterwards (the low byte is
+        // the kind, the rest the generation).
+        constexpr std::uint64_t unknown_kind = 0xff;
+        constexpr std::uint64_t kind_mask = 0xff;
 
-        std::atomic<int>& cached_kind() noexcept
+        std::atomic<std::uint64_t>& cached_kind() noexcept
         {
-            static std::atomic<int> kind{unknown_kind};
+            static std::atomic<std::uint64_t> kind{unknown_kind};
             return kind;
+        }
+
+        // forgets the kind, starts a new generation
+        void forget_cached_kind() noexcept
+        {
+            std::uint64_t value = cached_kind().load(std::memory_order_relaxed);
+            while (!cached_kind().compare_exchange_weak(value,
+                ((value & ~kind_mask) + (kind_mask + 1)) | unknown_kind,
+                std::memory_order_acq_rel, std::memory_order_relaxed))
+            {
+            }
         }
 
         bool forget_configuration_when_stopped();
@@ -488,6 +530,32 @@ namespace hpx::thrust {
                     }
                 }
 
+                try
+                {
+                    record_read(block, stream);
+                }
+                catch (...)
+                {
+                    // The read isn't recorded: the block may be reused only
+                    // once the copy has finished. If that isn't certain
+                    // either, it is never reused (nor freed).
+                    if (cudaStreamSynchronize(stream) != cudaSuccess)
+                    {
+                        std::lock_guard<hpx::spinlock_no_backoff> l(mtx_);
+                        if (auto const it =
+                                blocks_.find(const_cast<void*>(block));
+                            it != blocks_.end())
+                        {
+                            it->second = nullptr;
+                        }
+                    }
+                    throw;
+                }
+            }
+
+        private:
+            void record_read(void const* block, cudaStream_t const stream)
+            {
                 cudaEvent_t event = nullptr;
                 hpx::cuda::experimental::check_cuda_error(
                     cudaEventCreateWithFlags(&event, cudaEventDisableTiming));
@@ -498,16 +566,26 @@ namespace hpx::thrust {
                     // read may have been queued on another stream, the event
                     // completes only after it (the new copy was queued
                     // before, it doesn't wait).
-                    std::lock_guard<hpx::spinlock_no_backoff> l(mtx_);
-                    cudaEvent_t& entry = reads_[block];
-                    if (entry != nullptr)
+                    // the errors are thrown without holding the lock
+                    // (creating the exception may suspend the thread)
+                    cudaError_t error = cudaSuccess;
                     {
-                        hpx::cuda::experimental::check_cuda_error(
-                            cudaStreamWaitEvent(stream, entry, 0));
+                        std::lock_guard<hpx::spinlock_no_backoff> l(mtx_);
+                        cudaEvent_t& entry = reads_[block];
+                        if (entry != nullptr)
+                        {
+                            error = cudaStreamWaitEvent(stream, entry, 0);
+                        }
+                        if (error == cudaSuccess)
+                        {
+                            error = cudaEventRecord(event, stream);
+                        }
+                        if (error == cudaSuccess)
+                        {
+                            replaced = std::exchange(entry, event);
+                        }
                     }
-                    hpx::cuda::experimental::check_cuda_error(
-                        cudaEventRecord(event, stream));
-                    replaced = std::exchange(entry, event);
+                    hpx::cuda::experimental::check_cuda_error(error);
                 }
                 catch (...)
                 {
@@ -520,6 +598,7 @@ namespace hpx::thrust {
                 }
             }
 
+        public:
             void deallocate(void* block, std::size_t const bytes) noexcept
             {
                 // a block allocated before the runtime ran, returned once
@@ -554,6 +633,17 @@ namespace hpx::thrust {
                         read = r->second;
                         reads_.erase(r);
                     }
+                }
+
+                // a staging copy may still read it, and its read couldn't be
+                // recorded (see note_read): never reused
+                if (p == nullptr)
+                {
+                    if (read != nullptr)
+                    {
+                        (void) cudaEventDestroy(read);
+                    }
+                    return;
                 }
 
                 // a staging copy may still read it: reused only afterwards
@@ -710,6 +800,7 @@ namespace hpx::thrust {
             hpx::spinlock_no_backoff mtx_;
             std::vector<std::unique_ptr<pool>> device_pools_;
             std::unique_ptr<pool> pinned_pool_;
+            // the pool of each block given out (nullptr: never reused)
             std::unordered_map<void*, pool*> blocks_;
 
             // the last staging copy reading a block, by address
@@ -724,29 +815,40 @@ namespace hpx::thrust {
         // already).
         bool forget_configuration_when_stopped()
         {
-            static std::atomic<bool> registered(false);
+            // not registered, being registered (by another thread, which
+            // may still fail), registered
+            enum : int
+            {
+                none,
+                registering,
+                done
+            };
+            static std::atomic<int> registered(none);
             if (!hpx::is_running())
             {
                 return false;
             }
-            if (registered.exchange(true, std::memory_order_acq_rel))
+            int expected = none;
+            if (!registered.compare_exchange_strong(
+                    expected, registering, std::memory_order_acq_rel))
             {
-                return true;
+                // cached only once the hook is in place
+                return expected == done;
             }
             try
             {
                 // called once the runtime has stopped running
                 bool const registered_now = hpx::register_on_exit([]() {
-                    cached_kind().store(
-                        unknown_kind, std::memory_order_release);
+                    forget_cached_kind();
                     if (pools* p = pools::existing())
                     {
                         p->unconfigure();
                     }
-                    registered.store(false, std::memory_order_release);
+                    registered.store(none, std::memory_order_release);
                 });
                 if (registered_now)
                 {
+                    registered.store(done, std::memory_order_release);
                     return true;
                 }
             }
@@ -754,7 +856,7 @@ namespace hpx::thrust {
             catch (...)
             {
             }
-            registered.store(false, std::memory_order_release);
+            registered.store(none, std::memory_order_release);
             return false;
         }
     }    // namespace
@@ -762,10 +864,10 @@ namespace hpx::thrust {
     // reads the configuration only, the GPU isn't touched
     memory_kind default_memory_kind()
     {
-        if (int const value = cached_kind().load(std::memory_order_acquire);
-            value != unknown_kind)
+        std::uint64_t value = cached_kind().load(std::memory_order_acquire);
+        if ((value & kind_mask) != unknown_kind)
         {
-            return static_cast<memory_kind>(value);
+            return static_cast<memory_kind>(value & kind_mask);
         }
 
         // the configuration is complete only once the runtime runs, it is
@@ -773,8 +875,11 @@ namespace hpx::thrust {
         memory_kind const kind = configured_memory_kind();
         if (forget_configuration_when_stopped())
         {
-            cached_kind().store(
-                static_cast<int>(kind), std::memory_order_release);
+            // not if the runtime it was read in has stopped meanwhile (a
+            // new generation has started)
+            (void) cached_kind().compare_exchange_strong(value,
+                (value & ~kind_mask) | static_cast<std::uint64_t>(kind),
+                std::memory_order_acq_rel, std::memory_order_relaxed);
         }
         return kind;
     }
@@ -827,6 +932,11 @@ namespace hpx::thrust::detail {
             (void) cudaGetLastError();
             return false;
         }
+#if defined(HPX_HAVE_HIP) && defined(HIP_VERSION_MAJOR) && HIP_VERSION_MAJOR < 6
+        // before ROCm 6, hipPointerAttribute_t names the field memoryType
+        return attributes.memoryType == cudaMemoryTypeHost;
+#else
         return attributes.type == cudaMemoryTypeHost;
+#endif
     }
 }    // namespace hpx::thrust::detail

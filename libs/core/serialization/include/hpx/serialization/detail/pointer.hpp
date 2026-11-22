@@ -17,6 +17,7 @@
 #include <hpx/serialization/detail/polymorphic_id_factory.hpp>
 #include <hpx/serialization/detail/polymorphic_intrusive_factory.hpp>
 #include <hpx/serialization/detail/polymorphic_nonintrusive_factory.hpp>
+#include <hpx/serialization/detail/preprocess_keep_alive.hpp>
 #include <hpx/serialization/macros.hpp>
 #include <hpx/serialization/serialization_fwd.hpp>
 #include <hpx/serialization/string.hpp>
@@ -124,7 +125,7 @@ namespace hpx::serialization::detail {
             }
         }
 
-        alignas(void*) unsigned char storage_[2 * sizeof(void*)];
+        alignas(void*) unsigned char storage_[2 * sizeof(void*)] = {};
         manage_type manage_ = nullptr;
     };
 
@@ -345,6 +346,68 @@ namespace hpx::serialization {
                     intrusive_polymorphic, usual>>;
         };
 
+        // Preprocessing: the keep-alive buffers created while the object a
+        // tracked pointer points to is serialized know that they are part of
+        // it (see preprocess_keep_alive).
+        template <typename Archive>
+        class keep_alive_enclosing
+        {
+        public:
+            keep_alive_enclosing(Archive const& ar, void const* object)
+              : keep_alive_(ar.is_preprocessing() ?
+                        ar.template try_get_extra_data<
+                            preprocess_keep_alive>() :
+                        nullptr)
+            {
+                if (keep_alive_ != nullptr)
+                {
+                    keep_alive_->enter(object);
+                }
+            }
+
+            keep_alive_enclosing(keep_alive_enclosing const&) = delete;
+            keep_alive_enclosing(keep_alive_enclosing&&) = delete;
+            keep_alive_enclosing& operator=(
+                keep_alive_enclosing const&) = delete;
+            keep_alive_enclosing& operator=(keep_alive_enclosing&&) = delete;
+
+            ~keep_alive_enclosing()
+            {
+                if (keep_alive_ != nullptr)
+                {
+                    keep_alive_->leave();
+                }
+            }
+
+        private:
+            preprocess_keep_alive* keep_alive_;
+        };
+
+        // The object at 'object', written at 'pos', is written as a
+        // back-reference. Preprocessing drops the keep-alive buffers an
+        // earlier round has created for the objects it contains here. In the
+        // real pass, if an earlier parcel of the same message has written it,
+        // these buffers are not sent.
+        template <typename Archive>
+        void skip_keep_alive_of_back_reference(
+            Archive const& ar, std::uint64_t const pos, void const* object)
+        {
+            auto* keep_alive =
+                ar.template try_get_extra_data<preprocess_keep_alive>();
+            if (keep_alive == nullptr)
+            {
+                return;
+            }
+            if (ar.is_preprocessing())
+            {
+                keep_alive->drop_back_reference(object);
+            }
+            else if (pos < keep_alive->parcel_start())
+            {
+                keep_alive->skip_back_reference(object);
+            }
+        }
+
         // forwarded serialize pointer functions
         template <typename Pointer>
         HPX_FORCEINLINE void serialize_pointer_tracked(
@@ -361,8 +424,14 @@ namespace hpx::serialization {
                 if (pos == static_cast<std::uint64_t>(-1))
                 {
                     ar << cur_pos;
+                    keep_alive_enclosing<output_archive> const enclosing(
+                        ar, ptr.get());
                     detail::pointer_output_dispatcher<Pointer>::type::call(
                         ar, ptr);
+                }
+                else
+                {
+                    skip_keep_alive_of_back_reference(ar, pos, ptr.get());
                 }
             }
         }

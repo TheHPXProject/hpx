@@ -41,6 +41,14 @@ namespace hpx::serialization::detail {
         using value_type = Vector::value_type;
         if constexpr (host_accessible_as_array<value_type>)
         {
+#if !defined(HPX_SERIALIZATION_HAVE_ALL_TYPES_ARE_BITWISE_SERIALIZABLE)
+            // element by element, as std::vector does
+            if (ar.disable_array_optimization() || ar.endianess_differs())
+            {
+                save_collection(ar, v);
+                return;
+            }
+#endif
             ar << hpx::serialization::make_array(
                 ::thrust::raw_pointer_cast(v.data()), size);
         }
@@ -59,6 +67,14 @@ namespace hpx::serialization::detail {
         using value_type = Vector::value_type;
         if constexpr (host_accessible_as_array<value_type>)
         {
+#if !defined(HPX_SERIALIZATION_HAVE_ALL_TYPES_ARE_BITWISE_SERIALIZABLE)
+            // element by element into fresh elements, as std::vector does
+            if (ar.disable_array_optimization() || ar.endianess_differs())
+            {
+                load_collection(ar, v, size);
+                return;
+            }
+#endif
             v.resize(size);
             if (size != 0)
             {
