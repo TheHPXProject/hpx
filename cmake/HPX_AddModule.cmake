@@ -646,6 +646,18 @@ function(add_hpx_module libname modulename)
         hpx_${libname}
         PRIVATE -WHOLEARCHIVE:$<TARGET_FILE:$<TARGET_NAME:hpx_${modulename}>>
       )
+    elseif(WIN32)
+      # clang with a GNU-like command line on Windows links with lld-link (the
+      # MSVC linker interface), the compiler driver passes the option on; as a
+      # link item (like for MSVC) it also reaches the consumers of a static
+      # library. CMake passes it on verbatim: the quotes keep a path with spaces
+      # together.
+      set(_module_target hpx_${modulename})
+      target_link_libraries(
+        hpx_${libname}
+        PRIVATE
+          "-Wl,/WHOLEARCHIVE:\"$<TARGET_FILE:$<TARGET_NAME:hpx_${modulename}>>\""
+      )
     endif()
     target_link_libraries(hpx_${libname} PRIVATE ${_module_target})
 

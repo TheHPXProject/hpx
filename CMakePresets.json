@@ -195,6 +195,36 @@
             }
         },
         {
+            "name": "windows-clang-cuda",
+            "displayName": "CUDA Support on Windows (clang, experimental)",
+            "description": "Build with CUDA support on Windows, using clang as the C++ and CUDA compiler (nvcc can't compile the HPX headers with MSVC as the host compiler). Requires a recent clang, the CUDA toolkit, and a Visual Studio developer environment.",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/windows-clang-cuda",
+            "toolchainFile": "${sourceDir}/cmake/toolchains/Windows-Clang-CUDA.cmake",
+            "architecture": {
+                "value": "x64",
+                "strategy": "external"
+            },
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "HPX_WITH_CUDA": "ON",
+                "HPX_WITH_TESTS": "ON",
+                "HPX_WITH_EXAMPLES": "ON"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            },
+            "vendor": {
+                "microsoft.com/VisualStudioSettings/CMake/1.0": {
+                    "hostOS": [
+                        "Windows"
+                    ]
+                }
+            }
+        },
+        {
             "name": "sycl",
             "displayName": "SYCL Support",
             "description": "Build with SYCL support for heterogeneous computing. Requires SYCL compiler.",
@@ -379,6 +409,12 @@
             "name": "cuda",
             "displayName": "CUDA Build",
             "configurePreset": "cuda",
+            "jobs": 0
+        },
+        {
+            "name": "windows-clang-cuda",
+            "displayName": "CUDA Build on Windows (clang, experimental)",
+            "configurePreset": "windows-clang-cuda",
             "jobs": 0
         },
         {
