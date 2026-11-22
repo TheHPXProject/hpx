@@ -61,7 +61,11 @@ namespace hpx::experimental {
     {
         if (!latch_.is_ready())
         {
-            ar.request_await();
+            if (ar.defer_to_preprocessing())
+            {
+                return;
+            }
+
             if (ar.is_preprocessing())
             {
                 using init_no_addref = shared_state_type::init_no_addref;

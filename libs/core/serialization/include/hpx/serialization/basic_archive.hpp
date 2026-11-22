@@ -11,6 +11,7 @@
 #include <hpx/config/endian.hpp>
 #include <hpx/serialization/config/defines.hpp>
 #include <hpx/modules/type_support.hpp>
+#include <hpx/serialization/detail/optimistic_save.hpp>
 
 #include <algorithm>
 #include <cstddef>
@@ -44,18 +45,7 @@ namespace hpx::serialization {
         // zero-copy chunks may refer to device memory: the parcelport that
         // sends (and receives) the archive moves device memory itself
         enable_device_chunks = 0x00400000,
-        all_archive_flags = 0x006fe000,    // all of the above
-
-        // local only, never sent: request_await() stops the archive
-        archive_is_optimistic = 0x00800000
-    };
-
-    /// Thrown by request_await() in an optimistic archive. It is not an
-    /// std::exception, so that only the code that made the archive optimistic
-    /// catches it. It is thrown and caught in different libraries, so its
-    /// type information must be visible.
-    HPX_CXX_CORE_EXPORT struct HPX_ALWAYS_EXPORT await_required
-    {
+        all_archive_flags = 0x006fe000    // all of the above
     };
 
     HPX_CXX_CORE_EXPORT constexpr archive_flags operator|(
@@ -370,25 +360,19 @@ namespace hpx::serialization {
             extra_data_ = HPX_MOVE(rhs.extra_data_);
         }
 
-        /// Make the archive optimistic. Call it after the constructor, so
-        /// that the flag is not written into the archive. reset() keeps the
-        /// flag.
-        void enable_optimistic() noexcept
-        {
-            flags_ = flags_ | archive_flags::archive_is_optimistic;
-        }
-
         /// A save function that needs the preprocessing pass (a managed
         /// id_type, a future that is not ready) calls this before any side
-        /// effect. An optimistic archive then stops with await_required;
-        /// other archives continue.
-        void request_await() const
+        /// effect. If the archive has detail::optimistic_save, this marks it
+        /// and returns true, and the save function must then save nothing.
+        [[nodiscard]] bool defer_to_preprocessing() const noexcept
         {
-            if (static_cast<bool>(
-                    flags_ & archive_flags::archive_is_optimistic))
+            auto* optimistic = try_get_extra_data<detail::optimistic_save>();
+            if (optimistic == nullptr)
             {
-                throw await_required{};
+                return false;
             }
+            optimistic->needs_await = true;
+            return true;
         }
 
     protected:

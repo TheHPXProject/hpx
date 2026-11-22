@@ -107,6 +107,7 @@ set(serialization_headers
     hpx/serialization/detail/allow_zero_copy_receive.hpp
     hpx/serialization/detail/constructor_selector.hpp
     hpx/serialization/detail/non_default_constructible.hpp
+    hpx/serialization/detail/optimistic_save.hpp
     hpx/serialization/detail/pointer.hpp
     hpx/serialization/detail/polymorphic_id_factory.hpp
     hpx/serialization/detail/polymorphic_intrusive_factory.hpp
@@ -236,6 +237,7 @@ endif()
 # Default location is $HPX_ROOT/libs/serialization/src
 set(serialization_sources
     detail/allow_zero_copy_receive.cpp
+    detail/optimistic_save.cpp
     detail/pointer.cpp
     detail/polymorphic_id_factory.cpp
     detail/polymorphic_intrusive_factory.cpp
@@ -270,6 +272,7 @@ add_hpx_module(
   DEPENDENCIES ${serialization_optional_dependencies}
   ADD_TO_GLOBAL_HEADER
     hpx/serialization/detail/allow_zero_copy_receive.hpp
+    hpx/serialization/detail/optimistic_save.hpp
     hpx/serialization/detail/polymorphic_id_factory.hpp
     hpx/serialization/detail/polymorphic_intrusive_factory.hpp
     hpx/serialization/detail/polymorphic_nonintrusive_factory.hpp
