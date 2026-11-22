@@ -326,7 +326,7 @@ namespace hpx::components::stubs {
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
         using action_type =
             server::runtime_support::remove_from_connection_cache_action;
-        hpx::post<action_type>(target, gid, endpoints);
+        hpx::post<action_type>(target, gid, endpoints, false);
 #else
         HPX_ASSERT(false);
 #endif

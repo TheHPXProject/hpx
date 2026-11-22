@@ -71,6 +71,14 @@ namespace hpx::parcelset::device_conduits {
 
         bool background_work_impl();
 
+        /// Closes the endpoint to a locality that has left, after the sends
+        /// in flight to it have finished (or failed, with
+        /// hpx.parcel.conduit.ucx.error_handling 'peer'), or that was
+        /// disconnected ('forced'), cancelling them (with 'peer'; with 'none'
+        /// UCX allows only to flush the endpoint).
+        void locality_removed_impl(
+            std::uint32_t locality_id, bool forced) noexcept;
+
         /// The address of this locality's worker (what the action returns).
         [[nodiscard]] std::vector<char> const& worker_address() const noexcept
         {
@@ -78,25 +86,50 @@ namespace hpx::parcelset::device_conduits {
         }
 
     private:
+        // an endpoint, and which one of those to the same locality (a
+        // removed locality's endpoint is closed, a later message to that
+        // locality creates a new one)
+        struct endpoint_entry
+        {
+            hpx::shared_future<ucp_ep*> ep;
+            std::uint64_t generation = 0;
+        };
+
         // the endpoint to 'locality_id', fetches the address and creates it
         // the first time (on an HPX thread)
-        hpx::shared_future<ucp_ep*> endpoint(std::uint32_t locality_id);
+        endpoint_entry endpoint(std::uint32_t locality_id);
+
+        // starts closing an endpoint that is no longer in endpoints_ (or at
+        // destruction), without holding endpoints_mtx_: UCX may complete the
+        // sends on it right away, calling their callbacks
+        void close_endpoint(ucp_ep* ep, std::uint32_t locality_id, bool force);
 
         // makes sure the OS thread has a CUDA context for the GPU of the
         // memory at 'p' (if it is device memory), remembers the GPU for
         // progress
         void note_device(void const* p) noexcept;
 
-        void start_send(ucp_ep* ep, std::uint64_t tag, void const* p,
-            std::size_t size,
+        // sends unless the endpoint was closed since (its locality was
+        // removed)
+        void start_send(std::uint32_t locality_id, std::uint64_t generation,
+            ucp_ep* ep, std::uint64_t tag, void const* p, std::size_t size,
             hpx::move_only_function<void(std::exception_ptr)> sent);
 
         ucp_context* context_ = nullptr;
         ucp_worker* worker_ = nullptr;
         std::vector<char> address_;
 
+        // UCP_ERR_HANDLING_MODE_PEER for the endpoints
+        // (hpx.parcel.conduit.ucx.error_handling)
+        bool peer_errors_ = true;
+
         hpx::spinlock endpoints_mtx_;
-        std::map<std::uint32_t, hpx::shared_future<ucp_ep*>> endpoints_;
+        std::map<std::uint32_t, endpoint_entry> endpoints_;
+        std::uint64_t generation_ = 0;
+
+        // the requests closing the endpoints of removed localities
+        // (ucs_status_ptr_t, guarded by endpoints_mtx_)
+        std::vector<void*> closing_;
 
         // the GPU of the last device memory sent or received: progress makes
         // its context current where none is (with several GPUs per locality,

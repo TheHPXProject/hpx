@@ -38,9 +38,24 @@ settings of the memory domains and transports are read by UCX from the
 ``UCX_`` variables only (e.g. ``UCX_ROCM_COPY_DMABUF=yes``, which GPUDirect
 RDMA with ROCm needs where it is available only through DMA-BUF). The
 configuration entry
-``hpx.parcel.ucx_conduit.rndv_thresh`` sets the size from which UCX uses its
+``hpx.parcel.conduit.ucx.rndv_thresh`` sets the size from which UCX uses its
 rendezvous protocol (default 16384 bytes) unless
 ``HPX_DEVICE_CONDUIT_UCX_RNDV_THRESH`` is set.
+
+The configuration entry ``hpx.parcel.conduit.ucx.error_handling`` (or
+``HPX_PARCEL_CONDUIT_UCX_ERROR_HANDLING``) sets the error handling of the
+endpoints, the same on all localities. With ``peer`` (the default), a locality
+that fails or leaves fails the transfers to it instead of hanging them, and the
+endpoints are closed at shutdown without waiting for the peers. UCX then does
+not use its pipelined protocol for staging device memory through host memory,
+which it needs where the network cannot access device memory (no GPUDirect
+RDMA, e.g. ConnectX-3 adapters): there, transfers between nodes are several
+times slower (4.7x for 8 MiB on V100 nodes with ConnectX-3). With ``none``,
+they are as fast as with a UCX based MPI library, but a locality leaving while
+transfers to or from it are in flight may hang the others, and closing the
+endpoints at shutdown waits for the peers. Use ``none`` only where no locality
+leaves before the others (no localities connecting and disconnecting
+dynamically).
 
 See the :ref:`API reference <modules_device_conduit_ucx_api>` of this module
 for more details.
