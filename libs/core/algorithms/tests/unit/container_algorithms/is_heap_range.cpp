@@ -113,6 +113,29 @@ void test_is_heap_async(ExPolicy&& policy, DataType)
     HPX_TEST_EQ(result, solution);
 }
 
+template <typename Sentinel, typename... ExPolicy>
+void test_is_heap_sent(ExPolicy&&... policy)
+{
+    using base_iterator = std::vector<int>::iterator;
+    using iterator =
+        test::test_iterator<base_iterator, std::random_access_iterator_tag>;
+
+    std::size_t const size = 10007;
+    std::vector<int> c(size);
+    std::iota(std::begin(c), std::end(c), std::rand());
+
+    // a heap that covers all, part, or none of the range
+    for (std::size_t heap_size :
+        {size, std::size_t(std::rand()) % size, std::size_t(0)})
+    {
+        std::make_heap(std::begin(c), std::next(std::begin(c), heap_size));
+
+        bool result = hpx::ranges::is_heap(policy..., iterator(std::begin(c)),
+            Sentinel(iterator(std::end(c))));
+        HPX_TEST_EQ(result, std::is_heap(std::begin(c), std::end(c)));
+    }
+}
+
 template <typename DataType>
 void test_is_heap()
 {
@@ -132,6 +155,15 @@ void test_is_heap()
 {
     test_is_heap<int>();
     test_is_heap<user_defined_type>();
+
+    using namespace hpx::execution;
+    using iterator = test::test_iterator<std::vector<int>::iterator,
+        std::random_access_iterator_tag>;
+    using sized_sentinel = test::sized_sentinel_from_iterator<iterator>;
+    test_is_heap_sent<test::sentinel_from_iterator<iterator>>();
+    test_is_heap_sent<sized_sentinel>(seq);
+    test_is_heap_sent<sized_sentinel>(par);
+    test_is_heap_sent<sized_sentinel>(par_unseq);
 }
 
 int hpx_main(hpx::program_options::variables_map& vm)
