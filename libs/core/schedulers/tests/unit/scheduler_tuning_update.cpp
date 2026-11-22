@@ -37,8 +37,6 @@
 
 namespace policies = hpx::threads::policies;
 
-using tuned_scheduler = policies::local_priority_tuned_scheduler<>;
-
 constexpr std::chrono::milliseconds period(5);
 constexpr std::chrono::seconds timeout(10);
 constexpr std::size_t num_tasks = 100;
@@ -107,10 +105,11 @@ void use_tuned_scheduler(hpx::local::init_params& init_args)
 
 policies::scheduler_tuning_counters const& get_counters()
 {
-    auto* scheduler = dynamic_cast<tuned_scheduler*>(
-        hpx::threads::get_self_id_data()->get_scheduler_base());
-    HPX_TEST(scheduler != nullptr);
-    return scheduler->get_tuning_counters();
+    auto const* counters = hpx::threads::get_self_id_data()
+                               ->get_scheduler_base()
+                               ->get_tuning_counters();
+    HPX_TEST(counters != nullptr);
+    return *counters;
 }
 
 // the given counter of all workers and of the threads from outside the pool

@@ -383,6 +383,14 @@ namespace hpx::threads::policies {
         /// must not call back into the pool. Does nothing by default.
         virtual void on_pool_stopping() {}
 
+        /// What this scheduler counts for its tuner (see
+        /// scheduler_tuning_counters), nullptr if it doesn't count.
+        [[nodiscard]] virtual scheduler_tuning_counters const*
+        get_tuning_counters() const noexcept
+        {
+            return nullptr;
+        }
+
         virtual void on_error(
             std::size_t num_thread, std::exception_ptr const& e) = 0;
 

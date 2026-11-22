@@ -559,7 +559,10 @@ settings the worker thread decided with (named after their configuration
 entries; empty for ``external``). The counters are written while they are
 counted, so a row is approximate. The scheduler keeps them as 32-bit numbers
 that wrap around; the tuner writes the differences between its readings, and
-adds them up for ``totals``, so neither wraps. They are:
+adds them up for ``totals``, so neither wraps. They are (and are available as
+performance counters too, see :ref:`scheduler_tuning_performance_counters`):
+
+.. _scheduler_tuning_counters:
 
 .. list-table::
 

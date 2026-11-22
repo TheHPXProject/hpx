@@ -113,10 +113,10 @@ namespace hpx::threads::policies {
         }
 
         /// What this scheduler counted for its tuner.
-        [[nodiscard]] scheduler_tuning_counters const& get_tuning_counters()
-            const noexcept
+        [[nodiscard]] scheduler_tuning_counters const* get_tuning_counters()
+            const noexcept override
         {
-            return this->rules_.counters();
+            return &this->rules_.counters();
         }
 
         // The tuner sees the counters every update period (see

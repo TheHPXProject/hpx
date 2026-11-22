@@ -2589,6 +2589,50 @@ system and application performance.
      * Returns the current (instantaneous) busy-loop count for the given |hpx|-
        worker thread or the accumulated value for all worker threads.
 
+.. _scheduler_tuning_performance_counters:
+
+.. list-table:: Thread manager performance counters ``/scheduler/tuning/<name>``
+   :widths: 20 80
+
+   * * Counter type
+     * ``/scheduler/tuning/<name>``, one for each counter a scheduler with a
+       tuner keeps for it, with ``-`` in place of ``_`` in its name (see
+       :ref:`scheduler_tuning_counters`), for instance
+       ``/scheduler/tuning/run-small`` or
+       ``/scheduler/tuning/idle-wait-timed-out``
+   * * Counter instance formatting
+     * ``locality#*/total`` or
+
+       ``locality#*/pool#*`` or
+
+       ``locality#*/pool#*/worker-thread#*`` or
+
+       ``locality#*/worker-thread#*``
+
+       where:
+
+       ``locality#*`` is defining the :term:`locality` for which the counter
+       should be queried. The :term:`locality` id (given by the ``*``) is a
+       (zero based) number identifying the :term:`locality`.
+
+       ``pool#*`` is defining the pool for which the counter should be
+       queried, the sum over all of its worker threads and the threads from
+       outside of the pool if no worker thread is given. ``total`` is the sum
+       over all pools.
+
+       ``worker-thread#*`` is defining the worker thread for which the counter
+       should be queried. The worker thread number (given by the ``*``) is a
+       (zero based) number identifying the worker thread. If no pool is
+       specified the counter refers to the 'default' pool.
+   * * Description
+     * Returns the current value of the counter. The scheduler keeps it for its
+       tuner as a 32-bit number that wraps around, so the value wraps around as
+       well; resetting the counter does nothing, as that would change what the
+       tuner sees. Only a scheduler with a tuner counts (the
+       ``local-priority-tuned-fifo`` scheduler, see :ref:`schedulers`): these
+       counters exist only if a pool uses such a scheduler, and only for those
+       pools (``total`` sums them).
+
 ...................................................................................
 
 .. list-table:: Thread manager performance counter ``/threads/time/background-work-duration``
