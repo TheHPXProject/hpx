@@ -365,7 +365,7 @@ namespace hpx::serialization {
         /// calls this before any side effect. If the archive has
         /// detail::optimistic_save, this marks it and returns true, and the
         /// save function must then save nothing.
-        [[nodiscard]] bool defer_to_preprocessing() const noexcept
+        [[nodiscard]] bool defer_to_preprocessing() noexcept
         {
             auto* optimistic = try_get_extra_data<detail::optimistic_save>();
             if (optimistic == nullptr)
