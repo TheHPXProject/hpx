@@ -18,6 +18,8 @@
 #include <utility>
 #include <vector>
 
+#include <hpx/config/warnings_prefix.hpp>
+
 namespace hpx::serialization::detail {
 
     // The completion of a parcel's steps and of those of the parcels before
@@ -160,3 +162,5 @@ struct hpx::util::extra_data_helper<
         p->reset();
     }
 };
+
+#include <hpx/config/warnings_suffix.hpp>

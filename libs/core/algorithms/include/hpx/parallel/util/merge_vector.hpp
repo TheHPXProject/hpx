@@ -52,12 +52,14 @@ namespace hpx::parallel::util {
             return;
         }
 
-        std::uint32_t nrange = v_input.size();
-        std::uint32_t pos_ini = 0;
+        std::size_t nrange = v_input.size();
+        std::size_t pos_ini = 0;
         while (pos_ini < v_input.size())
         {
-            std::uint32_t const nmerge = (nrange + 3) >> 2;
-            std::uint32_t nelem = (nrange + nmerge - 1) / nmerge;
+            std::size_t const nmerge = (nrange + 3) >> 2;
+            // at most four ranges are merged at a time
+            auto const nelem =
+                static_cast<std::uint32_t>((nrange + nmerge - 1) / nmerge);
             range1_t rz = full_merge4(dest, &v_input[pos_ini], nelem, comp);
             v_output.emplace_back(rz);
             dest = util::range<Iter1, Sent1>(rz.end(), dest.end());
@@ -97,12 +99,14 @@ namespace hpx::parallel::util {
             return;
         }
 
-        std::uint32_t nrange = v_input.size();
-        std::uint32_t pos_ini = 0;
+        std::size_t nrange = v_input.size();
+        std::size_t pos_ini = 0;
         while (pos_ini < v_input.size())
         {
-            std::uint32_t const nmerge = (nrange + 3) >> 2;
-            std::uint32_t nelem = (nrange + nmerge - 1) / nmerge;
+            std::size_t const nmerge = (nrange + 3) >> 2;
+            // at most four ranges are merged at a time
+            auto const nelem =
+                static_cast<std::uint32_t>((nrange + nmerge - 1) / nmerge);
             range1_t rz =
                 uninit_full_merge4(dest, &v_input[pos_ini], nelem, comp);
             v_output.emplace_back(rz);
@@ -148,7 +152,7 @@ namespace hpx::parallel::util {
         }
 
         bool sw = false;
-        std::uint32_t nrange = v_input.size();
+        std::size_t nrange = v_input.size();
         while (nrange > 1)
         {
             if (sw)

@@ -38,22 +38,23 @@ struct add
     }
 };
 
-template <typename T, typename U>
+// R is the value type of the output
+template <typename T, typename U, typename R>
 struct constness_add
 {
-    double operator()(T const& v1, U& v2) const
+    R operator()(T const& v1, U& v2) const
     {
-        return v1 + v2 + 100;
+        return R(v1 + v2 + 100);
     }
 
-    double operator()(T& v1, U const& v2) const
+    R operator()(T& v1, U const& v2) const
     {
-        return v1 + v2 + 200;
+        return R(v1 + v2 + 200);
     }
 
-    double operator()(T& v1, U& v2) const
+    R operator()(T& v1, U& v2) const
     {
-        return v1 + v2;
+        return R(v1 + v2);
     }
 };
 
@@ -105,9 +106,9 @@ void verify_values_count(
     ExPolicy&& policy, hpx::partitioned_vector<T> const& v, U const& val)
 {
     HPX_TEST_EQ(
-        std::size_t(hpx::count(policy, v.begin(), v.end(), val)), v.size());
+        std::size_t(hpx::count(policy, v.begin(), v.end(), T(val))), v.size());
     HPX_TEST_EQ(
-        std::size_t(hpx::count_if(policy, v.begin(), v.end(), cmp<T>(val))),
+        std::size_t(hpx::count_if(policy, v.begin(), v.end(), cmp<T>(T(val)))),
         v.size());
 }
 
@@ -130,11 +131,12 @@ template <typename ExPolicy, typename T, typename U = T>
 void verify_values_count_async(
     ExPolicy&& policy, hpx::partitioned_vector<T> const& v, U const& val)
 {
-    HPX_TEST_EQ(std::size_t(hpx::count(policy, v.begin(), v.end(), val).get()),
+    HPX_TEST_EQ(
+        std::size_t(hpx::count(policy, v.begin(), v.end(), T(val)).get()),
         v.size());
     HPX_TEST_EQ(
         std::size_t(
-            hpx::count_if(policy, v.begin(), v.end(), cmp<T>(val)).get()),
+            hpx::count_if(policy, v.begin(), v.end(), cmp<T>(T(val))).get()),
         v.size());
 }
 
@@ -364,22 +366,23 @@ void transform_binary_tests(std::vector<hpx::id_type>& localities)
         reset_output();
         hpx::transform(hpx::execution::seq, std::as_const(v).begin(),
             std::as_const(v).end(), w.begin(), x.begin(),
-            constness_add<T, U>{});
+            constness_add<T, U, V>{});
         verify_constness(V(100));
         reset_output();
         hpx::transform(hpx::execution::par, v.begin(), v.end(),
             std::as_const(w).begin(), std::as_const(w).end(), x.begin(),
-            constness_add<T, U>{});
+            constness_add<T, U, V>{});
         verify_constness(V(200));
         reset_output();
         hpx::transform(hpx::execution::seq(hpx::execution::task),
             std::as_const(v).begin(), std::as_const(v).end(), w.begin(),
-            w.end(), x.begin(), constness_add<T, U>{})
+            w.end(), x.begin(), constness_add<T, U, V>{})
             .get();
         verify_constness(V(100));
         reset_output();
         hpx::transform(hpx::execution::par(hpx::execution::task), v.begin(),
-            v.end(), std::as_const(w).begin(), x.begin(), constness_add<T, U>{})
+            v.end(), std::as_const(w).begin(), x.begin(),
+            constness_add<T, U, V>{})
             .get();
         verify_constness(V(200));
     }

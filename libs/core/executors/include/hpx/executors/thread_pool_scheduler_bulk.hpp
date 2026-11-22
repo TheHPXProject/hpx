@@ -104,6 +104,30 @@ namespace hpx::execution::experimental::detail {
         HPX_INVOKE(HPX_FORWARD(F, f), HPX_FORWARD(T, t), hpx::get<Is>(ts)...);
     }
 
+    // The type of the indices bulk_chunked passes to f for a shape: the shape's
+    // type if it is integral, the value type of an integral range (as the
+    // counting shape an integral shape is turned into), std::size_t otherwise
+    HPX_CXX_CORE_EXPORT template <typename Shape>
+    struct bulk_index_type
+    {
+        using type = std::size_t;
+    };
+
+    template <typename Shape>
+        requires(std::is_integral_v<Shape>)
+    struct bulk_index_type<Shape>
+    {
+        using type = Shape;
+    };
+
+    template <typename Shape>
+        requires(std::ranges::range<Shape> &&
+            std::is_integral_v<std::ranges::range_value_t<Shape>>)
+    struct bulk_index_type<Shape>
+    {
+        using type = std::ranges::range_value_t<Shape>;
+    };
+
     // For bulk_chunked: f(start, end, ...)
     HPX_CXX_CORE_EXPORT template <std::size_t... Is, typename F, typename Start,
         typename End, typename Ts>
@@ -275,9 +299,13 @@ namespace hpx::execution::experimental::detail {
 
             if constexpr (OperationState::is_chunked)
             {
-                // bulk_chunked: f(start, end, values...)
-                bulk_scheduler_invoke_helper_chunked(
-                    index_pack_type{}, op_state->f, i_begin, i_end, ts);
+                // bulk_chunked: f(start, end, values...), with start and end
+                // of the shape's index type
+                using index_type = typename bulk_index_type<
+                    std::decay_t<decltype(op_state->shape)>>::type;
+                bulk_scheduler_invoke_helper_chunked(index_pack_type{},
+                    op_state->f, static_cast<index_type>(i_begin),
+                    static_cast<index_type>(i_end), ts);
             }
             else
             {

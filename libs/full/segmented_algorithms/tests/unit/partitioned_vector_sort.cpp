@@ -101,7 +101,8 @@ void verify_sorted(hpx::partitioned_vector<T> const& values,
 template <typename T>
 void initialize_reverse(hpx::partitioned_vector<T>& values)
 {
-    initialize_values(values, [](int i) {
+    initialize_values(values, [](std::size_t pos) {
+        auto const i = static_cast<int>(pos);
         return make_sort_value<T>(HPX_SEGMENTED_SORT_TEST_SIZE - i);
     });
 }
@@ -109,7 +110,8 @@ void initialize_reverse(hpx::partitioned_vector<T>& values)
 template <typename T>
 void initialize_mixed(hpx::partitioned_vector<T>& values)
 {
-    initialize_values(values, [](int i) {
+    initialize_values(values, [](std::size_t pos) {
+        auto const i = static_cast<int>(pos);
         return make_sort_value<T>((i * 17 + 3) % HPX_SEGMENTED_SORT_TEST_SIZE);
     });
 }
@@ -117,20 +119,28 @@ void initialize_mixed(hpx::partitioned_vector<T>& values)
 template <typename T>
 void initialize_sorted(hpx::partitioned_vector<T>& values)
 {
-    initialize_values(values, [](int i) { return make_sort_value<T>(i); });
+    initialize_values(values, [](std::size_t pos) {
+        auto const i = static_cast<int>(pos);
+        return make_sort_value<T>(i);
+    });
 }
 
 template <typename T>
 void initialize_duplicates(hpx::partitioned_vector<T>& values)
 {
-    initialize_values(values, [](int i) { return make_sort_value<T>(i % 4); });
+    initialize_values(values, [](std::size_t pos) {
+        auto const i = static_cast<int>(pos);
+        return make_sort_value<T>(i % 4);
+    });
 }
 
 template <typename T>
 void initialize_mixed_n(hpx::partitioned_vector<T>& values, int n)
 {
-    initialize_values(
-        values, [n](int i) { return make_sort_value<T>((i * 17 + 3) % n); });
+    initialize_values(values, [n](std::size_t pos) {
+        auto const i = static_cast<int>(pos);
+        return make_sort_value<T>((i * 17 + 3) % n);
+    });
 }
 
 struct throwing_less

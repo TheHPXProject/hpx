@@ -101,7 +101,9 @@ namespace hpx::parallel::detail {
 
                 auto f = [value](FwdIter part_begin, std::size_t part_size,
                              std::size_t global_index) {
-                    T cur_value = value + global_index;
+                    T cur_value = static_cast<T>(value +
+                        static_cast<std::iter_difference_t<FwdIter>>(
+                            global_index));
                     return util::const_loop_n<std::decay_t<Expolicy>>(
                         part_begin, part_size,
                         [&cur_value](FwdIter it) { *it = cur_value++; });
