@@ -151,7 +151,7 @@ namespace hpx {
         // The definition lives in the components module. Declare it before
         // future<id_type> can instantiate the primary shared-state template.
         template <>
-        struct future_data<hpx::id_type>;
+        struct HPX_EXPORT future_data<hpx::id_type>;
     }    // namespace lcos::detail
 
     namespace naming {
