@@ -166,7 +166,7 @@ void test_thread_callable_object_multiple_arguments()
 
     callable_multiple_arg func;
 
-    hpx::thread callable3(func, "hello", x, 1.2);
+    hpx::thread callable3(func, "hello", x, 1);
     callable3.join();
     HPX_TEST(callable_multiple_arg::called_three);
     HPX_TEST_EQ(callable_multiple_arg::called_three_arg1, "hello");

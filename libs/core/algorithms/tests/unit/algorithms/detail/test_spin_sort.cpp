@@ -90,7 +90,7 @@ void test3()
     {
         for (std::uint32_t k = 0; k < NMAX; ++k)
         {
-            std::uint32_t NM = my_rand();
+            auto const NM = static_cast<std::uint32_t>(my_rand());
             xk G;
             G.num = NM >> 3;
             G.tail = i;
