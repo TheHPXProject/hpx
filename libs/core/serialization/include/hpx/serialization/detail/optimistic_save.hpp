@@ -12,10 +12,13 @@
 namespace hpx::serialization::detail {
 
     /// Attached to an output archive that saves without the preprocessing
-    /// pass. A save function that needs that pass (a managed id_type, a
-    /// future or task_group that is not ready) sets needs_await and saves
-    /// nothing, with no side effect. The code that attached it then discards
-    /// the output and runs the preprocessing pass.
+    /// pass. A save function that needs that pass (an id_type that is not
+    /// unmanaged, a future or task_group that is not ready) sets needs_await
+    /// and saves nothing, with no side effect. The code that attached it
+    /// reads needs_await, and if it is set, discards the output and the
+    /// archive and runs the preprocessing pass. The marker cannot be
+    /// removed, and reset() of the archive clears needs_await, so the
+    /// archive must not be used for another pass.
     HPX_CXX_CORE_EXPORT struct optimistic_save
     {
         bool needs_await = false;

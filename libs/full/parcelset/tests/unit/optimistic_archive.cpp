@@ -87,6 +87,14 @@ std::vector<char> save(T& t)
     return buffer;
 }
 
+std::vector<char> save_nothing()
+{
+    std::vector<char> buffer;
+    hpx::serialization::output_archive ar(buffer);
+    ar.flush();
+    return buffer;
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 void test_plain_data()
 {
@@ -111,8 +119,12 @@ void test_futures()
 
     hpx::promise<int> p;
     hpx::future<int> pending = p.get_future();
-    HPX_TEST(defers(pending));
+    std::vector<char> skipped;
+    HPX_TEST(defers(pending, &skipped));
     HPX_TEST(defers_preprocessing(pending));
+
+    // the skipped save wrote nothing
+    HPX_TEST(skipped == save_nothing());
 
     // the skipped save left the future as it was
     HPX_TEST(pending.valid());
@@ -126,8 +138,31 @@ void test_futures()
     futures.push_back(hpx::make_ready_future(1));
     futures.push_back(q.get_future());
     HPX_TEST(defers(futures));
+
+    // the pass goes on after a skipped save
+    hpx::promise<int> r;
+    std::vector<hpx::future<int>> pending_first;
+    pending_first.push_back(r.get_future());
+    pending_first.push_back(hpx::make_ready_future(3));
+    pending_first.push_back(hpx::make_ready_future(4));
+    HPX_TEST(defers(pending_first));
+    HPX_TEST(defers_preprocessing(pending_first));
+    r.set_value(5);
+    HPX_TEST(!defers(pending_first));
+
     q.set_value(2);
     HPX_TEST(!defers(futures));
+
+    // reset() of the archive clears the mark
+    hpx::promise<int> t;
+    hpx::future<int> pending_reset = t.get_future();
+    std::vector<char> buffer;
+    hpx::serialization::output_archive ar(buffer);
+    HPX_TEST(defers_in(ar, pending_reset));
+    ar.reset();
+    HPX_TEST(!ar.get_extra_data<hpx::serialization::detail::optimistic_save>()
+            .needs_await);
+    t.set_value(6);
 
     // the preprocessing pass runs a deferred future, the skipped save does not
     bool ran = false;

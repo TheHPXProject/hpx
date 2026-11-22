@@ -360,10 +360,11 @@ namespace hpx::serialization {
             extra_data_ = HPX_MOVE(rhs.extra_data_);
         }
 
-        /// A save function that needs the preprocessing pass (a managed
-        /// id_type, a future that is not ready) calls this before any side
-        /// effect. If the archive has detail::optimistic_save, this marks it
-        /// and returns true, and the save function must then save nothing.
+        /// A save function that needs the preprocessing pass (an id_type
+        /// that is not unmanaged, a future or task_group that is not ready)
+        /// calls this before any side effect. If the archive has
+        /// detail::optimistic_save, this marks it and returns true, and the
+        /// save function must then save nothing.
         [[nodiscard]] bool defer_to_preprocessing() const noexcept
         {
             auto* optimistic = try_get_extra_data<detail::optimistic_save>();
