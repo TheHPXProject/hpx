@@ -330,8 +330,10 @@ The |hpx| configuration section
      * This setting selects by name the tuner of the ``local-priority-tuned-fifo``
        scheduler, which decides the values of the settings in
        :ref:`ini_hpx_scheduler_policy` while the scheduler runs. The default,
-       ``static``, keeps the configured values. Other tuners can be registered
-       with ``hpx::threads::policies::register_scheduler_tuner``.
+       ``static``, keeps the configured values; ``recording`` keeps them as
+       well and writes what the scheduler counted to a file, see
+       :ref:`ini_hpx_scheduler_tuner`. Other tuners can be registered with
+       ``hpx::threads::policies::register_scheduler_tuner``.
    * * ``hpx.default_scheduler_mode``
      * This setting defines the scheduler mode of the default thread pool as a
        number (the bitwise or of the values of
@@ -514,6 +516,84 @@ their defaults the scheduler decides like the local priority scheduler (see
    * * ``hpx.scheduler_policy.free_pass_after_wake``
      * If ``1``, a worker thread woken up by new work may steal once without
        the early minima (see :ref:`thread_scheduler_pending_steal`).
+
+The ``hpx.scheduler_tuner`` configuration section
+.................................................
+
+These settings are read by the ``recording`` tuner of the
+``local-priority-tuned-fifo`` scheduler (``hpx.scheduler_tuner=recording``)
+when the scheduler of a thread pool is created. A tuner registered by an
+application reads its own entries from this section as well; as they have no
+defaults here, they are set with a ``!`` after the key, for instance
+``--hpx:ini=hpx.scheduler_tuner.my_setting!=1``.
+
+.. code-block:: ini
+
+   [hpx.scheduler_tuner]
+   period = ${HPX_SCHEDULER_TUNER_PERIOD:100}
+   file = ${HPX_SCHEDULER_TUNER_FILE}
+   columns = ${HPX_SCHEDULER_TUNER_COLUMNS:deltas}
+
+.. _ini_hpx_scheduler_tuner:
+
+.. list-table::
+
+   * * Property
+     * Description
+   * * ``hpx.scheduler_tuner.period``
+     * The time between two rows of the file in milliseconds (greater than
+       ``0``). The default is ``100``.
+   * * ``hpx.scheduler_tuner.file``
+     * The CSV file the tuner writes, created anew when the scheduler is
+       created. If empty (the default), ``scheduler-tuning-<pool>.csv`` in the
+       current directory, named after the thread pool.
+   * * ``hpx.scheduler_tuner.columns``
+     * ``deltas`` (the default) writes the counts since the previous row,
+       ``totals`` the counts since the start.
+
+Every period the tuner writes one row for each worker thread of the pool and
+one for the threads from outside the pool (``external``). A row has the time in
+milliseconds since the tuner was created (``ms``), the pool (``pool``), the
+worker thread (``worker``), the counters, and the values of the tunable
+settings the worker thread decided with (named after their configuration
+entries; empty for ``external``). The counters are written while they are
+counted, so a row is approximate. The scheduler keeps them as 32-bit numbers
+that wrap around; the tuner writes the differences between its readings, and
+adds them up for ``totals``, so neither wraps. They are:
+
+.. list-table::
+
+   * * Counters
+     * Description
+   * * ``created_<size>``
+     * Threads created, by task size (``unknown``, ``nano``, ``small``,
+       ``medium``, ``large``, see :ref:`task_sizes`).
+   * * ``run_<size>``
+     * Threads handed to a worker thread to run, by task size.
+   * * ``wake_none``, ``wake_target_if_sleeping``, ``wake_one``, ``wake_all``
+     * What the scheduler decided to wake up for a new thread up to
+       ``hpx.scheduler_policy.wake_one_max_size``.
+   * * ``wake_by_creator``
+     * New threads above that size or without a size, for which the creator
+       wakes up sleeping worker threads as before.
+   * * ``woke_sleeper``
+     * Decisions to wake up a worker thread that found one asleep.
+   * * ``sleeper_woken_while_spinning``, ``sleeper_woken_with_sentinel``
+     * New threads that woke up the sleeping worker thread they were queued
+       for while another idle worker thread spun, or while the sentinel spun.
+   * * ``idle_spin_own_work``, ``idle_spin_work_to_steal``,
+       ``idle_spin_ran_out``, ``idle_sentinel``, ``idle_work_before_wait``,
+       ``idle_wait_notified``, ``idle_wait_timed_out``
+     * How the idle periods of the worker threads ended: while spinning, work
+       was found in its own queues or work to steal, or the spin ran out; it
+       spun as the sentinel; work was found before it waited; its wait was
+       ended by a notification or ran out (see
+       :ref:`thread_scheduler_idle_backoff`).
+   * * ``stolen_<size>``
+     * Threads stolen from the pending queues of other worker threads, by
+       task size.
+   * * ``steal_staged``
+     * Steals from the staged queues of other worker threads that got tasks.
 
 The ``hpx.thread_queue`` configuration section
 ..............................................
