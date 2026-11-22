@@ -216,6 +216,10 @@ namespace hpx::threads::detail {
 
         if (!threads_.empty())
         {
+            // let the scheduler end the HPX threads it runs on its own (see
+            // scheduler_base::on_pool_stopping)
+            sched_->Scheduler::on_pool_stopping();
+
             // wait for all work to be done before requesting threads to shut
             // down, but only if all threads were successfully initialized
             if (blocking)
@@ -355,6 +359,23 @@ namespace hpx::threads::detail {
             // trigger the barrier
             while (thread_num-- != 0)
                 startup->wait();
+
+            stop_locked(l);
+            threads_.clear();
+
+            return false;
+        }
+
+        // all workers have passed the barrier, if the scheduler fails to act
+        // on that they only have to be stopped
+        try
+        {
+            sched_->Scheduler::on_pool_started();
+        }
+        catch (std::exception const& e)
+        {
+            LTM_(always).format(
+                "run: {} failed with: {}", id_.name(), e.what());
 
             stop_locked(l);
             threads_.clear();

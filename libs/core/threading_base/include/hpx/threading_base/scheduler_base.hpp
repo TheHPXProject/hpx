@@ -369,6 +369,20 @@ namespace hpx::threads::policies {
 
         virtual void on_start_thread(std::size_t num_thread) = 0;
         virtual void on_stop_thread(std::size_t num_thread) = 0;
+
+        /// Called once by the thread pool of this scheduler after all of its
+        /// workers have started up, right before they enter their scheduling
+        /// loops, so that HPX threads created here run. If it throws, the
+        /// pool stops its workers again and fails to run. Does nothing by
+        /// default.
+        virtual void on_pool_started() {}
+
+        /// Called by the thread pool of this scheduler when it starts to stop
+        /// its workers, while they still run HPX threads; also called if the
+        /// pool is stopped more than once. The pool holds its lock, so this
+        /// must not call back into the pool. Does nothing by default.
+        virtual void on_pool_stopping() {}
+
         virtual void on_error(
             std::size_t num_thread, std::exception_ptr const& e) = 0;
 
