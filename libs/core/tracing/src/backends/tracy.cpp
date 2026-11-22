@@ -60,7 +60,10 @@ namespace hpx::tracing {
         fiber_region_init_data const& data,
         std::size_t const num_thread) noexcept
     {
-        bool const enabled = data.name != nullptr && !data.is_stackless;
+        // fiber_name is null if the profiler connected after the task's name
+        // was looked up; that task enters a fiber from its next switch on.
+        bool const enabled = data.name != nullptr &&
+            data.fiber_name != nullptr && !data.is_stackless;
         char const* fiber_name = enabled ? data.fiber_name : nullptr;
 
         // Use num_thread as color seed so each worker thread gets a distinct
