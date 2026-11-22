@@ -10,10 +10,8 @@
 #include <hpx/assert.hpp>
 #include <hpx/execution/algorithms/run_loop.hpp>
 #include <hpx/modules/execution_base.hpp>
-#include <hpx/modules/synchronization.hpp>
 
 #include <exception>
-#include <mutex>
 #include <optional>
 #include <system_error>
 #include <tuple>
@@ -28,8 +26,8 @@
 // completion requires more work on the same HPX thread pool, especially with
 // --hpx:threads=1.
 //
-// sync_wait_domain customizes apply_sender(sync_wait_t, sndr) to use HPX-aware
-// waiting with hpx::spinlock + hpx::lcos::local::detail::condition_variable.
+// sync_wait_domain customizes apply_sender(sync_wait_t, sndr) to use HPX's
+// run_loop (which uses hpx::spinlock + hpx::lcos::local::detail::condition_variable).
 // This suspends the HPX task cooperatively instead of OS-blocking the worker
 // thread, allowing queued HPX work to continue running.
 //
@@ -102,12 +100,12 @@ namespace hpx::execution::experimental::detail {
     using sync_wait_rcv_scheduler_t =
         sync_wait_rcv_scheduler_impl<Sender>::type;
 
-    // Receiver env: exposes a stdexec run_loop scheduler via the standard
+    // Receiver env: exposes a run_loop scheduler via the standard
     // get_scheduler / get_delegation_scheduler queries so dependent senders
     // (let_value, let_error, etc.) can compute their completion signatures
     // against this environment. The run_loop is owned by shared_state and is
-    // NEVER actually run; it exists purely as a type carrier required by
-    // stdexec::sync_wait_t's constraint (sender_in<sync_wait::__env>).
+    // driven by wait_get_value() to execute work scheduled onto the receiver's
+    // environment.
     //
     // Modern P2300: Uses query() functions instead of old tag_invoke.
     //
@@ -211,43 +209,29 @@ namespace hpx::execution::experimental::detail {
     HPX_CXX_CORE_EXPORT template <typename ValueTuple>
     struct shared_state
     {
-        hpx::spinlock mtx;
-        hpx::lcos::local::detail::condition_variable cv;
         hpx::execution::experimental::run_loop loop;
-        bool done = false;
         std::variant<std::monostate, ValueTuple, std::exception_ptr,
             stopped_t<ValueTuple>>
             result;
 
-        void notify_all(std::unique_lock<hpx::spinlock> l)
-        {
-            cv.notify_all(HPX_MOVE(l));
-        }
-
         template <typename... Vs>
-        void notify_value(Vs&&... vs) noexcept
+        void set_value(Vs&&... vs) noexcept
         {
             try
             {
-                std::unique_lock<hpx::spinlock> l(mtx);
                 result.template emplace<ValueTuple>(HPX_FORWARD(Vs, vs)...);
-                done = true;
-                notify_all(HPX_MOVE(l));
             }
             catch (...)
             {
-                std::unique_lock<hpx::spinlock> l(mtx);
                 result.template emplace<std::exception_ptr>(
                     std::current_exception());
-                done = true;
-                notify_all(HPX_MOVE(l));
             }
+            loop.finish();
         }
 
         template <typename E>
-        void notify_error(E&& e) noexcept
+        void set_error(E&& e) noexcept
         {
-            std::unique_lock<hpx::spinlock> l(mtx);
             using err_t = std::decay_t<E>;
             if constexpr (std::is_same_v<err_t, std::exception_ptr>)
             {
@@ -270,31 +254,19 @@ namespace hpx::execution::experimental::detail {
                         std::current_exception());
                 }
             }
-            done = true;
-            notify_all(HPX_MOVE(l));
+            loop.finish();
         }
 
-        void notify_stopped() noexcept
+        void set_stopped() noexcept
         {
-            std::unique_lock<hpx::spinlock> l(mtx);
             result.template emplace<stopped_t<ValueTuple>>();
-            done = true;
-            notify_all(HPX_MOVE(l));
+            loop.finish();
         }
 
         // Wait HPX-aware: yields the calling HPX task while waiting, does not
         // block the underlying OS thread.
         std::optional<ValueTuple> wait_get_value()
         {
-            {
-                std::unique_lock<hpx::spinlock> l(mtx);
-                while (!done)
-                {
-                    cv.wait(l, "sync_wait_domain::wait_get_value");
-                }
-            }
-
-            loop.finish();
             loop.run();
 
             if (auto* v = std::get_if<ValueTuple>(&result))
@@ -322,18 +294,18 @@ namespace hpx::execution::experimental::detail {
         template <typename... Vs>
         constexpr void set_value(Vs&&... vs) && noexcept
         {
-            state->notify_value(HPX_FORWARD(Vs, vs)...);
+            state->set_value(HPX_FORWARD(Vs, vs)...);
         }
 
         template <typename E>
         constexpr void set_error(E&& e) && noexcept
         {
-            state->notify_error(HPX_FORWARD(E, e));
+            state->set_error(HPX_FORWARD(E, e));
         }
 
         constexpr void set_stopped() && noexcept
         {
-            state->notify_stopped();
+            state->set_stopped();
         }
 
         [[nodiscard]]
