@@ -37,6 +37,7 @@ add_hpx_module(
     hpx_parcelset
     hpx_parcelset_base
     hpx_plugin_factories
+  CMAKE_SUBDIRS tests
 )
 
 set(HPX_STATIC_DEVICE_CONDUIT_PLUGINS
