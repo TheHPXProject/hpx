@@ -71,6 +71,7 @@ add_hpx_module(
     hpx_datastructures
     hpx_debugging
     hpx_errors
+    hpx_execution_base
     hpx_format
     hpx_functional
     hpx_logging

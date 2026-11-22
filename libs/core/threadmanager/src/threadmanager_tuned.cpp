@@ -21,6 +21,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 
 namespace hpx::threads {
@@ -116,10 +117,23 @@ namespace hpx::threads {
                 static_cast<policies::numa_sensitive_mode>(numa_sensitive)),
             get_scheduling_policy_init_parameters());
 
+        // The tuner reads its own entries (hpx.scheduler_tuner.<key>) from
+        // the runtime configuration while it is created; it gets the name of
+        // its pool to tell pools apart.
+        policies::scheduler_tuner_context context;
+        context.pool_name = thread_pool_init.name_;
+        context.lookup = [this](std::string_view const key,
+                             std::string_view const default_value) {
+            return hpx::util::get_entry_as<std::string>(rtcfg_,
+                "hpx.scheduler_tuner." + std::string(key),
+                std::string(default_value));
+        };
+
         auto sched = std::make_unique<local_sched_type>(init);
         sched->set_tuner(policies::create_scheduler_tuner(
             hpx::util::get_entry_as<std::string>(
-                rtcfg_, "hpx.scheduler_tuner", "static")));
+                rtcfg_, "hpx.scheduler_tuner", "static"),
+            context));
 
         auto const full_mask =
             hpx::resource::get_partitioner().get_pool_pus_mask(

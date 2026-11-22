@@ -280,6 +280,17 @@ namespace hpx::util {
             "free_pass_after_wake = "
             "${HPX_SCHEDULER_POLICY_FREE_PASS_AFTER_WAKE:1}",
 
+            // the entries of the "recording" tuner (see hpx.scheduler_tuner
+            // and hpx::threads::policies::file_recording_tuner): the ms
+            // between its rows, its file (empty: scheduler-tuning-<pool>.csv),
+            // and whether it writes the counts since the last row (deltas) or
+            // since the start (totals); a tuner of its own adds entries here
+            // with a '!' after the key (hpx.scheduler_tuner.<key>!=<value>)
+            "[hpx.scheduler_tuner]",
+            "period = ${HPX_SCHEDULER_TUNER_PERIOD:100}",
+            "file = ${HPX_SCHEDULER_TUNER_FILE}",
+            "columns = ${HPX_SCHEDULER_TUNER_COLUMNS:deltas}",
+
             "[hpx.thread_queue]",
             "max_thread_count = ${HPX_THREAD_QUEUE_MAX_THREAD_COUNT:" HPX_PP_STRINGIZE(
                 HPX_PP_EXPAND(HPX_THREAD_QUEUE_MAX_THREAD_COUNT)) "}",

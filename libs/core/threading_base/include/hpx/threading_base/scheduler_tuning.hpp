@@ -15,14 +15,18 @@
 #include <hpx/modules/concurrency.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/type_support.hpp>
+#include <hpx/threading_base/scheduler_tuning_counters.hpp>
 
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <chrono>
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
+#include <fstream>
 #include <memory>
+#include <ostream>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -268,11 +272,60 @@ namespace hpx::threads::policies {
         /// Called once the scheduler has registered its settings, before
         /// its workers start.
         virtual void attach(scheduler_tuning_parameters& parameters) = 0;
+
+        /// How often update is called while the scheduler's pool runs. Zero,
+        /// the default, means never: the scheduler then runs no thread for
+        /// its tuner.
+        [[nodiscard]] virtual std::chrono::milliseconds update_period() const
+        {
+            return std::chrono::milliseconds(0);
+        }
+
+        /// Called every update_period on an HPX thread of the scheduler's
+        /// pool, from when its workers have started until the pool stops
+        /// (see scheduler_base::on_pool_started and on_pool_stopping). The
+        /// tuner reads what the scheduler did (counters, written while it
+        /// reads them, so approximate) and may change the settings in
+        /// response. It runs as a background thread of the pool, so it
+        /// doesn't keep the pool from being suspended or stopped. Does
+        /// nothing by default.
+        virtual void update(scheduler_tuning_counters const& /*counters*/,
+            scheduler_tuning_parameters& /*parameters*/)
+        {
+        }
     };
 
-    /// Creates a tuner.
+    /// What a tuner can find out when it is created: the pool whose scheduler
+    /// it tunes, and its own configuration entries. Whoever creates the
+    /// scheduler fills it in; the thread manager does for the pools it
+    /// creates (from the runtime configuration), code that creates a pool
+    /// itself passes what it has. Valid only while the tuner is created: a
+    /// tuner reads what it needs in its constructor.
+    HPX_CXX_CORE_EXPORT struct scheduler_tuner_context
+    {
+        /// The name of the thread pool, empty if not known.
+        std::string pool_name;
+
+        /// The value of the configuration entry hpx.scheduler_tuner.<key>, or
+        /// default_value if there is none (see get_entry). Empty if there is
+        /// no configuration.
+        hpx::function<std::string(
+            std::string_view key, std::string_view default_value)>
+            lookup;
+
+        /// The value of hpx.scheduler_tuner.<key>, or default_value.
+        [[nodiscard]] std::string get_entry(std::string_view const key,
+            std::string_view const default_value) const
+        {
+            return lookup ? lookup(key, default_value) :
+                            std::string(default_value);
+        }
+    };
+
+    /// Creates a tuner for the given context.
     HPX_CXX_CORE_EXPORT using scheduler_tuner_factory =
-        hpx::function<std::unique_ptr<scheduler_tuner>()>;
+        hpx::function<std::unique_ptr<scheduler_tuner>(
+            scheduler_tuner_context const&)>;
 
     /// Make a tuner available under the given name, for use with the
     /// configuration entry hpx.scheduler_tuner. Register tuners before the
@@ -281,10 +334,89 @@ namespace hpx::threads::policies {
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void register_scheduler_tuner(
         std::string const& name, scheduler_tuner_factory factory);
 
-    /// Create the tuner registered under the given name ("static" is always
-    /// available). Throws hpx::exception (bad_parameter) for an unknown name.
+    /// Create the tuner registered under the given name for the given
+    /// context ("static" and "recording" are always available). Throws
+    /// hpx::exception (bad_parameter) for an unknown name.
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT std::unique_ptr<scheduler_tuner>
-    create_scheduler_tuner(std::string const& name);
+    create_scheduler_tuner(std::string const& name,
+        scheduler_tuner_context const& context = scheduler_tuner_context{});
+
+    /// A tuner that keeps the configured values, as the static tuner does,
+    /// and writes what the scheduler counted to a stream every update
+    /// period: CSV rows with the time in ms since the tuner was created, the
+    /// pool, the worker (a number, or external for the threads from outside
+    /// the pool), the counters (see scheduler_counter), and the values of the
+    /// settings the worker decided with. It collects what a learning tuner
+    /// would see, to design one from real workloads. The stream belongs to
+    /// the caller (see file_recording_tuner for one that writes to a file of
+    /// its own).
+    HPX_CXX_CORE_EXPORT class HPX_CORE_EXPORT recording_tuner final
+      : public scheduler_tuner
+    {
+    public:
+        /// Write to out, which has to outlive the tuner's pool (until the
+        /// pool has stopped). The tuner writes from one HPX thread at a time
+        /// and flushes after each update; tuners of several pools that share
+        /// a stream may interleave their rows.
+        recording_tuner(std::ostream& out, std::chrono::milliseconds period,
+            bool totals = false, std::string pool_name = {});
+
+        void attach(scheduler_tuning_parameters& parameters) override;
+
+        [[nodiscard]] std::chrono::milliseconds update_period() const override;
+
+        /// Write one row per worker and one for external: the counts since
+        /// the last update, or since the start if totals was given.
+        void update(scheduler_tuning_counters const& counters,
+            scheduler_tuning_parameters& parameters) override;
+
+    private:
+        void write_header(scheduler_tuning_parameters const& parameters);
+        void write_value(scheduler_tuning_parameters const& parameters,
+            std::size_t worker, std::size_t id);
+
+        std::ostream& out_;
+        std::chrono::milliseconds const period_;
+        bool const totals_;
+        std::string const pool_name_;
+        std::chrono::steady_clock::time_point const start_;
+        // the counters at the last update, and the counts since the start
+        // (the counters wrap around, these don't)
+        std::vector<std::uint32_t> last_;
+        std::vector<std::uint64_t> totals_since_start_;
+    };
+
+    /// A recording_tuner that writes to a file of its own, which it opens
+    /// (and truncates) when it is created. Registered as "recording" (see
+    /// hpx.scheduler_tuner.file).
+    HPX_CXX_CORE_EXPORT class HPX_CORE_EXPORT file_recording_tuner final
+      : public scheduler_tuner
+    {
+    public:
+        /// Throws hpx::exception (bad_parameter) if the file can't be opened.
+        file_recording_tuner(std::string const& file_name,
+            std::chrono::milliseconds period, bool totals = false,
+            std::string pool_name = {});
+
+        // recorder_ writes to file_
+        file_recording_tuner(file_recording_tuner const&) = delete;
+        file_recording_tuner(file_recording_tuner&&) = delete;
+        file_recording_tuner& operator=(file_recording_tuner const&) = delete;
+        file_recording_tuner& operator=(file_recording_tuner&&) = delete;
+
+        ~file_recording_tuner() override = default;
+
+        void attach(scheduler_tuning_parameters& parameters) override;
+
+        [[nodiscard]] std::chrono::milliseconds update_period() const override;
+
+        void update(scheduler_tuning_counters const& counters,
+            scheduler_tuning_parameters& parameters) override;
+
+    private:
+        std::ofstream file_;          // opened before recorder_ is created
+        recording_tuner recorder_;    // writes to file_
+    };
 }    // namespace hpx::threads::policies
 
 #include <hpx/config/warnings_suffix.hpp>

@@ -13,6 +13,7 @@ set(tests
     schedule_hint_none_stale_queue_6978
     scheduler_mode_overrides
     scheduler_tuning
+    scheduler_tuning_update
     shared_priority_queue_external_cleanup
     shared_priority_queue_thread_creation
     steal_pending_early

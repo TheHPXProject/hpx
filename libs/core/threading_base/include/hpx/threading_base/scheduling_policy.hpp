@@ -442,6 +442,22 @@ namespace hpx::threads::policies {
             tuner_->attach(parameters_);
         }
 
+        /// How often the tuner wants to see the counters (see
+        /// scheduler_tuner::update_period), zero if never.
+        [[nodiscard]] std::chrono::milliseconds update_period() const
+        {
+            HPX_ASSERT(tuner_);
+            return tuner_->update_period();
+        }
+
+        /// Let the tuner see the counters and change the settings, called
+        /// every update_period on an HPX thread of the scheduler's pool.
+        void update_tuner()
+        {
+            HPX_ASSERT(tuner_);
+            tuner_->update(counters_, parameters_);
+        }
+
         [[nodiscard]] scheduler_tuning_parameters& parameters() noexcept
         {
             return parameters_;
