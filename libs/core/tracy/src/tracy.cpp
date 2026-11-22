@@ -19,7 +19,6 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
-#include <utility>
 
 #include <tracy/Tracy.hpp>
 #include <tracy/TracyC.h>
@@ -67,6 +66,10 @@ namespace hpx::tracy {
         // when the set or the map grows.
         struct names_type
         {
+            // Not an HPX lock: this runs in the scheduling loop, with no HPX
+            // thread for hpx::mutex to suspend, HPX spinlocks emit Tracy lock
+            // events, and either would make hpx_tracy depend on modules that
+            // depend on it. It is held for one insert, once per task.
             std::mutex mtx;
             std::unordered_set<std::string> names;
             std::unordered_map<std::string, std::string> long_names;
@@ -86,7 +89,7 @@ namespace hpx::tracy {
         std::lock_guard<std::mutex> l(names->mtx);
         if (size < max_description)
         {
-            return names->names.insert(std::move(name)).first->c_str();
+            return names->names.insert(HPX_MOVE(name)).first->c_str();
         }
 
         // A long description is cut to max_description bytes ending in a
@@ -101,8 +104,7 @@ namespace hpx::tracy {
             std::string cut(description, max_description - number.size());
             cut += number;
             cut += suffix;
-            it = names->long_names.emplace(std::move(name), std::move(cut))
-                     .first;
+            it = names->long_names.emplace(HPX_MOVE(name), HPX_MOVE(cut)).first;
         }
         return it->second.c_str();
     }
