@@ -111,6 +111,14 @@ namespace hpx::execution::experimental {
                 {
                 }
 
+                using env_type = decltype(hpx::execution::experimental::get_env(
+                    std::declval<std::decay_t<Receiver> const&>()));
+
+                env_type get_env() const noexcept
+                {
+                    return hpx::execution::experimental::get_env(receiver);
+                }
+
                 template <typename Error>
                 void set_error(Error&& error) && noexcept
                 {
