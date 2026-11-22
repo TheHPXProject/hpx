@@ -476,6 +476,10 @@ namespace hpx::serialization {
                     ptr = helper.t_;
                 }
             }
+            else
+            {
+                ptr.reset();
+            }
         }
 
         template <typename Pointer>
@@ -499,6 +503,10 @@ namespace hpx::serialization {
             if (valid)
             {
                 ptr = detail::pointer_input_dispatcher<Pointer>::type::call(ar);
+            }
+            else
+            {
+                ptr = Pointer(nullptr);
             }
         }
     }    // namespace detail
