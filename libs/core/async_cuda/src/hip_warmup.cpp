@@ -8,12 +8,8 @@
 
 #if defined(HPX_HAVE_HIP)
 #include <hpx/async_cuda/custom_gpu_api.hpp>
-#include <hpx/modules/async_base.hpp>
 #include <hpx/modules/errors.hpp>
-#include <hpx/modules/execution.hpp>
-#include <hpx/modules/executors.hpp>
 #include <hpx/modules/runtime_local.hpp>
-#include <hpx/modules/threading_base.hpp>
 
 #include <string>
 
@@ -22,8 +18,9 @@
 // device with comgr (LLVM) on the calling thread. That needs far more stack
 // than an HPX thread has by default (hpx.stacks.small_size): a task that uses
 // a device first crashes with a stack overflow. The runtime therefore warms
-// the devices up before hpx_main runs, on an HPX thread with a huge stack
-// (hpx.hip.warmup: none, current or all devices; default: current).
+// the devices up before hpx_main runs, as a pre-startup function on the
+// run_helper thread, which has a large stack (hpx.hip.warmup: none, current
+// or all devices; default: current).
 namespace hpx::cuda::experimental::detail {
 
     // warm-up of the devices at startup, registered below
@@ -87,11 +84,10 @@ namespace hpx::cuda::experimental::detail {
                     mode);
             }
 
-            auto const exec = hpx::execution::experimental::with_stacksize(
-                hpx::execution::parallel_executor(),
-                hpx::threads::thread_stacksize::huge);
-            hpx::parallel::execution::sync_execute(
-                exec, [all = mode == "all"]() { warm_up_devices(all); });
+            // Pre-startup functions run on the run_helper thread, which has a
+            // large stack (as hpx_main does): enough for the first use of a
+            // device.
+            warm_up_devices(mode == "all");
         }
 
         // registers the warm-up when the library is loaded

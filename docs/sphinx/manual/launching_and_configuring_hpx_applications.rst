@@ -425,8 +425,10 @@ The ``hpx.hip`` configuration section
        copy, a memset), which needs more stack than |hpx| threads have by
        default (``hpx.stacks.small_size``); without the warm-up, a task that
        is the first to use a device crashes with a stack overflow. The
-       warm-up runs on an |hpx| thread with a huge stack and takes about two
-       seconds per device. Only present when |hpx| was built with HIP.
+       warm-up runs as a pre-startup function on the thread that later runs
+       ``hpx_main``, which has a large stack (``hpx.stacks.large_size``), and
+       takes about two seconds per device. Only present when |hpx| was built
+       with HIP.
 
 The ``hpx.threadpools`` configuration section
 .............................................
