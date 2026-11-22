@@ -11,7 +11,6 @@
 #include <hpx/config/endian.hpp>
 #include <hpx/serialization/config/defines.hpp>
 #include <hpx/modules/type_support.hpp>
-#include <hpx/serialization/detail/optimistic_save.hpp>
 
 #include <algorithm>
 #include <cstddef>
@@ -334,6 +333,7 @@ namespace hpx::serialization {
         void reset()
         {
             size_ = 0;
+            needs_await_ = false;
             extra_data_.reset();
         }
 
@@ -360,24 +360,44 @@ namespace hpx::serialization {
             extra_data_ = HPX_MOVE(rhs.extra_data_);
         }
 
-        /// A save function that needs the preprocessing pass (an id_type
-        /// that is not unmanaged, a future or task_group that is not ready)
-        /// calls this before any side effect. If the archive has
-        /// detail::optimistic_save, this marks it and returns true, and the
-        /// save function must then save nothing.
+        /// Save without the preprocessing pass. A save function that needs
+        /// that pass (an id_type that is not unmanaged, a future or
+        /// task_group that is not ready) then saves nothing, with no side
+        /// effect, and needs_await() returns true. The caller must then
+        /// discard the output and run the preprocessing pass on a new
+        /// archive. The archive does not write the mode to its output. The
+        /// mode cannot be turned off, reset() keeps it, and
+        /// move_extra_data_from() does not move it.
+        void enable_optimistic_save() noexcept
+        {
+            optimistic_save_ = true;
+        }
+
+        /// True if a save function asked for the preprocessing pass since
+        /// the archive was created or reset.
+        [[nodiscard]] constexpr bool needs_await() const noexcept
+        {
+            return needs_await_;
+        }
+
+        /// A save function that needs the preprocessing pass calls this
+        /// before any side effect. In optimistic mode, this records the
+        /// request and returns true, and the save function must then save
+        /// nothing.
         [[nodiscard]] bool defer_to_preprocessing() noexcept
         {
-            auto* optimistic = try_get_extra_data<detail::optimistic_save>();
-            if (optimistic == nullptr)
+            if (!optimistic_save_)
             {
                 return false;
             }
-            optimistic->needs_await = true;
+            needs_await_ = true;
             return true;
         }
 
     protected:
         std::uint32_t flags_;
+        bool optimistic_save_ = false;
+        bool needs_await_ = false;
         std::size_t size_;
         util::extra_data extra_data_;
     };

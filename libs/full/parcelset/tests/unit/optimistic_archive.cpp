@@ -4,10 +4,9 @@
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-// A save that needs the preprocessing pass (a managed id_type, a future or
-// task_group that is not ready) marks an archive that has
-// detail::optimistic_save and saves nothing, with no side effect. Everything
-// else saves as usual.
+// In an optimistic archive, a save that needs the preprocessing pass (a
+// managed id_type, a future or task_group that is not ready) marks the archive
+// and saves nothing, with no side effect. Everything else saves as usual.
 
 #include <hpx/config.hpp>
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
@@ -41,11 +40,10 @@ HPX_REGISTER_COMPONENT(test_server_type, test_server)
 template <typename T>
 bool defers_in(hpx::serialization::output_archive& ar, T& t)
 {
-    auto& optimistic =
-        ar.get_extra_data<hpx::serialization::detail::optimistic_save>();
+    ar.enable_optimistic_save();
     ar << t;
     ar.flush();
-    if (optimistic.needs_await)
+    if (ar.needs_await())
     {
         // nothing waits for a future or splits a credit
         using hpx::serialization::detail::preprocess_futures;
@@ -53,7 +51,7 @@ bool defers_in(hpx::serialization::output_archive& ar, T& t)
         HPX_TEST(ar.try_get_extra_data<preprocess_futures>() == nullptr);
         HPX_TEST(ar.try_get_extra_data<preprocess_gid_types>() == nullptr);
     }
-    return optimistic.needs_await;
+    return ar.needs_await();
 }
 
 template <typename T>
@@ -98,7 +96,7 @@ std::vector<char> save_nothing()
 ///////////////////////////////////////////////////////////////////////////////
 void test_plain_data()
 {
-    // the marker is not saved, so it does not change the bytes
+    // the mode is not saved, so it does not change the bytes
     std::vector<double> data{1.0, 2.0, 3.0};
     std::vector<char> optimistic;
     HPX_TEST(!defers(data, &optimistic));
@@ -139,7 +137,7 @@ void test_futures()
     futures.push_back(q.get_future());
     HPX_TEST(defers(futures));
 
-    // the pass goes on after a skipped save
+    // a pending future first, then ready ones
     hpx::promise<int> r;
     std::vector<hpx::future<int>> pending_first;
     pending_first.push_back(r.get_future());
@@ -153,16 +151,23 @@ void test_futures()
     q.set_value(2);
     HPX_TEST(!defers(futures));
 
-    // reset() of the archive clears the mark
+    // reset() of the archive clears needs_await
     hpx::promise<int> t;
     hpx::future<int> pending_reset = t.get_future();
     std::vector<char> buffer;
     hpx::serialization::output_archive ar(buffer);
     HPX_TEST(defers_in(ar, pending_reset));
     ar.reset();
-    HPX_TEST(!ar.get_extra_data<hpx::serialization::detail::optimistic_save>()
-            .needs_await);
+    HPX_TEST(!ar.needs_await());
+    // reset() keeps the mode
+    HPX_TEST(ar.defer_to_preprocessing());
     t.set_value(6);
+
+    // an archive that is not optimistic does not defer
+    std::vector<char> plain_buffer;
+    hpx::serialization::output_archive plain(plain_buffer);
+    HPX_TEST(!plain.defer_to_preprocessing());
+    HPX_TEST(!plain.needs_await());
 
     // the preprocessing pass runs a deferred future, the skipped save does not
     bool ran = false;
