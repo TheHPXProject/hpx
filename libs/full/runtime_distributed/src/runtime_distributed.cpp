@@ -231,6 +231,44 @@ namespace hpx {
             reinterpret_cast<std::uint64_t>(runtime_support_.get()));
     }
 
+#if defined(HPX_HAVE_NETWORKING)
+    namespace {
+
+        // Starts the bootstrap parcelport. One that fails is stopped, which
+        // joins the I/O threads run() may have started, and its error is
+        // rethrown: the construction of the runtime fails, and hpx::init
+        // reports the error.
+        void run_bootstrap_parcelport(parcelset::parcelport& pp)
+        {
+            std::exception_ptr error;
+            try
+            {
+                pp.run(false);
+                return;
+            }
+            catch (...)
+            {
+                error = std::current_exception();
+            }
+
+            // the parcelport's own error is the one reported
+            try
+            {
+                pp.stop(true);
+            }
+            // NOLINTNEXTLINE(bugprone-empty-catch)
+            catch (...)
+            {
+            }
+
+            HPX_THROW_EXCEPTION(hpx::error::network_error,
+                "hpx::runtime_distributed::initialize_agas",
+                "the bootstrap parcelport ({}) has failed to start: {}",
+                pp.type(), hpx::get_error_what(error));
+        }
+    }    // namespace
+#endif
+
     void runtime_distributed::initialize_agas()
     {
 #if defined(HPX_HAVE_NETWORKING)
@@ -261,20 +299,8 @@ namespace hpx {
             parcelset::locality const published =
                 pp ? pp->here() : parcelset::locality();
 
-            hpx::detail::try_catch_exception_ptr(
-                [&]() {
-                    if (pp)
-                        pp->run(false);
-                },
-                [&](std::exception_ptr const& e) {
-                    std::cerr << hpx::util::format(
-                        "the bootstrap parcelport ({}) has failed to "
-                        "initialize on locality {}:\n{},\n"
-                        "bailing out\n",
-                        pp->type(), hpx::get_locality_id(),
-                        hpx::get_error_what(e));
-                    std::terminate();
-                });
+            if (pp)
+                run_bootstrap_parcelport(*pp);
 
             // Binding may settle an endpoint that was left open in the
             // configuration, which every other locality is free to do. The
@@ -287,6 +313,16 @@ namespace hpx {
             // condition and is left alone.
             if (pp && pp->here() != published)
             {
+                // the parcelport runs: stop it (joining its I/O threads)
+                // before the runtime's construction fails
+                try
+                {
+                    pp->stop(true);
+                }
+                // NOLINTNEXTLINE(bugprone-empty-catch)
+                catch (...)
+                {
+                }
                 HPX_THROW_EXCEPTION(hpx::error::network_error,
                     "runtime_distributed::initialize_agas",
                     "the AGAS root locality published {} and then bound {}; "
@@ -300,20 +336,8 @@ namespace hpx {
         }
         else
         {
-            hpx::detail::try_catch_exception_ptr(
-                [&]() {
-                    if (pp)
-                        pp->run(false);
-                },
-                [&](std::exception_ptr const& e) {
-                    std::cerr << hpx::util::format(
-                        "the bootstrap parcelport ({}) has failed to "
-                        "initialize on locality {}:\n{},\n"
-                        "bailing out\n",
-                        pp->type(), hpx::get_locality_id(),
-                        hpx::get_error_what(e));
-                    std::terminate();
-                });
+            if (pp)
+                run_bootstrap_parcelport(*pp);
 
             // The parcelport has bound by now, so its endpoint is final. It
             // was recorded when the parcelport was attached, which is before
