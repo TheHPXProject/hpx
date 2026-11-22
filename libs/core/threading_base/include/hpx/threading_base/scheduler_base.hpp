@@ -533,6 +533,13 @@ namespace hpx::threads::policies {
             return spinning_workers_.data_.load(std::memory_order_relaxed) != 0;
         }
 
+        // Does an idle worker spin as the sentinel (see spin_as_sentinel)?
+        // Not counted by has_spinning_worker; read only to count events.
+        bool has_sentinel() const noexcept
+        {
+            return sentinel_.data_.worker.load(std::memory_order_relaxed) != 0;
+        }
+
         // Wake up one sleeping worker (one that announced itself in
         // sleep_mask_), the given one if it sleeps, otherwise the next one
         // after it. Returns whether a worker was woken up.

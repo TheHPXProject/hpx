@@ -15,6 +15,7 @@
 #include <hpx/modules/coroutines.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/threading_base/scheduler_tuning.hpp>
+#include <hpx/threading_base/scheduler_tuning_counters.hpp>
 #include <hpx/threading_base/thread_queue_init_parameters.hpp>
 
 #include <algorithm>
@@ -176,6 +177,13 @@ namespace hpx::threads::policies {
         // rules 6 to 8 come from the scheduler's configuration (see
         // scheduler_base::idle_callback_with_rules)
         static constexpr bool tunes_idle = false;
+
+        // No tuner, so nothing is counted (see scheduler_tuning_counters).
+        // The scheduler counts only inside if constexpr (Rules::counts), so
+        // the default scheduler's code is what it was without counters; these
+        // rules have no count, so that a count outside of such a check
+        // doesn't compile.
+        static constexpr bool counts = false;
 
         template <typename HasSpinningWorker>
         [[nodiscard]] wake_action wake_for_small(
@@ -385,12 +393,35 @@ namespace hpx::threads::policies {
     public:
         explicit tuned_scheduling_rules(std::size_t const num_workers)
           : parameters_(num_workers)
+          , counters_(num_workers)
         {
         }
 
         // rules 6 to 8 come from the tunable settings (see
         // scheduler_base::idle_callback_with_rules)
         static constexpr bool tunes_idle = true;
+
+        // The scheduler counts events for the tuner (see
+        // scheduler_tuning_counters): threads created, run and stolen by
+        // size, whom it wakes up for new threads, how idle periods end, and
+        // staged steals. The counters are kept here, next to the settings the
+        // tuner changes in response.
+        static constexpr bool counts = true;
+
+        /// Count an event of the given worker (or of a thread that is not a
+        /// worker of the pool, see scheduler_tuning_counters::external).
+        /// Counting doesn't change a decision of the rules, so it is allowed
+        /// where the scheduler only reads them (idle_callback).
+        void count(
+            std::size_t const worker, scheduler_counter const c) const noexcept
+        {
+            counters_.add(worker, c);
+        }
+
+        [[nodiscard]] scheduler_tuning_counters const& counters() const noexcept
+        {
+            return counters_;
+        }
 
         /// Register the settings of all rules, with the values of the given
         /// configuration.
@@ -457,6 +488,7 @@ namespace hpx::threads::policies {
 
     private:
         scheduler_tuning_parameters parameters_;
+        mutable scheduler_tuning_counters counters_;
         scheduling_policy policy_;
         std::unique_ptr<scheduler_tuner> tuner_;
     };

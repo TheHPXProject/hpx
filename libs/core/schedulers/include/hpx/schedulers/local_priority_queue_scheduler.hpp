@@ -906,17 +906,47 @@ namespace hpx::threads::policies {
             }
             }
 
-#if defined(HPX_HAVE_THREAD_MANAGER_IDLE_BACKOFF)
-            if (this->wakes_up_for(size))
+            // A scheduler with a tuner counts the new thread by its size
+            // (see scheduler_tuning_counters), for the share of sized threads
+            // a tuner looks at. The count needs the creating worker's number,
+            // so it is read once here for both the count and the wake up. A
+            // thread created from outside this pool has no worker of its own
+            // and is counted in the shared counters. The default scheduler
+            // (fixed rules) counts nothing and reads the number only for nano
+            // and small threads, as before.
+            if constexpr (Rules::counts)
             {
-                wake_up_for_small(num_thread, priority, placed_by_caller);
-            }
+                std::size_t const caller = calling_worker();
+                rules_.count(caller, created_of(size));
+                if (this->wakes_up_for(size))
+                {
+#if defined(HPX_HAVE_THREAD_MANAGER_IDLE_BACKOFF)
+                    wake_up_for_small(
+                        num_thread, caller, priority, placed_by_caller);
 #endif
+                }
+                else
+                {
+                    // create_thread and create_work call do_some_work for
+                    // it right after this returns (see wakes_up_for)
+                    rules_.count(caller, scheduler_counter::wake_by_creator);
+                }
+            }
+            else
+            {
+#if defined(HPX_HAVE_THREAD_MANAGER_IDLE_BACKOFF)
+                if (this->wakes_up_for(size))
+                {
+                    wake_up_for_small(num_thread, calling_worker(), priority,
+                        placed_by_caller);
+                }
+#endif
+            }
         }
 
-#if defined(HPX_HAVE_THREAD_MANAGER_IDLE_BACKOFF)
         // the number of the calling worker if it belongs to this scheduler's
-        // pool, -1 otherwise
+        // pool, -1 otherwise (used to wake up workers and, with a tuner, to
+        // count new threads)
         std::size_t calling_worker() const noexcept
         {
             auto const nums = threads::detail::get_thread_nums_tss();
@@ -926,6 +956,7 @@ namespace hpx::threads::policies {
                 static_cast<std::size_t>(-1);
         }
 
+#if defined(HPX_HAVE_THREAD_MANAGER_IDLE_BACKOFF)
         // Wake up a worker for a new nano or small thread queued for worker
         // num_thread (create_thread and create_work leave this to the
         // scheduler, see wakes_up_for). The rules decide whom to wake up (see
@@ -939,18 +970,62 @@ namespace hpx::threads::policies {
         // the calling worker. A thread that round-robin placement put there
         // may belong to a caller that waits for it without yielding, so one
         // sleeping worker is woken up for it.
+        //
+        // With a tuner, each decision is counted for the caller, and whether
+        // it woke up a sleeping worker (wake_if_sleeping and wake_one tell).
+        // For the fixed rules count does nothing, and the return values are
+        // ignored as before.
         void wake_up_for_small(std::size_t const num_thread,
-            thread_priority const priority, bool const placed_by_caller)
+            std::size_t const caller, thread_priority const priority,
+            bool const placed_by_caller)
         {
             switch (rules_.wake_for_small(thread_queue_init_, num_thread,
-                calling_worker(), priority, placed_by_caller,
+                caller, priority, placed_by_caller,
                 [&] { return this->has_spinning_worker(); }))
             {
             case wake_action::none:
+                if constexpr (Rules::counts)
+                {
+                    rules_.count(caller, scheduler_counter::wake_none);
+                }
                 break;
 
             case wake_action::target_if_sleeping:
-                this->wake_if_sleeping(num_thread);
+                if constexpr (Rules::counts)
+                {
+                    rules_.count(
+                        caller, scheduler_counter::wake_target_if_sleeping);
+                    if (this->wake_if_sleeping(num_thread))
+                    {
+                        // The thread was queued for a sleeping worker
+                        // (round-robin placement, or a thread created from
+                        // outside the pool), which now has to wake up. If
+                        // another worker spins, or the sentinel does, an
+                        // awake worker could have run it instead: these are
+                        // the events a placement that prefers awake workers
+                        // would save. The two loads are made only after a
+                        // wake up, which costs much more than they do, and
+                        // only by a scheduler with a tuner; they are
+                        // approximate, since a worker may start or stop
+                        // spinning right after the wake up.
+                        rules_.count(caller, scheduler_counter::woke_sleeper);
+                        if (this->has_spinning_worker())
+                        {
+                            rules_.count(caller,
+                                scheduler_counter::
+                                    sleeper_woken_while_spinning);
+                        }
+                        if (this->has_sentinel())
+                        {
+                            rules_.count(caller,
+                                scheduler_counter::sleeper_woken_with_sentinel);
+                        }
+                    }
+                }
+                else
+                {
+                    this->wake_if_sleeping(num_thread);
+                }
                 break;
 
             case wake_action::one:
@@ -959,11 +1034,26 @@ namespace hpx::threads::policies {
                 // goes on with its own). An idle worker that spins finds
                 // them, but if all of them sleep, one is woken up, which
                 // then spins for a while (waking up resets its backoff).
-                this->wake_one((num_thread + 1) % num_queues_);
+                if constexpr (Rules::counts)
+                {
+                    rules_.count(caller, scheduler_counter::wake_one);
+                    if (this->wake_one((num_thread + 1) % num_queues_))
+                    {
+                        rules_.count(caller, scheduler_counter::woke_sleeper);
+                    }
+                }
+                else
+                {
+                    this->wake_one((num_thread + 1) % num_queues_);
+                }
                 break;
 
             case wake_action::all:
                 // as for threads of other sizes
+                if constexpr (Rules::counts)
+                {
+                    rules_.count(caller, scheduler_counter::wake_all);
+                }
                 this->do_some_work(num_thread);
                 break;
             }
@@ -1021,6 +1111,12 @@ namespace hpx::threads::policies {
                         victim_min_tasks(num_thread, idx, q, min_tasks, false)))
                 {
                     increment_counters(q, this_queue);
+                    // one thread taken from the pending queue of the victim,
+                    // counted by its size
+                    if constexpr (Rules::counts)
+                    {
+                        rules_.count(num_thread, stolen_size_of(thrd));
+                    }
                     hpx::tracing::work_stolen(num_thread, idx, thrd);
                     return true;
                 }
@@ -1042,6 +1138,10 @@ namespace hpx::threads::policies {
                         q->get_next_thread(thrd, true, true))
                     {
                         increment_counters(q, this_high_priority_queue);
+                        if constexpr (Rules::counts)
+                        {
+                            rules_.count(num_thread, stolen_size_of(thrd));
+                        }
                         hpx::tracing::work_stolen(num_thread, idx, thrd);
                         return true;
                     }
@@ -1067,6 +1167,14 @@ namespace hpx::threads::policies {
             }
         }
 
+        // The counter of a stolen thread, by its size (only for a scheduler
+        // with a tuner).
+        static scheduler_counter stolen_size_of(
+            threads::thread_id_ref_type const& thrd) noexcept
+        {
+            return stolen_of(get_thread_id_data(thrd)->get_task_size());
+        }
+
         // Return the next thread to be executed, return false if none is
         // available
         bool get_next_thread(std::size_t num_thread, bool const running,
@@ -1078,6 +1186,18 @@ namespace hpx::threads::policies {
             if (found)
                 this->clear_free_pass(num_thread);
 #endif
+            // With a tuner, count the thread this worker runs next by its
+            // size (kept by thread_data from the hint it was created with).
+            // Together with the threads created this shows how much of the
+            // work is sized, and of which size.
+            if constexpr (Rules::counts)
+            {
+                if (found)
+                {
+                    rules_.count(num_thread,
+                        run_of(get_thread_id_data(thrd)->get_task_size()));
+                }
+            }
             return found;
         }
 
@@ -1908,6 +2028,14 @@ namespace hpx::threads::policies {
                 if (0 != added)
                 {
                     increment_counters(q, this_queue);
+                    // staged threads of the victim were converted into
+                    // threads in this worker's queues (counted once per
+                    // victim, not per thread)
+                    if constexpr (Rules::counts)
+                    {
+                        rules_.count(
+                            num_thread, scheduler_counter::steal_staged);
+                    }
                     return true;
                 }
                 return false;
@@ -1937,6 +2065,11 @@ namespace hpx::threads::policies {
                     if (0 != added)
                     {
                         increment_counters(q, this_high_priority_queue);
+                        if constexpr (Rules::counts)
+                        {
+                            rules_.count(
+                                num_thread, scheduler_counter::steal_staged);
+                        }
                         return true;
                     }
                 }
