@@ -54,14 +54,14 @@ int hpx_main()
 #endif
 
     // B. Double the value from A
-    auto b = a_shared | ex::transfer(sched) | ex::then([](int x) {
+    auto b = a_shared | ex::continues_on(sched) | ex::then([](int x) {
         int result = x * 2;
         std::cout << "B: " << x << " * 2 = " << result << "\n";
         return result;
     });
 
     // C. Triple the value from A
-    auto c = a_shared | ex::transfer(sched) | ex::then([](int x) {
+    auto c = a_shared | ex::continues_on(sched) | ex::then([](int x) {
         int result = x * 3;
         std::cout << "C: " << x << " * 3 = " << result << "\n";
         return result;
