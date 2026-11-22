@@ -561,6 +561,12 @@ namespace hpx {
     {
         LRT_(debug).format("~runtime_local(entering)");
 
+        // The thread pools never ran if the construction of the runtime
+        // failed (for instance, a parcelport couldn't start): their
+        // schedulers aren't set up for waiting then.
+        bool const threads_ran =
+            thread_manager_->status() != hpx::state::initialized;
+
         // stop all services
         thread_manager_->stop();    // stops timer_pool_ as well
 #ifdef HPX_HAVE_IO_POOL
@@ -571,7 +577,10 @@ namespace hpx {
         // This ensures that collective operations and other background work
         // finish before reinit_destruct() destroys component heaps.
         // Fixes issue #6776: crash in one_size_heap_list::alloc on macOS Debug
-        thread_manager_->wait();
+        if (threads_ran)
+        {
+            thread_manager_->wait();
+        }
 
         LRT_(debug).format("~runtime_local(finished)");
 
