@@ -1061,7 +1061,7 @@ namespace hpx::parallel {
             template <typename B, typename E>
             HPX_HOST_DEVICE HPX_FORCEINLINE constexpr void loop_iter_impl(
                 B part_begin, E part_end, std::size_t part_index,
-                std::uint32_t current_thread, hpx::tuple<Ts...>& args)
+                std::size_t current_thread, hpx::tuple<Ts...>& args)
             {
                 auto pack = hpx::util::make_index_pack_t<sizeof...(Ts)>();
                 detail::init_iteration(args, pack, part_index, current_thread);
@@ -1077,7 +1077,7 @@ namespace hpx::parallel {
             template <typename B, typename E>
             HPX_HOST_DEVICE HPX_FORCEINLINE constexpr void loop_iter(
                 B part_begin, E part_end, std::size_t part_index,
-                std::uint32_t current_thread)
+                std::size_t current_thread)
             {
                 if constexpr (hpx::execution_policy_has_scheduler_executor_v<
                                   ExPolicy>)
@@ -1096,7 +1096,7 @@ namespace hpx::parallel {
             template <typename B>
             HPX_HOST_DEVICE HPX_FORCEINLINE constexpr void loop_n_impl(
                 B part_begin, std::size_t part_steps, std::size_t part_index,
-                std::uint32_t current_thread, hpx::tuple<Ts...>& args)
+                std::size_t current_thread, hpx::tuple<Ts...>& args)
             {
                 auto pack = hpx::util::make_index_pack_t<sizeof...(Ts)>();
                 detail::init_iteration(args, pack, part_index, current_thread);
@@ -1112,7 +1112,7 @@ namespace hpx::parallel {
             template <typename B>
             HPX_HOST_DEVICE HPX_FORCEINLINE constexpr void const_loop_n(
                 B part_begin, std::size_t part_steps, std::size_t part_index,
-                std::uint32_t current_thread)
+                std::size_t current_thread)
             {
                 if constexpr (hpx::execution_policy_has_scheduler_executor_v<
                                   ExPolicy>)
