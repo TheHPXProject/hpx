@@ -179,10 +179,11 @@ namespace hpx::threads::policies {
         static constexpr bool tunes_idle = false;
 
         // No tuner, so nothing is counted (see scheduler_tuning_counters).
-        // The scheduler counts only inside if constexpr (Rules::counts), so
-        // the default scheduler's code is what it was without counters; these
-        // rules have no count, so that a count outside of such a check
-        // doesn't compile.
+        // The scheduler reports events only inside if constexpr
+        // (Rules::counts), so the default scheduler's code is what it was
+        // without counters; these rules have none of the event functions
+        // (on_created and the others), so that a report outside of such a
+        // check doesn't compile.
         static constexpr bool counts = false;
 
         template <typename HasSpinningWorker>
@@ -401,21 +402,143 @@ namespace hpx::threads::policies {
         // scheduler_base::idle_callback_with_rules)
         static constexpr bool tunes_idle = true;
 
-        // The scheduler counts events for the tuner (see
-        // scheduler_tuning_counters): threads created, run and stolen by
-        // size, whom it wakes up for new threads, how idle periods end, and
-        // staged steals. The counters are kept here, next to the settings the
-        // tuner changes in response.
+        // The scheduler reports events to these rules where they happen
+        // (the on_... functions below), with what it knows about them; the
+        // rules decide what to count for the tuner (see
+        // scheduler_tuning_counters). The counters are kept here, next to the
+        // settings the tuner changes in response.
         static constexpr bool counts = true;
 
-        /// Count an event of the given worker (or of a thread that is not a
-        /// worker of the pool, see scheduler_tuning_counters::external).
-        /// Counting doesn't change a decision of the rules, so it is allowed
-        /// where the scheduler only reads them (idle_callback).
-        void count(
-            std::size_t const worker, scheduler_counter const c) const noexcept
+        // The events, of the given worker (or of a thread that is not a
+        // worker of the pool, see scheduler_tuning_counters::external).
+        // Counting doesn't change a decision of the rules, so it is allowed
+        // where the scheduler only reads them (idle_callback).
+
+        /// A thread of the given size was created.
+        void on_created(std::size_t const worker,
+            threads::task_size const size) const noexcept
         {
-            counters_.add(worker, c);
+            counters_.add(worker, created_of(size));
+        }
+
+        /// A thread of the given size was handed to the worker to run.
+        void on_run(std::size_t const worker,
+            threads::task_size const size) const noexcept
+        {
+            counters_.add(worker, run_of(size));
+        }
+
+        /// The worker stole a thread of the given size from the pending
+        /// queues of another one.
+        void on_stolen(std::size_t const worker,
+            threads::task_size const size) const noexcept
+        {
+            counters_.add(worker, stolen_of(size));
+        }
+
+        /// The worker stole from the staged queues of another one, which
+        /// got it threads (counted once per victim, not per thread).
+        void on_staged_steal(std::size_t const worker) const noexcept
+        {
+            counters_.add(worker, scheduler_counter::steal_staged);
+        }
+
+        /// What the rules decided to wake up for a new thread up to
+        /// hpx.scheduler_policy.wake_one_max_size (see wake_for_small).
+        void on_wake_decision(
+            std::size_t const worker, wake_action const action) const noexcept
+        {
+            switch (action)
+            {
+            case wake_action::none:
+                counters_.add(worker, scheduler_counter::wake_none);
+                break;
+            case wake_action::target_if_sleeping:
+                counters_.add(
+                    worker, scheduler_counter::wake_target_if_sleeping);
+                break;
+            case wake_action::one:
+                counters_.add(worker, scheduler_counter::wake_one);
+                break;
+            default:
+                counters_.add(worker, scheduler_counter::wake_all);
+                break;
+            }
+        }
+
+        /// A new thread above that size or without a size, for which its
+        /// creator wakes up sleeping workers as before.
+        void on_wake_by_creator(std::size_t const worker) const noexcept
+        {
+            counters_.add(worker, scheduler_counter::wake_by_creator);
+        }
+
+        /// A wake up for a new thread found a worker asleep.
+        void on_woke_sleeper(std::size_t const worker) const noexcept
+        {
+            counters_.add(worker, scheduler_counter::woke_sleeper);
+        }
+
+        /// A new thread woke up the sleeping worker it was queued for, while
+        /// another worker spun or the sentinel did (as far as the scheduler
+        /// could tell right after the wake up).
+        void on_woke_target_sleeper(std::size_t const worker,
+            bool const other_spinning,
+            bool const sentinel_spinning) const noexcept
+        {
+            counters_.add(worker, scheduler_counter::woke_sleeper);
+            if (other_spinning)
+            {
+                counters_.add(
+                    worker, scheduler_counter::sleeper_woken_while_spinning);
+            }
+            if (sentinel_spinning)
+            {
+                counters_.add(
+                    worker, scheduler_counter::sleeper_woken_with_sentinel);
+            }
+        }
+
+        /// An idle worker's spin ended, as given.
+        void on_spin_end(
+            std::size_t const worker, idle_spin_end const how) const noexcept
+        {
+            switch (how)
+            {
+            case idle_spin_end::own_work:
+                counters_.add(worker, scheduler_counter::idle_spin_own_work);
+                break;
+            case idle_spin_end::work_to_steal:
+                counters_.add(
+                    worker, scheduler_counter::idle_spin_work_to_steal);
+                break;
+            default:
+                counters_.add(worker, scheduler_counter::idle_spin_ran_out);
+                break;
+            }
+        }
+
+        /// An idle worker spun through a period as the sentinel instead of
+        /// sleeping.
+        void on_sentinel(std::size_t const worker) const noexcept
+        {
+            counters_.add(worker, scheduler_counter::idle_sentinel);
+        }
+
+        /// An idle worker saw work before it went to sleep.
+        void on_work_before_sleep(std::size_t const worker) const noexcept
+        {
+            counters_.add(worker, scheduler_counter::idle_work_before_wait);
+        }
+
+        /// An idle worker's sleep ended, by a notification or when its
+        /// period ran out.
+        void on_woken_up(
+            std::size_t const worker, bool const notified) const noexcept
+        {
+            counters_.add(worker,
+                notified ? scheduler_counter::idle_wait_notified :
+                           scheduler_counter::idle_wait_timed_out);
         }
 
         [[nodiscard]] scheduler_tuning_counters const& counters() const noexcept

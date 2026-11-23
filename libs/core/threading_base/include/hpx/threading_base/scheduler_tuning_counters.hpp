@@ -174,6 +174,14 @@ namespace hpx::threads::policies {
     HPX_CXX_CORE_EXPORT [[nodiscard]] HPX_CORE_EXPORT char const*
     get_scheduler_counter_name(scheduler_counter c) noexcept;
 
+    /// How an idle worker's spin ended: it saw work in its own queues, or
+    /// work to steal, or the spin ran out.
+    HPX_CXX_CORE_EXPORT enum class idle_spin_end : std::uint8_t {
+        own_work,
+        work_to_steal,
+        ran_out
+    };
+
     /// Counters of the events of a scheduler, kept per worker. A worker's
     /// counters are written only by that worker, with relaxed loads and
     /// stores on lines of their own, so counting costs no atomic
