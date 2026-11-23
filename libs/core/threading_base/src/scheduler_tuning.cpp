@@ -19,6 +19,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -70,13 +71,9 @@ namespace hpx::threads::policies {
 
     scheduler_tuner::~scheduler_tuner() = default;
 
-    namespace {
+    void static_tuner::attach(scheduler_tuning_parameters&) {}
 
-        // keeps the values the settings were configured with
-        struct static_tuner final : scheduler_tuner
-        {
-            void attach(scheduler_tuning_parameters&) override {}
-        };
+    namespace {
 
         std::chrono::milliseconds read_period(std::string const& value)
         {
@@ -93,6 +90,13 @@ namespace hpx::threads::policies {
                     value);
             }
             return std::chrono::milliseconds(ms);
+        }
+
+        // whether the rows have the counts since the start (columns=totals)
+        // instead of those since the last row (deltas, the default)
+        bool read_totals(scheduler_tuner_context const& context)
+        {
+            return context.get_entry("columns", "deltas") == "totals";
         }
 
         // The "recording" tuner: a file_recording_tuner,
@@ -115,17 +119,37 @@ namespace hpx::threads::policies {
             }
             return std::make_unique<file_recording_tuner>(file,
                 read_period(context.get_entry("period", "100")),
-                context.get_entry("columns", "deltas") == "totals",
-                context.pool_name);
+                read_totals(context), context.pool_name);
         }
+
+    }    // namespace
+
+    std::optional<tuner_recording_options> get_tuner_recording_options(
+        scheduler_tuner_context const& context)
+    {
+        // hpx.scheduler_tuner.record=<prefix>: <prefix>-<pool>.csv, or
+        // <prefix>.csv if the pool isn't known
+        std::string const prefix = context.get_entry("record", "");
+        if (prefix.empty())
+            return std::nullopt;
+
+        return tuner_recording_options{context.pool_name.empty() ?
+                prefix + ".csv" :
+                prefix + "-" + context.pool_name + ".csv",
+            read_period(context.get_entry("period", "100")),
+            read_totals(context)};
+    }
+
+    namespace {
 
         struct tuner_registry
         {
             tuner_registry()
             {
-                factories.emplace("static", [](scheduler_tuner_context const&) {
-                    return std::make_unique<static_tuner>();
-                });
+                factories.emplace(
+                    "static", [](scheduler_tuner_context const& context) {
+                        return make_scheduler_tuner<static_tuner>(context);
+                    });
                 factories.emplace("recording", &make_recording_tuner);
             }
 
@@ -167,6 +191,17 @@ namespace hpx::threads::policies {
             }
             factory = it->second;
         }
-        return factory(context);
+
+        auto tuner = factory(context);
+        if (!tuner->records() && !context.get_entry("record", "").empty())
+        {
+            HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
+                "create_scheduler_tuner",
+                "the scheduler tuner {} doesn't record although "
+                "hpx.scheduler_tuner.record is set (its factory has to create "
+                "it with make_scheduler_tuner)",
+                name);
+        }
+        return tuner;
     }
 }    // namespace hpx::threads::policies

@@ -533,6 +533,7 @@ defaults here, they are set with a ``!`` after the key, for instance
    period = ${HPX_SCHEDULER_TUNER_PERIOD:100}
    file = ${HPX_SCHEDULER_TUNER_FILE}
    columns = ${HPX_SCHEDULER_TUNER_COLUMNS:deltas}
+   record = ${HPX_SCHEDULER_TUNER_RECORD}
 
 .. _ini_hpx_scheduler_tuner:
 
@@ -550,6 +551,15 @@ defaults here, they are set with a ``!`` after the key, for instance
    * * ``hpx.scheduler_tuner.columns``
      * ``deltas`` (the default) writes the counts since the previous row,
        ``totals`` the counts since the start.
+   * * ``hpx.scheduler_tuner.record``
+     * If set, the rows the ``recording`` tuner writes are written for the
+       tuner selected with ``hpx.scheduler_tuner`` to ``<record>-<pool>.csv``:
+       after each of its updates (every ``hpx.scheduler_tuner.period``
+       milliseconds for a tuner without an update period), with the values
+       of the settings as the tuner decided them. Every tuner of |hpx|
+       supports it; a tuner registered by an application does if its factory
+       creates it with ``hpx::threads::policies::make_scheduler_tuner``,
+       otherwise creating it fails. Empty by default.
 
 Every period the tuner writes one row for each worker thread of the pool and
 one for the threads from outside the pool (``external``). A row has the time in

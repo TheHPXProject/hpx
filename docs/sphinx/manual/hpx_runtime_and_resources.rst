@@ -76,7 +76,15 @@ how the idle periods of its worker threads end. A tuner with an update period
 counters every period on an |hpx| thread of the scheduler's pool and may change
 the settings in response. The ``recording`` tuner keeps the configured values
 and writes the counters to a CSV file, to collect what a tuner would see from
-real workloads (see :ref:`ini_hpx_scheduler_tuner`).
+real workloads (see :ref:`ini_hpx_scheduler_tuner`). With
+``hpx.scheduler_tuner.record`` any tuner writes the same rows after each of
+its updates, so that what it decided can be checked against what it saw.
+Recording is a mixin, ``hpx::threads::policies::recorded<Base>``, that adds
+to the tuner ``Base`` and calls it statically, so that the scheduler's call
+into the tuner stays its only virtual call; an application can stack such
+mixins on its own tuner. Its factory supports ``hpx.scheduler_tuner.record``
+if it creates the tuner with ``hpx::threads::policies::make_scheduler_tuner``,
+which adds the recording when it is asked for.
 
 A tuner derives from ``hpx::threads::policies::scheduler_tuner``. The example
 below lowers the idle spin time (``hpx.min_idle_backoff_time``, a ``float``

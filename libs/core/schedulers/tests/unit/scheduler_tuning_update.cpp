@@ -350,6 +350,119 @@ void test_recording_tuner()
         std::uint64_t(1), check_records(text, num_workers, "run_unknown"));
 }
 
+// A tuner chosen by name sets the spin time; with hpx.scheduler_tuner.record
+// the rows written after each of its updates show what it decided.
+// not final: make_scheduler_tuner may add the recording on top of it
+struct setting_tuner : policies::scheduler_tuner
+{
+    void attach(policies::scheduler_tuning_parameters& parameters) override
+    {
+        spin_time = parameters.find("hpx.min_idle_backoff_time");
+    }
+
+    [[nodiscard]] std::chrono::milliseconds update_period() const override
+    {
+        return period;
+    }
+
+    void update(policies::scheduler_tuning_counters const&,
+        policies::scheduler_tuning_parameters& parameters) override
+    {
+        if (spin_time == policies::scheduler_tuning_parameters::npos)
+            return;
+        for (std::size_t w = 0; w != parameters.num_workers(); ++w)
+        {
+            parameters.set(w, spin_time, 7.0f);
+        }
+    }
+
+    std::size_t spin_time = policies::scheduler_tuning_parameters::npos;
+};
+
+void test_record_entry()
+{
+    // a factory that supports recording creates its tuner with
+    // make_scheduler_tuner
+    policies::register_scheduler_tuner(
+        "setting", [](policies::scheduler_tuner_context const& context) {
+            return policies::make_scheduler_tuner<setting_tuner>(context);
+        });
+
+    std::string const prefix = (std::filesystem::temp_directory_path() /
+        ("scheduler_tuning_record_" +
+            std::to_string(
+                std::chrono::steady_clock::now().time_since_epoch().count())))
+                                   .generic_string();
+    // one file per pool, named after it
+    recording_file = prefix + "-default.csv";
+
+    hpx::local::init_params init_args;
+    init_args.cfg = {"hpx.os_threads=2", "hpx.scheduler_tuner=setting",
+        "hpx.scheduler_tuner.record=" + prefix};
+    use_tuned_scheduler(init_args);
+    HPX_TEST_EQ(
+        hpx::local::init(test_recording_file, argc_, argv_, init_args), 0);
+
+    std::string text;
+    {
+        std::ifstream in(recording_file);
+        HPX_TEST(in.is_open());
+        std::ostringstream content;
+        content << in.rdbuf();
+        text = content.str();
+    }
+    std::filesystem::remove(recording_file);
+
+    // the rows are those of the recording tuner, hpx_main itself ran
+    HPX_TEST_LTE(
+        std::uint64_t(1), check_records(text, num_workers, "run_unknown"));
+
+#if defined(HPX_HAVE_THREAD_MANAGER_IDLE_BACKOFF)
+    // and they show the spin time the tuner set, for every worker
+    auto const rows = parse_csv(text);
+    if (rows.size() > num_workers + 1)
+    {
+        std::size_t const c =
+            column_of(rows.front(), "hpx.min_idle_backoff_time");
+        for (std::size_t w = 0; w != num_workers; ++w)
+        {
+            HPX_TEST_EQ(
+                rows[rows.size() - num_workers - 1 + w][c], std::string("7"));
+        }
+    }
+#endif
+}
+
+// a tuner whose factory doesn't create it with make_scheduler_tuner can't
+// record, which is reported when it is created
+void test_record_unsupported()
+{
+    policies::register_scheduler_tuner(
+        "plain", [](policies::scheduler_tuner_context const&) {
+            return std::make_unique<setting_tuner>();
+        });
+
+    policies::scheduler_tuner_context context;
+    context.pool_name = "default";
+    context.lookup = [](std::string_view key, std::string_view default_value) {
+        return key == "record" ? std::string("unused") :
+                                 std::string(default_value);
+    };
+
+    bool caught = false;
+    try
+    {
+        [[maybe_unused]] auto t =
+            policies::create_scheduler_tuner("plain", context);
+    }
+    catch (hpx::exception const& e)
+    {
+        caught = true;
+        HPX_TEST_EQ(e.get_error(), hpx::error::bad_parameter);
+    }
+    HPX_TEST(caught);
+}
+
 // invalid entries of the "recording" tuner are reported when it is created
 void test_invalid_entries()
 {
@@ -571,6 +684,8 @@ int main(int argc, char* argv[])
     test_invalid_entries();
     test_update_loop();
     test_recording_tuner();
+    test_record_entry();
+    test_record_unsupported();
     test_stop_suspended_pool();
 
     return hpx::util::report_errors();

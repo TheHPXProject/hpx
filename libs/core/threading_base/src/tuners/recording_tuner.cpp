@@ -46,26 +46,17 @@ namespace hpx::threads::policies {
         }
     }    // namespace
 
-    recording_tuner::recording_tuner(std::ostream& out,
-        std::chrono::milliseconds const period, bool const totals,
-        std::string pool_name)
+    tuner_recorder::tuner_recorder(
+        std::ostream& out, bool const totals, std::string pool_name)
       : out_(out)
-      , period_(period)
       , totals_(totals)
       , pool_name_(HPX_MOVE(pool_name))
       , start_(std::chrono::steady_clock::now())
     {
     }
 
-    void recording_tuner::attach(scheduler_tuning_parameters&) {}
-
-    std::chrono::milliseconds recording_tuner::update_period() const
-    {
-        return period_;
-    }
-
-    void recording_tuner::update(scheduler_tuning_counters const& counters,
-        scheduler_tuning_parameters& parameters)
+    void tuner_recorder::record(scheduler_tuning_counters const& counters,
+        scheduler_tuning_parameters const& parameters)
     {
         std::size_t const num_workers = counters.num_workers();
         if (last_.empty())
@@ -127,7 +118,7 @@ namespace hpx::threads::policies {
         out_.flush();
     }
 
-    void recording_tuner::write_value(
+    void tuner_recorder::write_value(
         scheduler_tuning_parameters const& parameters, std::size_t const worker,
         std::size_t const id)
     {
@@ -143,7 +134,7 @@ namespace hpx::threads::policies {
         }
     }
 
-    void recording_tuner::write_header(
+    void tuner_recorder::write_header(
         scheduler_tuning_parameters const& parameters)
     {
         out_ << "ms,pool,worker";
@@ -162,34 +153,16 @@ namespace hpx::threads::policies {
     }
 
     ///////////////////////////////////////////////////////////////////////////
-    file_recording_tuner::file_recording_tuner(std::string const& file_name,
-        std::chrono::milliseconds const period, bool const totals,
-        std::string pool_name)
+    recording_file::recording_file(std::string const& file_name)
       : file_(file_name, std::ios::out | std::ios::trunc)
-      , recorder_(file_, period, totals, HPX_MOVE(pool_name))
     {
         // fail when the scheduler is created rather than on the first update
         if (!file_)
         {
-            HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
-                "file_recording_tuner",
-                "can't open {} (see hpx.scheduler_tuner.file)", file_name);
+            HPX_THROW_EXCEPTION(hpx::error::bad_parameter, "recording_file",
+                "can't open {} (see hpx.scheduler_tuner.file and "
+                "hpx.scheduler_tuner.record)",
+                file_name);
         }
-    }
-
-    void file_recording_tuner::attach(scheduler_tuning_parameters& parameters)
-    {
-        recorder_.attach(parameters);
-    }
-
-    std::chrono::milliseconds file_recording_tuner::update_period() const
-    {
-        return recorder_.update_period();
-    }
-
-    void file_recording_tuner::update(scheduler_tuning_counters const& counters,
-        scheduler_tuning_parameters& parameters)
-    {
-        recorder_.update(counters, parameters);
     }
 }    // namespace hpx::threads::policies

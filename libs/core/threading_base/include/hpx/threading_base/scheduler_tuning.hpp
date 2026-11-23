@@ -291,6 +291,24 @@ namespace hpx::threads::policies {
             scheduler_tuning_parameters& /*parameters*/)
         {
         }
+
+        /// Whether this tuner records what it decided (see recorded). Asked
+        /// once, when the tuner is created with hpx.scheduler_tuner.record
+        /// set (see create_scheduler_tuner).
+        [[nodiscard]] virtual bool records() const noexcept
+        {
+            return false;
+        }
+    };
+
+    /// The default tuner ("static"): keeps the values the settings were
+    /// configured with, and has no update period. It can be the base of
+    /// mixins that add to a tuner (see recorded).
+    HPX_CXX_CORE_EXPORT class HPX_CORE_EXPORT static_tuner
+      : public scheduler_tuner
+    {
+    public:
+        void attach(scheduler_tuning_parameters& parameters) override;
     };
 
     /// What a tuner can find out when it is created: the pool whose scheduler
@@ -333,8 +351,11 @@ namespace hpx::threads::policies {
         std::string const& name, scheduler_tuner_factory factory);
 
     /// Create the tuner registered under the given name for the given
-    /// context ("static" and "recording" are always available). Throws
-    /// hpx::exception (bad_parameter) for an unknown name.
+    /// context ("static" and "recording" are always available). If the
+    /// context has the entry hpx.scheduler_tuner.record, the factory has to
+    /// return a tuner that records (see make_scheduler_tuner). Throws
+    /// hpx::exception (bad_parameter) for an unknown name, a file that can't
+    /// be opened, or a tuner that doesn't record although record is set.
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT std::unique_ptr<scheduler_tuner>
     create_scheduler_tuner(std::string const& name,
         scheduler_tuner_context const& context = scheduler_tuner_context{});

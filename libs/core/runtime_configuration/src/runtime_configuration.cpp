@@ -284,12 +284,17 @@ namespace hpx::util {
             // and hpx::threads::policies::file_recording_tuner): the ms
             // between its rows, its file (empty: scheduler-tuning-<pool>.csv),
             // and whether it writes the counts since the last row (deltas) or
-            // since the start (totals); a tuner of its own adds entries here
-            // with a '!' after the key (hpx.scheduler_tuner.<key>!=<value>)
+            // since the start (totals); record: if set, the rows of what the
+            // scheduler counted and what the selected tuner decided are
+            // written after each of its updates to <record>-<pool>.csv (see
+            // hpx::threads::policies::recorded); a tuner of its own adds
+            // entries here with a '!' after the key
+            // (hpx.scheduler_tuner.<key>!=<value>)
             "[hpx.scheduler_tuner]",
             "period = ${HPX_SCHEDULER_TUNER_PERIOD:100}",
             "file = ${HPX_SCHEDULER_TUNER_FILE}",
             "columns = ${HPX_SCHEDULER_TUNER_COLUMNS:deltas}",
+            "record = ${HPX_SCHEDULER_TUNER_RECORD}",
 
             "[hpx.thread_queue]",
             "max_thread_count = ${HPX_THREAD_QUEUE_MAX_THREAD_COUNT:" HPX_PP_STRINGIZE(
