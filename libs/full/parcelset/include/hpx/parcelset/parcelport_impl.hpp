@@ -1053,8 +1053,8 @@ namespace hpx::parcelset {
         // Send one parcel with one encode pass and no preprocessing pass.
         // Returns false, with p and f not changed, if the parcel must take
         // the usual path: the destination can't take it now, parcels wait in
-        // a queue (this keeps their order), the parcel has a serialization
-        // filter, or a value in it needs the preprocessing pass.
+        // a queue, the parcel has a serialization filter, or a value in it
+        // needs the preprocessing pass.
         bool try_send_fast(
             locality const& dest, parcel& p, write_handler_type& f)
         {
@@ -1078,8 +1078,10 @@ namespace hpx::parcelset {
             }
 
             detail::call_for_each::handlers_type handlers;
-            handlers.push_back(HPX_MOVE(f));
             detail::call_for_each::parcels_type parcels;
+            handlers.reserve(1);
+            parcels.reserve(1);
+            handlers.push_back(HPX_MOVE(f));
             parcels.push_back(HPX_MOVE(p));
 
             typename ConnectionHandler::sender_type::callback_fn_type
