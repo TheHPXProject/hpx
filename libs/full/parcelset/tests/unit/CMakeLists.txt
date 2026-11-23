@@ -10,7 +10,9 @@ if(NOT HPX_WITH_NETWORKING)
   return()
 endif()
 
-set(tests put_parcels set_parcel_write_handler temporary_ids zero_copy_parcel)
+set(tests optimistic_archive put_parcels set_parcel_write_handler temporary_ids
+          zero_copy_parcel
+)
 
 # parcels keep buffers for their zero-copy chunks only with thrust (the
 # serialization of device memory)
