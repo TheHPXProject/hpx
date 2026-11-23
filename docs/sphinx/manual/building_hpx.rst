@@ -119,7 +119,8 @@ used CMake options.
    such as |vtune|. Task lifecycle and work-stealing events are emitted as
    well, see :option:`HPX_WITH_TRACING_LIFECYCLE_EVENTS` and
    :option:`HPX_WITH_TRACING_WORK_STEALING_EVENTS`. Lock events need
-   :option:`HPX_WITH_TRACING_LOCK_EVENTS`. No events are emitted
+   :option:`HPX_WITH_TRACING_LOCK_EVENTS`, and parcel markers need
+   :option:`HPX_WITH_PARCEL_PROFILING`. No events are emitted
    unless ITTNotify is enabled at runtime with
    ``--hpx:ini=hpx.use_itt_notify=1``. See :ref:`profiling_with_itt`.
 
