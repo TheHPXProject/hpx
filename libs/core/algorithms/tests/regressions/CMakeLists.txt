@@ -17,6 +17,7 @@ set(tests
     for_loop_5735
     for_loop_with_auto_chunk_size
     guided_chunk_size_8115
+    guided_chunk_size_scan_merge
     includes_chunk_boundary
     includes_empty_ranges
     is_sorted_until_chunk_boundary

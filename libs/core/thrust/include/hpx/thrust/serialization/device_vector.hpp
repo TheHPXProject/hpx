@@ -62,7 +62,11 @@ namespace hpx::serialization {
     // function creates needs an owner that keeps it alive until then
     // whenever the chunk refers to its memory: if that is pinned, or if it
     // is device memory and the parcelport moves device memory. Only a
-    // temporary sent from a host copy (which the parcel keeps) needs none.
+    // temporary sent from a host copy (which the parcel keeps) needs none,
+    // unless its allocator frees the memory asynchronously on another
+    // stream (e.g. cudaFreeAsync) and doesn't come from HPX's pools: the
+    // copy is made asynchronously, and only the pools make freeing wait for
+    // it.
 
     HPX_CXX_CORE_EXPORT template <typename T, typename Alloc>
     void serialize(output_archive& ar,
@@ -74,6 +78,15 @@ namespace hpx::serialization {
         using detail::device_data_storage;
 
         std::size_t const size = v.size();
+        if (size != 0 && ar.endianess_differs())
+        {
+            // the elements are sent as raw bytes, they can't be converted
+            HPX_THROW_EXCEPTION(hpx::error::serialization_error,
+                "hpx::serialization::serialize(device_vector)",
+                "the elements of a device_vector can't be sent in an archive "
+                "with another byte order");
+        }
+
         ar << size;
         if (size == 0)
             return;
@@ -129,8 +142,14 @@ namespace hpx::serialization {
             return;
         }
 
-        if (auto const* buffer =
-                detail::device_host_copy_of(ar, &v, device_data, bytes))
+        // A host copy prepared during preprocessing, for the archives that
+        // don't take device memory. These must ask for the copy in both
+        // passes or in neither: the copies are matched by the order of the
+        // requests. (An archive taking device memory with chunking disabled
+        // in the real pass copies the bytes into the archive below.)
+        if (auto const* buffer = !ar.enable_device_chunks() ?
+                detail::device_host_copy_of(ar, device_data, bytes) :
+                nullptr)
         {
             ar << static_cast<std::uint8_t>(device_data_storage::host_chunk);
             ar.save_binary_chunk(

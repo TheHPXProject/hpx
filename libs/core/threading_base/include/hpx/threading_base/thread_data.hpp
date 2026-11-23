@@ -341,12 +341,17 @@ namespace hpx::threads {
 
 #if defined(HPX_HAVE_TRACY)
     private:
-        mutable char fiber_name_[64];
+        // Tracy keeps reading a fiber name after this object is reused for
+        // another task, so the name lives in a set that is never freed.
+        mutable char const* fiber_name_ = nullptr;
         // 1-in-N tracing sample decision, set at ctor/rebind_base only.
         bool emit_lifecycle_ = false;
 #endif
 
     public:
+        // With Tracy, this is nullptr until the task first runs while a
+        // profiler is connected, and always for stackless tasks, which don't
+        // get a fiber.
         char const* get_fiber_name() const noexcept;
 
 #if !defined(HPX_HAVE_THREAD_PARENT_REFERENCE)

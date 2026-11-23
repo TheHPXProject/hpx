@@ -17,6 +17,7 @@
 #include <hpx/modules/serialization.hpp>
 
 #include <hpx/modules/actions.hpp>
+#include <hpx/modules/errors.hpp>
 #include <hpx/parcelset/detail/parcel_await.hpp>
 #include <hpx/parcelset/parcelset_fwd.hpp>
 
@@ -53,15 +54,18 @@ namespace hpx::parcelset::detail {
         // The parcel keeps the buffers zero-copy chunks will refer to alive
         // (serialization creates them only if this exists). Buffers from an
         // earlier preprocessing of this parcel (e.g. by post() before handing
-        // it to the parcelport) are reused. Only the serialization of device
-        // memory (the thrust module) creates such buffers.
+        // it to the parcelport) are reused; the archive keeps those of its
+        // earlier rounds (reset() only starts again at the first object).
+        // Only the serialization of device memory (the thrust module)
+        // creates such buffers.
         serialization::detail::preprocess_keep_alive* buffers = nullptr;
 #if defined(HPX_HAVE_THRUST)
         buffers = &archive.get_extra_data<
             serialization::detail::preprocess_keep_alive>();
-        if (auto const& keep_alive = p.keep_alive(); !keep_alive.empty())
+        if (auto const& keep_alive = p.keep_alive();
+            buffers->empty() && !keep_alive.empty())
         {
-            buffers->add_buffers(keep_alive);
+            buffers->set_buffers(keep_alive);
         }
 #endif
 
@@ -227,7 +231,55 @@ namespace hpx::parcelset::detail {
             HPX_ASSERT(handle_futures != nullptr);
 
             auto this_ = this->shared_from_this();
-            (*handle_futures)([this_]() { this_->apply(); });
+            (*handle_futures)([this_]() { this_->resume(); });
+        }
+
+        // a later pass runs from the continuation of a future: its error
+        // goes to the write handler(s) instead of the caller of the send
+        void resume()
+        {
+            // only the preprocessing is guarded: once done() hands the parcel
+            // on, its errors are reported by whoever took the parcel
+            bool complete = false;
+            std::exception_ptr error;
+            try
+            {
+                complete = static_cast<Derived*>(this)->preprocess();
+            }
+            catch (...)
+            {
+                error = std::current_exception();
+            }
+
+            if (!error)
+            {
+                if (complete)
+                {
+                    this->done();
+                }
+                return;
+            }
+
+            error_code const ec = make_error_code(error);
+            if constexpr (std::is_same_v<Parcel, parcelset::parcel>)
+            {
+                if (handler_)
+                {
+                    handler_(ec, parcel_);
+                }
+            }
+            else
+            {
+                // nothing has been sent yet, all of them failed
+                static_cast<Derived*>(this)->return_split_credits();
+                for (std::size_t i = 0; i != handler_.size(); ++i)
+                {
+                    if (handler_[i])
+                    {
+                        handler_[i](ec, parcel_[i]);
+                    }
+                }
+            }
         }
 
         put_parcel_type put_parcel_;
@@ -252,9 +304,15 @@ namespace hpx::parcelset::detail {
         {
         }
 
+        // whether the parcel is complete (else it waits for futures)
+        bool preprocess()
+        {
+            return apply_single(parcel_);
+        }
+
         void apply()
         {
-            if (apply_single(parcel_))
+            if (preprocess())
             {
                 done();
             }
@@ -278,14 +336,52 @@ namespace hpx::parcelset::detail {
         {
         }
 
-        void apply()
+        // whether all parcels are complete (else one waits for futures)
+        bool preprocess()
         {
             for (/*idx_*/; idx_ != parcel_.size(); ++idx_)
             {
                 if (!apply_single(parcel_[idx_]))
-                    return;
+                    return false;
             }
-            done();
+            return true;
+        }
+
+        void apply()
+        {
+            bool complete = false;
+            std::exception_ptr error;
+            try
+            {
+                complete = preprocess();
+            }
+            catch (...)
+            {
+                error = std::current_exception();
+            }
+            if (error)
+            {
+                // none of them is sent (not inside the handler: returning a
+                // credit may suspend this thread)
+                return_split_credits();
+                std::rethrow_exception(error);
+            }
+            if (complete)
+            {
+                done();
+            }
+        }
+
+        // The parcels before the one that failed have been preprocessed and
+        // hold the credits split for their ids: return these, as none of the
+        // parcels is sent.
+        void return_split_credits() noexcept
+        {
+            for (std::size_t i = 0; i != idx_ && i != parcel_.size(); ++i)
+            {
+                serialization::detail::preprocess_gid_types::return_credits(
+                    parcel_[i].move_split_gids());
+            }
         }
 
         std::size_t idx_;

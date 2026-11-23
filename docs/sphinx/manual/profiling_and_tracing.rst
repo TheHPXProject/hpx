@@ -252,9 +252,10 @@ You can follow a task on its fiber row when it moves from one worker to
 another. The color of a zone on a fiber row depends on the worker it ran on, so
 a change of color means that the task moved.
 
-|hpx| reuses thread objects. A later task that reuses the same thread object
-appears on the same fiber row, so a fiber row can show more than one task under
-one name.
+|hpx| reuses thread objects. A later task with the same description that reuses
+the same thread object appears on the same fiber row, so a fiber row can show
+more than one task, one after the other, all with that description. A task with
+a different description gets its own fiber row.
 
 Messages
 ~~~~~~~~

@@ -847,12 +847,8 @@ namespace hpx::agas {
     {
         util::reinitializable_static<std::shared_ptr<big_boot_barrier>, bbb_tag>
             bbb;
-        if (!bbb.get())
-        {
-            HPX_THROW_EXCEPTION(hpx::error::internal_server_error,
-                "destroy_big_boot_barrier",
-                "big_boot_barrier has not been created yet");
-        }
+        // called from ~addressing_service, also when the runtime's
+        // construction failed before the barrier was created
         bbb.get().reset();
     }
 

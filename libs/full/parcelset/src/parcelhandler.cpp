@@ -265,30 +265,31 @@ namespace hpx::parcelset {
 
         if (hpx::is_networking_enabled())
         {
-            std::cerr << "Could not find usable bootstrap parcelport.\n";
-            std::cerr << hpx::util::format(
-                "Preconfigured bootstrap parcelport: '{}'\n",
+            // this locality can't start: the runtime's construction fails,
+            // and hpx::init reports the error
+            std::ostringstream strm;
+            hpx::util::format_to(strm,
+                "could not find a usable bootstrap parcelport (configured "
+                "bootstrap parcelport: '{}'), ",
                 get_config_entry(cfgkey, "tcp"));
-
             if (pports_.empty())
             {
-                std::cerr << "No available parcelports\n";
+                strm << "no parcelports are available";
             }
             else
             {
-                std::cerr << "List of available parcelports:\n";
+                strm << "available parcelports:";
                 for (auto const& pp : pports_)
                 {
-                    std::cerr << hpx::util::format(
-                        "  {}, priority: {}, can bootstrap: {}\n",
+                    hpx::util::format_to(strm,
+                        "\n  {}, priority: {}, can bootstrap: {}",
                         pp.second->type(), pp.first,
                         pp.second->can_bootstrap());
                 }
-                std::cerr << "\n";
             }
-
-            // terminate this locality as there is nothing else we can do
-            std::terminate();
+            HPX_THROW_EXCEPTION(hpx::error::network_error,
+                "hpx::parcelset::parcelhandler::get_bootstrap_parcelport", "{}",
+                strm.str());
         }
 
         return {};
@@ -298,13 +299,20 @@ namespace hpx::parcelset {
     {
         exception_list exceptions;
         std::vector<int> failed_pps;
+
+        // initialize_agas has started the bootstrap parcelport already (it
+        // failed there if there is none)
+        std::shared_ptr<parcelport> const bootstrap =
+            get_bootstrap_parcelport();
+        bool bootstrap_failed = false;
+
         for (pports_type::value_type& pp : pports_)
         {
             // protect against exceptions thrown by a parcelport during
             // initialization
             hpx::detail::try_catch_exception_ptr(
                 [&]() {
-                    if (pp.second != get_bootstrap_parcelport())
+                    if (pp.second != bootstrap)
                     {
                         if (pp.first > 0)
                             pp.second->run(false);
@@ -320,19 +328,50 @@ namespace hpx::parcelset {
                 [&](std::exception_ptr&& e) {
                     exceptions.add(HPX_MOVE(e));
                     failed_pps.push_back(pp.first);
+                    bootstrap_failed =
+                        bootstrap_failed || pp.second == bootstrap;
                 });
         }
 
         // handle exceptions
         if (exceptions.size() != 0)
         {
-            if (failed_pps.size() == pports_.size())
+            if (failed_pps.size() == pports_.size() || bootstrap_failed)
             {
-                std::cerr << hpx::util::format(
-                    "all parcelports failed initializing on locality {}, "
-                    "exiting:\n{}\n",
-                    agas::get_locality_id(), exceptions.get_message());
-                std::terminate();
+                // this locality can't communicate (with the bootstrap
+                // parcelport, AGAS and the other localities can't reach it):
+                // stop the parcelports (joining their I/O threads), the
+                // runtime's construction fails, and hpx::init reports the
+                // errors
+                for (auto const& pp : pports_)
+                {
+                    if (pp.first <= 0)
+                    {
+                        continue;
+                    }
+                    try
+                    {
+                        pp.second->stop();
+                    }
+                    // NOLINTNEXTLINE(bugprone-empty-catch)
+                    catch (...)
+                    {
+                    }
+                }
+                if (failed_pps.size() == pports_.size())
+                {
+                    HPX_THROW_EXCEPTION(hpx::error::network_error,
+                        "hpx::parcelset::parcelhandler::initialize",
+                        "all parcelports failed initializing on locality "
+                        "{}:\n{}",
+                        agas::get_locality_id(), exceptions.get_message());
+                }
+                HPX_THROW_EXCEPTION(hpx::error::network_error,
+                    "hpx::parcelset::parcelhandler::initialize",
+                    "the bootstrap parcelport ({}) failed initializing on "
+                    "locality {}:\n{}",
+                    bootstrap->type(), agas::get_locality_id(),
+                    exceptions.get_message());
             }
             else
             {

@@ -34,6 +34,32 @@
 
 namespace hpx {
 
+    namespace {
+
+        // std::system_error appends the message of the error code to the
+        // message of the exception (": HPX(network_error)"). A message that
+        // embeds the message of another error with the same code (e.g. the
+        // error that caused this one) would show it twice: remove it from
+        // the message, it is appended once. Codes that add no text (rethrow)
+        // are left alone.
+        std::string without_code(std::string msg, std::error_code const& ec)
+        {
+            std::string const code = ec.message();
+            if (code.empty())
+            {
+                return msg;
+            }
+
+            std::string const suffix = ": " + code;
+            for (auto pos = msg.find(suffix); pos != std::string::npos;
+                pos = msg.find(suffix, pos))
+            {
+                msg.erase(pos, suffix.size());
+            }
+            return msg;
+        }
+    }    // namespace
+
     ///////////////////////////////////////////////////////////////////////////
     /// Construct a hpx::exception from a \a hpx::error.
     ///
@@ -80,7 +106,8 @@ namespace hpx {
     ///               is the default) or to the category \a hpx_category_rethrow
     ///               (if mode is \a throwmode::rethrow).
     exception::exception(hpx::error e, char const* msg, throwmode mode)
-      : std::system_error(make_system_error_code(e, mode), msg)
+      : std::system_error(make_system_error_code(e, mode),
+            without_code(msg, make_system_error_code(e, mode)))
     {
         HPX_ASSERT((e >= hpx::error::success && e < hpx::error::last_error) ||
             (e & hpx::error::system_error_flag));
@@ -103,7 +130,8 @@ namespace hpx {
     ///               the default) or to the category \a hpx_category_rethrow
     ///               (if mode is \a throwmode::rethrow).
     exception::exception(hpx::error e, std::string const& msg, throwmode mode)
-      : std::system_error(make_system_error_code(e, mode), msg)
+      : std::system_error(make_system_error_code(e, mode),
+            without_code(msg, make_system_error_code(e, mode)))
     {
         HPX_ASSERT((e >= hpx::error::success && e < hpx::error::last_error) ||
             (e & hpx::error::system_error_flag));

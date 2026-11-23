@@ -84,9 +84,9 @@ void verify_values_count(
     ExPolicy&& policy, hpx::partitioned_vector<T> const& v, U const& val)
 {
     HPX_TEST_EQ(
-        std::size_t(hpx::count(policy, v.begin(), v.end(), val)), v.size());
+        std::size_t(hpx::count(policy, v.begin(), v.end(), T(val))), v.size());
     HPX_TEST_EQ(
-        std::size_t(hpx::count_if(policy, v.begin(), v.end(), cmp<T>(val))),
+        std::size_t(hpx::count_if(policy, v.begin(), v.end(), cmp<T>(T(val)))),
         v.size());
 }
 
@@ -94,11 +94,12 @@ template <typename ExPolicy, typename T, typename U = T>
 void verify_values_count_async(
     ExPolicy&& policy, hpx::partitioned_vector<T> const& v, U const& val)
 {
-    HPX_TEST_EQ(std::size_t(hpx::count(policy, v.begin(), v.end(), val).get()),
+    HPX_TEST_EQ(
+        std::size_t(hpx::count(policy, v.begin(), v.end(), T(val)).get()),
         v.size());
     HPX_TEST_EQ(
         std::size_t(
-            hpx::count_if(policy, v.begin(), v.end(), cmp<T>(val)).get()),
+            hpx::count_if(policy, v.begin(), v.end(), cmp<T>(T(val))).get()),
         v.size());
 }
 

@@ -182,7 +182,7 @@ namespace hpx::parallel::detail::rfa {
         {
             if constexpr (std::is_same_v<ftype, float>)
             {
-                bins[0] = std::ldexp(0.75, MAX_EXP);
+                bins[0] = static_cast<ftype>(std::ldexp(0.75, MAX_EXP));
             }
             else
             {
@@ -191,8 +191,8 @@ namespace hpx::parallel::detail::rfa {
 
             for (int index = 1; index <= MAXINDEX; index++)
             {
-                bins[index] = std::ldexp(0.75,
-                    MAX_EXP + MANT_DIG - BIN_WIDTH + 1 - index * BIN_WIDTH);
+                bins[index] = static_cast<ftype>(std::ldexp(0.75,
+                    MAX_EXP + MANT_DIG - BIN_WIDTH + 1 - index * BIN_WIDTH));
             }
             for (int index = MAXINDEX + 1; index < MAXINDEX + MAXFOLD; index++)
             {
@@ -682,7 +682,7 @@ namespace hpx::parallel::detail::rfa {
             double Y = 0.0;
 
             if (ISNANINF(primary(0)))
-                return primary(0);
+                return static_cast<float>(primary(0));
             if (ISZERO(primary(0)))
                 return 0.0f;
 
