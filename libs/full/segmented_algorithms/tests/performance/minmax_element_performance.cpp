@@ -94,8 +94,6 @@ int hpx_main(hpx::program_options::variables_map& vm)
 
 int main(int argc, char* argv[])
 {
-    std::srand((unsigned int) std::time(nullptr));
-
     // initialize program
     std::vector<std::string> const cfg = {
         "hpx.os_threads=all", "hpx.run_hpx_main!=1"};
