@@ -324,7 +324,9 @@ These messages connect a future to the continuations it starts. The address in
 the message is the address of the shared state of the future, so you can search
 for the same address on the producer side and on the consumer side. If a task
 is running when the message is sent, the message is also added to the text of
-its zone on the fiber row.
+its zone on the fiber row, but not while an ``HPX_TRACING_MARK_EVENT`` zone,
+including one that |hpx| itself opens, is open inside it, as Tracy accepts zone
+text only for the innermost open zone.
 
 .. list-table::
    :header-rows: 1

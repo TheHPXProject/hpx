@@ -63,12 +63,9 @@ namespace hpx::tracy {
             return region;
         }
 
-        // True while this OS thread is executing inside a Tracy fiber context.
-        // rename_region (called by mark_event) must be a no-op in that case:
-        // the zone ctx in TLS belongs to the OS-thread zone opened before
-        // FiberEnter, but Tracy's internal zone stack has switched to the
-        // fiber's stack - calling TracyCZoneName on the OS zone while inside
-        // a fiber causes a "zone name destination doesn't match" crash.
+        // True while this OS thread is inside a Tracy fiber. rename_region is
+        // then a no-op, as its zone is on the OS thread's zone stack, not the
+        // fiber's, and push_zone counts the zones it opens on the fiber.
         bool& in_fiber() noexcept
         {
             thread_local bool flag = false;
@@ -83,13 +80,14 @@ namespace hpx::tracy {
             return s.id == 0 && s.active == 0 && s.connectionId == 0;
         }
 
-        // The task's zone on the fiber this worker is in, opened by
-        // enter_fiber or taken over in resume_fiber_zone, and closed by
-        // leave_fiber unless the task is suspended. It is per worker, so a
-        // suspended task keeps its zones in suspended_fiber_zone instead.
+        // The innermost zone HPX keeps on this worker's fiber (the task's zone,
+        // or the one enter_fiber opens for a resumed task) and how many
+        // push_zone zones are open on top of it. Per worker, so a suspended
+        // task carries both in its suspended_fiber_zone instead.
         struct fiber_zone_data
         {
             zone_ctx_storage ctx_value{};
+            std::uint32_t zones_above = 0;
             bool active = false;
         };
 
@@ -111,6 +109,7 @@ namespace hpx::tracy {
             std::uint32_t color) noexcept
         {
             fz.ctx_value = open_zone(zone_name, color);
+            fz.zones_above = 0;
             fz.active = true;
         }
     }    // namespace
@@ -190,6 +189,7 @@ namespace hpx::tracy {
                 TracyCZoneEnd(to_tracy(fz.ctx_value));
                 fz.active = false;
                 fz.ctx_value = {};
+                fz.zones_above = 0;
             }
         }
 
@@ -211,9 +211,10 @@ namespace hpx::tracy {
             suspended_fiber_zone const suspended{
                 open_zone(intern_zone_label(suspend_reason, "suspend"),
                     suspended_color),
-                fz.ctx_value, true};
+                fz.ctx_value, fz.zones_above, true};
             fz.active = false;
             fz.ctx_value = {};
+            fz.zones_above = 0;
             return suspended;
         }
 
@@ -234,18 +235,20 @@ namespace hpx::tracy {
             }
             TracyCZoneEnd(to_tracy(suspended.suspension));
             fz.ctx_value = suspended.task;
+            fz.zones_above = suspended.zones_above;
             fz.active = true;
         }
 
-        // Embed text into the currently-active fiber zone so it appears in
-        // Tracy's "Zone Info" popup when the user clicks the colored bar on
-        // the timeline. Uses the same ctx stored by open_fiber_zone.
+        // The text shows in Tracy's zone information window. Skipped while a
+        // push_zone zone is on top, as Tracy accepts zone text only for the
+        // innermost zone and stops a verifying capture otherwise; the same
+        // text is also sent as a message.
         HPX_CORE_EXPORT void add_zone_text_to_fiber(
             char const* txt, std::size_t size) noexcept
         {
             auto& fz = current_fiber_zone();
             if (txt == nullptr || size == 0 || !fz.active ||
-                ctx_is_empty(fz.ctx_value))
+                fz.zones_above != 0 || ctx_is_empty(fz.ctx_value))
                 return;
 
             // TracyCZoneText sends the text via the zone validation protocol.
@@ -344,6 +347,13 @@ namespace hpx::tracy {
             char const* safe_name = intern_zone_label(name, "event");
             TracyCZoneC(ctx, 0x0078D7, 1);
             TracyCZoneName(ctx, safe_name, std::strlen(safe_name));
+
+            // Inside a fiber the zone goes on top of the task's zone, so
+            // add_zone_text_to_fiber must not add text until it is closed.
+            if (ctx.active && in_fiber())
+            {
+                ++current_fiber_zone().zones_above;
+            }
             return to_storage(ctx);
         }
 
@@ -353,6 +363,14 @@ namespace hpx::tracy {
             if (!ctx_is_empty(ctx_value))
             {
                 TracyCZoneEnd(to_tracy(ctx_value));
+            }
+
+            // A zone opened before the task had a fiber was not counted; the
+            // check keeps the count from wrapping around.
+            auto& fz = current_fiber_zone();
+            if (ctx_value.active && in_fiber() && fz.zones_above != 0)
+            {
+                --fz.zones_above;
             }
         }
     }    // namespace detail

@@ -37,11 +37,13 @@ namespace hpx::tracy {
 
     // The zones a suspended task keeps open on its fiber: the zone for the
     // suspension, and the task's zone below it. The task keeps them, not the
-    // worker, as it can resume on another worker.
+    // worker, as it can resume on another worker. zones_above counts the
+    // zones the task opened on top of its zone (see push_zone).
     struct suspended_fiber_zone
     {
         zone_ctx_storage suspension{};
         zone_ctx_storage task{};
+        std::uint32_t zones_above = 0;
         bool open = false;
     };
 
@@ -58,8 +60,9 @@ namespace hpx::tracy {
         HPX_CORE_EXPORT void pop_zone(zone_ctx_storage const&) noexcept;
         HPX_CORE_EXPORT region_data stop_region(
             region_data const& prev_region) noexcept;
-        // Set/clear the per-OS-thread "inside fiber" flag used to guard
-        // rename_region from operating on a stale zone ctx.
+        // Set/clear the per-OS-thread "inside fiber" flag. rename_region uses
+        // it to skip a zone that is not on the fiber's zone stack, push_zone
+        // to count the zones it opens on top of the task's zone.
         HPX_CORE_EXPORT void set_in_fiber(bool) noexcept;
 
         // Open/close a zone on the fiber's zone stack so that the fiber track
@@ -83,6 +86,8 @@ namespace hpx::tracy {
         /// The text appears in the Zone Info popup when the user clicks the
         /// colored bar on the Tracy timeline. This is how producer/consumer
         /// addresses are attached directly to the visual zone rectangle.
+        /// Does nothing while a zone opened by push_zone is on top of it, as
+        /// Tracy accepts zone text only for the innermost zone.
         ///
         /// \param txt  Pointer to character string.
         /// \param size Length of the string.
