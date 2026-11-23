@@ -27,9 +27,10 @@
 // --hpx:threads=1.
 //
 // sync_wait_domain customizes apply_sender(sync_wait_t, sndr) to use HPX's
-// run_loop (which uses hpx::spinlock + hpx::lcos::local::detail::condition_variable).
-// This suspends the HPX task cooperatively instead of OS-blocking the worker
-// thread, allowing queued HPX work to continue running.
+// run_loop (which uses hpx::spinlock +
+// hpx::lcos::local::detail::condition_variable). This suspends the HPX task
+// cooperatively instead of OS-blocking the worker thread, allowing queued HPX
+// work to continue running.
 //
 // Senders executing through HPX should expose this domain through
 // get_completion_domain<set_value_t> so sync_wait routes here.
