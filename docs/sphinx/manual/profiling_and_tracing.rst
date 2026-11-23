@@ -47,8 +47,8 @@ them when you configure |hpx| with |cmake|_. If more than one of
      * The Tracy profiler (Linux, Windows, macOS)
    * * |ittnotify|_
      * :option:`HPX_WITH_ITTNOTIFY`
-     * Tasks, task lifecycle, work stealing, markers, locks (optional),
-       performance counters
+     * Tasks, task lifecycle, work stealing, markers, parcels, locks
+       (optional), performance counters
      * |vtune|
    * * |apex|_
      * :option:`HPX_WITH_APEX`
@@ -594,6 +594,18 @@ Tasks and markers use the ITT domain ``hpx``.
 * **Work stealing**: a ``work_stolen`` marker with the metadata ``thief``,
   ``victim`` and ``task``. Controlled by
   :option:`HPX_WITH_TRACING_WORK_STEALING_EVENTS`.
+* **Parcels**: the parcel layer records the events ``send_parcel``,
+  ``recv_parcel`` and ``parcel_scheduled`` (see *Events* below). With
+  :option:`HPX_WITH_PARCEL_PROFILING`\ ``=ON``, |hpx| also records a marker
+  for each parcel: ``parcel_send`` when its write completed, ``parcel_recv``
+  when it arrived, and ``parcel_scheduled`` when its action was put on the
+  scheduler later than the receive. Each marker has the parcel id as the
+  metadata ``parcel_id_msb`` and ``parcel_id_lsb``. ``parcel_send`` also has
+  ``size`` and ``target_locality``, ``parcel_recv`` has ``source_locality``,
+  and ``parcel_scheduled`` has ``source_locality`` and ``source_thread``. A
+  locality that is not known yet is left out. To follow a parcel, match the id
+  of a ``parcel_send`` marker with a ``parcel_recv`` marker in the trace of the
+  other locality, using both halves of the id.
 * **Markers**: ``os_thread_sleep`` when a worker finds no work, and a marker
   for each call to ``hpx::tracing::frame_mark``.
 * **Events**: ``HPX_TRACING_MARK_EVENT`` records an ITT event that lasts until
@@ -605,8 +617,7 @@ Tasks and markers use the ITT domain ``hpx``.
   reported as ITT counters.
 * **Thread names**: the names of the OS threads that |hpx| starts.
 
-The ITT backend does not record futures and continuations, and it does not
-record parcel events.
+The ITT backend does not record futures and continuations.
 
 .. _profiling_with_apex:
 
