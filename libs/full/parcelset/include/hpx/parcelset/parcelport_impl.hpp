@@ -193,6 +193,8 @@ namespace hpx::parcelset {
           , operations_in_flight_(0)
           , num_thread_(0)
           , max_background_thread_(max_background_threads(ini))
+          , fast_path_(hpx::util::get_entry_as<int>(
+                           ini, "hpx.parcel.fast_path", 0) != 0)
         {
             std::string const endian_out =
                 get_config_entry("hpx.parcel.endian_out",
@@ -345,6 +347,17 @@ namespace hpx::parcelset {
                       hpx::error::locality_was_disconnected)),
                     p);
                 return;
+            }
+
+            if constexpr (connection_handler_traits<
+                              ConnectionHandler>::is_connectionless::value &&
+                connection_handler_traits<
+                    ConnectionHandler>::send_immediate_parcels::value)
+            {
+                if (fast_path_ && try_send_fast(dest, p, f))
+                {
+                    return;
+                }
             }
 
             // We create a shared pointer of the parcels_await object since it
@@ -1037,6 +1050,47 @@ namespace hpx::parcelset {
         }
 
     private:
+        // Send one parcel with one encode pass and no preprocessing pass.
+        // Returns false, with p and f not changed, if the parcel must take
+        // the usual path: the destination can't take it now, parcels wait in
+        // a queue (this keeps their order), the parcel has a serialization
+        // filter, or a value in it needs the preprocessing pass.
+        bool try_send_fast(
+            locality const& dest, parcel& p, write_handler_type& f)
+        {
+            if (!can_send_immediate_impl(dest) ||
+                num_parcel_destinations_.load(std::memory_order_relaxed) != 0)
+            {
+                return false;
+            }
+
+            if (std::unique_ptr<serialization::binary_filter> const filter(
+                    p.get_serialization_filter());
+                filter)
+            {
+                return false;
+            }
+
+            typename ConnectionHandler::sender_type::parcel_buffer_type buffer;
+            if (!encode_parcel_optimistic(*this, p, buffer, archive_flags_))
+            {
+                return false;
+            }
+
+            detail::call_for_each::handlers_type handlers;
+            handlers.push_back(HPX_MOVE(f));
+            detail::call_for_each::parcels_type parcels;
+            parcels.push_back(HPX_MOVE(p));
+
+            typename ConnectionHandler::sender_type::callback_fn_type
+                callback_fn = detail::call_for_each(
+                    HPX_MOVE(handlers), HPX_MOVE(parcels));
+
+            connection_handler().send_immediate(
+                this, dest, HPX_MOVE(buffer), HPX_MOVE(callback_fn));
+            return true;
+        }
+
         ///////////////////////////////////////////////////////////////////////
         void get_connection_and_send_parcels(
             locality const& locality_id, bool /* background */ = false)
@@ -1239,6 +1293,9 @@ namespace hpx::parcelset {
 
         std::atomic<std::size_t> num_thread_;
         std::size_t const max_background_thread_;
+
+        // try to send parcels with one encode pass (hpx.parcel.fast_path)
+        bool const fast_path_;
 
         // set once early parcel handling is finished (see initialized)
         std::atomic<bool> initialized_ = false;

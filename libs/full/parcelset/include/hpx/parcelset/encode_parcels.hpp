@@ -153,6 +153,67 @@ namespace hpx::parcelset {
         }
     }    // namespace detail
 
+    /// Encode one parcel in a single pass, without the preprocessing pass
+    /// (see basic_archive::enable_optimistic_save). Returns false if a value
+    /// in the parcel needs the preprocessing pass (a managed id_type, a
+    /// future or task_group that is not ready): the buffer is then cleared,
+    /// and the parcel is not changed. Exceptions go to the caller. The
+    /// parcel must have no serialization filter.
+    HPX_CXX_EXPORT template <typename Buffer>
+    bool encode_parcel_optimistic(
+        parcelport& pp, parcel& p, Buffer& buffer, int archive_flags)
+    {
+        HPX_ASSERT(buffer.data_.empty());
+
+        // most small parcels fit, so the buffer is allocated once
+        buffer.data_.reserve(512);
+
+#if defined(HPX_HAVE_PARCELPORT_COUNTERS)
+        hpx::chrono::high_resolution_timer const timer;
+#endif
+        serialization::output_archive archive(buffer.data_, archive_flags,
+            &buffer.chunks_, nullptr,
+            pp.get_zero_copy_serialization_threshold());
+        archive.enable_optimistic_save();
+
+        std::size_t const num_parcels = 1;
+        archive << num_parcels;    //-V128
+
+#if defined(HPX_HAVE_PARCELPORT_COUNTERS) &&                                   \
+    defined(HPX_HAVE_PARCELPORT_ACTION_COUNTERS)
+        std::size_t const archive_pos = archive.current_pos();
+        std::int64_t const serialize_time = timer.elapsed_nanoseconds();
+#endif
+        archive << p;
+        if (archive.needs_await())
+        {
+            buffer.data_.clear();
+            buffer.chunks_.clear();
+            return false;
+        }
+        LPT_(debug) << p;
+
+#if defined(HPX_HAVE_PARCELPORT_COUNTERS) &&                                   \
+    defined(HPX_HAVE_PARCELPORT_ACTION_COUNTERS)
+        parcelset::data_point action_data;
+        action_data.bytes_ = archive.current_pos() - archive_pos;
+        action_data.serialization_time_ =
+            timer.elapsed_nanoseconds() - serialize_time;
+        action_data.num_parcels_ = 1;
+        pp.add_sent_data(p.get_action_name(), action_data);
+#endif
+        archive.flush();
+
+#if defined(HPX_HAVE_PARCELPORT_COUNTERS)
+        buffer.data_point_.serialization_time_ = timer.elapsed_nanoseconds();
+        buffer.data_point_.num_parcels_ = 1;
+#endif
+        p.size() = archive.bytes_written();
+        p.num_chunks() = buffer.chunks_.size();
+        detail::encode_finalize(buffer, archive.bytes_written());
+        return true;
+    }
+
     HPX_CXX_EXPORT template <typename Buffer>
     std::size_t encode_parcels(parcelport& pp, parcel const* ps,
         std::size_t num_parcels, Buffer& buffer, int archive_flags_,

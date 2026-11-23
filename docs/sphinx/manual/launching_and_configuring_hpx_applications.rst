@@ -731,6 +731,7 @@ The ``hpx.parcel`` configuration section
     zero_copy_optimization = ${HPX_PARCEL_ZERO_COPY_OPTIMIZATION:$[hpx.parcel.array_optimization]}
     zero_copy_receive_optimization = ${HPX_PARCEL_ZERO_COPY_RECEIVE_OPTIMIZATION:$[hpx.parcel.array_optimization]}
     async_serialization = ${HPX_PARCEL_ASYNC_SERIALIZATION:1}
+    fast_path = ${HPX_PARCEL_FAST_PATH:0}
     message_handlers = ${HPX_PARCEL_MESSAGE_HANDLERS:0}
 
 .. _ini_hpx_parcel:
@@ -799,6 +800,18 @@ The ``hpx.parcel`` configuration section
      * This property defines whether this :term:`locality` is allowed to spawn a
        new thread for serialization (this is both for encoding and decoding
        parcels). The default is ``1``.
+   * * ``hpx.parcel.fast_path``
+     * This property defines whether a parcelport that sends parcels
+       immediately (MPI, LCI or LCW with ``sendimm=1`` in its section)
+       encodes a :term:`parcel` in one pass, without the preprocessing pass,
+       if no parcels are queued and the parcel has no serialization filter.
+       A parcel with a value that needs the preprocessing pass (a managed
+       ``id_type``, a future or ``task_group`` that is not ready) stops that
+       encode and takes the usual path; the work of the stopped encode is
+       lost. A save function of a user type that relies on the
+       preprocessing pass must call ``ar.defer_to_preprocessing()`` first.
+       Device memory without a prepared host copy is copied synchronously.
+       The default is ``0``.
    * * ``hpx.parcel.message_handlers``
      * This property defines whether message handlers are loaded. The default is
        ``0``.

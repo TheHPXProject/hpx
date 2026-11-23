@@ -10,8 +10,8 @@ if(NOT HPX_WITH_NETWORKING)
   return()
 endif()
 
-set(tests optimistic_archive put_parcels set_parcel_write_handler temporary_ids
-          zero_copy_parcel
+set(tests fast_path_fallback optimistic_archive put_parcels
+          set_parcel_write_handler temporary_ids zero_copy_parcel
 )
 
 # parcels keep buffers for their zero-copy chunks only with thrust (the
@@ -20,6 +20,7 @@ if(HPX_WITH_THRUST AND (HPX_WITH_CUDA OR HPX_WITH_HIP))
   list(APPEND tests delayed_serialization)
 endif()
 
+set(fast_path_fallback_PARAMETERS LOCALITIES 2)
 set(put_parcels_PARAMETERS LOCALITIES 2)
 set(set_parcel_write_handler_PARAMETERS LOCALITIES 2)
 set(zero_copy_parcel_PARAMETERS LOCALITIES 2)
@@ -102,3 +103,14 @@ if(HPX_WITH_ITTNOTIFY AND HPX_WITH_PARCEL_PROFILING)
          --hpx:ini=hpx.trace_depth=0
   )
 endif()
+
+# run fast_path_fallback with the fast path on (only parcelports that send
+# immediately use it)
+add_hpx_unit_test(
+  "modules.parcelset" fast_path_fallback_enabled
+  EXECUTABLE fast_path_fallback
+  PSEUDO_DEPS_NAME fast_path_fallback ${fast_path_fallback_PARAMETERS}
+  PARCELPORTS mpi lci lcw
+  RUN_SERIAL
+  ARGS --hpx:ini=hpx.parcel.fast_path!=1 --hpx:ini=hpx.parcel.mpi.sendimm!=1
+)
