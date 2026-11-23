@@ -161,6 +161,7 @@ namespace hpx::serialization {
             {
                 *this << detail::raw_ptr(filter);
                 buffer_->set_filter(filter);
+                filtered_ = true;
             }
         }
 
@@ -177,6 +178,14 @@ namespace hpx::serialization {
         [[nodiscard]] constexpr std::size_t bytes_written() const noexcept
         {
             return size_;
+        }
+
+        // Whether the data goes through a filter (e.g. compression): the
+        // filter reads all of it on the host, also the data of zero-copy
+        // chunks.
+        [[nodiscard]] constexpr bool is_filtered() const noexcept
+        {
+            return filtered_;
         }
 
         [[nodiscard]] std::size_t get_num_chunks() const noexcept
@@ -399,8 +408,12 @@ namespace hpx::serialization {
         ///                checking.
         /// \param address The data.
         /// \param count   The number of bytes.
+        /// \param memory  Whether \a address refers to device memory: the
+        ///                chunk is marked (see
+        ///                serialization_chunk::is_device_memory).
         void save_binary_chunk(detail::fundamental_types t, void const* address,
-            std::size_t const count)
+            std::size_t const count,
+            chunk_memory const memory = chunk_memory::host)
         {
             if (HPX_UNLIKELY(count == 0))
                 return;
@@ -412,17 +425,20 @@ namespace hpx::serialization {
 
             if (HPX_UNLIKELY(disable_data_chunking()))
             {
+                // device memory must not be copied on the host
+                HPX_ASSERT(memory == chunk_memory::host);
                 size_ += buffer_->save_binary(t, address, count);
             }
             else
             {
                 // the size might grow if optimizations are not used
-                size_ += buffer_->save_binary_chunk(t, address, count);
+                size_ += buffer_->save_binary_chunk(t, address, count, memory);
             }
         }
 
     private:
         std::unique_ptr<erased_output_container> buffer_;
+        bool filtered_ = false;
     };
 }    // namespace hpx::serialization
 

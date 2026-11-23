@@ -50,10 +50,12 @@ namespace hpx::serialization {
     //
     // Data above the zero-copy threshold goes as a zero-copy chunk: of the
     // vector's memory itself if that is pinned host memory (see
-    // hpx::thrust::pooled_allocator) or if the parcelport moves device memory
-    // (enable_device_chunks), else of a pinned host copy. Smaller data is
-    // copied into the archive. A vector of pinned host memory receives the
-    // data in its own memory too.
+    // hpx::thrust::pooled_allocator) or if the parcelport sends device
+    // memory (enable_device_chunks), else of a pinned host copy. Smaller data
+    // is copied into the archive. The receiving side decides itself where
+    // chunks arrive, whatever memory they were sent from: in the vector's
+    // memory if that is pinned host memory or if the parcelport receives into
+    // device memory (allow_device_receive), else in a pinned staging buffer.
     //
     // A chunk of the vector's own memory refers to it until the parcel has
     // been sent, like the zero-copy chunks of any other container (see
@@ -125,7 +127,9 @@ namespace hpx::serialization {
         // host: an archive without chunks (e.g. with the array optimization
         // disabled) copies the data through the host instead. Preprocessing
         // archives report chunking as disabled but copy nothing.
-        if (ar.enable_device_chunks() &&
+        // A filter (e.g. compression) reads the data on the host: it is
+        // copied into the archive below.
+        if (ar.enable_device_chunks() && !ar.is_filtered() &&
             (ar.is_preprocessing() || !ar.disable_data_chunking()) &&
             bytes >= ar.get_zero_copy_serialization_threshold())
         {
@@ -137,8 +141,8 @@ namespace hpx::serialization {
             }
 #endif
             ar << static_cast<std::uint8_t>(device_data_storage::device_chunk);
-            ar.save_binary_chunk(
-                detail::fundamental_types::none, device_data, bytes);
+            ar.save_binary_chunk(detail::fundamental_types::none, device_data,
+                bytes, chunk_memory::device);
             return;
         }
 
@@ -210,9 +214,10 @@ namespace hpx::serialization {
         T* device_data = ::thrust::raw_pointer_cast(v.data());
 
         // Zero-copy receive: the networking layer places the data at the
-        // address handed over here only after this function returns.
+        // address handed over here only after this function returns. A
+        // filter (e.g. decompression) writes all data on the host instead.
         bool const zero_copy_receive =
-            storage != device_data_storage::in_archive &&
+            storage != device_data_storage::in_archive && !ar.is_filtered() &&
             !ar.disable_receive_data_chunking() &&
             ar.try_get_extra_data<detail::allow_zero_copy_receive>() != nullptr;
 
@@ -232,17 +237,19 @@ namespace hpx::serialization {
             return;
         }
 
-        if (zero_copy_receive && storage == device_data_storage::device_chunk)
+        if (zero_copy_receive &&
+            ar.try_get_extra_data<detail::allow_device_receive>() != nullptr)
         {
-            // the parcelport moves device memory: it receives into v
-            ar.load_binary_chunk(
-                detail::fundamental_types::none, device_data, bytes, true);
+            // the parcelport receives into device memory: it receives into v,
+            // also data sent from host memory
+            ar.load_binary_chunk(detail::fundamental_types::none, device_data,
+                bytes, true, chunk_memory::device);
             return;
         }
 
         if (zero_copy_receive)
         {
-            // The networking layer can't write to device memory: hand it a
+            // The parcelport doesn't receive into device memory: hand it a
             // pinned staging buffer and copy to the device once the data has
             // arrived, before the parcel's action runs.
             void* staging =
