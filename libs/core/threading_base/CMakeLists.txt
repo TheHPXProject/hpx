@@ -47,6 +47,7 @@ set(threading_base_headers
     hpx/threading_base/thread_specific_ptr.hpp
     hpx/threading_base/threading_base_fwd.hpp
     hpx/threading_base/tracing_sample_rate.hpp
+    hpx/threading_base/tuners/recording_tuner.hpp
 )
 
 if(HPX_WITH_APEX)
@@ -105,6 +106,7 @@ set(threading_base_sources
     thread_helpers.cpp
     thread_num_tss.cpp
     thread_pool_base.cpp
+    tuners/recording_tuner.cpp
 )
 
 if(HPX_WITH_THREAD_BACKTRACE_ON_SUSPENSION)
