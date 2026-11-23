@@ -122,13 +122,15 @@ void test_is_heap_sent(ExPolicy&&... policy)
 
     std::size_t const size = 10007;
     std::vector<int> c(size);
-    std::iota(std::begin(c), std::end(c), std::rand());
 
-    // a heap that covers all, part, or none of the range
+    // a heap that covers all, part, or none of the range; each case starts
+    // from ascending values, so only the first one is a heap
     for (std::size_t heap_size :
         {size, std::size_t(std::rand()) % size, std::size_t(0)})
     {
-        std::make_heap(std::begin(c), std::next(std::begin(c), heap_size));
+        std::iota(std::begin(c), std::end(c), std::rand());
+        std::make_heap(std::begin(c),
+            std::next(std::begin(c), static_cast<std::ptrdiff_t>(heap_size)));
 
         bool result = hpx::ranges::is_heap(policy..., iterator(std::begin(c)),
             Sentinel(iterator(std::end(c))));
