@@ -78,7 +78,7 @@ std::vector<std::string> const user_defined_type::name_list{
 struct random_fill
 {
     random_fill(std::size_t rand_base, std::size_t range)
-      : gen(std::rand())
+      : gen(_gen())
       , base(static_cast<unsigned int>(rand_base))
       , dist(-static_cast<int>(range / 2), static_cast<int>(range / 2))
     {

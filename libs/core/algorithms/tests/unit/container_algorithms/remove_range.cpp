@@ -328,6 +328,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
 
     std::cout << "using seed: " << seed << std::endl;
     std::srand(seed);
+    g.seed(seed);
 
     test_remove();
     return hpx::local::finalize();
