@@ -176,6 +176,16 @@ void test_registry()
 
 void test_float_clamping()
 {
+    // Compile-time evaluation test (C++20 constexpr)
+    constexpr policies::tuning_parameter_info constexpr_info{"test_time",
+        policies::tuning_value(0.5f), policies::tuning_value(100.0f), false,
+        policies::tuning_parameter_type::real};
+    static_assert(constexpr_info.clamped(10.0f) == 10.0f);
+    static_assert(constexpr_info.clamped(0.1f) == 0.5f);
+    static_assert(constexpr_info.clamped(200.0f) == 100.0f);
+    static_assert(constexpr_info.clamped(
+                      std::numeric_limits<float>::quiet_NaN()) == 0.5f);
+
     policies::scheduler_tuning_parameters parameters(2);
     std::size_t const time = parameters.add("time", 0.5f, 100.0f, true, 1.5f);
 
