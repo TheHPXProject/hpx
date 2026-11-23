@@ -8,12 +8,14 @@
 #include <hpx/init.hpp>
 #include <hpx/modules/testing.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <iostream>
 #include <iterator>
 #include <numeric>
 #include <random>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -154,6 +156,42 @@ void test_mismatch1_async(ExPolicy&& p, IteratorTag)
     }
 }
 
+// both ranges end with a sentinel, compared with std::mismatch on the
+// underlying vectors
+template <typename Sentinel, typename IteratorTag, typename... ExPolicy>
+void test_mismatch_sent(IteratorTag, ExPolicy&&... policy)
+{
+    using base_iterator = std::vector<std::size_t>::iterator;
+    using iterator = test::test_iterator<base_iterator, IteratorTag>;
+
+    std::vector<std::size_t> c1(10007);
+    std::size_t const first_value = gen();    //-V101
+    std::iota(std::begin(c1), std::end(c1), first_value);
+
+    // the second range is as long, shorter, or longer, and differs at a
+    // random position or not at all
+    for (std::size_t size2 : {c1.size(), c1.size() / 2, c1.size() + 10})
+    {
+        for (bool change : {false, true})
+        {
+            std::vector<std::size_t> c2(size2);
+            std::iota(std::begin(c2), std::end(c2), first_value);
+            if (change)
+                ++c2[static_cast<std::size_t>(dis(gen)) % c2.size()];
+
+            auto expected = std::mismatch(
+                std::begin(c1), std::end(c1), std::begin(c2), std::end(c2));
+
+            auto result = hpx::ranges::mismatch(policy...,
+                iterator(std::begin(c1)), Sentinel(iterator(std::end(c1))),
+                iterator(std::begin(c2)), Sentinel(iterator(std::end(c2))));
+
+            HPX_TEST(result.in1 == iterator(expected.first));
+            HPX_TEST(result.in2 == iterator(expected.second));
+        }
+    }
+}
+
 template <typename IteratorTag>
 void test_mismatch1()
 {
@@ -167,6 +205,17 @@ void test_mismatch1()
 
     test_mismatch1_async(seq(task), IteratorTag());
     test_mismatch1_async(par(task), IteratorTag());
+
+    using iterator =
+        test::test_iterator<std::vector<std::size_t>::iterator, IteratorTag>;
+    test_mismatch_sent<test::sentinel_from_iterator<iterator>>(IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        using sentinel = test::sized_sentinel_from_iterator<iterator>;
+        test_mismatch_sent<sentinel>(IteratorTag(), seq);
+        test_mismatch_sent<sentinel>(IteratorTag(), par);
+        test_mismatch_sent<sentinel>(IteratorTag(), par_unseq);
+    }
 }
 
 void mismatch_test1()

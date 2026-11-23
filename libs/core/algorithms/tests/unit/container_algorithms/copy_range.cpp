@@ -15,6 +15,7 @@
 #include <iterator>
 #include <numeric>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "test_utils.hpp"
@@ -86,6 +87,47 @@ void test_copy_async(ExPolicy&& p, IteratorTag)
 }
 
 template <typename IteratorTag>
+void test_copy_sent(IteratorTag)
+{
+    using base_iterator = std::vector<int>::iterator;
+    using iterator = test::test_iterator<base_iterator, IteratorTag>;
+    using sentinel = test::sentinel_from_iterator<iterator>;
+
+    std::vector<int> c(10007);
+    std::vector<int> d(c.size());
+    std::iota(std::begin(c), std::end(c), std::rand());
+
+    auto result = hpx::ranges::copy(iterator(std::begin(c)),
+        sentinel(iterator(std::end(c))), std::begin(d));
+
+    HPX_TEST(result.in == iterator(std::end(c)));
+    HPX_TEST(result.out == std::end(d));
+    HPX_TEST(c == d);
+}
+
+template <typename ExPolicy, typename IteratorTag>
+void test_copy_sent(ExPolicy&& policy, IteratorTag)
+{
+    static_assert(hpx::is_execution_policy<ExPolicy>::value,
+        "hpx::is_execution_policy<ExPolicy>::value");
+
+    using base_iterator = std::vector<int>::iterator;
+    using iterator = test::test_iterator<base_iterator, IteratorTag>;
+    using sentinel = test::sized_sentinel_from_iterator<iterator>;
+
+    std::vector<int> c(10007);
+    std::vector<int> d(c.size());
+    std::iota(std::begin(c), std::end(c), std::rand());
+
+    auto result = hpx::ranges::copy(policy, iterator(std::begin(c)),
+        sentinel(iterator(std::end(c))), std::begin(d));
+
+    HPX_TEST(result.in == iterator(std::end(c)));
+    HPX_TEST(result.out == std::end(d));
+    HPX_TEST(c == d);
+}
+
+template <typename IteratorTag>
 void test_copy()
 {
     using namespace hpx::execution;
@@ -98,6 +140,14 @@ void test_copy()
 
     test_copy_async(seq(task), IteratorTag());
     test_copy_async(par(task), IteratorTag());
+
+    test_copy_sent(IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_copy_sent(seq, IteratorTag());
+        test_copy_sent(par, IteratorTag());
+        test_copy_sent(par_unseq, IteratorTag());
+    }
 }
 
 void copy_test()
