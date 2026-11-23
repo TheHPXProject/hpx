@@ -35,6 +35,16 @@ namespace hpx::tracy {
         std::uint32_t phase = 0;
     };
 
+    // The zones a suspended task keeps open on its fiber: the zone for the
+    // suspension, and the task's zone below it. The task keeps them, not the
+    // worker, as it can resume on another worker.
+    struct suspended_fiber_zone
+    {
+        zone_ctx_storage suspension{};
+        zone_ctx_storage task{};
+        bool open = false;
+    };
+
     namespace detail {
 
         HPX_CORE_EXPORT region_data start_region(
@@ -59,16 +69,14 @@ namespace hpx::tracy {
             char const* zone_name, std::uint32_t color = 0) noexcept;
         HPX_CORE_EXPORT void stop_fiber_zone() noexcept;
 
-        // Suspend/resume the zone that is currently open on the fiber's zone
-        // stack. Call suspend_fiber_zone() just before self_.yield() and
-        // resume_fiber_zone() immediately after self_.yield() returns.
-        // Both operate solely on current_fiber_zone() - they never touch the
-        // OS-thread zone (current_region()), so there is no zone-stack
-        // conflict.
-        HPX_CORE_EXPORT void suspend_fiber_zone(
+        // Call suspend_fiber_zone() just before self_.yield() and pass what it
+        // returns to resume_fiber_zone() after self_.yield() returns. The
+        // suspension zone stays open in between, also while the task's fiber
+        // is left, so it lasts until the task runs again.
+        HPX_CORE_EXPORT suspended_fiber_zone suspend_fiber_zone(
             char const* suspend_reason = nullptr) noexcept;
         HPX_CORE_EXPORT void resume_fiber_zone(
-            char const* zone_name = nullptr, std::uint32_t color = 0) noexcept;
+            suspended_fiber_zone const& suspended) noexcept;
 
         /// \brief Embed arbitrary text into the currently-active fiber zone.
         ///
@@ -221,16 +229,14 @@ namespace hpx::tracy {
         zone_ctx_storage ctx_value;
     };
 
-    // RAII guard that closes the running fiber zone before self_.yield() and
-    // reopens it after self_.yield() returns. Fully inline so it is visible
-    // to all translation units (execution_agent.cpp, thread_helpers.cpp, etc.)
-    // without requiring a separate shared-library export.
-    // Only touches current_fiber_zone() - never calls stop_region() /
-    // start_region() - so there is no zone-stack conflict.
+    // RAII guard that opens a zone on the task's fiber before self_.yield()
+    // and closes it after self_.yield() returns, so the zone lasts until the
+    // task runs again. A zone opened after the guard must close before the
+    // yield, or the fiber's zones end out of order.
     struct fiber_suspend_region
     {
-        /// \brief Suspends the currently active fiber zone with the given
-        ///        reason.
+        /// \brief Opens a zone named after the reason on the task's fiber,
+        ///        which the destructor closes.
         ///
         /// \param active  If false, the ctor and dtor emit no Tracy events.
         // Two-arg ctor honours the profiler-connected decision captured by
@@ -243,7 +249,7 @@ namespace hpx::tracy {
         {
             if (active_)
             {
-                detail::suspend_fiber_zone(suspend_reason);
+                suspended_ = detail::suspend_fiber_zone(suspend_reason);
             }
         }
 
@@ -258,12 +264,14 @@ namespace hpx::tracy {
         {
             if (active_)
             {
-                detail::resume_fiber_zone();
+                detail::resume_fiber_zone(suspended_);
             }
         }
 
     private:
         bool active_;
+        // Lives on the task's stack, so it moves with the task.
+        suspended_fiber_zone suspended_;
     };
 }    // namespace hpx::tracy
 
