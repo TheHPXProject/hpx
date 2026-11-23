@@ -21,6 +21,7 @@
 #include <hpx/schedulers/local_priority_queue_scheduler.hpp>
 #include <hpx/schedulers/lockfree_queue_backends.hpp>
 
+#include <atomic>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -152,13 +153,51 @@ namespace hpx::threads::policies {
         }
 
     private:
+        // Whether the tuner's thread runs. Starting and ending it may be
+        // asked for at the same time (two calls of resume_pool, a stop while
+        // the pool is resumed), so each claims the state for its whole
+        // operation: a start only from idle, an end only from running, and
+        // either waits while the other is busy. Nothing is locked while an
+        // end waits for the thread to finish.
+        enum class tuner_state : std::uint8_t
+        {
+            idle,
+            busy,
+            running
+        };
+
+        // Claim the state from the given one for an operation (it is busy
+        // then); returns false if the state is the one the operation leads
+        // to already, so that there is nothing to do.
+        bool claim_tuner_state(
+            tuner_state const from, tuner_state const done, char const* what)
+        {
+            tuner_state seen = from;
+            hpx::util::yield_while(
+                [&] {
+                    seen = from;
+                    if (tuner_state_.compare_exchange_strong(
+                            seen, tuner_state::busy, std::memory_order_acquire))
+                    {
+                        return false;
+                    }
+                    return seen != done;    // wait while another is busy
+                },
+                what);
+            return seen == from;
+        }
+
         void start_tuner()
         {
             // a tuner without an update period runs no thread, and a pool
             // resumed without having been suspended still runs it
             auto const period = this->rules_.update_period();
-            if (period.count() <= 0 || tuner_thread_)
+            if (period.count() <= 0 ||
+                !claim_tuner_state(tuner_state::idle, tuner_state::running,
+                    "local_priority_tuned_scheduler::start_tuner"))
+            {
                 return;
+            }
 
             {
                 std::unique_lock<hpx::spinlock> l(tuner_mtx_);
@@ -180,7 +219,17 @@ namespace hpx::threads::policies {
                 // can be staged
                 thread_schedule_state::suspended, true, this);
 
-            this->create_thread(data, &tuner_thread_, hpx::throws);
+            try
+            {
+                this->create_thread(data, &tuner_thread_, hpx::throws);
+            }
+            catch (...)
+            {
+                // the thread doesn't run if it can't be created
+                tuner_state_.store(
+                    tuner_state::idle, std::memory_order_release);
+                throw;
+            }
             HPX_ASSERT(tuner_thread_);
 
             // The thread is waiting for its next update most of the time.
@@ -200,12 +249,17 @@ namespace hpx::threads::policies {
             this->increment_background_thread_count();
             threads::set_thread_state(
                 tuner_thread_.noref(), thread_schedule_state::pending);
+
+            tuner_state_.store(tuner_state::running, std::memory_order_release);
         }
 
         void end_tuner()
         {
-            if (!tuner_thread_)
+            if (!claim_tuner_state(tuner_state::running, tuner_state::idle,
+                    "local_priority_tuned_scheduler::end_tuner"))
+            {
                 return;
+            }
 
             {
                 std::unique_lock<hpx::spinlock> l(tuner_mtx_);
@@ -223,6 +277,7 @@ namespace hpx::threads::policies {
                 "local_priority_tuned_scheduler::end_tuner");
 
             tuner_thread_ = invalid_thread_id;
+            tuner_state_.store(tuner_state::idle, std::memory_order_release);
         }
 
         void run_tuner(std::chrono::milliseconds const period)
@@ -255,6 +310,7 @@ namespace hpx::threads::policies {
         bool tuner_stop_ = false;
         bool tuner_done_ = true;
         thread_id_ref_type tuner_thread_;
+        std::atomic<tuner_state> tuner_state_{tuner_state::idle};
     };
 }    // namespace hpx::threads::policies
 

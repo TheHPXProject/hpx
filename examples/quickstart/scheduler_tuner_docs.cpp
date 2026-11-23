@@ -41,6 +41,17 @@ public:
         spin_time_ = parameters.find("hpx.min_idle_backoff_time");
         found_.assign(parameters.num_workers(), 0);
         ran_out_.assign(parameters.num_workers(), 0);
+
+        // start with at least one spin step (see update), also if the spin
+        // time was configured shorter
+        if (spin_time_ != policies::scheduler_tuning_parameters::npos)
+        {
+            for (std::size_t w = 0; w != parameters.num_workers(); ++w)
+            {
+                parameters.set(w, spin_time_,
+                    (std::max) (parameters.get<float>(w, spin_time_), 2.0f));
+            }
+        }
     }
 
     // how often update is called

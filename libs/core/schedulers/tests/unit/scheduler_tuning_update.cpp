@@ -509,6 +509,13 @@ int test_suspended_pool()
     hpx::threads::resume_pool(pool).get();
     wait_for_suspended_pool_updates(updates_when_suspended + 2);
 
+    // resuming a pool that runs, twice at the same time, starts no second
+    // tuner thread (the suspension below would then end only one of them)
+    auto resumed_once = hpx::threads::resume_pool(pool);
+    auto resumed_twice = hpx::threads::resume_pool(pool);
+    resumed_once.get();
+    resumed_twice.get();
+
     // stopping the runtime stops the pool while it is suspended
     hpx::threads::suspend_pool(pool).get();
     return hpx::local::finalize();
