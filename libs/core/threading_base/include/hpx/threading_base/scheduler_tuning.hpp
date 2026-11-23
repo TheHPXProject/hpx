@@ -19,12 +19,14 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <cmath>
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <vector>
 
 #include <hpx/config/warnings_prefix.hpp>
@@ -112,6 +114,17 @@ namespace hpx::threads::policies {
         [[nodiscard]] constexpr T clamped(T const value) const noexcept
         {
             HPX_ASSERT(type == tuning_parameter_type_of<T>);
+            if constexpr (std::same_as<T, float>)
+            {
+                if (std::isnan(value))
+                {
+                    // Fall back to min_value if value is NaN (e.g. from
+                    // division by zero in a dynamic tuner), as default_value
+                    // is not stored in tuning_parameter_info and min_value is a
+                    // safe conservative fallback.
+                    return min_value.as<float>();
+                }
+            }
             return std::clamp(value, min_value.as<T>(), max_value.as<T>());
         }
     };
