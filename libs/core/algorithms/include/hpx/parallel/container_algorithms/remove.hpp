@@ -503,8 +503,9 @@ namespace hpx::ranges {
                 hpx::traits::is_iterator_v<Iter> &&
                 hpx::parallel::traits::is_projected_v<Proj, Iter> &&
                 std::sentinel_for<Sent, Iter> &&
-                hpx::is_invocable_v<Pred,
-                    typename std::iterator_traits<Iter>::value_type
+                hpx::parallel::traits::is_indirect_callable_v<
+                    hpx::execution::sequenced_policy, Pred,
+                    hpx::parallel::traits::projected<Proj, Iter>
                 >
             )
         // clang-format on
@@ -526,10 +527,9 @@ namespace hpx::ranges {
             requires(
                 std::ranges::range<Rng> &&
                 hpx::parallel::traits::is_projected_range_v<Proj, Rng> &&
-                hpx::is_invocable_v<Pred,
-                    typename std::iterator_traits<
-                        std::ranges::iterator_t<Rng>
-                    >::value_type
+                hpx::parallel::traits::is_indirect_callable_v<
+                    hpx::execution::sequenced_policy, Pred,
+                    hpx::parallel::traits::projected_range<Proj, Rng>
                 >
             )
         // clang-format on
@@ -628,11 +628,9 @@ namespace hpx::ranges {
             static_assert(
                 std::input_iterator<Iter>, "Required at least input iterator.");
 
-            using type = typename std::iterator_traits<Iter>::value_type;
-
             return hpx::ranges::remove_if(
                 first, last,
-                [value](type const& a) -> bool { return value == a; },
+                [value](auto const& a) -> bool { return value == a; },
                 HPX_MOVE(proj));
         }
 
@@ -652,12 +650,9 @@ namespace hpx::ranges {
             static_assert(std::input_iterator<std::ranges::iterator_t<Rng>>,
                 "Required at least input iterator.");
 
-            using type = typename std::iterator_traits<
-                std::ranges::iterator_t<Rng>>::value_type;
-
             return hpx::ranges::remove_if(
                 HPX_FORWARD(Rng, rng),
-                [value](type const& a) -> bool { return value == a; },
+                [value](auto const& a) -> bool { return value == a; },
                 HPX_MOVE(proj));
         }
 
@@ -681,11 +676,9 @@ namespace hpx::ranges {
             static_assert(std::forward_iterator<FwdIter>,
                 "Required at least forward iterator.");
 
-            using type = typename std::iterator_traits<FwdIter>::value_type;
-
             return hpx::ranges::remove_if(
                 HPX_FORWARD(ExPolicy, policy), first, last,
-                [value](type const& a) -> bool { return value == a; },
+                [value](auto const& a) -> bool { return value == a; },
                 HPX_MOVE(proj));
         }
 
@@ -709,12 +702,9 @@ namespace hpx::ranges {
             static_assert(std::forward_iterator<std::ranges::iterator_t<Rng>>,
                 "Required at least forward iterator.");
 
-            using type = typename std::iterator_traits<
-                std::ranges::iterator_t<Rng>>::value_type;
-
             return hpx::ranges::remove_if(
                 HPX_FORWARD(ExPolicy, policy), HPX_FORWARD(Rng, rng),
-                [value](type const& a) -> bool { return value == a; },
+                [value](auto const& a) -> bool { return value == a; },
                 HPX_MOVE(proj));
         }
     } remove{};

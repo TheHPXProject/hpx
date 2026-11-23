@@ -260,6 +260,75 @@ void test_remove_if()
     test_remove_if<user_defined_type>();
 }
 
+////////////////////////////////////////////////////////////////////////////
+// The projection may yield a type other than the element type. The predicate
+// then applies to what the projection yields, as in std::ranges::remove_if.
+struct projected_item
+{
+    int id;
+    double weight;
+};
+
+std::vector<projected_item> make_projected_items()
+{
+    return {{1, 1.0}, {2, 2.0}, {3, 3.0}, {2, 4.0}, {5, 5.0}};
+}
+
+void test_remove_if_projection()
+{
+    auto is_two = [](int id) { return id == 2; };
+
+    {
+        std::vector<projected_item> c = make_projected_items();
+        auto result = hpx::ranges::remove_if(
+            c.begin(), c.end(), is_two, &projected_item::id);
+        HPX_TEST(result.begin() == c.begin() + 3);
+        HPX_TEST(result.end() == c.end());
+        HPX_TEST_EQ(c[0].id, 1);
+        HPX_TEST_EQ(c[1].id, 3);
+        HPX_TEST_EQ(c[2].id, 5);
+    }
+    {
+        std::vector<projected_item> c = make_projected_items();
+        auto result = hpx::ranges::remove_if(c, is_two, &projected_item::id);
+        HPX_TEST(result.begin() == c.begin() + 3);
+        HPX_TEST(result.end() == c.end());
+        HPX_TEST_EQ(c[0].id, 1);
+        HPX_TEST_EQ(c[1].id, 3);
+        HPX_TEST_EQ(c[2].id, 5);
+    }
+    {
+        std::vector<projected_item> c = make_projected_items();
+        auto result = hpx::ranges::remove_if(hpx::execution::seq, c.begin(),
+            c.end(), is_two, &projected_item::id);
+        HPX_TEST(result.begin() == c.begin() + 3);
+        HPX_TEST(result.end() == c.end());
+        HPX_TEST_EQ(c[0].id, 1);
+        HPX_TEST_EQ(c[1].id, 3);
+        HPX_TEST_EQ(c[2].id, 5);
+    }
+    {
+        std::vector<projected_item> c = make_projected_items();
+        auto result = hpx::ranges::remove_if(hpx::execution::par, c.begin(),
+            c.end(), is_two, &projected_item::id);
+        HPX_TEST(result.begin() == c.begin() + 3);
+        HPX_TEST(result.end() == c.end());
+        HPX_TEST_EQ(c[0].id, 1);
+        HPX_TEST_EQ(c[1].id, 3);
+        HPX_TEST_EQ(c[2].id, 5);
+    }
+    {
+        std::vector<projected_item> c = make_projected_items();
+        auto result = hpx::ranges::remove_if(
+            hpx::execution::par, c, is_two, &projected_item::id);
+        HPX_TEST(result.begin() == c.begin() + 3);
+        HPX_TEST(result.end() == c.end());
+        HPX_TEST_EQ(c[0].id, 1);
+        HPX_TEST_EQ(c[1].id, 3);
+        HPX_TEST_EQ(c[2].id, 5);
+    }
+}
+
 int hpx_main(hpx::program_options::variables_map& vm)
 {
     unsigned int seed = (unsigned int) std::time(nullptr);
@@ -270,6 +339,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
     std::srand(seed);
 
     test_remove_if();
+    test_remove_if_projection();
     return hpx::local::finalize();
 }
 
