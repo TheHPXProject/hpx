@@ -146,6 +146,29 @@ void test_pool_without_tuner()
     std::ranges::sort(expected);
     std::ranges::sort(discovered);
     HPX_TEST(discovered == expected);
+
+    // a pool wildcard stands for the pools whose scheduler counts only
+    for (std::string const instance : {"pool#*", "pool#*/worker-thread#*"})
+    {
+        std::vector<hpx::performance_counters::counter_info> pools;
+        hpx::performance_counters::discover_counter_type(
+            counter_name(instance, "created-small"), pools,
+            hpx::performance_counters::discover_counters_mode::full);
+
+        std::string const pool_instance = instance == "pool#*" ?
+            "pool#default" :
+            "pool#default/worker-thread#*";
+        HPX_TEST_EQ(pools.size(), std::size_t(1));
+        if (!pools.empty())
+        {
+            HPX_TEST_EQ(pools[0].fullname_,
+                counter_name(pool_instance, "created-small"));
+        }
+        for (auto const& info : pools)
+        {
+            HPX_TEST(info.fullname_.find("pool#plain") == std::string::npos);
+        }
+    }
     if (discovered != expected)
     {
         for (auto const& name : discovered)

@@ -72,16 +72,19 @@ public:
             found_[w] = found;
             ran_out_[w] = ran_out;
 
-            // the spin time is a float (in microseconds); set clamps the
-            // value to the range of the setting
+            // The spin time is a float (in microseconds); set clamps the
+            // value to the range of the setting. It stays at least 2 us, so
+            // that the first backoff step (1 us) is still spun: without any
+            // spin there are no spins to count, and the tuner could never
+            // raise the spin time again.
             float const spin_time = parameters.get<float>(w, spin_time_);
             if (new_ran_out / 4 > new_found)
             {
-                parameters.set(w, spin_time_, spin_time / 2);
+                parameters.set(w, spin_time_, (std::max) (spin_time / 2, 2.0f));
             }
             else if (new_found > new_ran_out)
             {
-                parameters.set(w, spin_time_, (std::max) (2 * spin_time, 1.0f));
+                parameters.set(w, spin_time_, (std::max) (2 * spin_time, 2.0f));
             }
         }
     }

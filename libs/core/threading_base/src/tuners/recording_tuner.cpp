@@ -17,10 +17,34 @@
 #include <ios>
 #include <ostream>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
 namespace hpx::threads::policies {
+
+    namespace {
+
+        // A field of a CSV row: as it is, or in double quotes (with its
+        // double quotes doubled) if it contains a comma, a double quote or a
+        // line break, for instance a pool name of an application.
+        void write_csv_field(std::ostream& out, std::string_view const field)
+        {
+            if (field.find_first_of(",\"\r\n") == std::string_view::npos)
+            {
+                out << field;
+                return;
+            }
+            out << '"';
+            for (char const c : field)
+            {
+                if (c == '"')
+                    out << '"';
+                out << c;
+            }
+            out << '"';
+        }
+    }    // namespace
 
     recording_tuner::recording_tuner(std::ostream& out,
         std::chrono::milliseconds const period, bool const totals,
@@ -63,7 +87,9 @@ namespace hpx::threads::policies {
             std::size_t const worker =
                 external ? scheduler_tuning_counters::external : w;
 
-            out_ << ms << ',' << pool_name_ << ',';
+            out_ << ms << ',';
+            write_csv_field(out_, pool_name_);
+            out_ << ',';
             if (external)
                 out_ << "external";
             else
@@ -129,7 +155,8 @@ namespace hpx::threads::policies {
         }
         for (std::size_t id = 0; id != parameters.size(); ++id)
         {
-            out_ << ',' << parameters.info(id).name;
+            out_ << ',';
+            write_csv_field(out_, parameters.info(id).name);
         }
         out_ << '\n';
     }

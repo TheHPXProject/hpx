@@ -418,6 +418,13 @@ namespace hpx::threads::detail {
     void scheduled_thread_pool<Scheduler>::resume_direct(error_code& ec)
     {
         this->resume_internal(true, ec);
+
+        // let the scheduler start the HPX threads it ended for the
+        // suspension (see scheduler_base::on_pool_suspending)
+        if (!ec)
+        {
+            sched_->Scheduler::on_pool_resumed();
+        }
     }
 
     template <typename Scheduler>
@@ -468,6 +475,11 @@ namespace hpx::threads::detail {
                 "cannot suspend a pool from itself");
             return;
         }
+
+        // let the scheduler end the HPX threads it runs on its own, which
+        // would keep the pool from being suspended (see
+        // scheduler_base::on_pool_suspending)
+        sched_->Scheduler::on_pool_suspending();
 
         this->suspend_internal(ec);
     }

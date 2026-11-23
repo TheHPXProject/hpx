@@ -2626,9 +2626,12 @@ system and application performance.
        specified the counter refers to the 'default' pool.
    * * Description
      * Returns the current value of the counter. The scheduler keeps it for its
-       tuner as a 32-bit number that wraps around, so the value wraps around as
-       well; resetting the counter does nothing, as that would change what the
-       tuner sees. Only a scheduler with a tuner counts (the
+       tuner as a 32-bit number per worker thread that wraps around, so the
+       value of a worker thread wraps around as well. The value of a pool, or
+       of ``total``, is the sum of these 32-bit numbers (as a 64-bit number):
+       it doesn't wrap around like one 32-bit counter, and it goes down when
+       the counter of one of its worker threads wraps around. Resetting the
+       counter does nothing, as that would change what the tuner sees. Only a scheduler with a tuner counts (the
        ``local-priority-tuned-fifo`` scheduler, see :ref:`schedulers`): these
        counters exist only if a pool uses such a scheduler, and only for those
        pools (``total`` sums them).

@@ -383,6 +383,16 @@ namespace hpx::threads::policies {
         /// must not call back into the pool. Does nothing by default.
         virtual void on_pool_stopping() {}
 
+        /// Called by the thread pool of this scheduler when it is about to
+        /// suspend its workers (suspend_direct), while they still run HPX
+        /// threads, and when it has resumed them (resume_direct). A scheduler
+        /// that runs HPX threads of its own ends them before the pool is
+        /// suspended: the pool waits until it runs no threads but background
+        /// threads, and a background thread that waits with a timeout keeps
+        /// ordinary threads in the pool (the timer's). Do nothing by default.
+        virtual void on_pool_suspending() {}
+        virtual void on_pool_resumed() {}
+
         /// What this scheduler counts for its tuner (see
         /// scheduler_tuning_counters), nullptr if it doesn't count.
         [[nodiscard]] virtual scheduler_tuning_counters const*

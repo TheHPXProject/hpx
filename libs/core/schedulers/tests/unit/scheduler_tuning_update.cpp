@@ -17,6 +17,7 @@
 #include <hpx/modules/resource_partitioner.hpp>
 #include <hpx/modules/schedulers.hpp>
 #include <hpx/modules/testing.hpp>
+#include <hpx/modules/thread_pool_util.hpp>
 #include <hpx/modules/threading_base.hpp>
 #include <hpx/thread.hpp>
 
@@ -278,23 +279,52 @@ void test_update_loop()
         num_tasks, check_records(recorded.str(), num_workers, "run_small"));
 }
 
+// the file the "recording" tuner writes
+std::filesystem::path recording_file;
+
+// the number of complete rows (ending with a line break) of the given file
+// after its header
+std::size_t complete_rows(std::filesystem::path const& file)
+{
+    std::ifstream in(file);
+    std::ostringstream content;
+    content << in.rdbuf();
+    std::string const text = content.str();
+
+    std::size_t lines = 0;
+    for (char const c : text)
+    {
+        if (c == '\n')
+            ++lines;
+    }
+    return lines == 0 ? 0 : lines - 1;
+}
+
 int test_recording_file()
 {
     num_workers = hpx::get_os_thread_count();
 
-    // let the tuner write a few rows
-    hpx::this_thread::sleep_for(5 * period);
+    // let the tuner write a few rows (one per worker and one for external
+    // per update): wait for them rather than for a fixed time, as the tuner
+    // may be late
+    auto const deadline = std::chrono::steady_clock::now() + timeout;
+    while (complete_rows(recording_file) < 2 * (num_workers + 1) &&
+        std::chrono::steady_clock::now() < deadline)
+    {
+        hpx::this_thread::sleep_for(period);
+    }
     return hpx::local::finalize();
 }
 
 // the registered "recording" tuner, configured with its entries
 void test_recording_tuner()
 {
-    std::filesystem::path const file = std::filesystem::temp_directory_path() /
+    recording_file = std::filesystem::temp_directory_path() /
         ("scheduler_tuning_update_" +
             std::to_string(
                 std::chrono::steady_clock::now().time_since_epoch().count()) +
             ".csv");
+    std::filesystem::path const& file = recording_file;
 
     hpx::local::init_params init_args;
     init_args.cfg = {"hpx.os_threads=2", "hpx.scheduler_tuner=recording",
@@ -426,6 +456,104 @@ void test_counter_wraps()
     }
 }
 
+///////////////////////////////////////////////////////////////////////////////
+// A pool whose tuner has an update period can be suspended, resumed and
+// stopped while suspended (by the end of the runtime). The tuner's thread
+// waits for its next update with a timeout, which keeps the timer's threads
+// in the pool: suspending the pool ends the tuner's thread first, resuming it
+// starts the thread again.
+std::atomic<std::size_t> suspended_pool_updates{0};
+
+struct counting_tuner final : policies::scheduler_tuner
+{
+    void attach(policies::scheduler_tuning_parameters&) override {}
+
+    [[nodiscard]] std::chrono::milliseconds update_period() const override
+    {
+        return period;
+    }
+
+    void update(policies::scheduler_tuning_counters const&,
+        policies::scheduler_tuning_parameters&) override
+    {
+        ++suspended_pool_updates;
+    }
+};
+
+// wait until the tuner has run at least the given number of updates
+void wait_for_suspended_pool_updates(std::size_t const n)
+{
+    auto const deadline = std::chrono::steady_clock::now() + timeout;
+    while (suspended_pool_updates.load() < n &&
+        std::chrono::steady_clock::now() < deadline)
+    {
+        hpx::this_thread::sleep_for(period);
+    }
+    HPX_TEST_LTE(n, suspended_pool_updates.load());
+}
+
+int test_suspended_pool()
+{
+    auto& pool = hpx::resource::get_thread_pool("tuned");
+
+    // the tuner's thread runs in its pool
+    wait_for_suspended_pool_updates(2);
+
+    // no updates while the pool is suspended
+    hpx::threads::suspend_pool(pool).get();
+    std::size_t const updates_when_suspended = suspended_pool_updates.load();
+    hpx::this_thread::sleep_for(4 * period);
+    HPX_TEST_EQ(suspended_pool_updates.load(), updates_when_suspended);
+
+    // they go on once it is resumed
+    hpx::threads::resume_pool(pool).get();
+    wait_for_suspended_pool_updates(updates_when_suspended + 2);
+
+    // stopping the runtime stops the pool while it is suspended
+    hpx::threads::suspend_pool(pool).get();
+    return hpx::local::finalize();
+}
+
+void test_stop_suspended_pool()
+{
+    policies::register_scheduler_tuner(
+        "counting", [](policies::scheduler_tuner_context const&) {
+            return std::make_unique<counting_tuner>();
+        });
+
+    hpx::local::init_params init_args;
+    init_args.cfg = {"hpx.os_threads=2", "hpx.scheduler_tuner=counting"};
+    init_args.rp_callback = [](hpx::resource::partitioner& rp,
+                                hpx::program_options::variables_map const&) {
+        // the default pool keeps the first processing unit, the tuned pool
+        // gets the second one
+        rp.create_thread_pool("tuned",
+            hpx::resource::scheduling_policy::local_priority_tuned_fifo,
+            policies::scheduler_mode::default_ |
+                policies::scheduler_mode::enable_elasticity);
+
+        bool added = false;
+        for (hpx::resource::numa_domain const& d : rp.numa_domains())
+        {
+            for (hpx::resource::core const& c : d.cores())
+            {
+                for (hpx::resource::pu const& p : c.pus())
+                {
+                    if (!added && p.id() != 0)
+                    {
+                        rp.add_resource(p, "tuned");
+                        added = true;
+                    }
+                }
+            }
+        }
+    };
+
+    // the suspension of the pool didn't end while the tuner ran
+    HPX_TEST_EQ(
+        hpx::local::init(test_suspended_pool, argc_, argv_, init_args), 0);
+}
+
 int main(int argc, char* argv[])
 {
     argc_ = argc;
@@ -436,6 +564,7 @@ int main(int argc, char* argv[])
     test_invalid_entries();
     test_update_loop();
     test_recording_tuner();
+    test_stop_suspended_pool();
 
     return hpx::util::report_errors();
 }

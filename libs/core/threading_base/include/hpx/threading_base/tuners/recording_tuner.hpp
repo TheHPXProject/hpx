@@ -41,8 +41,14 @@ namespace hpx::threads::policies {
     public:
         /// Write to out, which has to outlive the tuner's pool (until the
         /// pool has stopped). The tuner writes from one HPX thread at a time
-        /// and flushes after each update; tuners of several pools that share
-        /// a stream may interleave their rows.
+        /// and flushes after each update. The tuners of several pools may run
+        /// their updates at the same time, so tuners that share a stream need
+        /// one whose writes are synchronized (such as std::cout with the
+        /// default synchronization with stdio), or the caller has to make
+        /// sure that they don't write at the same time; a string or file
+        /// stream written by two tuners at once is a data race. The
+        /// "recording" tuner writes to a file of its own (see
+        /// file_recording_tuner).
         recording_tuner(std::ostream& out, std::chrono::milliseconds period,
             bool totals = false, std::string pool_name = {});
 

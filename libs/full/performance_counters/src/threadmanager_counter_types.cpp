@@ -356,6 +356,28 @@ namespace hpx::performance_counters::detail {
                 }
             }
         }
+        else if (p.instancename_ == "pool#*")
+        {
+            // pool#* stands for the pools whose scheduler counts: the
+            // registry would expand it to all pools
+            std::size_t const num_pools = hpx::resource::get_num_thread_pools();
+            for (std::size_t pool = 0; pool != num_pools; ++pool)
+            {
+                if (!pool_has_tuning_counters(pool))
+                {
+                    continue;
+                }
+
+                p.instancename_ = "pool";
+                p.instanceindex_ = static_cast<std::int64_t>(pool);
+
+                status = get_counter_name(p, i.fullname_, ec);
+                if (!status_is_valid(status) || !f(i, ec) || ec)
+                {
+                    return false;
+                }
+            }
+        }
         else if (!f(i, ec) || ec)
         {
             return false;

@@ -126,13 +126,38 @@ namespace hpx::threads::policies {
         // condition variable with the period as its timeout, so that a stop
         // ends the wait at once without waking up the thread from whatever
         // else it may wait for. It is a background thread of the pool, so a
-        // tuner that waits for its next update doesn't keep the pool from
-        // being suspended or stopped. A tuner without an update period runs
-        // no thread.
+        // tuner that waits for its next update doesn't keep a blocking stop
+        // waiting. Its timed wait keeps ordinary threads in the pool, though
+        // (those of the timer), so the thread is ended before the pool is
+        // suspended and started again when it is resumed. A tuner without an
+        // update period runs no thread.
         void on_pool_started() override
         {
+            start_tuner();
+        }
+
+        void on_pool_stopping() override
+        {
+            end_tuner();
+        }
+
+        void on_pool_suspending() override
+        {
+            end_tuner();
+        }
+
+        void on_pool_resumed() override
+        {
+            start_tuner();
+        }
+
+    private:
+        void start_tuner()
+        {
+            // a tuner without an update period runs no thread, and a pool
+            // resumed without having been suspended still runs it
             auto const period = this->rules_.update_period();
-            if (period.count() <= 0)
+            if (period.count() <= 0 || tuner_thread_)
                 return;
 
             {
@@ -177,7 +202,7 @@ namespace hpx::threads::policies {
                 tuner_thread_.noref(), thread_schedule_state::pending);
         }
 
-        void on_pool_stopping() override
+        void end_tuner()
         {
             if (!tuner_thread_)
                 return;
@@ -195,12 +220,11 @@ namespace hpx::threads::policies {
                     std::unique_lock<hpx::spinlock> l(tuner_mtx_);
                     return !tuner_done_;
                 },
-                "local_priority_tuned_scheduler::on_pool_stopping");
+                "local_priority_tuned_scheduler::end_tuner");
 
             tuner_thread_ = invalid_thread_id;
         }
 
-    private:
         void run_tuner(std::chrono::milliseconds const period)
         {
             std::unique_lock<hpx::spinlock> l(tuner_mtx_);

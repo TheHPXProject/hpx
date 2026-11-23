@@ -52,6 +52,8 @@ set(shared_priority_queue_thread_creation_PARAMETERS THREADS_PER_LOCALITY 2)
 set(steal_staged_early_PARAMETERS THREADS_PER_LOCALITY 4)
 set(steal_pending_early_PARAMETERS THREADS_PER_LOCALITY 4)
 set(wake_by_task_size_PARAMETERS THREADS_PER_LOCALITY 4)
+# the stop of a suspended pool needs a second pool, see the test
+set(scheduler_tuning_update_PARAMETERS THREADS_PER_LOCALITY 2)
 
 # ##############################################################################
 foreach(test ${tests})
