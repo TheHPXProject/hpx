@@ -94,7 +94,7 @@ int hpx_main(variables_map& vm)
     ///////////////////////////////////////////////////////////////////////////
     // Initialize the PRNG seed.
     if (!seed)
-        seed = std::uint64_t(std::time(nullptr));
+        seed = std::uint64_t(std::random_device{}());
 
     {
         ///////////////////////////////////////////////////////////////////////

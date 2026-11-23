@@ -51,7 +51,7 @@ int app_main(variables_map&)
     ///////////////////////////////////////////////////////////////////////
     // Initialize the PRNG seed.
     if (!seed)
-        seed = std::uint64_t(std::time(nullptr));
+        seed = std::uint64_t(std::random_device{}());
 
     ///////////////////////////////////////////////////////////////////////
     // Validate command-line arguments.
