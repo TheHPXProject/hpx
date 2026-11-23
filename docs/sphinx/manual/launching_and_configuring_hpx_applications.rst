@@ -480,7 +480,8 @@ These settings are used by the ``local-priority-tuned-fifo`` scheduler only (see
 ``hpx.idle_backoff_spin_round_pauses`` they are the tunable settings of its
 rules, which its tuner (``hpx.scheduler_tuner``) may change while it runs. At
 their defaults the scheduler decides like the local priority scheduler (see
-:ref:`thread_scheduler_wake_up`).
+:ref:`thread_scheduler_wake_up`). Their current values are performance counters
+(see :ref:`scheduler_tuning_setting_performance_counters`).
 
 .. code-block:: ini
 

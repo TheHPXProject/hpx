@@ -7,7 +7,9 @@
 // The counters a scheduler with a tuner keeps (scheduler_tuning_counters) are
 // available as performance counters /scheduler/tuning/<name>, for the
 // locality, a pool and a worker thread, but only for the pools whose scheduler
-// counts: here the default pool, not the pool "plain".
+// counts: here the default pool, not the pool "plain". The settings of such a
+// scheduler (scheduler_tuning_parameters) are available as performance
+// counters /scheduler/tuning/setting/<name>, for a pool and a worker thread.
 
 #include <hpx/config.hpp>
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
@@ -20,10 +22,12 @@
 #include <hpx/thread.hpp>
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -182,6 +186,99 @@ void test_pool_without_tuner()
     }
 }
 
+// the name of the counter of a setting: its configuration entry without
+// "hpx.", with '-' in place of '_' and '.'
+std::string setting_counter_name(std::string entry)
+{
+    entry.erase(0, 4);
+    std::ranges::replace(entry, '_', '-');
+    std::ranges::replace(entry, '.', '-');
+    return "setting/" + entry;
+}
+
+double setting_value(policies::scheduler_tuning_parameters const& parameters,
+    std::size_t const worker, std::size_t const id)
+{
+    if (parameters.info(id).type == policies::tuning_parameter_type::real)
+    {
+        return static_cast<double>(parameters.get<float>(worker, id));
+    }
+    return parameters.get<std::uint32_t>(worker, id);
+}
+
+bool query_throws(std::string const& instance, std::string const& name)
+{
+    try
+    {
+        query(instance, name);
+    }
+    catch (hpx::exception const&)
+    {
+        return true;
+    }
+    return false;
+}
+
+void test_settings(policies::scheduler_tuning_parameters const& parameters)
+{
+    // the configured value (see main)
+    std::size_t const spin = parameters.find("hpx.min_idle_backoff_time");
+    HPX_TEST_NEQ(spin, policies::scheduler_tuning_parameters::npos);
+    HPX_TEST_EQ(query("pool#default", "setting/min-idle-backoff-time"), 37);
+    HPX_TEST_EQ(query("worker-thread#0", "setting/min-idle-backoff-time"), 37);
+
+    for (std::size_t id = 0; id != parameters.size(); ++id)
+    {
+        auto const& info = parameters.info(id);
+        HPX_TEST(std::string_view(info.name).starts_with("hpx."));
+        std::string const name = setting_counter_name(info.name);
+
+        // the workers, of the pool and of the default pool
+        double sum = 0.0;
+        for (std::size_t i = 0; i != parameters.num_workers(); ++i)
+        {
+            std::string const worker = "worker-thread#" + std::to_string(i);
+            double const value = setting_value(parameters, i, id);
+            HPX_TEST_EQ(query("pool#default/" + worker, name),
+                static_cast<std::int64_t>(std::llround(value)));
+            HPX_TEST_EQ(query(worker, name),
+                static_cast<std::int64_t>(std::llround(value)));
+            sum += value;
+        }
+
+        // the pool: the mean over the workers, or the value of the pool
+        double const expected = info.per_worker ?
+            sum / static_cast<double>(parameters.num_workers()) :
+            setting_value(parameters, 0, id);
+        HPX_TEST_EQ(query("pool#default", name),
+            static_cast<std::int64_t>(std::llround(expected)));
+
+        // no total, and nothing for the pool whose scheduler has no settings
+        HPX_TEST(query_throws("total", name));
+        HPX_TEST(query_throws("pool#plain", name));
+        HPX_TEST(query_throws("pool#plain/worker-thread#0", name));
+    }
+
+    // the settings are discovered for the default pool only, without a total
+    std::vector<hpx::performance_counters::counter_info> infos;
+    hpx::performance_counters::discover_counter_type(
+        "/scheduler/tuning/setting/min-idle-backoff-time", infos,
+        hpx::performance_counters::discover_counters_mode::full);
+
+    std::vector<std::string> expected = {
+        counter_name("pool#default", "setting/min-idle-backoff-time"),
+        counter_name(
+            "pool#default/worker-thread#*", "setting/min-idle-backoff-time")};
+    std::vector<std::string> discovered;
+    for (auto const& info : infos)
+    {
+        discovered.push_back(info.fullname_);
+    }
+    std::ranges::sort(expected);
+    std::ranges::sort(discovered);
+    HPX_TEST(discovered == expected);
+}
+
 int hpx_main()
 {
     auto const* counters = hpx::threads::get_self_id_data()
@@ -194,13 +291,23 @@ int hpx_main()
         test_pool_without_tuner();
     }
 
+    auto const* parameters = hpx::threads::get_self_id_data()
+                                 ->get_scheduler_base()
+                                 ->find_tuning_parameters();
+    HPX_TEST(parameters != nullptr);
+    if (parameters != nullptr)
+    {
+        test_settings(*parameters);
+    }
+
     return hpx::finalize();
 }
 
 int main(int argc, char* argv[])
 {
     hpx::init_params init_args;
-    init_args.cfg = {"hpx.force_min_os_threads!=2"};
+    init_args.cfg = {
+        "hpx.force_min_os_threads!=2", "hpx.min_idle_backoff_time!=37"};
     init_args.rp_callback = [](hpx::resource::partitioner& rp,
                                 hpx::program_options::variables_map const&) {
         rp.create_thread_pool("default",

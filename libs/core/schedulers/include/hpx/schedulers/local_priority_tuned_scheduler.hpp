@@ -113,6 +113,13 @@ namespace hpx::threads::policies {
             return this->rules_.parameters();
         }
 
+        /// The tunable settings of the rules of this scheduler.
+        [[nodiscard]] scheduler_tuning_parameters const*
+        find_tuning_parameters() const noexcept override
+        {
+            return &this->rules_.parameters();
+        }
+
         /// What this scheduler counted for its tuner.
         [[nodiscard]] scheduler_tuning_counters const* get_tuning_counters()
             const noexcept override

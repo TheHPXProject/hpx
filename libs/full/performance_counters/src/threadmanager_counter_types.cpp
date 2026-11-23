@@ -25,9 +25,11 @@
 #include <hpx/performance_counters/threadmanager_counter_types.hpp>
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -290,11 +292,160 @@ namespace hpx::performance_counters::detail {
         return naming::invalid_gid;
     }
 
+    // The tunable settings of a scheduler with a tuner (see
+    // scheduler_tuning_parameters), nullptr if the pool's scheduler has none.
+    threads::policies::scheduler_tuning_parameters const*
+    find_tuning_parameters(threads::thread_pool_base const& pool) noexcept
+    {
+        auto const* scheduler = pool.get_scheduler();
+        return scheduler != nullptr ? scheduler->find_tuning_parameters() :
+                                      nullptr;
+    }
+
+    // The name of the counter of a setting: the name of its configuration
+    // entry without "hpx.", with '-' in place of '_' and '.', for instance
+    // min-idle-backoff-time for hpx.min_idle_backoff_time.
+    std::string get_tuning_setting_counter_name(std::string_view entry)
+    {
+        if (entry.starts_with("hpx."))
+        {
+            entry.remove_prefix(4);
+        }
+        std::string name(entry);
+        std::ranges::replace(name, '_', '-');
+        std::ranges::replace(name, '.', '-');
+        return name;
+    }
+
+    // The value of a setting for a worker, as a double.
+    double get_tuning_setting_value(
+        threads::policies::scheduler_tuning_parameters const& parameters,
+        std::size_t const worker, std::size_t const id) noexcept
+    {
+        using threads::policies::tuning_parameter_type;
+        if (parameters.info(id).type == tuning_parameter_type::real)
+        {
+            return static_cast<double>(parameters.get<float>(worker, id));
+        }
+        return static_cast<double>(parameters.get<std::uint32_t>(worker, id));
+    }
+
+    // The current value of a setting of one worker of a pool, or of the
+    // pool (worker == -1): the value that holds for the whole pool, or the
+    // mean over its workers if each worker has a value of its own. Rounded
+    // to an integer.
+    std::int64_t get_scheduler_tuning_setting(
+        threads::policies::scheduler_tuning_parameters const* parameters,
+        std::size_t const id, std::size_t const worker, bool /* reset */)
+    {
+        if (worker != static_cast<std::size_t>(-1))
+        {
+            return std::llround(
+                get_tuning_setting_value(*parameters, worker, id));
+        }
+
+        std::size_t const num_workers = parameters->num_workers();
+        if (!parameters->info(id).per_worker || num_workers == 0)
+        {
+            return std::llround(get_tuning_setting_value(*parameters, 0, id));
+        }
+
+        double sum = 0.0;
+        for (std::size_t i = 0; i != num_workers; ++i)
+        {
+            sum += get_tuning_setting_value(*parameters, i, id);
+        }
+        return std::llround(sum / static_cast<double>(num_workers));
+    }
+
+    // a setting of the given worker of the given pool (worker == -1: of the
+    // pool), if the pool's scheduler has it
+    naming::gid_type scheduler_tuning_pool_setting_creator(
+        threads::thread_pool_base const& pool, std::string const& entry,
+        std::int64_t const worker, counter_info const& info, error_code& ec)
+    {
+        auto const* parameters = find_tuning_parameters(pool);
+        std::size_t const id = parameters != nullptr ?
+            parameters->find(entry) :
+            threads::policies::scheduler_tuning_parameters::npos;
+        if (id == threads::policies::scheduler_tuning_parameters::npos)
+        {
+            HPX_THROWS_IF(ec, hpx::error::bad_parameter,
+                "scheduler_tuning_setting_creator",
+                "the scheduler of pool {} has no setting {}: {}",
+                pool.get_pool_name(), entry, info.fullname_);
+            return naming::invalid_gid;
+        }
+
+        if (worker < -1 ||
+            (worker >= 0 &&
+                static_cast<std::size_t>(worker) >= parameters->num_workers()))
+        {
+            HPX_THROWS_IF(ec, hpx::error::bad_parameter,
+                "scheduler_tuning_setting_creator",
+                "invalid worker thread of pool {}: {}", pool.get_pool_name(),
+                info.fullname_);
+            return naming::invalid_gid;
+        }
+
+        hpx::function<std::int64_t(bool)> f =
+            hpx::bind_front(&get_scheduler_tuning_setting, parameters, id,
+                static_cast<std::size_t>(worker));
+        return detail::create_raw_counter(info, HPX_MOVE(f), ec);
+    }
+
+    // the settings exist for a pool and its workers, there is no total
+    naming::gid_type scheduler_tuning_setting_creator(
+        threads::threadmanager* tm, std::string const& entry,
+        counter_info const& info, error_code& ec)
+    {
+        // verify the validity of the counter instance name
+        counter_path_elements paths;
+        get_counter_path_elements(info.fullname_, paths, ec);
+        if (ec)
+        {
+            return naming::invalid_gid;
+        }
+
+        if (paths.parentinstance_is_basename_)
+        {
+            HPX_THROWS_IF(ec, hpx::error::bad_parameter,
+                "scheduler_tuning_setting_creator",
+                "invalid counter instance parent name: {}",
+                paths.parentinstancename_);
+            return naming::invalid_gid;
+        }
+
+        if (paths.instancename_ == "pool" && paths.instanceindex_ >= 0 &&
+            static_cast<std::size_t>(paths.instanceindex_) <
+                hpx::resource::get_num_thread_pools())
+        {
+            // setting of the given pool, or of one of its workers
+            return scheduler_tuning_pool_setting_creator(
+                hpx::resource::get_thread_pool(
+                    static_cast<std::size_t>(paths.instanceindex_)),
+                entry, paths.subinstanceindex_, info, ec);
+        }
+
+        if (paths.instancename_ == "worker-thread" && paths.instanceindex_ >= 0)
+        {
+            // setting of the given worker of the default pool
+            return scheduler_tuning_pool_setting_creator(
+                tm->default_pool(), entry, paths.instanceindex_, info, ec);
+        }
+
+        HPX_THROWS_IF(ec, hpx::error::bad_parameter,
+            "scheduler_tuning_setting_creator",
+            "invalid counter instance name: {}", paths.instancename_);
+        return naming::invalid_gid;
+    }
+
     // Like locality_pool_thread_counter_discoverer, but only for the pools
-    // whose scheduler counts: pool#* would be expanded to all pools.
-    bool scheduler_tuning_counter_discoverer(counter_info const& info,
-        discover_counter_func const& f, discover_counters_mode mode,
-        error_code& ec)
+    // whose scheduler counts: pool#* would be expanded to all pools. The
+    // counters have a total for the locality if with_total is given.
+    bool scheduler_tuning_counter_discoverer(bool const with_total,
+        counter_info const& info, discover_counter_func const& f,
+        discover_counters_mode mode, error_code& ec)
     {
         counter_info i = info;
 
@@ -316,15 +467,18 @@ namespace hpx::performance_counters::detail {
                 p.parentinstanceindex_ = -1;
             }
 
-            p.instancename_ = "total";
-            p.instanceindex_ = -1;
-            p.subinstancename_.clear();
-            p.subinstanceindex_ = -1;
-
-            status = get_counter_name(p, i.fullname_, ec);
-            if (!status_is_valid(status) || !f(i, ec) || ec)
+            if (with_total)
             {
-                return false;
+                p.instancename_ = "total";
+                p.instanceindex_ = -1;
+                p.subinstancename_.clear();
+                p.subinstanceindex_ = -1;
+
+                status = get_counter_name(p, i.fullname_, ec);
+                if (!status_is_valid(status) || !f(i, ec) || ec)
+                {
+                    return false;
+                }
             }
 
             std::size_t const num_pools = hpx::resource::get_num_thread_pools();
@@ -1003,7 +1157,49 @@ namespace hpx::performance_counters {
                 HPX_PERFORMANCE_COUNTER_V1,
                 hpx::bind_front(
                     &detail::scheduler_tuning_counter_creator, &tm, c),
-                &detail::scheduler_tuning_counter_discoverer, ""});
+                hpx::bind_front(
+                    &detail::scheduler_tuning_counter_discoverer, true),
+                ""});
+        }
+
+        // the tunable settings of a scheduler with a tuner, one counter type
+        // for each (see scheduler_tuning_parameters), e.g.
+        // /scheduler/tuning/setting/min-idle-backoff-time; the schedulers
+        // with a tuner have the same settings, take them from the first
+        threads::policies::scheduler_tuning_parameters const* parameters =
+            nullptr;
+        std::size_t const num_pools = hpx::resource::get_num_thread_pools();
+        for (std::size_t i = 0; i != num_pools && parameters == nullptr; ++i)
+        {
+            parameters = detail::find_tuning_parameters(
+                hpx::resource::get_thread_pool(i));
+        }
+
+        if (parameters != nullptr)
+        {
+            for (std::size_t id = 0; id != parameters->size(); ++id)
+            {
+                std::string entry = parameters->info(id).name;
+                std::string const name =
+                    detail::get_tuning_setting_counter_name(entry);
+
+                tuning_counter_types.push_back({"/scheduler/tuning/setting/" +
+                        name,
+                    counter_type::raw,
+                    "returns the current value of the setting '" + entry +
+                        "' of a scheduler with a tuner (rounded to an "
+                        "integer) at the referenced pool or worker "
+                        "thread; the value of a pool is the mean over "
+                        "its worker threads for a setting each worker "
+                        "thread has a value of; available for the pools "
+                        "whose scheduler has a tuner",
+                    HPX_PERFORMANCE_COUNTER_V1,
+                    hpx::bind_front(&detail::scheduler_tuning_setting_creator,
+                        &tm, HPX_MOVE(entry)),
+                    hpx::bind_front(
+                        &detail::scheduler_tuning_counter_discoverer, false),
+                    ""});
+            }
         }
 
         install_counter_types(

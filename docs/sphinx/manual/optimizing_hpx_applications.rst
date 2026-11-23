@@ -2638,6 +2638,52 @@ system and application performance.
 
 ...................................................................................
 
+.. _scheduler_tuning_setting_performance_counters:
+
+.. list-table:: Thread manager performance counters ``/scheduler/tuning/setting/<name>``
+   :widths: 20 80
+
+   * * Counter type
+     * ``/scheduler/tuning/setting/<name>``, one for each tunable setting of a
+       scheduler with a tuner, named after its configuration entry without
+       ``hpx.`` and with ``-`` in place of ``_`` and ``.``, for instance
+       ``/scheduler/tuning/setting/min-idle-backoff-time`` for
+       ``hpx.min_idle_backoff_time`` or
+       ``/scheduler/tuning/setting/scheduler-policy-wake-target-only`` for
+       ``hpx.scheduler_policy.wake_target_only``
+   * * Counter instance formatting
+     * ``locality#*/pool#*`` or
+
+       ``locality#*/pool#*/worker-thread#*`` or
+
+       ``locality#*/worker-thread#*``
+
+       where:
+
+       ``locality#*`` is defining the :term:`locality` for which the setting
+       should be queried. The :term:`locality` id (given by the ``*``) is a
+       (zero based) number identifying the :term:`locality`.
+
+       ``pool#*`` is defining the pool for which the setting should be
+       queried. There is no ``total``, as the pools decide independently.
+
+       ``worker-thread#*`` is defining the worker thread for which the setting
+       should be queried. The worker thread number (given by the ``*``) is a
+       (zero based) number identifying the worker thread. If no pool is
+       specified the counter refers to the 'default' pool.
+   * * Description
+     * Returns the current value of the setting, rounded to an integer, as the
+       scheduler uses it: the value its tuner decided, or the configured one.
+       The value of a pool is the mean over its worker threads for a setting
+       each worker thread has a value of (for instance
+       ``hpx.min_idle_backoff_time``), and the value of the pool for the others.
+       Only a scheduler with a tuner has these settings (the
+       ``local-priority-tuned-fifo`` scheduler, see :ref:`schedulers`): these
+       counters exist only if a pool uses such a scheduler, and only for those
+       pools.
+
+...................................................................................
+
 .. list-table:: Thread manager performance counter ``/threads/time/background-work-duration``
    :widths: 20 80
 

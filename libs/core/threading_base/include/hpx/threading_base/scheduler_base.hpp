@@ -401,6 +401,14 @@ namespace hpx::threads::policies {
             return nullptr;
         }
 
+        /// The tunable settings of this scheduler (see
+        /// scheduler_tuning_parameters), nullptr if it has none.
+        [[nodiscard]] virtual scheduler_tuning_parameters const*
+        find_tuning_parameters() const noexcept
+        {
+            return nullptr;
+        }
+
         virtual void on_error(
             std::size_t num_thread, std::exception_ptr const& e) = 0;
 
