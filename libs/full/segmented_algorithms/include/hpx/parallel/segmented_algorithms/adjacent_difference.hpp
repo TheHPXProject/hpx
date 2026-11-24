@@ -99,7 +99,9 @@ namespace hpx::parallel::detail {
 
             if (has_previous)
             {
-                *first_dest = HPX_INVOKE(op, captured.values.front(), previous);
+                // as the local algorithm, pass the predecessor as an rvalue
+                *first_dest =
+                    HPX_INVOKE(op, captured.values.front(), HPX_MOVE(previous));
             }
             return out;
         }

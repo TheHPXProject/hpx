@@ -72,9 +72,48 @@ void test_adjacent_difference_async(ExPolicy&& policy,
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// takes the predecessor as an rvalue, as std::adjacent_difference passes it
+template <typename T>
+struct minus_moved_predecessor
+{
+    T operator()(T const& current, T&& previous) const
+    {
+        return current - previous;
+    }
+
+    template <typename Archive>
+    void serialize(Archive&, unsigned)
+    {
+    }
+};
+
 template <typename T>
 void adjacent_difference_tests(std::vector<hpx::id_type>& localities)
 {
+    {
+        hpx::partitioned_vector<T> v(
+            8, T(0), hpx::container_layout(localities));
+        hpx::partitioned_vector<T> w(
+            8, T(0), hpx::container_layout(localities));
+        auto it = v.begin();
+        for (T value = T(10); it != v.end(); ++it, ++value)
+        {
+            *it = value;
+        }
+
+        hpx::adjacent_difference(
+            v.begin(), v.end(), w.begin(), minus_moved_predecessor<T>{});
+
+        std::vector<T> const expected{
+            T(10), T(1), T(1), T(1), T(1), T(1), T(1), T(1)};
+        auto result = w.begin();
+        for (T value : expected)
+        {
+            HPX_TEST_EQ(*result, value);
+            ++result;
+        }
+    }
+
     {
         hpx::partitioned_vector<T> in_place(8, T(0), hpx::container_layout(2));
         auto it = in_place.begin();
