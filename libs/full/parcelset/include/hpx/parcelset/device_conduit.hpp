@@ -58,6 +58,17 @@ namespace hpx::parcelset {
     ///    locality), calls 'done' once it has arrived (with the error if it
     ///    failed: the parcel isn't run then)
     ///
+    /// and optionally (this base implements them doing nothing)
+    ///
+    ///  - bool background_work_impl()
+    ///    makes progress, called with the parcelports' background work
+    ///  - void locality_removed_impl(
+    ///        std::uint32_t locality_id, bool forced) noexcept
+    ///    releases what the conduit holds for a locality that has left or
+    ///    was disconnected
+    ///  - static void config_defaults(std::vector<std::string>& ini)
+    ///    adds the defaults of its configuration entries
+    ///
     /// The descriptor of a chunk holds the sending locality and a tag unique
     /// for it. Conduits are registered with HPX_REGISTER_DEVICE_CONDUIT
     /// (compiled into HPX) or a static hpx::plugins::device_conduit_factory<>
@@ -107,7 +118,21 @@ namespace hpx::parcelset {
                 {
                     return false;
                 }
-                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
+                // nothing else makes progress at shutdown
+                bool did_work = false;
+                try
+                {
+                    did_work = derived().background_work_impl();
+                }
+                catch (...)
+                {
+                    return false;
+                }
+                if (!did_work)
+                {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                }
             }
             return true;
         }
@@ -122,6 +147,28 @@ namespace hpx::parcelset {
             s.bytes_received = bytes_received_.load(std::memory_order_relaxed);
             return s;
         }
+
+        bool background_work() override
+        {
+            return derived().background_work_impl();
+        }
+
+        void locality_removed(std::uint32_t const locality_id,
+            bool const forced) noexcept override
+        {
+            derived().locality_removed_impl(locality_id, forced);
+        }
+
+        // the defaults of the optional functions of 'Derived' (hidden by
+        // its own)
+        static void config_defaults(std::vector<std::string>&) noexcept {}
+
+        bool background_work_impl() noexcept
+        {
+            return false;
+        }
+
+        void locality_removed_impl(std::uint32_t, bool) noexcept {}
 
     private:
         Derived& derived() noexcept
@@ -168,7 +215,8 @@ namespace hpx::parcelset {
                 try
                 {
                     conduit_.send_impl(locality_id_, d, p, size,
-                        [&b, size, once, keep_alive = keep_alive_](
+                        [&b, locality_id = locality_id_, size, once,
+                            keep_alive = keep_alive_](
                             std::exception_ptr error) mutable {
                             if (once->exchange(true))
                             {
@@ -189,6 +237,19 @@ namespace hpx::parcelset {
                                     LPT_(warning).format(
                                         "device conduit: a send failed during "
                                         "shutdown: {}",
+                                        hpx::get_error_what(error));
+                                }
+                                else if (parcelset::locality_was_disconnected(
+                                             locality_id) ||
+                                    hpx::tolerate_node_faults())
+                                {
+                                    // like parcels to it (the destination
+                                    // has left, was disconnected, or failed
+                                    // while node faults are tolerated)
+                                    LPT_(warning).format(
+                                        "device conduit: a send to locality "
+                                        "{} failed: {}",
+                                        locality_id,
                                         hpx::get_error_what(error));
                                 }
                                 else
@@ -275,15 +336,25 @@ namespace hpx::parcelset {
                                 b.bytes_received_.fetch_add(
                                     size, std::memory_order_relaxed);
                             }
-                            else if (b.draining_.load(
-                                         std::memory_order_acquire))
+                            if (b.draining_.load(std::memory_order_acquire))
                             {
-                                // the runtime has gone: the message is
-                                // dropped, its error can't be reported
-                                LPT_(warning).format(
-                                    "device conduit: a receive failed during "
-                                    "shutdown: {}",
-                                    hpx::get_error_what(error));
+                                // the runtime has gone (the thread manager
+                                // has stopped): the message can't be run
+                                // any more, even if its data arrived, and
+                                // an error can't be reported; it is dropped
+                                if (error)
+                                {
+                                    LPT_(warning).format(
+                                        "device conduit: a receive failed "
+                                        "during shutdown: {}",
+                                        hpx::get_error_what(error));
+                                }
+                                else
+                                {
+                                    LPT_(warning).format(
+                                        "device conduit: a message received "
+                                        "during shutdown is dropped");
+                                }
                                 return;
                             }
                             done(HPX_MOVE(error));

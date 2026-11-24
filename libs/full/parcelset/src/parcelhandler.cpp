@@ -546,7 +546,8 @@ namespace hpx::parcelset {
     /// \brief Make sure the specified locality is not held by any connection
     ///        caches anymore
     void parcelhandler::remove_from_connection_cache(
-        naming::gid_type const& gid, endpoints_type const& endpoints)
+        naming::gid_type const& gid, endpoints_type const& endpoints,
+        bool const forced)
     {
         {
             std::lock_guard<mutex_type> l(mtx_);
@@ -581,6 +582,14 @@ namespace hpx::parcelset {
 
             remove_handler(dest);
         }
+
+        // the device conduit releases its connection to the locality
+        if (device_conduit* conduit = get_device_conduit())
+        {
+            conduit->locality_removed(
+                naming::get_locality_id_from_gid(gid), forced);
+        }
+
         agas::remove_resolved_locality(gid);
     }
 
@@ -598,6 +607,12 @@ namespace hpx::parcelset {
         if (!is_networking_enabled_)
         {
             return did_some_work;
+        }
+
+        // the device conduit moves data next to the parcelports
+        if (device_conduit* conduit = get_device_conduit())
+        {
+            did_some_work = conduit->background_work();
         }
 
         LPT_(debug).format(

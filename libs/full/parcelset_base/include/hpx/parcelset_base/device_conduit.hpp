@@ -80,9 +80,24 @@ namespace hpx::parcelset {
         /// thread, before the conduit is destroyed: a conduit must be able
         /// to finish its transfers without HPX threads (driving its own
         /// progress if needed). Errors of transfers finishing then are logged
-        /// only.
+        /// only, and messages whose data arrives then are dropped (their
+        /// actions can't run any more).
         [[nodiscard]] virtual bool drain(
             std::chrono::steady_clock::duration timeout) noexcept = 0;
+
+        /// Makes progress (called with the parcelports' background work),
+        /// returns whether it did anything.
+        virtual bool background_work() = 0;
+
+        /// The locality 'locality_id' has left ('forced' is false) or was
+        /// disconnected with hpx::force_disconnect ('forced' is true): the
+        /// conduit releases what it holds for it (e.g. its connection). A
+        /// locality leaving still receives what was sent to it before, a
+        /// disconnected one need not. Sends to it that haven't finished may
+        /// fail; like parcels to a disconnected locality, these failures are
+        /// logged, not reported as errors.
+        virtual void locality_removed(
+            std::uint32_t locality_id, bool forced) noexcept = 0;
     };
 }    // namespace hpx::parcelset
 

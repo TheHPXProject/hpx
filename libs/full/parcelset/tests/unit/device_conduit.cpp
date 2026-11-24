@@ -262,10 +262,11 @@ int hpx_main()
     HPX_TEST(conduit != nullptr);
     if (conduit == nullptr)
     {
-        // launched without the test conduit
+        // launched without a device conduit
         return hpx::finalize();
     }
-    HPX_TEST_EQ(conduit->name(), std::string("test_file"));
+    HPX_TEST_EQ(conduit->name(),
+        hpx::get_config_entry("hpx.parcel.device_conduit", ""));
 
     std::filesystem::path const dir = make_chunk_directory();
     {
@@ -314,8 +315,20 @@ int hpx_main()
 
 int main(int argc, char* argv[])
 {
+    // the test's conduit unless the command line selects one (e.g. ucx)
+    bool conduit_selected = false;
+    for (int i = 1; i < argc; ++i)
+    {
+        conduit_selected = conduit_selected ||
+            std::string(argv[i]).find("hpx.parcel.device_conduit=") !=
+                std::string::npos;
+    }
+
     hpx::init_params params;
-    params.cfg = {"hpx.parcel.device_conduit=test_file"};
+    if (!conduit_selected)
+    {
+        params.cfg = {"hpx.parcel.device_conduit=test_file"};
+    }
 
     HPX_TEST_EQ(hpx::init(argc, argv, params), 0);
     return hpx::util::report_errors();

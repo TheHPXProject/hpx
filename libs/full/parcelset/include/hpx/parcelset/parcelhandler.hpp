@@ -232,8 +232,11 @@ namespace hpx::parcelset {
 
         /// \brief Make sure the specified locality is not held by any
         /// connection caches anymore
-        void remove_from_connection_cache(
-            naming::gid_type const& gid, endpoints_type const& endpoints);
+        ///
+        /// \param forced  Whether the locality was removed with
+        ///                hpx::force_disconnect (instead of leaving).
+        void remove_from_connection_cache(naming::gid_type const& gid,
+            endpoints_type const& endpoints, bool forced = false);
 
         /// \brief return the endpoints associated with this parcelhandler
         /// \returns all connection information for the enabled parcelports
