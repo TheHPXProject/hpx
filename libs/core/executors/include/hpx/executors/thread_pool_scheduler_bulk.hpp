@@ -912,8 +912,8 @@ namespace hpx::execution::experimental::detail {
                 tasks_remaining;
 
             using value_types = value_types_of_t<Sender,
-                hpx::execution::experimental::empty_env, decayed_tuple,
-                hpx::variant>;
+                hpx::execution::experimental::env_of_t<std::decay_t<Receiver>>,
+                decayed_tuple, hpx::variant>;
             hpx::util::detail::prepend_t<value_types, hpx::monostate> ts;
             std::atomic<bool> bad_alloc_thrown{false};
             hpx::exception_list exceptions;
@@ -942,6 +942,8 @@ namespace hpx::execution::experimental::detail {
                 tasks_remaining.data_.store(
                     num_worker_threads, std::memory_order_relaxed);
                 HPX_ASSERT(hpx::threads::count(pu_mask) == num_worker_threads);
+            // the environment the predecessor sees: bulk_receiver forwards
+            // the one of the receiver
             }
 
             void start() & noexcept
