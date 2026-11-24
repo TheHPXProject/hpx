@@ -34,15 +34,18 @@ namespace hpx::parallel::detail {
       : algorithm<captured_adjacent_difference<Algo, LocalIterator>,
             typename Algo::result_type>
     {
-        using input_traits =
-            hpx::traits::segmented_local_iterator_traits<LocalIterator>;
         using output_traits = hpx::traits::segmented_local_iterator_traits<
             typename Algo::result_type>;
-        using raw_input_iterator = typename input_traits::local_raw_iterator;
         using raw_output_iterator = typename output_traits::local_raw_iterator;
         using result_type = typename Algo::result_type;
         using value_type =
             typename std::iterator_traits<LocalIterator>::value_type;
+
+        // The input is passed as a range of its partition, not as local
+        // iterators: those would be made local on the locality of the
+        // output, which doesn't hold the partition of the input. The values
+        // are captured from the locality of the input instead.
+        using indexed_range_type = indexed_partition_range<LocalIterator>;
 
         captured_adjacent_difference()
           : algorithm<captured_adjacent_difference<Algo, LocalIterator>,
@@ -52,45 +55,35 @@ namespace hpx::parallel::detail {
 
         template <typename ExPolicy, typename OutIterator, typename Op>
         static raw_output_iterator sequential(ExPolicy policy,
-            hpx::id_type source_id, raw_input_iterator first,
-            raw_input_iterator last, OutIterator dest, Op op,
+            std::vector<indexed_range_type> input, OutIterator dest, Op op,
             value_type previous, bool has_previous)
         {
-            return invoke(HPX_MOVE(policy), source_id, HPX_MOVE(first),
-                HPX_MOVE(last), HPX_MOVE(dest), HPX_MOVE(op),
-                HPX_MOVE(previous), has_previous, std::true_type{});
+            return invoke(HPX_MOVE(policy), HPX_MOVE(input), HPX_MOVE(dest),
+                HPX_MOVE(op), HPX_MOVE(previous), has_previous,
+                std::true_type{});
         }
 
         template <typename ExPolicy, typename OutIterator, typename Op>
         static raw_output_iterator parallel(ExPolicy policy,
-            hpx::id_type source_id, raw_input_iterator first,
-            raw_input_iterator last, OutIterator dest, Op op,
+            std::vector<indexed_range_type> input, OutIterator dest, Op op,
             value_type previous, bool has_previous)
         {
-            return invoke(HPX_MOVE(policy), source_id, HPX_MOVE(first),
-                HPX_MOVE(last), HPX_MOVE(dest), HPX_MOVE(op),
-                HPX_MOVE(previous), has_previous, std::false_type{});
+            return invoke(HPX_MOVE(policy), HPX_MOVE(input), HPX_MOVE(dest),
+                HPX_MOVE(op), HPX_MOVE(previous), has_previous,
+                std::false_type{});
         }
 
     private:
         template <typename ExPolicy, typename OutIterator, typename Op,
             typename IsSeq>
         static raw_output_iterator invoke(ExPolicy policy,
-            hpx::id_type const& source_id, raw_input_iterator first,
-            raw_input_iterator last, OutIterator dest, Op op,
+            std::vector<indexed_range_type> input, OutIterator dest, Op op,
             value_type previous, bool has_previous, IsSeq)
         {
-            using range_type = partition_range<LocalIterator>;
-            using indexed_range_type = indexed_partition_range<LocalIterator>;
-
-            std::vector<indexed_range_type> ranges;
-            ranges.push_back(indexed_range_type{0,
-                range_type{source_id, input_traits::remote(HPX_MOVE(first)),
-                    input_traits::remote(HPX_MOVE(last))}});
-
+            hpx::id_type const source_id = input.front().range.partition_id;
             auto captured = get_capture_result<ExPolicy>(
                 capture_async<value_type, LocalIterator>(
-                    source_id, HPX_MOVE(ranges)));
+                    source_id, HPX_MOVE(input)));
 
             OutIterator const first_dest = dest;
             raw_output_iterator out =
@@ -232,9 +225,11 @@ namespace hpx::parallel::detail {
                 using captured_algo =
                     captured_adjacent_difference<Algo, local_iterator_type1>;
 
+                std::vector<typename captured_algo::indexed_range_type> ranges{
+                    {0, {source_id, input, input_chunk_end}}};
                 dispatch(destination_id, captured_algo{}, policy,
-                    std::true_type(), source_id, input, input_chunk_end, output,
-                    op, previous, has_previous);
+                    std::true_type(), HPX_MOVE(ranges), output, op, previous,
+                    has_previous);
             }
 
             previous = HPX_MOVE(last_value);
@@ -430,10 +425,12 @@ namespace hpx::parallel::detail {
                             local_iterator_type1>;
 
                         segments.emplace_back();
-                        segments.back() = dispatch_async(destination_id,
-                            captured_algo{}, policy, forced_seq(), source_id,
-                            input, input_chunk_end, output, op, previous,
-                            has_previous);
+                        std::vector<typename captured_algo::indexed_range_type>
+                            ranges{{0, {source_id, input, input_chunk_end}}};
+                        segments.back() =
+                            dispatch_async(destination_id, captured_algo{},
+                                policy, forced_seq(), HPX_MOVE(ranges), output,
+                                op, previous, has_previous);
                     }
 
                     previous = HPX_MOVE(last_value);
