@@ -83,6 +83,12 @@ Breaking changes
   ``hpx/hpx_main.hpp`` has to link ``HPX::wrap_main`` (or
   ``HPX::auto_wrap_main``), which was previously avoidable by setting the
   option to ``OFF``.
+- The SONAME of the |hpx| libraries now holds the full version (for instance
+  ``libhpx.so.2.1.0`` instead of ``libhpx.so.2``), as |hpx| keeps no ABI
+  compatibility between releases. Applications and libraries built against an
+  earlier release no longer start with the libraries of this one, instead of
+  running with a mismatched ABI; rebuild them. This also applies to the
+  components and plugins of |hpx|. Windows is not affected.
 
 Supervision Module
 ==================
