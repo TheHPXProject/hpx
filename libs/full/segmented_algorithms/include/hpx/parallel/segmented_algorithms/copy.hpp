@@ -327,8 +327,10 @@ namespace hpx::segmented {
             hpx::traits::is_segmented_iterator_v<OutIter>)
     OutIter hpx_invoke(hpx::copy_t, SegIter first, SegIter last, OutIter dest)
     {
-        static_assert(hpx::traits::is_input_iterator_v<SegIter>,
-            "Requires at least input iterator.");
+        // the segmented iterator is read more than once (its segment and its
+        // local position), it can't be a single-pass iterator
+        static_assert(hpx::traits::is_forward_iterator_v<SegIter>,
+            "Requires at least forward iterator.");
 
         if (first == last)
         {

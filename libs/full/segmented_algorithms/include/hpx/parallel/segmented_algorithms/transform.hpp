@@ -768,8 +768,10 @@ namespace hpx::segmented {
     hpx::parallel::util::in_out_result<SegIter, OutIter> hpx_invoke(
         hpx::transform_t, SegIter first, SegIter last, OutIter dest, F&& f)
     {
-        static_assert(
-            std::input_iterator<SegIter>, "Requires at least input iterator.");
+        // the segmented iterator is read more than once (its segment and its
+        // local position), it can't be a single-pass iterator
+        static_assert(std::forward_iterator<SegIter>,
+            "Requires at least forward iterator.");
 
         if (first == last)
         {
@@ -842,8 +844,8 @@ namespace hpx::segmented {
         OutIter dest, F&& f)
     {
         static_assert(
-            std::input_iterator<InIter1> && std::input_iterator<InIter2>,
-            "Requires at least input iterator.");
+            std::forward_iterator<InIter1> && std::forward_iterator<InIter2>,
+            "Requires at least forward iterator.");
 
         auto last2 = first2;
         hpx::parallel::detail::advance(last2, std::distance(first1, last1));
@@ -876,6 +878,8 @@ namespace hpx::segmented {
         typename InIter2, typename OutIter, typename F>
         requires(hpx::is_execution_policy_v<ExPolicy> &&
             hpx::traits::is_iterator_v<InIter1> &&
+        // the segmented iterators are read more than once (their segments and
+        // local positions), they can't be single-pass iterators
             hpx::traits::is_segmented_iterator_v<InIter1> &&
             hpx::traits::is_iterator_v<InIter2> &&
             hpx::traits::is_segmented_iterator_v<InIter2> &&
@@ -935,8 +939,8 @@ namespace hpx::segmented {
         InIter2 last2, OutIter dest, F&& f)
     {
         static_assert(
-            std::input_iterator<InIter1> && std::input_iterator<InIter2>,
-            "Requires at least input iterator.");
+            std::forward_iterator<InIter1> && std::forward_iterator<InIter2>,
+            "Requires at least forward iterator.");
 
         // an empty range: nothing to do (and no partition to localize)
         if (first1 == last1 || first2 == last2)
@@ -969,6 +973,8 @@ namespace hpx::segmented {
             hpx::traits::is_iterator_v<InIter1> &&
             hpx::traits::is_segmented_iterator_v<InIter1> &&
             hpx::traits::is_iterator_v<InIter2> &&
+        // the segmented iterators are read more than once (their segments and
+        // local positions), they can't be single-pass iterators
             hpx::traits::is_segmented_iterator_v<InIter2> &&
             hpx::traits::is_iterator_v<OutIter> &&
             hpx::traits::is_segmented_iterator_v<OutIter>)
