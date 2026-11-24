@@ -12,12 +12,23 @@
 #include <hpx/modules/algorithms.hpp>
 #include <hpx/modules/segmented_algorithms.hpp>
 #include <hpx/modules/testing.hpp>
+#include <hpx/modules/threading_base.hpp>
 
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <iterator>
+#include <limits>
+#include <stdexcept>
 #include <type_traits>
 #include <vector>
+
+static_assert(hpx::parallel::detail::transform_reduce_chunk_size<std::int8_t,
+                  int, int>() == (std::numeric_limits<std::int8_t>::max)());
+static_assert(hpx::parallel::detail::transform_reduce_chunk_size<std::int16_t,
+                  int, int>() == (std::numeric_limits<std::int16_t>::max)());
+static_assert(hpx::parallel::detail::transform_reduce_chunk_size<std::int64_t,
+                  int, int>() == 32 * 1024 * 1024);
 
 ///////////////////////////////////////////////////////////////////////////////
 struct multiply
@@ -155,12 +166,67 @@ void transform_reduce_binary_regressions(
     }
 }
 
+void transform_reduce_binary_multiple_exceptions()
+{
+    std::vector<hpx::id_type> owners(2, hpx::find_here());
+    hpx::partitioned_vector<int> first(
+        2, 1, hpx::explicit_container_layout({1, 1}, owners));
+    hpx::partitioned_vector<int> second(
+        2, 1, hpx::explicit_container_layout({1, 1}, owners));
+
+    auto check = [&](auto policy) {
+        try
+        {
+            auto operation = hpx::transform_reduce(policy, first.begin(),
+                first.end(), second.begin(), 0, std::plus<int>(),
+                [](int, int) -> int { throw std::runtime_error("failure"); });
+            if constexpr (hpx::is_async_execution_policy_v<decltype(policy)>)
+                operation.get();
+            HPX_TEST(false);
+        }
+        catch (hpx::exception_list const& errors)
+        {
+            HPX_TEST_EQ(errors.size(), std::size_t(2));
+        }
+    };
+
+    check(hpx::execution::par);
+    check(hpx::execution::par(hpx::execution::task));
+}
+
+hpx::threads::thread_id_type expected_reduction_thread;
+
+void transform_reduce_binary_sequential_thread()
+{
+    std::vector<hpx::id_type> owners(1, hpx::find_here());
+    hpx::partitioned_vector<int> first(
+        1, 2, hpx::explicit_container_layout({1}, owners));
+    hpx::partitioned_vector<int> second(
+        1, 3, hpx::explicit_container_layout({1}, owners));
+    expected_reduction_thread = hpx::threads::get_self_id();
+    auto reduce = [](int left, int right) {
+        if (left == 1000)
+            HPX_TEST(hpx::threads::get_self_id() == expected_reduction_thread);
+        return left + right;
+    };
+
+    HPX_TEST_EQ(
+        hpx::transform_reduce(hpx::execution::seq, first.begin(), first.end(),
+            second.begin(), 1000, reduce, std::multiplies<int>()),
+        1006);
+    HPX_TEST_EQ(hpx::transform_reduce(first.begin(), first.end(),
+                    second.begin(), 1000, reduce, std::multiplies<int>()),
+        1006);
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 int main()
 {
     std::vector<hpx::id_type> localities = hpx::find_all_localities();
     transform_reduce_binary_tests<int>(localities);
     transform_reduce_binary_regressions(localities);
+    transform_reduce_binary_multiple_exceptions();
+    transform_reduce_binary_sequential_thread();
     return hpx::util::report_errors();
 }
 #endif

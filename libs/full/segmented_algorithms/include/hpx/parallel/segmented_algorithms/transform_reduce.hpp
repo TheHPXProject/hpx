@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <exception>
 #include <iterator>
+#include <limits>
 #include <list>
 #include <numeric>
 #include <tuple>
@@ -181,6 +182,25 @@ namespace hpx::parallel::detail {
             HPX_MOVE(segments)));
     }
 
+    HPX_CXX_EXPORT template <typename Difference, typename Value1,
+        typename Value2>
+    constexpr Difference transform_reduce_chunk_size() noexcept
+    {
+        constexpr std::size_t count =
+            max_capture_batch_elements<Value1, Value2>();
+        if constexpr (std::numeric_limits<Difference>::digits <
+            std::numeric_limits<std::size_t>::digits)
+        {
+            return static_cast<Difference>((std::min) (count,
+                static_cast<std::size_t>(
+                    (std::numeric_limits<Difference>::max)())));
+        }
+        else
+        {
+            return static_cast<Difference>(count);
+        }
+    }
+
     template <typename Algo>
     struct captured_transform_reduce
       : algorithm<captured_transform_reduce<Algo>, typename Algo::result_type>
@@ -258,8 +278,9 @@ namespace hpx::parallel::detail {
         using value_type1 = typename std::iterator_traits<FwdIter1>::value_type;
         using value_type2 = typename std::iterator_traits<FwdIter2>::value_type;
         using result = util::detail::algorithm_result<ExPolicy, T>;
-        constexpr std::size_t max_chunk_size =
-            max_capture_batch_elements<value_type1, value_type2>();
+        constexpr difference_type max_chunk_size =
+            transform_reduce_chunk_size<difference_type, value_type1,
+                value_type2>();
 
         auto sit1 = traits1::segment(first1);
         auto send1 = traits1::segment(last1);
@@ -284,8 +305,7 @@ namespace hpx::parallel::detail {
             difference_type count = (std::min) (static_cast<difference_type>(
                                                     std::distance(beg1, end1)),
                 static_cast<difference_type>(std::distance(beg2, end2)));
-            count = (std::min) (count,
-                static_cast<difference_type>(max_chunk_size));
+            count = (std::min) (count, max_chunk_size);
             auto chunk_end1 = std::next(beg1, count);
             if (count != 0)
             {
@@ -308,47 +328,52 @@ namespace hpx::parallel::detail {
             }
         }
 
-        return result::get(hpx::async(
-            [chunks = HPX_MOVE(chunks), init = HPX_FORWARD(T, init), policy,
-                algo = HPX_FORWARD(Algo, algo),
-                red_op = HPX_FORWARD(Reduce, red_op),
-                conv_op = HPX_FORWARD(Convert, conv_op)]() mutable -> T {
-                std::size_t next = 0;
+        auto run = [chunks = HPX_MOVE(chunks), init = HPX_FORWARD(T, init),
+                       policy, algo = HPX_FORWARD(Algo, algo),
+                       red_op = HPX_FORWARD(Reduce, red_op),
+                       conv_op = HPX_FORWARD(Convert, conv_op)]() mutable -> T {
+            std::size_t next = 0;
+            while (next != chunks.size())
+            {
+                std::vector<hpx::future<T>> values;
+                difference_type captured_elements = 0;
                 while (next != chunks.size())
                 {
-                    std::vector<hpx::future<T>> values;
-                    difference_type captured_elements = 0;
-                    while (next != chunks.size())
-                    {
-                        auto const& chunk = chunks[next];
-                        auto id1 = traits1::get_id(std::get<0>(chunk));
-                        auto id2 = traits2::get_id(std::get<1>(chunk));
-                        bool const remote = get_partition_locality(id1) !=
-                            get_partition_locality(id2);
-                        difference_type count = remote ?
-                            static_cast<difference_type>(std::distance(
-                                std::get<2>(chunk), std::get<3>(chunk))) :
-                            0;
-                        if (!values.empty() &&
-                            (IsSeq::value ||
-                                count > static_cast<difference_type>(
-                                            max_chunk_size) -
-                                        captured_elements))
-                            break;
-                        values.push_back(dispatch_transform_reduce_async(id1,
-                            id2, algo, policy, IsSeq(), std::get<2>(chunk),
-                            std::get<3>(chunk), std::get<4>(chunk), red_op,
-                            conv_op));
-                        captured_elements += count;
-                        ++next;
-                    }
-                    (void) hpx::wait_all_nothrow(values);
-                    for (auto& value : values)
-                        init = HPX_INVOKE(red_op, HPX_MOVE(init),
-                            get_capture_result<ExPolicy>(HPX_MOVE(value)));
+                    auto const& chunk = chunks[next];
+                    auto id1 = traits1::get_id(std::get<0>(chunk));
+                    auto id2 = traits2::get_id(std::get<1>(chunk));
+                    bool const remote = get_partition_locality(id1) !=
+                        get_partition_locality(id2);
+                    difference_type count = remote ?
+                        static_cast<difference_type>(std::distance(
+                            std::get<2>(chunk), std::get<3>(chunk))) :
+                        0;
+                    if (!values.empty() &&
+                        (IsSeq::value ||
+                            count > max_chunk_size - captured_elements))
+                        break;
+                    values.push_back(
+                        dispatch_transform_reduce_async(id1, id2, algo, policy,
+                            IsSeq(), std::get<2>(chunk), std::get<3>(chunk),
+                            std::get<4>(chunk), red_op, conv_op));
+                    captured_elements += count;
+                    ++next;
                 }
-                return init;
-            }));
+                auto results = get_capture_results<ExPolicy>(HPX_MOVE(values));
+                for (auto& value : results)
+                    init = HPX_INVOKE(red_op, HPX_MOVE(init), HPX_MOVE(value));
+            }
+            return init;
+        };
+        if constexpr (IsSeq::value &&
+            !hpx::is_async_execution_policy_v<ExPolicy>)
+        {
+            return result::get(run());
+        }
+        else
+        {
+            return result::get(hpx::async(HPX_MOVE(run)));
+        }
     }
     /// \endcond
 }    // namespace hpx::parallel::detail
