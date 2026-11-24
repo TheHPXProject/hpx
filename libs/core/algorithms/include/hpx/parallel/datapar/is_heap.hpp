@@ -20,22 +20,87 @@
 #include <hpx/parallel/util/cancellation_token.hpp>
 
 #include <cstddef>
+#include <functional>
 #include <iterator>
 #include <type_traits>
 #include <utility>
 
 namespace hpx::parallel::detail {
 
-    HPX_CXX_CORE_EXPORT template <typename Comp, typename Proj, typename Vector>
-    inline constexpr bool is_heap_datapar_compatible_v = requires(
-        std::decay_t<Comp>& comp, std::decay_t<Proj>& proj, Vector& v) {
-        requires(!std::is_convertible_v<
-            std::decay_t<decltype(HPX_INVOKE(
-                comp, HPX_INVOKE(proj, v), HPX_INVOKE(proj, v)))>,
-            bool>);
-        hpx::parallel::traits::find_first_of(
-            HPX_INVOKE(comp, HPX_INVOKE(proj, v), HPX_INVOKE(proj, v)));
+    template <typename Comp>
+    struct is_known_pack_comparator : std::false_type
+    {
     };
+
+    template <>
+    struct is_known_pack_comparator<std::less<void>> : std::true_type
+    {
+    };
+
+    template <>
+    struct is_known_pack_comparator<std::greater<void>> : std::true_type
+    {
+    };
+
+    template <>
+    struct is_known_pack_comparator<hpx::parallel::detail::less>
+      : std::true_type
+    {
+    };
+
+    template <>
+    struct is_known_pack_comparator<hpx::parallel::detail::greater>
+      : std::true_type
+    {
+    };
+
+    template <>
+    struct is_known_pack_comparator<std::ranges::less> : std::true_type
+    {
+    };
+
+    template <>
+    struct is_known_pack_comparator<std::ranges::greater> : std::true_type
+    {
+    };
+
+    template <typename Comp>
+    inline constexpr bool is_known_pack_comparator_v =
+        is_known_pack_comparator<std::decay_t<Comp>>::value;
+
+    template <bool Known, typename Comp, typename Proj, typename Vector>
+    struct is_heap_datapar_compatible_impl : std::false_type
+    {
+    };
+
+    template <typename Comp, typename Proj, typename Vector>
+    struct is_heap_datapar_compatible_impl<true, Comp, Proj, Vector>
+    {
+        static constexpr bool value = requires(
+            std::decay_t<Comp>& comp, std::decay_t<Proj>& proj, Vector& v) {
+            requires(!std::is_convertible_v<
+                std::decay_t<decltype(HPX_INVOKE(
+                    comp, HPX_INVOKE(proj, v), HPX_INVOKE(proj, v)))>,
+                bool>);
+            hpx::parallel::traits::find_first_of(
+                HPX_INVOKE(comp, HPX_INVOKE(proj, v), HPX_INVOKE(proj, v)));
+        };
+    };
+
+    template <typename Comp, typename Proj>
+    inline constexpr bool is_heap_datapar_compatible_types_v =
+        is_known_pack_comparator_v<Comp> &&
+        std::is_same_v<std::decay_t<Proj>, hpx::identity>;
+
+    template <typename Comp, typename Proj, typename Vector>
+    inline constexpr bool is_heap_datapar_compatible_impl_v =
+        is_heap_datapar_compatible_impl<
+            is_heap_datapar_compatible_types_v<Comp, Proj>, Comp, Proj,
+            Vector>::value;
+
+    HPX_CXX_CORE_EXPORT template <typename Comp, typename Proj, typename Vector>
+    inline constexpr bool is_heap_datapar_compatible_v =
+        is_heap_datapar_compatible_impl_v<Comp, Proj, Vector>;
 
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT template <typename ExPolicy>
@@ -68,6 +133,7 @@ namespace hpx::parallel::detail {
                     traits::vector_pack_size_v<vector_type>;
 
                 constexpr bool can_vectorize = (num_lanes > 1) &&
+                    (num_lanes % 2 == 0) &&
                     is_heap_datapar_compatible_v<Comp, Proj, vector_type>;
 
                 if constexpr (!can_vectorize)
@@ -111,32 +177,21 @@ namespace hpx::parallel::detail {
                         while (count >= static_cast<decltype(count)>(num_lanes))
                         {
                             vector_type parent_vec{};
-                            for (std::size_t e = 0; e != num_lanes; ++e)
+                            Iter const parent_first = first + (base_idx / 2);
+                            for (std::size_t e = 0; e != num_lanes / 2; ++e)
                             {
                                 value_type const parent_val =
-                                    *(first + (base_idx + e) / 2);
-                                traits::set(parent_vec, e, parent_val);
+                                    *(parent_first + e);
+                                traits::set(parent_vec, 2 * e, parent_val);
+                                traits::set(parent_vec, 2 * e + 1, parent_val);
                             }
 
                             auto child_vec =
                                 traits::vector_pack_load<vector_type,
                                     value_type>::unaligned(it);
 
-                            int offset = -1;
-                            if constexpr (std::is_same_v<hpx::identity,
-                                              std::decay_t<Proj>>)
-                            {
-                                auto mask =
-                                    HPX_INVOKE(comp, parent_vec, child_vec);
-                                offset = traits::find_first_of(mask);
-                            }
-                            else
-                            {
-                                auto mask = HPX_INVOKE(comp,
-                                    HPX_INVOKE(proj, parent_vec),
-                                    HPX_INVOKE(proj, child_vec));
-                                offset = traits::find_first_of(mask);
-                            }
+                            auto mask = HPX_INVOKE(comp, parent_vec, child_vec);
+                            int const offset = traits::find_first_of(mask);
 
                             if (offset != -1)
                             {
@@ -151,24 +206,9 @@ namespace hpx::parallel::detail {
 
                         while (count != 0)
                         {
-                            if constexpr (std::is_same_v<hpx::identity,
-                                              std::decay_t<Proj>>)
+                            if (HPX_INVOKE(comp, *(first + base_idx / 2), *it))
                             {
-                                if (HPX_INVOKE(
-                                        comp, *(first + base_idx / 2), *it))
-                                {
-                                    return it;
-                                }
-                            }
-                            else
-                            {
-                                if (HPX_INVOKE(comp,
-                                        HPX_INVOKE(
-                                            proj, *(first + base_idx / 2)),
-                                        HPX_INVOKE(proj, *it)))
-                                {
-                                    return it;
-                                }
+                                return it;
                             }
 
                             ++it;
@@ -211,6 +251,7 @@ namespace hpx::parallel::detail {
                     traits::vector_pack_size_v<vector_type>;
 
                 constexpr bool can_vectorize = (num_lanes > 1) &&
+                    (num_lanes % 2 == 0) &&
                     is_heap_datapar_compatible_v<Comp, Proj, vector_type>;
 
                 if constexpr (!can_vectorize)
@@ -224,6 +265,24 @@ namespace hpx::parallel::detail {
                 }
                 else
                 {
+                    if ((base_idx & 1) != 0 && part_size != 0)
+                    {
+                        if (tok.was_cancelled(base_idx))
+                        {
+                            return;
+                        }
+
+                        if (HPX_INVOKE(comp, *(first + base_idx / 2), *it))
+                        {
+                            tok.cancel(base_idx);
+                            return;
+                        }
+
+                        ++it;
+                        ++base_idx;
+                        --part_size;
+                    }
+
                     while (part_size >= num_lanes)
                     {
                         if (tok.was_cancelled(base_idx))
@@ -232,30 +291,19 @@ namespace hpx::parallel::detail {
                         }
 
                         vector_type parent_vec{};
-                        for (std::size_t e = 0; e != num_lanes; ++e)
+                        Iter const parent_first = first + (base_idx / 2);
+                        for (std::size_t e = 0; e != num_lanes / 2; ++e)
                         {
-                            value_type const parent_val =
-                                *(first + (base_idx + e) / 2);
-                            traits::set(parent_vec, e, parent_val);
+                            value_type const parent_val = *(parent_first + e);
+                            traits::set(parent_vec, 2 * e, parent_val);
+                            traits::set(parent_vec, 2 * e + 1, parent_val);
                         }
 
                         auto child_vec = traits::vector_pack_load<vector_type,
                             value_type>::unaligned(it);
 
-                        int offset = -1;
-                        if constexpr (std::is_same_v<hpx::identity,
-                                          std::decay_t<Proj>>)
-                        {
-                            auto mask = HPX_INVOKE(comp, parent_vec, child_vec);
-                            offset = traits::find_first_of(mask);
-                        }
-                        else
-                        {
-                            auto mask =
-                                HPX_INVOKE(comp, HPX_INVOKE(proj, parent_vec),
-                                    HPX_INVOKE(proj, child_vec));
-                            offset = traits::find_first_of(mask);
-                        }
+                        auto mask = HPX_INVOKE(comp, parent_vec, child_vec);
+                        int const offset = traits::find_first_of(mask);
 
                         if (offset != -1)
                         {
@@ -276,24 +324,10 @@ namespace hpx::parallel::detail {
                             return;
                         }
 
-                        if constexpr (std::is_same_v<hpx::identity,
-                                          std::decay_t<Proj>>)
+                        if (HPX_INVOKE(comp, *(first + base_idx / 2), *it))
                         {
-                            if (HPX_INVOKE(comp, *(first + base_idx / 2), *it))
-                            {
-                                tok.cancel(base_idx);
-                                return;
-                            }
-                        }
-                        else
-                        {
-                            if (HPX_INVOKE(comp,
-                                    HPX_INVOKE(proj, *(first + base_idx / 2)),
-                                    HPX_INVOKE(proj, *it)))
-                            {
-                                tok.cancel(base_idx);
-                                return;
-                            }
+                            tok.cancel(base_idx);
+                            return;
                         }
 
                         ++it;

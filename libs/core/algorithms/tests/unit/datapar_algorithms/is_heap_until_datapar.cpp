@@ -9,6 +9,7 @@
 #include <hpx/modules/testing.hpp>
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <functional>
 #include <iostream>
@@ -93,6 +94,49 @@ void test_is_heap_until_contiguous(ExPolicy policy, std::size_t size)
 
         HPX_TEST(result == solution);
         HPX_TEST(result == std::end(c));
+    }
+
+    // Custom predicate (min-heap using std::greater<>)
+    {
+        std::vector<int> c(size);
+        std::iota(std::begin(c), std::end(c), 0);
+        std::make_heap(std::begin(c), std::end(c), std::greater<>());
+
+        auto result = hpx::is_heap_until(
+            policy, std::begin(c), std::end(c), std::greater<>());
+        auto solution =
+            std::is_heap_until(std::begin(c), std::end(c), std::greater<>());
+
+        HPX_TEST(result == solution);
+        HPX_TEST(result == std::end(c));
+    }
+
+    // Custom generic lambda comparator (must fall back cleanly to scalar loop)
+    {
+        auto comp = [](auto a, auto b) { return std::abs(a) < std::abs(b); };
+
+        std::vector<int> c(size);
+        std::iota(std::begin(c), std::end(c), 0);
+        std::make_heap(std::begin(c), std::end(c), comp);
+
+        auto result =
+            hpx::is_heap_until(policy, std::begin(c), std::end(c), comp);
+        auto solution = std::is_heap_until(std::begin(c), std::end(c), comp);
+
+        HPX_TEST(result == solution);
+        HPX_TEST(result == std::end(c));
+
+        if (size >= 3)
+        {
+            c[size / 2] = 999999;
+            auto bad_result =
+                hpx::is_heap_until(policy, std::begin(c), std::end(c), comp);
+            auto bad_solution =
+                std::is_heap_until(std::begin(c), std::end(c), comp);
+
+            HPX_TEST(bad_result == bad_solution);
+            HPX_TEST(bad_result != std::end(c));
+        }
     }
 }
 

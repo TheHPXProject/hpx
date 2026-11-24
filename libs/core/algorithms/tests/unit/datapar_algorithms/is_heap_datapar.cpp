@@ -9,6 +9,7 @@
 #include <hpx/modules/testing.hpp>
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <functional>
 #include <iostream>
@@ -92,6 +93,47 @@ void test_is_heap_contiguous(ExPolicy policy, std::size_t size)
 
         HPX_TEST_EQ(result, solution);
         HPX_TEST(result);
+    }
+
+    // Custom predicate (min-heap using std::greater<>)
+    {
+        std::vector<int> c(size);
+        std::iota(std::begin(c), std::end(c), 0);
+        std::make_heap(std::begin(c), std::end(c), std::greater<>());
+
+        bool result =
+            hpx::is_heap(policy, std::begin(c), std::end(c), std::greater<>());
+        bool solution =
+            std::is_heap(std::begin(c), std::end(c), std::greater<>());
+
+        HPX_TEST_EQ(result, solution);
+        HPX_TEST(result);
+    }
+
+    // Custom generic lambda comparator (must fall back cleanly to scalar loop)
+    {
+        auto comp = [](auto a, auto b) { return std::abs(a) < std::abs(b); };
+
+        std::vector<int> c(size);
+        std::iota(std::begin(c), std::end(c), 0);
+        std::make_heap(std::begin(c), std::end(c), comp);
+
+        bool result = hpx::is_heap(policy, std::begin(c), std::end(c), comp);
+        bool solution = std::is_heap(std::begin(c), std::end(c), comp);
+
+        HPX_TEST_EQ(result, solution);
+        HPX_TEST(result);
+
+        if (size >= 3)
+        {
+            c[size / 2] = 999999;
+            bool bad_result =
+                hpx::is_heap(policy, std::begin(c), std::end(c), comp);
+            bool bad_solution = std::is_heap(std::begin(c), std::end(c), comp);
+
+            HPX_TEST_EQ(bad_result, bad_solution);
+            HPX_TEST(!bad_result);
+        }
     }
 }
 
