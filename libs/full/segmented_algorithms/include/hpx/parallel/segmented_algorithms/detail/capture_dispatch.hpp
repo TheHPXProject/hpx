@@ -429,6 +429,69 @@ namespace hpx::parallel::detail {
             act, hpx::colocated(routing_partition_id), HPX_MOVE(ranges));
     }
 
+    template <typename InputLocal, typename OutputLocal>
+    struct captured_copy
+      : algorithm<captured_copy<InputLocal, OutputLocal>, std::size_t>
+    {
+        using output_traits =
+            hpx::traits::segmented_local_iterator_traits<OutputLocal>;
+        using raw_output_iterator = typename output_traits::local_raw_iterator;
+        using value_type =
+            typename std::iterator_traits<InputLocal>::value_type;
+
+        captured_copy()
+          : algorithm<captured_copy<InputLocal, OutputLocal>, std::size_t>(
+                "captured_copy")
+        {
+        }
+
+        template <typename ExPolicy>
+        static std::size_t sequential(ExPolicy policy,
+            std::vector<value_type> values, raw_output_iterator dest)
+        {
+            return invoke(HPX_MOVE(policy), HPX_MOVE(values), HPX_MOVE(dest),
+                std::true_type{});
+        }
+
+        template <typename ExPolicy>
+        static std::size_t parallel(ExPolicy policy,
+            std::vector<value_type> values, raw_output_iterator dest)
+        {
+            return invoke(HPX_MOVE(policy), HPX_MOVE(values), HPX_MOVE(dest),
+                std::false_type{});
+        }
+
+    private:
+        template <typename ExPolicy, typename IsSeq>
+        static std::size_t invoke(ExPolicy policy,
+            std::vector<value_type> values, raw_output_iterator dest, IsSeq)
+        {
+            using raw_input_iterator =
+                typename hpx::traits::segmented_local_iterator_traits<
+                    InputLocal>::local_raw_iterator;
+            constexpr bool const_input =
+                std::is_const_v<std::remove_reference_t<typename std::
+                        iterator_traits<raw_input_iterator>::reference>>;
+            auto input = [&]() {
+                if constexpr (const_input)
+                    return values.cbegin();
+                else
+                    return values.begin();
+            }();
+            auto end = [&]() {
+                if constexpr (const_input)
+                    return values.cend();
+                else
+                    return values.end();
+            }();
+            using local_result =
+                util::in_out_result<decltype(input), raw_output_iterator>;
+            copy<local_result>{}.call2(policy(hpx::execution::non_task),
+                IsSeq{}, input, end, HPX_MOVE(dest));
+            return values.size();
+        }
+    };
+
     HPX_CXX_EXPORT template <typename Value, typename LocalIterator>
     struct move_transmitter
     {

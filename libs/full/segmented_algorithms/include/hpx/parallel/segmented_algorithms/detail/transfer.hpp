@@ -77,53 +77,6 @@ namespace hpx::parallel::detail {
         }
     };
 
-    template <typename InputLocal, typename OutputLocal>
-    struct captured_copy
-      : algorithm<captured_copy<InputLocal, OutputLocal>, std::size_t>
-    {
-        using output_traits =
-            hpx::traits::segmented_local_iterator_traits<OutputLocal>;
-        using raw_output_iterator = typename output_traits::local_raw_iterator;
-        using value_type =
-            typename std::iterator_traits<InputLocal>::value_type;
-
-        captured_copy()
-          : algorithm<captured_copy<InputLocal, OutputLocal>, std::size_t>(
-                "captured_copy")
-        {
-        }
-
-        template <typename ExPolicy>
-        static std::size_t sequential(ExPolicy policy,
-            std::vector<value_type> values, raw_output_iterator dest)
-        {
-            return invoke(
-                HPX_MOVE(policy), values, HPX_MOVE(dest), std::true_type{});
-        }
-
-        template <typename ExPolicy>
-        static std::size_t parallel(ExPolicy policy,
-            std::vector<value_type> values, raw_output_iterator dest)
-        {
-            return invoke(
-                HPX_MOVE(policy), values, HPX_MOVE(dest), std::false_type{});
-        }
-
-    private:
-        template <typename ExPolicy, typename IsSeq>
-        static std::size_t invoke(ExPolicy policy,
-            std::vector<value_type> const& values, raw_output_iterator dest,
-            IsSeq)
-        {
-            using local_result = util::in_out_result<
-                typename std::vector<value_type>::const_iterator,
-                raw_output_iterator>;
-            copy<local_result>{}.call2(policy(hpx::execution::non_task),
-                IsSeq{}, values.begin(), values.end(), HPX_MOVE(dest));
-            return values.size();
-        }
-    };
-
     template <typename Algo>
     inline constexpr bool is_move_transfer_v =
         std::is_base_of_v<move_pair<typename Algo::result_type>,
