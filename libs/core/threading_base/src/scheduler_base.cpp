@@ -551,9 +551,14 @@ namespace hpx::threads::policies {
     {
         // The creations and the workers are counted in the same atomic, so
         // either this comes first and the last worker to leave waits for it,
-        // or the last worker has left before and this gives up
+        // or the last worker has left before and this gives up. Acquire:
+        // each worker saw its state stopping before its decrement (a
+        // release), and the decrements form one release sequence, so if this
+        // reads the count the last worker left, the check below sees the
+        // states stopping as well. A relaxed increment would allow it to see
+        // an earlier state and create a thread that no worker runs.
         std::uint64_t const before = workers_in_loop_.fetch_add(
-            outside_creation_unit, std::memory_order_relaxed);
+            outside_creation_unit, std::memory_order_acq_rel);
         if ((before & workers_in_loop_mask) == 0 &&
             has_reached_state(hpx::state::stopping))
         {
