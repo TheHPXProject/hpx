@@ -498,8 +498,10 @@ namespace hpx::parcelset::detail {
         }
 
         // schedule later if this is de-serialized with zero-copy semantics
+        // or if a device conduit moves some of its data
         if (ar.try_get_extra_data<
-                serialization::detail::allow_zero_copy_receive>() != nullptr)
+                serialization::detail::allow_zero_copy_receive>() != nullptr ||
+            ar.enable_device_transport())
         {
             action_->load(ar);
             take_post_receive_actions(ar);

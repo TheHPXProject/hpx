@@ -12,6 +12,7 @@ set(parcelset_base_headers
     hpx/parcelset_base/detail/locality_interface_functions.hpp
     hpx/parcelset_base/detail/parcel_route_handler.hpp
     hpx/parcelset_base/detail/per_action_data_counter.hpp
+    hpx/parcelset_base/device_conduit.hpp
     hpx/parcelset_base/locality.hpp
     hpx/parcelset_base/parcelset_base_fwd.hpp
     hpx/parcelset_base/locality_interface.hpp
@@ -38,6 +39,7 @@ set(parcelset_base_compat_headers
 set(parcelset_base_sources
     detail/locality_interface_functions.cpp
     detail/per_action_data_counter.cpp
+    device_conduit.cpp
     locality.cpp
     locality_interface.cpp
     parcelport.cpp

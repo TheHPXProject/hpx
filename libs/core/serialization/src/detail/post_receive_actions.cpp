@@ -8,6 +8,7 @@
 #include <hpx/modules/type_support.hpp>
 #include <hpx/serialization/detail/post_receive_actions.hpp>
 
+#include <atomic>
 #include <cstddef>
 #include <exception>
 #include <functional>
@@ -31,8 +32,125 @@ namespace hpx::util {
 
 namespace hpx::serialization::detail {
 
+    namespace {
+
+        // Runs 'actions' and calls 'done' once all of them have finished,
+        // with the first error if one failed. If starting an action throws,
+        // that action and the ones not started yet count as finished (with
+        // the error), and 'done' still waits for the actions already started:
+        // they may write into memory that 'done' lets go.
+        void run_all(post_receive_actions::actions_type& actions,
+            post_receive_actions::done_type done)
+        {
+            if (actions.empty())
+            {
+                done();
+                return;
+            }
+
+            struct state
+            {
+                std::mutex mtx;
+                std::size_t pending = 0;
+                std::exception_ptr error;
+                post_receive_actions::done_type done;
+            };
+            auto s = std::make_shared<state>();
+            s->pending = actions.size();
+            s->done = HPX_MOVE(done);
+
+            auto finished = [](std::shared_ptr<state> const& st,
+                                std::size_t const count,
+                                std::exception_ptr error) {
+                std::exception_ptr first;
+                {
+                    std::lock_guard<std::mutex> l(st->mtx);
+                    if (error && !st->error)
+                    {
+                        st->error = HPX_MOVE(error);
+                    }
+                    st->pending -= count;
+                    if (st->pending != 0)
+                    {
+                        return;
+                    }
+                    first = st->error;
+                }
+                st->done(HPX_MOVE(first));
+            };
+
+            std::size_t started = 0;
+            for (auto& action : actions)
+            {
+                // an action finishes once: through its callback (which it may
+                // call before it throws) or because starting it threw
+                auto const once = std::make_shared<std::atomic<bool>>(false);
+                try
+                {
+                    action([s, finished, once](std::exception_ptr error) {
+                        if (!once->exchange(true))
+                        {
+                            finished(s, 1, HPX_MOVE(error));
+                        }
+                    });
+                }
+                catch (...)
+                {
+                    // this action (unless its callback has run) and the
+                    // ones not started yet count as finished
+                    std::size_t const count = actions.size() - started - 1 +
+                        (once->exchange(true) ? 0 : 1);
+                    if (count != 0)
+                    {
+                        finished(s, count, std::current_exception());
+                        return;
+                    }
+
+                    // all actions have finished: keep the error for 'done'
+                    // if it hasn't run yet, else pass it on
+                    {
+                        std::lock_guard<std::mutex> l(s->mtx);
+                        if (s->pending != 0)
+                        {
+                            if (!s->error)
+                            {
+                                s->error = std::current_exception();
+                            }
+                            return;
+                        }
+                    }
+                    throw;
+                }
+                ++started;
+            }
+        }
+    }    // namespace
+
     post_receive_actions::parcel_steps post_receive_actions::take_parcel_steps()
     {
+        if (!transfers_.empty())
+        {
+            // one step: the transfers, then the other steps
+            auto transfers =
+                std::make_shared<actions_type>(HPX_MOVE(transfers_));
+            auto actions = std::make_shared<actions_type>(HPX_MOVE(actions_));
+            transfers_.clear();
+            actions_.clear();
+            actions_.push_back([transfers, actions](done_type done) {
+                run_all(*transfers,
+                    [actions, done = HPX_MOVE(done)](
+                        std::exception_ptr error) mutable {
+                        // the data is incomplete if a transfer failed
+                        if (error)
+                        {
+                            done(HPX_MOVE(error));
+                            return;
+                        }
+                        run_all(*actions, HPX_MOVE(done));
+                    });
+            });
+        }
+
         if (actions_.empty())
         {
             // only the steps of earlier parcels, if any

@@ -23,6 +23,7 @@
 #include <hpx/modules/serialization.hpp>
 #include <hpx/modules/timing.hpp>
 
+#include <hpx/parcelset/device_conduit.hpp>
 #include <hpx/parcelset/parcel.hpp>
 #include <hpx/parcelset/parcelset_fwd.hpp>
 
@@ -200,6 +201,13 @@ namespace hpx::parcelset {
                 buffer.data_.reserve(arg_size);
                 buffer.chunks_.reserve(num_chunks);
 
+                // a device conduit moves the device memory of the parcels if
+                // it reaches their destination (the same for all of them)
+                std::uint32_t const destination =
+                    ps[0].destination_locality_id();
+                archive_flags = archive_flags |
+                    static_cast<int>(detail::device_conduit_flags(destination));
+
                 // mark start of serialization
 #if defined(HPX_HAVE_PARCELPORT_COUNTERS)
                 hpx::chrono::high_resolution_timer const timer;
@@ -214,6 +222,16 @@ namespace hpx::parcelset {
                     serialization::output_archive archive(buffer.data_,
                         archive_flags, &buffer.chunks_, filter.get(),
                         pp.get_zero_copy_serialization_threshold());
+
+                    // the conduit keeps the parcels (and the memory they
+                    // refer to) alive until it has sent their device data
+                    if (archive.enable_device_transport())
+                    {
+                        detail::attach_device_conduit_sender(archive,
+                            destination,
+                            std::make_shared<std::vector<parcel>>(
+                                ps, ps + parcels_sent));
+                    }
 
                     if (num_parcels != static_cast<std::size_t>(-1))
                         archive << parcels_sent;    //-V128

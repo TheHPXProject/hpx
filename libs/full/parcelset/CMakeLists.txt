@@ -11,6 +11,7 @@ set(parcelset_headers
     hpx/parcelset/connection_cache.hpp
     hpx/parcelset/decode_parcels.hpp
     hpx/parcelset/detail/call_for_each.hpp
+    hpx/parcelset/device_conduit.hpp
     hpx/parcelset/detail/parcel_await.hpp
     hpx/parcelset/detail/message_handler_interface_functions.hpp
     hpx/parcelset/encode_parcels.hpp
@@ -45,7 +46,7 @@ set(parcelset_compat_headers
 
 set(parcelset_sources
     detail/message_handler_interface_functions.cpp detail/parcel_await.cpp
-    message_handler.cpp parcel.cpp parcelhandler.cpp
+    device_conduit.cpp message_handler.cpp parcel.cpp parcelhandler.cpp
 )
 
 if(HPX_WITH_DISTRIBUTED_RUNTIME)
