@@ -28,6 +28,7 @@ struct wait_observer
     std::condition_variable cv;
     bool waiting = false;
     hpx::execution_base::agent_ref agent;
+    std::size_t entries = 0;    // suspensions and sleeps entered
 
     void notify_waiting()
     {
@@ -35,6 +36,7 @@ struct wait_observer
             std::lock_guard<std::mutex> lock(mutex);
             waiting = true;
         }
+            ++entries;
         cv.notify_all();
     }
 
@@ -45,6 +47,14 @@ struct wait_observer
     }
 
     void publish_agent(hpx::execution_base::agent_ref context)
+    // bounded, so that a test that expects more entries fails instead of
+    // hanging
+    bool wait_for_entries(std::size_t count, seconds timeout)
+    {
+        std::unique_lock<std::mutex> lock(mutex);
+        return cv.wait_for(lock, timeout, [&] { return entries >= count; });
+    }
+
     {
         std::lock_guard<std::mutex> lock(mutex);
         agent = context;
@@ -288,9 +298,12 @@ int main()
         observer.wait_until_waiting();
         p1.set_value(0);
         {
-            std::unique_lock<std::mutex> l(m);
-            HPX_TEST(!cv.wait_for(
-                l, milliseconds(20), [&] { return wait_returned; }));
+
+        // the stale wakeup ends the first suspension: the wait has to
+        // suspend again instead of returning before the futures are ready
+        HPX_TEST(observer.wait_for_entries(2, seconds(10)));
+            std::lock_guard<std::mutex> l(m);
+            HPX_TEST(!wait_returned);
         }
         p2.set_value(42);
         waiter.join();
@@ -481,9 +494,8 @@ int main()
         observer.wait_until_waiting();
         p1.set_value(0);
         {
-            std::unique_lock<std::mutex> l(m);
-            HPX_TEST(!cv.wait_for(
-                l, milliseconds(20), [&] { return wait_all_returned; }));
+            std::lock_guard<std::mutex> l(m);
+            HPX_TEST(!wait_all_returned);
         }
         p2.set_value(1);
         p3.set_value(2);
@@ -501,6 +513,10 @@ int main()
         bool agent_ready = false;
         hpx::execution_base::agent_ref agent;
 
+
+        // the stale wakeup ends the first suspension: the wait has to
+        // suspend again instead of returning before the futures are ready
+        HPX_TEST(observer.wait_for_entries(2, seconds(10)));
         std::thread waiter([&] {
             agent = hpx::execution_base::this_thread::agent();
             {
