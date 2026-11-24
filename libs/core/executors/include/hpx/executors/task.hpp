@@ -47,10 +47,27 @@ namespace hpx::execution::experimental {
 
     ///////////////////////////////////////////////////////////////////////////
     // with_error: P3552 error yield value wrapper
+    //
+    // P3552 specifies with_error as an aggregate. GCC 11 and 12 miscompile
+    // the aggregate initialization of a temporary in the operand of co_yield:
+    // the initializer is constructed once but destroyed twice (see GCC
+    // PR 101367 and PR 103909), so 'co_yield with_error(make_exception_ptr(e))'
+    // releases the exception object while it is still referenced. A
+    // constructor avoids the aggregate initialization.
     HPX_CXX_CORE_EXPORT template <typename Error>
     struct with_error
     {
         using type = std::decay_t<Error>;
+
+        template <typename E>
+            requires(!std::is_same_v<std::decay_t<E>, with_error> &&
+                std::is_constructible_v<type, E>)
+        constexpr with_error(E&& e) noexcept(
+            std::is_nothrow_constructible_v<type, E>)
+          : error(HPX_FORWARD(E, e))
+        {
+        }
+
         type error;
     };
 
