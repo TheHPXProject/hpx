@@ -402,7 +402,8 @@ namespace hpx { namespace ranges {
     template <typename FwdIter, typename Sent,
         typename T = std::iter_value_t<FwdIter>,
         typename Pred = hpx::ranges::equal_to, typename Proj = hpx::identity>
-    FwdIter search_n(FwdIter first, Sent last, std::size_t count,
+    FwdIter search_n(FwdIter first, Sent last,
+        std::iter_difference_t<FwdIter> count,
         T const& value, Pred&& op = Pred(), Proj&& proj = Proj());
 
     /// Searches the range for the first sequence of \a count consecutive
@@ -473,7 +474,8 @@ namespace hpx { namespace ranges {
         typename Pred = hpx::ranges::equal_to, typename Proj = hpx::identity>
     hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
         FwdIter>
-    search_n(ExPolicy&& policy, FwdIter first, Sent last, std::size_t count,
+    search_n(ExPolicy&& policy, FwdIter first, Sent last,
+        std::iter_difference_t<FwdIter> count,
         T const& value, Pred&& op = Pred(), Proj&& proj = Proj());
 
     /// Searches the range for the first sequence of \a count consecutive
@@ -522,7 +524,8 @@ namespace hpx { namespace ranges {
     template <typename Rng,
         typename T = std::iter_value_t<std::ranges::iterator_t<Rng>>,
         typename Pred = hpx::ranges::equal_to, typename Proj = hpx::identity>
-    std::ranges::iterator_t<Rng> search_n(Rng&& rng, std::size_t count,
+    std::ranges::iterator_t<Rng> search_n(Rng&& rng,
+        std::ranges::range_difference_t<Rng> count,
         T const& value, Pred&& op = Pred(), Proj&& proj = Proj());
 
     /// Searches the range for the first sequence of \a count consecutive
@@ -589,7 +592,8 @@ namespace hpx { namespace ranges {
         typename Pred = hpx::ranges::equal_to, typename Proj = hpx::identity>
     hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
         std::ranges::iterator_t<Rng>>
-    search_n(ExPolicy&& policy, Rng&& rng, std::size_t count, T const& value,
+    search_n(ExPolicy&& policy, Rng&& rng,
+        std::ranges::range_difference_t<Rng> count, T const& value,
         Pred&& op = Pred(), Proj&& proj = Proj());
 
 }}    // namespace hpx::ranges
@@ -749,14 +753,14 @@ namespace hpx::ranges {
                 std::forward_iterator<FwdIter> &&
                 std::sentinel_for<Sent, FwdIter> &&
                 parallel::traits::is_projected_v<Proj, FwdIter> &&
-                hpx::is_invocable_v<Pred,
+                hpx::is_invocable_v<Pred&,
                     std::invoke_result_t<Proj&, std::iter_reference_t<FwdIter>>,
                     T const&>
             )
         // clang-format on
         static FwdIter invoke_default(FwdIter first, Sent last,
-            std::size_t count, T const& value, Pred op = Pred(),
-            Proj proj = Proj())
+            std::iter_difference_t<FwdIter> count, T const& value,
+            Pred op = Pred(), Proj proj = Proj())
         {
             return hpx::parallel::detail::search_n<FwdIter, Sent>().call(
                 hpx::execution::seq, first, last, count, value, HPX_MOVE(op),
@@ -773,7 +777,7 @@ namespace hpx::ranges {
                 std::forward_iterator<FwdIter> &&
                 std::sentinel_for<Sent, FwdIter> &&
                 parallel::traits::is_projected_v<Proj, FwdIter> &&
-                hpx::is_invocable_v<Pred,
+                hpx::is_invocable_v<Pred&,
                     std::invoke_result_t<Proj&, std::iter_reference_t<FwdIter>>,
                     T const&>
             )
@@ -781,8 +785,8 @@ namespace hpx::ranges {
         static hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
             FwdIter>
         invoke_default(ExPolicy&& policy, FwdIter first, Sent last,
-            std::size_t count, T const& value, Pred op = Pred(),
-            Proj proj = Proj())
+            std::iter_difference_t<FwdIter> count, T const& value,
+            Pred op = Pred(), Proj proj = Proj())
         {
             return hpx::parallel::detail::search_n<FwdIter, Sent>().call(
                 HPX_FORWARD(ExPolicy, policy), first, last, count, value,
@@ -798,15 +802,15 @@ namespace hpx::ranges {
                 std::ranges::range<Rng> &&
                 std::forward_iterator<std::ranges::iterator_t<Rng>> &&
                 hpx::parallel::traits::is_projected_range_v<Proj, Rng> &&
-                hpx::is_invocable_v<Pred,
+                hpx::is_invocable_v<Pred&,
                     std::invoke_result_t<Proj&,
                         std::ranges::range_reference_t<Rng>>,
                     T const&>
             )
         // clang-format on
         static std::ranges::iterator_t<Rng> invoke_default(Rng&& rng,
-            std::size_t count, T const& value, Pred op = Pred(),
-            Proj proj = Proj())
+            std::ranges::range_difference_t<Rng> count, T const& value,
+            Pred op = Pred(), Proj proj = Proj())
         {
             using fwditer_type = std::ranges::iterator_t<Rng>;
             using sent_type = std::ranges::sentinel_t<Rng>;
@@ -827,7 +831,7 @@ namespace hpx::ranges {
                 std::ranges::range<Rng> &&
                 std::forward_iterator<std::ranges::iterator_t<Rng>> &&
                 hpx::parallel::traits::is_projected_range_v<Proj, Rng> &&
-                hpx::is_invocable_v<Pred,
+                hpx::is_invocable_v<Pred&,
                     std::invoke_result_t<Proj&,
                         std::ranges::range_reference_t<Rng>>,
                     T const&>
@@ -835,8 +839,9 @@ namespace hpx::ranges {
         // clang-format on
         static hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
             std::ranges::iterator_t<Rng>>
-        invoke_default(ExPolicy&& policy, Rng&& rng, std::size_t count,
-            T const& value, Pred op = Pred(), Proj proj = Proj())
+        invoke_default(ExPolicy&& policy, Rng&& rng,
+            std::ranges::range_difference_t<Rng> count, T const& value,
+            Pred op = Pred(), Proj proj = Proj())
         {
             using fwditer_type = std::ranges::iterator_t<Rng>;
             using sent_type = std::ranges::sentinel_t<Rng>;

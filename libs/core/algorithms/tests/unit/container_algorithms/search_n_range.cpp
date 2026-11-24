@@ -129,6 +129,7 @@ void ranges_search_n_test(ExPolicy&& policy)
     HPX_TEST(hpx::ranges::search_n(policy, c, 100000, std::size_t{5}) ==
         c.end());
     HPX_TEST(hpx::ranges::search_n(policy, c, 0, std::size_t{42}) == c.begin());
+    HPX_TEST(hpx::ranges::search_n(policy, c, -1, std::size_t{5}) == c.begin());
 
     // predicate and projection
     auto const equal = [](std::size_t a, std::size_t b) { return a == b; };
