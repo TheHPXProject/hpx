@@ -47,5 +47,5 @@ int main()
 
     delete[] a;
 
-    return 0;
+    return hpx::util::report_errors();
 }
