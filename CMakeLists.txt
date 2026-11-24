@@ -354,6 +354,11 @@ hpx_option(
   HPX_WITH_CXX_MODULES BOOL "Enable exposing C++20 modules (default: OFF)." OFF
   ADVANCED
 )
+hpx_option(
+  HPX_WITH_CXX_MODULE_STD BOOL
+  "Enable 'import std;' for C++ module interface units (default: OFF)." OFF
+  ADVANCED
+)
 if(HPX_WITH_CXX_MODULES)
   include(HPX_CXXModules)
   hpx_check_cxx_modules_support()
@@ -363,8 +368,15 @@ if(HPX_WITH_CXX_MODULES)
   )
   hpx_add_config_define(HPX_HAVE_CXX_MODULES)
 
+  if(HPX_WITH_CXX_MODULE_STD)
+    hpx_add_config_define(HPX_HAVE_CXX_MODULE_STD)
+  endif()
+
   set(HPX_WITH_CXX_MODULES_OPTION SCAN_FOR_MODULES ON)
 else()
+  if(HPX_WITH_CXX_MODULE_STD)
+    hpx_error("HPX_WITH_CXX_MODULE_STD requires HPX_WITH_CXX_MODULES=ON")
+  endif()
   hpx_info("HPX will be built and used with traditional headers only.")
 endif()
 
