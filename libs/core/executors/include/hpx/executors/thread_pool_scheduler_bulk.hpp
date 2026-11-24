@@ -138,14 +138,20 @@ namespace hpx::execution::experimental::detail {
             HPX_FORWARD(End, end), hpx::get<Is>(ts)...);
     }
 
-    HPX_CXX_CORE_EXPORT inline hpx::threads::mask_type full_mask(
+    // The workers a bulk operation runs on: num_threads of them from
+    // first_thread on, limited to the ones that exist (at least the last one).
+    // The mask, the queues, and the dispatch all use this range.
+    HPX_CXX_CORE_EXPORT struct bulk_worker_range
+    {
+        std::size_t first_thread;
+        std::size_t num_threads;
+    };
+
+    HPX_CXX_CORE_EXPORT inline bulk_worker_range get_bulk_worker_range(
         std::size_t first_thread, std::size_t num_threads)
     {
-        auto const& rp = hpx::resource::get_partitioner();
-
-        std::size_t const overall_threads =
-            hpx::threads::hardware_concurrency();
-        std::size_t const total_threads = rp.get_num_threads();
+        std::size_t const total_threads =
+            hpx::resource::get_partitioner().get_num_threads();
         if (first_thread < total_threads)
         {
             num_threads =
@@ -156,6 +162,20 @@ namespace hpx::execution::experimental::detail {
             first_thread = total_threads > 0 ? (total_threads - 1) : 0;
             num_threads = (std::min) (num_threads, static_cast<std::size_t>(1));
         }
+        return {first_thread, num_threads};
+    }
+
+    HPX_CXX_CORE_EXPORT inline hpx::threads::mask_type full_mask(
+        std::size_t first_thread, std::size_t num_threads)
+    {
+        auto const& rp = hpx::resource::get_partitioner();
+
+        std::size_t const overall_threads =
+            hpx::threads::hardware_concurrency();
+        auto const range = get_bulk_worker_range(first_thread, num_threads);
+        first_thread = range.first_thread;
+        num_threads = range.num_threads;
+
         auto mask = hpx::threads::mask_type();
         hpx::threads::resize(mask, overall_threads);
         for (std::size_t i = 0; i != num_threads; ++i)
@@ -1098,13 +1118,9 @@ namespace hpx::execution::experimental::detail {
           , sender(HPX_FORWARD(Sender_, sender))
           , shape(HPX_FORWARD(Shape_, shape))
           , f(HPX_FORWARD(F_, f))
-          , pu_mask(detail::full_mask(
-                this->scheduler.query(
-                    hpx::execution::experimental::get_first_core_t{}),
-                this->scheduler.query(
-                    hpx::execution::experimental::processing_units_count_t{},
-                    hpx::execution::experimental::null_parameters,
-                    hpx::chrono::null_duration, 0)))
+          , pu_mask(
+                detail::full_mask(worker_range(this->scheduler).first_thread,
+                    worker_range(this->scheduler).num_threads))
         {
         }
 
@@ -1198,6 +1214,19 @@ namespace hpx::execution::experimental::detail {
         }
 
     private:
+        // the workers of the scheduler that run the operation, see
+        // get_bulk_worker_range
+        static detail::bulk_worker_range worker_range(
+            thread_pool_policy_scheduler<Policy> const& sched)
+        {
+            return detail::get_bulk_worker_range(
+                sched.query(hpx::execution::experimental::get_first_core_t{}),
+                sched.query(
+                    hpx::execution::experimental::processing_units_count_t{},
+                    hpx::execution::experimental::null_parameters,
+                    hpx::chrono::null_duration, 0));
+        }
+
         template <typename Receiver>
         struct operation_state
         {
@@ -1224,6 +1253,8 @@ namespace hpx::execution::experimental::detail {
             HPX_NO_UNIQUE_ADDRESS std::decay_t<Shape> shape;
             HPX_NO_UNIQUE_ADDRESS std::decay_t<F> f;
 
+            // the environment the predecessor sees: bulk_receiver forwards
+            // the one of the receiver
             using value_types = value_types_of_t<Sender,
                 hpx::execution::experimental::env_of_t<std::decay_t<Receiver>>,
                 decayed_tuple, hpx::variant>;
@@ -1241,20 +1272,14 @@ namespace hpx::execution::experimental::detail {
               , op_state(hpx::execution::experimental::connect(
                     HPX_FORWARD(Sender_, sender),
                     bulk_receiver<operation_state, F, Shape, Receiver>{this}))
-              , first_thread(scheduler.query(
-                    hpx::execution::experimental::get_first_core_t{}))
-              , num_worker_threads(scheduler.query(
-                    hpx::execution::experimental::processing_units_count_t{},
-                    hpx::execution::experimental::null_parameters,
-                    hpx::chrono::null_duration, 0))
+              , first_thread(worker_range(scheduler).first_thread)
+              , num_worker_threads(worker_range(scheduler).num_threads)
               , pu_mask(HPX_MOVE(pumask))
               , work(new bulk_work(num_worker_threads), false)
               , shape(HPX_FORWARD(Shape_, shape))
               , f(HPX_FORWARD(F_, f))
             {
                 HPX_ASSERT(hpx::threads::count(pu_mask) == num_worker_threads);
-            // the environment the predecessor sees: bulk_receiver forwards
-            // the one of the receiver
             }
 
             void start() & noexcept
