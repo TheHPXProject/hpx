@@ -14,6 +14,7 @@
 #include <hpx/modules/testing.hpp>
 
 #include <cstddef>
+#include <functional>
 #include <iterator>
 #include <type_traits>
 #include <vector>
@@ -87,11 +88,79 @@ void transform_reduce_binary_tests(std::vector<hpx::id_type>& localities)
     }
 }
 
+template <typename Iterator1, typename Iterator2>
+void check_binary_subrange(
+    Iterator1 first, Iterator1 last, Iterator2 second, int expected)
+{
+    using namespace hpx::execution;
+
+    auto reduce = [&](auto policy) {
+        return hpx::transform_reduce(policy, first, last, second, 7,
+            std::plus<int>(), std::multiplies<int>());
+    };
+
+    HPX_TEST_EQ(hpx::transform_reduce(first, last, second, 7, std::plus<int>(),
+                    std::multiplies<int>()),
+        expected);
+    HPX_TEST_EQ(reduce(seq), expected);
+    HPX_TEST_EQ(reduce(par), expected);
+    HPX_TEST_EQ(reduce(seq(task)).get(), expected);
+    HPX_TEST_EQ(reduce(par(task)).get(), expected);
+}
+
+void test_binary_partition_layouts(std::vector<std::size_t> const& first_sizes,
+    std::vector<std::size_t> const& second_sizes,
+    hpx::id_type const& first_owner, hpx::id_type const& second_owner)
+{
+    hpx::partitioned_vector<int> first(6,
+        hpx::explicit_container_layout(first_sizes,
+            std::vector<hpx::id_type>(first_sizes.size(), first_owner)));
+    hpx::partitioned_vector<int> second(6,
+        hpx::explicit_container_layout(second_sizes,
+            std::vector<hpx::id_type>(second_sizes.size(), second_owner)));
+
+    for (std::size_t i = 0; i != 6; ++i)
+    {
+        first[i] = static_cast<int>(i + 1);
+        second[i] = static_cast<int>(i + 2);
+    }
+
+    auto first_begin = first.begin();
+    auto second_begin = second.begin();
+    check_binary_subrange(first_begin, first.end(), second_begin, 119);
+    check_binary_subrange(first_begin + 1, first_begin + 5, second_begin, 61);
+    check_binary_subrange(
+        first_begin + 2, first_begin + 5, second_begin + 1, 57);
+    check_binary_subrange(first_begin, first_begin + 2, second_begin + 1, 18);
+    check_binary_subrange(first_begin, first_begin + 1, second_begin, 9);
+    check_binary_subrange(first_begin, first_begin, second.end(), 7);
+}
+
+void transform_reduce_binary_regressions(
+    std::vector<hpx::id_type> const& localities)
+{
+    auto check_owners = [](hpx::id_type const& first,
+                            hpx::id_type const& second) {
+        test_binary_partition_layouts({2, 4}, {4, 2}, first, second);
+        test_binary_partition_layouts({4, 2}, {2, 4}, first, second);
+        test_binary_partition_layouts({2, 0, 4}, {4, 0, 2}, first, second);
+        test_binary_partition_layouts({4, 0, 2}, {2, 0, 4}, first, second);
+    };
+
+    check_owners(hpx::find_here(), hpx::find_here());
+    if (localities.size() > 1)
+    {
+        check_owners(localities[0], localities[1]);
+        check_owners(localities[1], localities[0]);
+    }
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 int main()
 {
     std::vector<hpx::id_type> localities = hpx::find_all_localities();
     transform_reduce_binary_tests<int>(localities);
+    transform_reduce_binary_regressions(localities);
     return hpx::util::report_errors();
 }
 #endif
