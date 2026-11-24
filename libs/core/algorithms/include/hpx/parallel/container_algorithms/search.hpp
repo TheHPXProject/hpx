@@ -604,6 +604,7 @@ namespace hpx { namespace ranges {
 #include <hpx/algorithms/traits/projected.hpp>
 #include <hpx/algorithms/traits/projected_range.hpp>
 #include <hpx/modules/execution.hpp>
+#include <hpx/modules/functional.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/parallel/algorithms/detail/search.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
