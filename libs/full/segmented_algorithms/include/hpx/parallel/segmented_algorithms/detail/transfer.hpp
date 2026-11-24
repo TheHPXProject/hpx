@@ -68,11 +68,28 @@ namespace hpx::parallel::detail {
         static std::size_t invoke(ExPolicy policy,
             std::vector<value_type> values, raw_output_iterator dest, IsSeq)
         {
+            using raw_input_iterator =
+                typename hpx::traits::segmented_local_iterator_traits<
+                    InputLocal>::local_raw_iterator;
+            constexpr bool const_input =
+                std::is_const_v<std::remove_reference_t<typename std::
+                        iterator_traits<raw_input_iterator>::reference>>;
+            auto input = [&]() {
+                if constexpr (const_input)
+                    return values.cbegin();
+                else
+                    return values.begin();
+            }();
+            auto end = [&]() {
+                if constexpr (const_input)
+                    return values.cend();
+                else
+                    return values.end();
+            }();
             using local_result =
-                util::in_out_result<typename std::vector<value_type>::iterator,
-                    raw_output_iterator>;
+                util::in_out_result<decltype(input), raw_output_iterator>;
             move_pair<local_result>{}.call2(policy(hpx::execution::non_task),
-                IsSeq{}, values.begin(), values.end(), HPX_MOVE(dest));
+                IsSeq{}, input, end, HPX_MOVE(dest));
             return values.size();
         }
     };

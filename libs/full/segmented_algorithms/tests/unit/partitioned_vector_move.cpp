@@ -255,8 +255,44 @@ void move_tests(T value, T other_value)
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+struct move_assignment_result
+{
+    int value = 0;
+
+    move_assignment_result& operator=(int&& input)
+    {
+        value = input;
+        return *this;
+    }
+
+    move_assignment_result& operator=(int const&& input)
+    {
+        value = -input;
+        return *this;
+    }
+};
+
+template <typename InputIterator>
+void captured_move_constness_test(int expected)
+{
+    using output_iterator = std::vector<move_assignment_result>::iterator;
+    using algorithm =
+        hpx::parallel::detail::captured_move<InputIterator, output_iterator>;
+    std::vector<move_assignment_result> output(1);
+    HPX_TEST_EQ(
+        algorithm::sequential(hpx::execution::seq, {42}, output.begin()),
+        std::size_t(1));
+    HPX_TEST_EQ(output[0].value, expected);
+    output[0].value = 0;
+    HPX_TEST_EQ(algorithm::parallel(hpx::execution::par, {42}, output.begin()),
+        std::size_t(1));
+    HPX_TEST_EQ(output[0].value, expected);
+}
+
 int main()
 {
+    captured_move_constness_test<std::vector<int>::iterator>(42);
+    captured_move_constness_test<std::vector<int>::const_iterator>(-42);
     move_partition_layout_tests();
     move_tests<double>(43, 42);
     move_tests<int>(43, 42);
