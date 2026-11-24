@@ -16,6 +16,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <memory>
 
 #include <hpx/config/warnings_prefix.hpp>
 
@@ -47,6 +48,37 @@ namespace hpx::threads::detail {
         thread_restart_state newstate_ex, thread_priority priority,
         thread_schedule_hint schedulehint, std::atomic<bool>* started,
         bool retry_on_active, std::int64_t suspension_tag, hpx::error_code& ec);
+
+    /// The timeout of one suspension of a thread (see
+    /// suspension_timeout::set).
+    HPX_CXX_CORE_EXPORT class HPX_CORE_EXPORT suspension_timeout
+    {
+    public:
+        suspension_timeout() noexcept = default;
+
+        /// Set a timer that makes the given thread pending with
+        /// thread_restart_state::timeout at the given time, but only while it
+        /// is still in the suspension tagged with  suspension_tag (see
+        /// set_suspended_thread_state). A thread setting such a timer on
+        /// itself has to suspend right after setting it, the tag of that
+        /// suspension is the tag of its current state plus one. Unlike
+        /// set_thread_state_timed this creates no thread: the timer's
+        /// handler sets the state of the thread directly, and the tag keeps
+        /// it from waking the thread in a later suspension.
+        [[nodiscard]] static suspension_timeout set(
+            hpx::chrono::steady_time_point const& abs_time,
+            thread_id_type const& thrd, std::int64_t suspension_tag,
+            thread_priority priority, hpx::error_code& ec);
+
+        /// Cancel the timeout, unless it has fired already. A timeout that
+        /// fires anyway doesn't touch the thread once the suspension it was
+        /// set for has ended, so cancelling only releases the timer early.
+        void cancel() noexcept;
+
+    private:
+        struct state;
+        std::shared_ptr<state> state_;
+    };
 
     HPX_CXX_CORE_EXPORT inline thread_id_ref_type set_thread_state_timed(
         policies::scheduler_base* scheduler,
