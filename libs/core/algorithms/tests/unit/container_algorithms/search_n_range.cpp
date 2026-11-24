@@ -101,6 +101,94 @@ void search_test_n_count_too_large()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// hpx::ranges::search_n
+struct item
+{
+    int id;
+    int payload;
+};
+
+template <typename ExPolicy>
+void ranges_search_n_test(ExPolicy&& policy)
+{
+    std::vector<std::size_t> c(10007, 5);
+    std::size_t const mid = c.size() / 2;
+    c[mid] = 1;
+    c[mid + 1] = 1;
+    c[mid + 2] = 1;
+
+    auto const expected = c.begin() + static_cast<std::ptrdiff_t>(mid);
+
+    // iterator/sentinel and range overloads
+    HPX_TEST(hpx::ranges::search_n(policy, c.begin(), c.end(), 3,
+                 std::size_t{1}) == expected);
+    HPX_TEST(hpx::ranges::search_n(policy, c, 3, std::size_t{1}) == expected);
+
+    // not found / count too large / zero count
+    HPX_TEST(hpx::ranges::search_n(policy, c, 4, std::size_t{1}) == c.end());
+    HPX_TEST(hpx::ranges::search_n(policy, c, 100000, std::size_t{5}) ==
+        c.end());
+    HPX_TEST(hpx::ranges::search_n(policy, c, 0, std::size_t{42}) == c.begin());
+
+    // predicate and projection
+    auto const equal = [](std::size_t a, std::size_t b) { return a == b; };
+    auto const twice = [](std::size_t a) { return 2 * a; };
+    HPX_TEST(hpx::ranges::search_n(
+                 policy, c, 3, std::size_t{2}, equal, twice) == expected);
+    HPX_TEST(hpx::ranges::search_n(policy, c.begin(), c.end(), 3,
+                 std::size_t{2}, equal, twice) == expected);
+}
+
+template <typename ExPolicy>
+void ranges_search_n_task_test(ExPolicy&& policy)
+{
+    std::vector<std::size_t> c(10007, 5);
+    std::size_t const mid = c.size() / 2;
+    c[mid] = 1;
+    c[mid + 1] = 1;
+
+    auto const expected = c.begin() + static_cast<std::ptrdiff_t>(mid);
+
+    auto f1 = hpx::ranges::search_n(policy, c, 2, std::size_t{1});
+    HPX_TEST(f1.get() == expected);
+
+    auto f2 =
+        hpx::ranges::search_n(policy, c.begin(), c.end(), 2, std::size_t{1});
+    HPX_TEST(f2.get() == expected);
+}
+
+void ranges_search_n_projection_test()
+{
+    // the projection yields a type other than the element type
+    std::vector<item> v{{1, 0}, {2, 0}, {2, 0}, {2, 0}, {3, 0}};
+
+    auto it = hpx::ranges::search_n(v, 2, 2, hpx::ranges::equal_to{}, &item::id);
+    HPX_TEST(it == v.begin() + 1);
+
+    it = hpx::ranges::search_n(hpx::execution::seq, v.begin(), v.end(), 4, 2,
+        hpx::ranges::equal_to{}, &item::id);
+    HPX_TEST(it == v.end());
+}
+
+void ranges_search_n_test_all()
+{
+    ranges_search_n_test(hpx::execution::seq);
+    ranges_search_n_test(hpx::execution::par);
+    ranges_search_n_task_test(hpx::execution::seq(hpx::execution::task));
+    ranges_search_n_task_test(hpx::execution::par(hpx::execution::task));
+
+    std::vector<std::size_t> c(100, 5);
+    c[10] = 7;
+    c[11] = 7;
+    HPX_TEST(hpx::ranges::search_n(c, 2, std::size_t{7}) == c.begin() + 10);
+    HPX_TEST(hpx::ranges::search_n(c.begin(), c.end(), 2, std::size_t{7}) ==
+        c.begin() + 10);
+    HPX_TEST(hpx::ranges::search_n(c, 3, std::size_t{7}) == c.end());
+
+    ranges_search_n_projection_test();
+}
+
+///////////////////////////////////////////////////////////////////////////////
 int hpx_main(hpx::program_options::variables_map& vm)
 {
     unsigned int seed = static_cast<unsigned int>(std::time(nullptr));
@@ -116,6 +204,8 @@ int hpx_main(hpx::program_options::variables_map& vm)
     search_test_n_not_found();
     search_test_n_zero_count();
     search_test_n_count_too_large();
+
+    ranges_search_n_test_all();
 
     return hpx::local::finalize();
 }

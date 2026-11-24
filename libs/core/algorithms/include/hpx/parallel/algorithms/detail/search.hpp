@@ -320,7 +320,7 @@ namespace hpx::parallel::detail {
                 return hpx::parallel::detail::advance_to_sentinel(first, last);
             }
 
-            auto value_proj = proj(value);
+            auto value_proj = value;
 
             if constexpr (hpx::is_vectorpack_execution_policy_v<ExPolicy> &&
                 std::random_access_iterator<FwdIter>)
@@ -356,7 +356,8 @@ namespace hpx::parallel::detail {
                     FwdIter curr = it;
                     Size matched = 0;
 
-                    while (matched < count && pred(proj(*curr), value_proj))
+                    while (matched < count &&
+                        HPX_INVOKE(pred, HPX_INVOKE(proj, *curr), value_proj))
                     {
                         ++curr;
                         ++matched;
@@ -397,7 +398,7 @@ namespace hpx::parallel::detail {
             difference_type max_start =
                 n - static_cast<difference_type>(count) + 1;
 
-            auto value_proj = proj(value);
+            auto value_proj = value;
 
             decltype(auto) policy =
                 hpx::execution::experimental::adapt_placement_mode(
