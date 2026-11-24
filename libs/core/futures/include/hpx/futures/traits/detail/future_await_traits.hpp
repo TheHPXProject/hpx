@@ -17,6 +17,7 @@
 #include <hpx/modules/memory.hpp>
 #include <hpx/modules/type_support.hpp>
 
+#include <atomic>
 #include <cstddef>
 #include <exception>
 #include <memory>
@@ -181,7 +182,15 @@ namespace hpx::lcos::detail {
             {
                 // If this was the last reference count, resume the coroutine
                 // to let it exit (which destroys the frame).
-                return !h.promise().requires_delete();
+                if (h.promise().requires_delete())
+                {
+                    // As in intrusive_ptr_release: the decrement is a
+                    // release only, the thread that destroys the shared
+                    // state must see all writes of the other holders.
+                    std::atomic_thread_fence(std::memory_order_acquire);
+                    return false;
+                }
+                return true;
             }
 
             static constexpr void await_resume() noexcept {}
