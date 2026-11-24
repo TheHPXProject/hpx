@@ -80,6 +80,15 @@ namespace hpx::tracy {
             return s.id == 0 && s.active == 0 && s.connectionId == 0;
         }
 
+        // Under TRACY_ON_DEMAND Tracy drops the end and the text of a zone
+        // opened while an earlier profiler was connected.
+        constexpr bool same_connection(
+            zone_ctx_storage const& a, zone_ctx_storage const& b) noexcept
+        {
+            return a.active != 0 && b.active != 0 &&
+                a.connectionId == b.connectionId;
+        }
+
         // The innermost zone HPX keeps on this worker's fiber (the task's zone,
         // or the one enter_fiber opens for a resumed task) and how many
         // push_zone zones are open on top of it. Per worker, so a suspended
@@ -231,6 +240,12 @@ namespace hpx::tracy {
 
             if (fz.active)
             {
+                // After a reconnect while the task was switched out, Tracy
+                // drops the events of the saved zones and of those the task
+                // opened before, so keep the zone enter_fiber opened, with no
+                // zones counted above it.
+                if (!same_connection(fz.ctx_value, suspended.suspension))
+                    return;
                 TracyCZoneEnd(to_tracy(fz.ctx_value));
             }
             TracyCZoneEnd(to_tracy(suspended.suspension));
@@ -365,8 +380,9 @@ namespace hpx::tracy {
                 TracyCZoneEnd(to_tracy(ctx_value));
             }
 
-            // A zone opened before the task had a fiber was not counted; the
-            // check keeps the count from wrapping around.
+            // A zone opened before the task had a fiber, or one that
+            // resume_fiber_zone dropped from the count after a reconnect, is
+            // not counted; the check keeps the count from wrapping around.
             auto& fz = current_fiber_zone();
             if (ctx_value.active && in_fiber() && fz.zones_above != 0)
             {
