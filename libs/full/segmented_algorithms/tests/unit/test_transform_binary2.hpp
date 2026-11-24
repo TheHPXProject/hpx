@@ -158,6 +158,29 @@ void transform_binary2_tests(std::vector<hpx::id_type>& localities)
     }
 
     {
+        // an empty second range: nothing is transformed
+        hpx::partitioned_vector<T> v(
+            length, T(1), hpx::container_layout(localities));
+        hpx::partitioned_vector<U> w;
+        hpx::partitioned_vector<V> x(length, hpx::container_layout(localities));
+
+        auto check = [&](auto const& result) {
+            HPX_TEST(result.in1 == v.begin());
+            HPX_TEST(result.in2 == w.begin());
+            HPX_TEST(result.out == x.begin());
+        };
+        check(hpx::ranges::transform(
+            v.begin(), v.end(), w.begin(), w.end(), x.begin(), add<V>()));
+        check(hpx::ranges::transform(hpx::execution::seq, v.begin(), v.end(),
+            w.begin(), w.end(), x.begin(), add<V>()));
+        check(hpx::ranges::transform(hpx::execution::par, v.begin(), v.end(),
+            w.begin(), w.end(), x.begin(), add<V>()));
+        check(hpx::ranges::transform(hpx::execution::par(hpx::execution::task),
+            v.begin(), v.end(), w.begin(), w.end(), x.begin(), add<V>())
+                .get());
+    }
+
+    {
         hpx::partitioned_vector<T> v(
             length, T(1), hpx::container_layout(localities));
         hpx::partitioned_vector<U> w(

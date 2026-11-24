@@ -938,7 +938,8 @@ namespace hpx::segmented {
             std::input_iterator<InIter1> && std::input_iterator<InIter2>,
             "Requires at least input iterator.");
 
-        if (first1 == last1)
+        // an empty range: nothing to do (and no partition to localize)
+        if (first1 == last1 || first2 == last2)
         {
             return hpx::parallel::util::in_in_out_result<InIter1, InIter2,
                 OutIter>{HPX_MOVE(first1), HPX_MOVE(first2), HPX_MOVE(dest)};
@@ -984,7 +985,8 @@ namespace hpx::segmented {
         using result = hpx::parallel::util::detail::algorithm_result<ExPolicy,
             hpx::parallel::util::in_in_out_result<InIter1, InIter2, OutIter>>;
 
-        if (first1 == last1)
+        // an empty range: nothing to do (and no partition to localize)
+        if (first1 == last1 || first2 == last2)
         {
             return result::get(hpx::parallel::util::in_in_out_result<InIter1,
                 InIter2, OutIter>{
