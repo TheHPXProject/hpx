@@ -31,7 +31,7 @@ namespace hpx::parallel::detail {
 
     /// \cond NOINTERNAL
 
-    template <typename InputLocal, typename OutputLocal>
+    HPX_CXX_EXPORT template <typename InputLocal, typename OutputLocal>
     struct captured_move
       : algorithm<captured_move<InputLocal, OutputLocal>, std::size_t>
     {
