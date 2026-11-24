@@ -130,7 +130,7 @@ void adjacent_difference_tests(std::vector<hpx::id_type>& localities)
 
         std::vector<T> const expected{
             T(10), T(1), T(1), T(1), T(1), T(1), T(1), T(1)};
-        auto verify = [&]() {
+        auto verify_result = [&]() {
             auto result = w.begin();
             for (T value : expected)
             {
@@ -142,14 +142,14 @@ void adjacent_difference_tests(std::vector<hpx::id_type>& localities)
 
         hpx::adjacent_difference(
             v.begin(), v.end(), w.begin(), std::minus<T>{});
-        verify();
+        verify_result();
         hpx::adjacent_difference(hpx::execution::par, v.begin(), v.end(),
             w.begin(), std::minus<T>{});
-        verify();
+        verify_result();
         hpx::adjacent_difference(hpx::execution::par(hpx::execution::task),
             v.begin(), v.end(), w.begin(), std::minus<T>{})
             .get();
-        verify();
+        verify_result();
     }
 
     {
