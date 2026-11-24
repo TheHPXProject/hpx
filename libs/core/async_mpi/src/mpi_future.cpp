@@ -375,6 +375,25 @@ namespace hpx { namespace mpi { namespace experimental {
             return work_count;
         }
 
+        namespace {
+
+            // the polling function this module registers with a scheduler
+            hpx::threads::policies::detail::polling_status registered_poll(
+                void* /*context*/)
+            {
+                return hpx::mpi::experimental::poll();
+            }
+
+            std::size_t registered_work_count(void* /*context*/)
+            {
+                return get_work_count();
+            }
+
+            constexpr hpx::threads::policies::detail::polling_function
+                polling_function{
+                    &registered_poll, &registered_work_count, nullptr};
+        }    // namespace
+
         // -------------------------------------------------------------
         void register_polling(hpx::threads::thread_pool_base& pool)
         {
@@ -383,8 +402,7 @@ namespace hpx { namespace mpi { namespace experimental {
 #endif
             mpi_debug.debug(debug::str<>("enable polling"));
             auto* sched = pool.get_scheduler();
-            sched->set_mpi_polling_functions(
-                &hpx::mpi::experimental::poll, &get_work_count);
+            sched->add_polling_function(&polling_function);
         }
 
         // -------------------------------------------------------------
@@ -412,7 +430,7 @@ namespace hpx { namespace mpi { namespace experimental {
             if constexpr (mpi_debug.is_enabled())
                 mpi_debug.debug(debug::str<>("disable polling"));
             auto* sched = pool.get_scheduler();
-            sched->clear_mpi_polling_function();
+            sched->remove_polling_function(&polling_function);
         }
     }    // namespace detail
 
