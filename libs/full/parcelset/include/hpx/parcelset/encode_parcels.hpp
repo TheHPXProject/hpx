@@ -176,8 +176,12 @@ namespace hpx::parcelset {
             pp.get_zero_copy_serialization_threshold());
         archive.enable_optimistic_save();
 
+        // the parcel's size leaves out the parcel count of the message, as
+        // in the preprocessing pass
+        std::size_t const header_size = archive.bytes_written();
         std::size_t const num_parcels = 1;
         archive << num_parcels;    //-V128
+        std::size_t const parcel_start = archive.bytes_written();
 
 #if defined(HPX_HAVE_PARCELPORT_COUNTERS) &&                                   \
     defined(HPX_HAVE_PARCELPORT_ACTION_COUNTERS)
@@ -208,7 +212,7 @@ namespace hpx::parcelset {
         buffer.data_point_.serialization_time_ = timer.elapsed_nanoseconds();
         buffer.data_point_.num_parcels_ = 1;
 #endif
-        p.size() = archive.bytes_written();
+        p.size() = header_size + archive.bytes_written() - parcel_start;
         p.num_chunks() = buffer.chunks_.size();
         detail::encode_finalize(buffer, archive.bytes_written());
         return true;
