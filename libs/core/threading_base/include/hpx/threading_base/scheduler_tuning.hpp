@@ -112,6 +112,17 @@ namespace hpx::threads::policies {
         [[nodiscard]] constexpr T clamped(T const value) const noexcept
         {
             HPX_ASSERT(type == tuning_parameter_type_of<T>);
+            if constexpr (std::same_as<T, float>)
+            {
+                if (value != value)
+                {
+                    // Fall back to min_value if value is NaN (e.g. from
+                    // division by zero in a dynamic tuner), as
+                    // default_value is not stored in tuning_parameter_info
+                    // and min_value is a safe conservative fallback.
+                    return min_value.as<float>();
+                }
+            }
             return std::clamp(value, min_value.as<T>(), max_value.as<T>());
         }
     };
@@ -210,7 +221,8 @@ namespace hpx::threads::policies {
 
         /// Change the given setting for the given worker, with a value of
         /// the type of the setting. The value is clamped to the range of the
-        /// setting. Settings that hold for the whole pool can only be
+        /// setting. If a NaN value is passed, the setting is set to its
+        /// minimum bound. Settings that hold for the whole pool can only be
         /// changed with set_all.
         template <tuning_value_type T>
         void set(std::size_t worker, std::size_t id, T value) noexcept
@@ -223,7 +235,9 @@ namespace hpx::threads::policies {
         }
 
         /// Change the given setting for all workers, with a value of the
-        /// type of the setting.
+        /// type of the setting. The value is clamped to the range of the
+        /// setting. If a NaN value is passed, the setting is set to its
+        /// minimum bound.
         template <tuning_value_type T>
         void set_all(std::size_t id, T value) noexcept
         {
