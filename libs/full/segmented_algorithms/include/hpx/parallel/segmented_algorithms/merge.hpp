@@ -1669,10 +1669,13 @@ namespace hpx::segmented {
 
     namespace detail {
 
+        // Built from hpx::segmented_iterator (not the equivalent traits), so
+        // that an overload for a specific execution policy requiring
+        // hpx::segmented_iterator and std::random_access_iterator is more
+        // constrained than the overloads below.
         template <typename Iter>
-        concept segmented_merge_iterator = hpx::traits::is_iterator_v<Iter> &&
-            hpx::traits::is_segmented_iterator_v<Iter> &&
-            std::random_access_iterator<Iter>;
+        concept segmented_merge_iterator =
+            hpx::segmented_iterator<Iter> && std::random_access_iterator<Iter>;
     }    // namespace detail
 
     HPX_CXX_EXPORT template <typename ExPolicy, typename Iter1, typename Iter2,
