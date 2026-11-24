@@ -249,8 +249,12 @@ Task fibers
 Each task, except stackless (``nostack``) tasks, also runs on a fiber row,
 named ``<description>_<id>``, where the id is the address of the |hpx| thread.
 You can follow a task on its fiber row when it moves from one worker to
-another. The color of a zone on a fiber row depends on the worker it ran on, so
-a change of color means that the task moved.
+another. On the fiber row, the zone of the task lasts from the first time it
+starts or resumes while the profiler is connected until it completes. While the
+task is suspended, a zone named after the reason, for example
+``future_data_base::wait``, lies inside it, from the suspension until the task
+runs again, possibly on another worker. A short zone at its end marks when the
+task got a worker again.
 
 |hpx| reuses thread objects. A later task with the same description that reuses
 the same thread object appears on the same fiber row, so a fiber row can show
@@ -320,7 +324,9 @@ These messages connect a future to the continuations it starts. The address in
 the message is the address of the shared state of the future, so you can search
 for the same address on the producer side and on the consumer side. If a task
 is running when the message is sent, the message is also added to the text of
-its zone on the fiber row.
+its zone on the fiber row, but not while an ``HPX_TRACING_MARK_EVENT`` zone,
+including one that |hpx| itself opens, is open inside it, as Tracy accepts zone
+text only for the innermost open zone.
 
 .. list-table::
    :header-rows: 1

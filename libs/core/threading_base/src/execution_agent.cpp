@@ -245,13 +245,9 @@ namespace hpx::threads {
 #ifdef HPX_HAVE_MODULE_LIKWID
             hpx::likwid::suspend_region region;
 #endif
-            // fiber_suspend_region operates only on the fiber zone stack
-            // (current_fiber_zone). It does NOT touch the OS-thread zone
-            // (current_region / stop_region), so there is no zone-stack
-            // conflict. The sequence is:
-            //   constructor: close running zone -> open grey "suspended" zone
-            //   self_.yield(): fiber parks, scheduler picks next task
-            //   destructor:  close "suspended" zone -> reopen running zone
+            // The zone lasts until the task runs again, on whichever worker,
+            // so the fiber row shows how long the task was suspended. It uses
+            // only the fiber, as the OS-thread zone belongs to the scheduler.
             hpx::tracing::fiber_suspend_region tracy_suspend(desc);
 
             HPX_ASSERT(thrd_data != nullptr &&
