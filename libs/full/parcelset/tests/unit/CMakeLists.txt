@@ -113,4 +113,5 @@ add_hpx_unit_test(
   PARCELPORTS mpi lci lcw
   RUN_SERIAL
   ARGS --hpx:ini=hpx.parcel.fast_path!=1 --hpx:ini=hpx.parcel.mpi.sendimm!=1
+       --fast-path
 )
