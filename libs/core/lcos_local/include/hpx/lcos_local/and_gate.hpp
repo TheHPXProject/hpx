@@ -23,6 +23,7 @@
 #include <hpx/modules/type_support.hpp>
 
 #include <cstddef>
+#include <memory>
 #include <mutex>
 #include <type_traits>
 #include <utility>
@@ -62,13 +63,101 @@ namespace hpx::lcos::local {
         struct condition_list_entry : conditional_cv
         {
             condition_list_entry() = default;
+            explicit condition_list_entry(std::size_t generation) noexcept
+              : async_generation(generation)
+            {
+            }
 
             condition_list_entry* prev = nullptr;
             condition_list_entry* next = nullptr;
+
+            // The generation an asynchronous waiter (synchronize_async())
+            // waits for, zero for a blocking waiter (synchronize()).
+            std::size_t async_generation = 0;
+        };
+
+        // An asynchronous waiter is owned by the gate until its promise is
+        // set.
+        struct async_condition_list_entry : condition_list_entry
+        {
+            explicit async_condition_list_entry(std::size_t generation)
+              : condition_list_entry(generation)
+            {
+            }
+
+            hpx::promise<void> promise;
         };
 
         using condition_list_type =
             hpx::detail::intrusive_list<condition_list_entry>;
+
+        static void delete_async_entries(condition_list_type& list) noexcept
+        {
+            condition_list_entry* next;
+            for (auto* c = list.front(); c != nullptr; c = next)
+            {
+                next = c->next;
+                if (c->async_generation != 0)
+                {
+                    list.erase(c);
+                    delete static_cast<async_condition_list_entry*>(c);
+                }
+            }
+        }
+
+    public:
+        /// \brief The asynchronous waiters released by next_generation().
+        ///
+        /// set() makes their futures ready. The caller of next_generation()
+        /// calls it after it has released its lock, so that a continuation
+        /// that runs inline does not run under that lock. The destructor
+        /// calls set() for waiters that are still held.
+        class released_waiters
+        {
+        public:
+            released_waiters() = default;
+
+            explicit released_waiters(condition_list_type& list) noexcept
+            {
+                list_.swap(list);
+            }
+
+            released_waiters(released_waiters&& rhs) noexcept
+            {
+                list_.swap(rhs.list_);
+            }
+
+            released_waiters(released_waiters const&) = delete;
+            released_waiters& operator=(released_waiters const&) = delete;
+            released_waiters& operator=(released_waiters&&) = delete;
+
+            ~released_waiters()
+            {
+                set();
+            }
+
+            /// \returns \c true if no waiter was released.
+            [[nodiscard]] bool empty() const noexcept
+            {
+                return list_.empty();
+            }
+
+            /// \brief Make the futures of the released waiters ready.
+            void set()
+            {
+                while (!list_.empty())
+                {
+                    std::unique_ptr<async_condition_list_entry> e(
+                        static_cast<async_condition_list_entry*>(
+                            list_.front()));
+                    list_.pop_front();
+                    e->promise.set_value();
+                }
+            }
+
+        private:
+            condition_list_type list_;
+        };
 
     public:
         /// \brief Construct a base_and_gate from the number of participants to
@@ -100,8 +189,11 @@ namespace hpx::lcos::local {
           , promise_(HPX_MOVE(rhs.promise_))
           , generation_(rhs.generation_)
           , conditions_(HPX_MOVE(rhs.conditions_))
+          , released_(HPX_MOVE(rhs.released_))
         {
             rhs.generation_ = static_cast<std::size_t>(-1);
+            rhs.conditions_.reset();
+            rhs.released_.reset();
         }
 
         /// \brief Move-assign a base_and_gate, leaving \p rhs in a
@@ -114,18 +206,48 @@ namespace hpx::lcos::local {
         {
             if (this != &rhs)
             {
-                std::lock_guard<mutex_type> l(rhs.mtx_);
-                mtx_ = mutex_type();
-                received_segments_ = HPX_MOVE(rhs.received_segments_);
-                promise_ = HPX_MOVE(rhs.promise_);
-                generation_ = rhs.generation_;
-                rhs.generation_ = static_cast<std::size_t>(-1);
-                conditions_ = HPX_MOVE(rhs.conditions_);
+                // The caller of next_generation() has to take the released
+                // waiters, setting them here could run a continuation inline
+                // on a gate that is being assigned to. If one is left, its
+                // generation was reached, so its future becomes ready when
+                // released goes out of scope, after rhs.mtx_ was unlocked.
+                HPX_ASSERT(released_.empty());
+                released_waiters released(released_);
+
+                // The waiters whose generation was not reached get a broken
+                // promise, also only after rhs.mtx_ was unlocked.
+                condition_list_type not_reached;
+                not_reached.swap(conditions_);
+
+                {
+                    std::lock_guard<mutex_type> l(rhs.mtx_);
+                    mtx_ = mutex_type();
+                    received_segments_ = HPX_MOVE(rhs.received_segments_);
+                    promise_ = HPX_MOVE(rhs.promise_);
+                    generation_ = rhs.generation_;
+                    rhs.generation_ = static_cast<std::size_t>(-1);
+                    conditions_ = HPX_MOVE(rhs.conditions_);
+                    released_ = HPX_MOVE(rhs.released_);
+                    rhs.conditions_.reset();
+                    rhs.released_.reset();
+                }
+
+                delete_async_entries(not_reached);
             }
             return *this;
         }
 
-        ~base_and_gate() = default;
+        // The futures of asynchronous waiters whose generation was not
+        // reached report a broken promise. The caller of next_generation()
+        // has to take the released waiters, setting them here could run a
+        // continuation inline on a gate that is being destroyed. If one is
+        // left, its generation was reached, so its future becomes ready.
+        ~base_and_gate()
+        {
+            HPX_ASSERT(released_.empty());
+            delete_async_entries(conditions_);
+            released_waiters released(released_);
+        }
 
     protected:
         template <typename Lock>
@@ -139,7 +261,18 @@ namespace hpx::lcos::local {
                 {
                     // item may be deleted during processing
                     next = c->next;
-                    triggered |= c->set(l);
+                    if (c->async_generation == 0)
+                    {
+                        triggered |= c->set(l);
+                    }
+                    else if (test_condition(c->async_generation))
+                    {
+                        // keep the promise until the caller has released its
+                        // lock, see take_released_waiters()
+                        conditions_.erase(c);
+                        released_.push_back(*c);
+                        triggered = true;
+                    }
                 }
             }
             return triggered;
@@ -322,6 +455,7 @@ namespace hpx::lcos::local {
             return generation_value <= generation_;
         }
 
+        /// Manages the lifetime of a registered gate condition.
         struct manage_condition
         {
             manage_condition(
@@ -354,17 +488,28 @@ namespace hpx::lcos::local {
 
     protected:
         template <typename Lock>
+        bool check_generation(std::size_t generation_value, Lock& l,
+            char const* function_name, error_code& ec)
+        {
+            if (generation_value < generation_)
+            {
+                l.unlock();
+                HPX_THROWS_IF(ec, hpx::error::invalid_status, function_name,
+                    "sequencing error, generational counter too small");
+                return false;
+            }
+            return true;
+        }
+
+        template <typename Lock>
         void synchronize(std::size_t generation_value, Lock& l,
             char const* function_name = "base_and_gate<>::synchronize",
             error_code& ec = throws)
         {
             HPX_ASSERT_OWNS_LOCK(l);
 
-            if (generation_value < generation_)
+            if (!check_generation(generation_value, l, function_name, ec))
             {
-                l.unlock();
-                HPX_THROWS_IF(ec, hpx::error::invalid_status, function_name,
-                    "sequencing error, generational counter too small");
                 return;
             }
 
@@ -399,9 +544,50 @@ namespace hpx::lcos::local {
             synchronize(generation_value, l, function_name, ec);
         }
 
+    protected:
+        template <typename Lock>
+        hpx::future<void> synchronize_async(std::size_t generation_value,
+            Lock& l,
+            char const* function_name = "base_and_gate<>::synchronize_async",
+            error_code& ec = throws)
+        {
+            HPX_ASSERT_OWNS_LOCK(l);
+
+            if (!check_generation(generation_value, l, function_name, ec))
+            {
+                return {};
+            }
+
+            if (&ec != &throws)
+                ec = make_success_code();
+
+            if (test_condition(generation_value))
+            {
+                return hpx::make_ready_future();
+            }
+
+            auto e =
+                std::make_unique<async_condition_list_entry>(generation_value);
+            hpx::future<void> f = e->promise.get_future();
+            conditions_.push_back(*e.release());
+            return f;
+        }
+
+        template <typename Lock>
+        released_waiters take_released_waiters(Lock& l) noexcept
+        {
+            HPX_ASSERT_OWNS_LOCK(l);
+            return released_waiters(released_);
+        }
+
     public:
         /// \brief Advance the generational counter of the gate, unblocking any
         ///        waiters whose requested generation has now been reached.
+        ///
+        /// Asynchronous waiters (synchronize_async()) are only released, their
+        /// futures do not become ready yet. The caller has to call
+        /// take_released_waiters(l) and call set() on the result after it has
+        /// unlocked \p l.
         ///
         /// \tparam Lock Type of the lock object used by the caller to
         ///              protect the gate; must already be locked when this
@@ -464,7 +650,14 @@ namespace hpx::lcos::local {
             error_code& ec = throws)
         {
             std::unique_lock<mutex_type> l(mtx_);
-            return next_generation(l, new_generation, ec);
+            std::size_t const retval = next_generation(l, new_generation, ec);
+            if (l.owns_lock())
+            {
+                released_waiters released = take_released_waiters(l);
+                l.unlock();
+                released.set();
+            }
+            return retval;
         }
 
         /// \brief Query the current generation value of the gate.
@@ -525,6 +718,7 @@ namespace hpx::lcos::local {
         hpx::promise<void> promise_;
         std::size_t generation_;
         condition_list_type conditions_;
+        condition_list_type released_;
     };
 
     ///////////////////////////////////////////////////////////////////////////
@@ -646,6 +840,85 @@ namespace hpx::lcos::local {
         {
             this->base_type::synchronize(
                 generation_value, l, function_name, ec);
+        }
+
+        /// \brief Advance the generational counter of the gate, unblocking any
+        ///        waiters whose requested generation has now been reached.
+        ///
+        /// and_gate has no mutex of its own, so this hides the overload of
+        /// base_and_gate that takes no lock. Asynchronous waiters
+        /// (synchronize_async()) are only released, the caller has to call
+        /// take_released_waiters(l) and call set() on the result after it has
+        /// unlocked \p l.
+        ///
+        /// \tparam Lock Type of the lock object used by the caller to
+        ///              protect the gate.
+        ///
+        /// \param l The lock object that is currently holding the gate's
+        ///          associated (outer) lock.
+        /// \param new_generation The generation value the gate's counter
+        ///                       should be reset to before being advanced; if
+        ///                       not given the gate is simply advanced to the
+        ///                       next generation. The returned generation value
+        ///                       is one beyond this value.
+        /// \param ec Used to hold error information if the operation fails.
+        ///
+        /// \returns The new generation value of the gate.
+        template <typename Lock>
+        std::size_t next_generation(Lock& l,
+            std::size_t const new_generation = static_cast<std::size_t>(-1),
+            error_code& ec = throws)
+        {
+            return this->base_type::next_generation(l, new_generation, ec);
+        }
+
+        /// \brief Get a future that becomes ready once the generational
+        ///        counter has reached the requested stage.
+        ///
+        /// Unlike synchronize(), this does not suspend the calling thread.
+        /// If the gate has not reached \p generation_value yet, the future
+        /// becomes ready after next_generation() has reached it and its
+        /// caller has called set() on the waiters returned by
+        /// take_released_waiters(). A generation that next_generation()
+        /// skips counts as reached.
+        ///
+        /// \tparam Lock Type of the lock object used by the caller to
+        ///              protect the gate.
+        ///
+        /// \param generation_value The generation the caller waits for the
+        ///                         gate to reach.
+        /// \param l The lock object that is currently holding the gate's
+        ///          associated (outer) lock.
+        /// \param function_name The name to be used for error reporting.
+        /// \param ec Used to hold error information if the operation fails.
+        ///
+        /// \returns A future that becomes ready once the gate has reached
+        ///          \p generation_value, or an invalid future if \p ec
+        ///          reports an error.
+        template <typename Lock>
+        hpx::future<void> synchronize_async(std::size_t generation_value,
+            Lock& l, char const* function_name = "and_gate::synchronize_async",
+            error_code& ec = throws)
+        {
+            return this->base_type::synchronize_async(
+                generation_value, l, function_name, ec);
+        }
+
+        /// \brief Take the asynchronous waiters that next_generation()
+        ///        released.
+        ///
+        /// \tparam Lock Type of the lock object used by the caller to
+        ///              protect the gate.
+        ///
+        /// \param l The lock object that is currently holding the gate's
+        ///          associated (outer) lock.
+        ///
+        /// \returns The released waiters. Call set() on them after \p l has
+        ///          been released.
+        template <typename Lock>
+        released_waiters take_released_waiters(Lock& l) noexcept
+        {
+            return this->base_type::take_released_waiters(l);
         }
     };
 }    // namespace hpx::lcos::local

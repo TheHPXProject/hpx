@@ -315,6 +315,92 @@ namespace hpx::parallel::util::detail {
     }
 
     ///////////////////////////////////////////////////////////////////////
+    // Combine the items returned by partition() and partition_with_index()
+    // for executor parameters that invoke a testing function: the futures
+    // for the chunks that were run while measuring (items.first), and
+    // whatever the executor's bulk_async_execute returned for the remaining
+    // chunks (items.second).
+    HPX_CXX_CORE_EXPORT template <typename Items1, typename Items2>
+    auto combine_partition_items(std::pair<Items1, Items2>&& items)
+    {
+        using init_item_type = typename Items1::value_type;
+        if constexpr (std::is_same_v<Items2, init_item_type>)
+        {
+            // one future representing all remaining chunks (e.g.
+            // hpx::future<void>)
+            items.first.emplace_back(HPX_MOVE(items.second));
+            return HPX_MOVE(items.first);
+        }
+        else if constexpr (hpx::traits::is_future_v<Items2>)
+        {
+            // one future holding the results of all remaining chunks (e.g.
+            // hpx::future<std::vector<Result>>), prepend the results of the
+            // measured chunks once it has become ready
+            return items.second.then(hpx::launch::sync,
+                [inititems = HPX_MOVE(items.first)](auto&& workitems) mutable {
+                    auto&& workresults = workitems.get();
+
+                    hpx::traits::future_traits_t<Items2> results;
+                    results.reserve(inititems.size() + workresults.size());
+
+                    std::transform(inititems.begin(), inititems.end(),
+                        std::back_inserter(results),
+                        [](init_item_type& f) { return f.get(); });
+                    results.insert(results.end(),
+                        std::make_move_iterator(workresults.begin()),
+                        std::make_move_iterator(workresults.end()));
+
+                    return results;
+                });
+        }
+        else
+        {
+            // a range of futures, one for each of the remaining chunks
+            items.first.insert(items.first.end(),
+                std::make_move_iterator(items.second.begin()),
+                std::make_move_iterator(items.second.end()));
+            return HPX_MOVE(items.first);
+        }
+    }
+
+    ///////////////////////////////////////////////////////////////////////
+    // Invoke the reduction function with the results of all (ready) chunks,
+    // held by one future or by one future per chunk.
+    HPX_CXX_CORE_EXPORT template <typename F, typename Items>
+    decltype(auto) invoke_with_results(F& f, Items&& items)
+    {
+        // nested, as the inner traits exist for futures only
+        using items_type = std::decay_t<Items>;
+        if constexpr (hpx::traits::is_future_v<items_type>)
+        {
+            if constexpr (!hpx::traits::is_future_void_v<items_type>)
+            {
+                return HPX_INVOKE(f, items.get());
+            }
+            else
+            {
+                return HPX_INVOKE(f, HPX_FORWARD(Items, items));
+            }
+        }
+        else if constexpr (hpx::traits::is_future_range_v<items_type>)
+        {
+            if constexpr (!hpx::traits::is_future_void_v<
+                              typename items_type::value_type>)
+            {
+                return HPX_INVOKE(f, hpx::unwrap(HPX_FORWARD(Items, items)));
+            }
+            else
+            {
+                return HPX_INVOKE(f, HPX_FORWARD(Items, items));
+            }
+        }
+        else
+        {
+            return HPX_INVOKE(f, HPX_FORWARD(Items, items));
+        }
+    }
+
+    ///////////////////////////////////////////////////////////////////////
     // The static partitioner simply spawns one chunk of iterations for
     // each available core.
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename R,
@@ -499,8 +585,13 @@ namespace hpx::parallel::util::detail {
                         // future
                         handle_local_exceptions::call(items);
                     }
+
+                    return invoke_with_results(f, HPX_FORWARD(Items, items));
                 }
-                return HPX_INVOKE(f, HPX_FORWARD(Items, items));
+                else
+                {
+                    return HPX_INVOKE(f, HPX_FORWARD(Items, items));
+                }
             }
         }
 
@@ -538,23 +629,32 @@ namespace hpx::parallel::util::detail {
         template <typename Items1, typename Items2, typename F>
         static auto reduce(std::pair<Items1, Items2>&& items, F&& f)
         {
-            if (items.first.empty())
+            using init_item_type = typename Items1::value_type;
+            if constexpr (hpx::traits::is_future_v<Items2> &&
+                !std::is_same_v<Items2, init_item_type>)
             {
-                return reduce(HPX_MOVE(items.second), HPX_FORWARD(F, f));
-            }
-
-            if constexpr (hpx::traits::is_future_v<Items2>)
-            {
-                items.first.emplace_back(HPX_MOVE(items.second));
+                // the executor returned one future holding the results of
+                // all remaining chunks (e.g.
+                // hpx::future<std::vector<Result>>), the reduction function
+                // expects a range of results
+                auto&& results = combine_partition_items(HPX_MOVE(items));
+                if (hpx::wait_all_nothrow(results))
+                {
+                    // always rethrow if results is exceptional
+                    handle_local_exceptions::call(results);
+                }
+                return reduce(results.get(), HPX_FORWARD(F, f));
             }
             else
             {
-                items.first.insert(items.first.end(),
-                    std::make_move_iterator(items.second.begin()),
-                    std::make_move_iterator(items.second.end()));
-            }
+                if (items.first.empty())
+                {
+                    return reduce(HPX_MOVE(items.second), HPX_FORWARD(F, f));
+                }
 
-            return reduce(HPX_MOVE(items.first), HPX_FORWARD(F, f));
+                return reduce(combine_partition_items(HPX_MOVE(items)),
+                    HPX_FORWARD(F, f));
+            }
         }
     };
 
@@ -670,19 +770,8 @@ namespace hpx::parallel::util::detail {
                     HPX_FORWARD(F, f));
             }
 
-            if constexpr (hpx::traits::is_future_v<Items2>)
-            {
-                items.first.emplace_back(HPX_MOVE(items.second));
-            }
-            else
-            {
-                items.first.insert(items.first.end(),
-                    std::make_move_iterator(items.second.begin()),
-                    std::make_move_iterator(items.second.end()));
-            }
-
-            return reduce(HPX_MOVE(scoped_params), HPX_MOVE(items.first),
-                HPX_FORWARD(F, f));
+            return reduce(HPX_MOVE(scoped_params),
+                combine_partition_items(HPX_MOVE(items)), HPX_FORWARD(F, f));
         }
 
         template <typename Items, typename F,
@@ -706,17 +795,8 @@ namespace hpx::parallel::util::detail {
 
                     handle_local_exceptions::call(r);
 
-                    if constexpr (hpx::traits::is_future_v<decltype((r))> &&
-                        !std::is_void_v<
-                            hpx::traits::future_traits_t<decltype((r))>>)
-                    {
-                        return hpx::util::void_guard<R>(), f(r.get());
-                    }
-                    else
-                    {
-                        return hpx::util::void_guard<R>(),
-                               f(HPX_FORWARD(decltype(r), r));
-                    }
+                    return hpx::util::void_guard<R>(),
+                           invoke_with_results(f, HPX_FORWARD(decltype(r), r));
                 },
                 HPX_FORWARD(Items, workitems));
 #endif

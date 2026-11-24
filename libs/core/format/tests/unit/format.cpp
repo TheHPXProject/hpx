@@ -12,8 +12,29 @@
 #include <hpx/hpx_main.hpp>
 
 #include <ctime>
+#include <stdexcept>
 #include <string>
 #include <vector>
+
+namespace {
+
+    // a replacement field that is never closed has to be rejected the same way
+    // a stray '}' is, with a std::runtime_error saying 'bad format string'
+    template <typename... Ts>
+    void test_bad_format(char const* format_str, Ts const&... ts)
+    {
+        try
+        {
+            (void) hpx::util::format(format_str, ts...);
+            HPX_TEST_MSG(false, format_str);    // must not return normally
+        }
+        catch (std::runtime_error const& e)
+        {
+            HPX_TEST_EQ_MSG(std::string(e.what()),
+                std::string("bad format string"), format_str);
+        }
+    }
+}    // namespace
 
 int main(int, char*[])
 {
@@ -77,6 +98,25 @@ int main(int, char*[])
         HPX_TEST_EQ((hpx::util::format("{} {{", 1)), "1 {");
         HPX_TEST_EQ((hpx::util::format("{} }}", 1)), "1 }");
         HPX_TEST_EQ((hpx::util::format("{{{1}}}", 2)), "{2}");
+    }
+
+    {
+        // replacement fields that are never closed by a '}'; the ones with
+        // an explicit argument index used to never return
+        test_bad_format("{", 42);
+        test_bad_format("abc {", 42);
+        test_bad_format("{:x", 42);
+        test_bad_format("{1", 42);
+        test_bad_format("abc {1", 42);
+        test_bad_format("{2:04", 42, 43);
+
+        // well-formed fields next to an unterminated one are still rejected
+        test_bad_format("{} {", 42);
+        test_bad_format("{1} {1", 42);
+
+        // a single brace at the end of the string
+        test_bad_format("}", 42);
+        test_bad_format("abc }", 42);
     }
 
     return hpx::util::report_errors();

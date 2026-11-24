@@ -46,8 +46,6 @@ int hpx_main()
     }
 
     // Same test with lambdas
-    // action lambdas inhibit undefined behavior...
-#if !defined(HPX_HAVE_SANITIZERS)
     {
         {
             hpx::async(std::move(mynamespace::t), hpx::find_here()).get();
@@ -55,7 +53,6 @@ int hpx_main()
 
         HPX_TEST(called_t);
     }
-#endif
 
     return hpx::finalize();
 }

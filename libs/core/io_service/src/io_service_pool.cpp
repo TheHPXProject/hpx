@@ -529,6 +529,15 @@ namespace hpx::util::detail { namespace {
 
 namespace hpx::util {
 
+    threads::policies::callback_notifier const&
+    default_io_service_pool_notifier() noexcept
+    {
+        // the pools keep a reference to their notifier, so the default one
+        // can't be a temporary
+        static threads::policies::callback_notifier const notifier;
+        return notifier;
+    }
+
     io_service_pool::io_service_pool(std::size_t const pool_size,
         threads::policies::callback_notifier const& notifier,
         char const* pool_name, char const* name_postfix)

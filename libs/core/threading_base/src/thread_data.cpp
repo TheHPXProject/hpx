@@ -25,7 +25,6 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
 #include <limits>
 #include <memory>
 #include <utility>
@@ -115,7 +114,7 @@ namespace hpx::threads {
 #endif
         set_timer_data(init_data.timer_data);
 #if defined(HPX_HAVE_TRACY)
-        fiber_name_[0] = '\0';
+        fiber_name_ = nullptr;
         // Decide once per task creation whether this task's lifecycle is
         // sampled. Safe unlocked: the object is not yet observable.
         emit_lifecycle_ = hpx::threads::detail::should_sample_next();
@@ -302,7 +301,7 @@ namespace hpx::threads {
 #endif
 
 #if defined(HPX_HAVE_TRACY)
-        fiber_name_[0] = '\0';
+        fiber_name_ = nullptr;
 #endif
 
         LTM_(debug).format("thread::thread({}), description({}), rebind", this,
@@ -345,7 +344,9 @@ namespace hpx::threads {
 
         std::swap(description_, value);
 
-        hpx::tracing::rename_region(description_.get_description());
+        // With HPX_HAVE_THREAD_DESCRIPTION_FULL the description can be an
+        // address, which must not be read as a name.
+        hpx::tracing::rename_region(get_safe_description(description_));
 
         return value;
     }
@@ -393,13 +394,15 @@ namespace hpx::threads {
     char const* thread_data::get_fiber_name() const noexcept
     {
 #if defined(HPX_HAVE_TRACY)
-        if (fiber_name_[0] == '\0')
+        // Making the name takes a lock, so it's done once per task and only
+        // when the task will enter a fiber. The suffix is the address of this
+        // object, so tasks running at the same time get different fibers.
+        if (fiber_name_ == nullptr && !is_stackless() &&
+            hpx::tracy::is_profiler_connected())
         {
-            char const* name = get_safe_description(get_description(), "fiber");
-            // Use the HPX thread_id pointer as the unique numeric suffix
-            // so each HPX task gets its own fiber track in Tracy.
-            std::snprintf(fiber_name_, sizeof(fiber_name_), "%s_%p", name,
-                static_cast<void*>(get_thread_id().get()));
+            fiber_name_ = hpx::tracy::fiber_name(
+                get_safe_description(get_description(), "fiber"),
+                get_thread_id().get());
         }
         return fiber_name_;
 #else
@@ -577,16 +580,19 @@ namespace hpx::threads {
     }
 
 #if defined(HPX_HAVE_TRACY)
+    // With HPX_HAVE_THREAD_DESCRIPTION_FULL an unnamed task is described by
+    // its function's address. Reading that as a name gives the zone the bytes
+    // stored at the address, so such tasks are named <unknown> instead.
     tracing::region_init_data get_region_init_data(thread_data const* thrdptr)
     {
-        return {thrdptr->get_description().get_description(),
+        return {thread_data::get_safe_description(thrdptr->get_description()),
             thrdptr->get_thread_phase(), thrdptr->is_stackless()};
     }
 
     tracing::fiber_region_init_data get_fiber_region_init_data(
         thread_data const* thrdptr)
     {
-        return {thrdptr->get_description().get_description(),
+        return {thread_data::get_safe_description(thrdptr->get_description()),
             thrdptr->get_fiber_name(), thrdptr->is_stackless()};
     }
 #elif defined(HPX_HAVE_ITTNOTIFY) && HPX_HAVE_ITTNOTIFY != 0

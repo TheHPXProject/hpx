@@ -178,7 +178,8 @@ namespace hpx::when_all_vector_detail {
                         hpx::execution::experimental::set_stopped_t>{},
                     hpx::execution::experimental::completion_signatures<
                         hpx::execution::experimental::set_error_t(
-                            std::exception_ptr)>{}))
+                            std::exception_ptr),
+                        hpx::execution::experimental::set_stopped_t()>{}))
         {
             return {};
         }
@@ -236,7 +237,8 @@ namespace hpx::when_all_vector_detail {
 
             // Number of predecessor senders that have not yet called any of
             // the set signals.
-            std::atomic<std::size_t> predecessors_remaining{num_predecessors};
+            std::atomic<std::size_t> predecessors_remaining{
+                num_predecessors + 1};
 
             // The values sent by the predecessor senders are stored in a
             // vector of optional or the dummy type void_value_type if the
@@ -305,6 +307,11 @@ namespace hpx::when_all_vector_detail {
               , receiver(HPX_FORWARD(Receiver_, receiver))
               , op_states(nullptr, op_states_deleter{alloc_type{}, 0})
             {
+                // Without predecessors there is nothing to allocate. Some
+                // allocators (e.g. MSVC's std::allocator) return nullptr
+                // for zero elements, which the deleter would never pass
+                // back to deallocate.
+                if (num_predecessors != 0)
                 {
                     alloc_type alloc(env_allocator<env_type>::get(
                         hpx::execution::experimental::get_env(this->receiver)));
@@ -446,7 +453,7 @@ namespace hpx::when_all_vector_detail {
                 if (stop_source_.stop_requested())
                 {
                     hpx::execution::experimental::set_stopped(
-                        HPX_FORWARD(Receiver, receiver));
+                        HPX_MOVE(receiver));
                     return;
                 }
 
@@ -486,6 +493,8 @@ namespace hpx::when_all_vector_detail {
 #pragma clang diagnostic pop
 #endif
                     }
+
+                    finish();
                 }
             }
         };
@@ -498,9 +507,11 @@ namespace hpx::when_all_vector_detail {
         }
 
         template <typename Receiver>
+            requires std::is_copy_constructible_v<Sender>
         operation_state<Receiver> connect(Receiver&& receiver) &
         {
-            return operation_state<Receiver>(receiver, senders);
+            return operation_state<Receiver>(
+                HPX_FORWARD(Receiver, receiver), senders_type(senders));
         }
     };    // namespace hpx::when_all_vector_detail
 

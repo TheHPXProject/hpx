@@ -19,7 +19,7 @@
 
 #include <concepts>
 #include <functional>
-#include <iosfwd>
+#include <ios>
 #include <memory>
 #include <type_traits>
 

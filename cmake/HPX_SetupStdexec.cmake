@@ -87,7 +87,6 @@ if(HPX_WITH_FETCH_STDEXEC)
   )
 
   fetchcontent_makeavailable(Stdexec)
-  set(Stdexec_ROOT ${stdexec_SOURCE_DIR})
 
   add_library(Stdexec INTERFACE)
   target_include_directories(
@@ -115,12 +114,14 @@ if(HPX_WITH_FETCH_STDEXEC)
     COMPONENT core
   )
 
+  # nvexec holds CUDA headers (*.cuh) only, which would leave empty directories
   install(
-    DIRECTORY ${Stdexec_ROOT}/include/
+    DIRECTORY ${stdexec_SOURCE_DIR}/include/
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
     COMPONENT core
     FILES_MATCHING
     PATTERN "*.hpp"
+    PATTERN "nvexec" EXCLUDE
   )
 
   export(

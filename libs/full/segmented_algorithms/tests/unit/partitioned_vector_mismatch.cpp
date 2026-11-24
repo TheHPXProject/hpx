@@ -147,12 +147,138 @@ void mismatch_empty_tests()
 }
 
 template <typename T>
+void mismatch_subrange_tests(std::size_t first_partitions,
+    std::size_t second_partitions, std::ptrdiff_t first_offset,
+    std::ptrdiff_t second_offset,
+    std::vector<hpx::id_type> const& first_localities,
+    std::vector<hpx::id_type> const& second_localities)
+{
+    hpx::partitioned_vector<T> v1(
+        8, hpx::container_layout(first_partitions, first_localities));
+    hpx::partitioned_vector<T> v2(
+        8, hpx::container_layout(second_partitions, second_localities));
+    iota_vector(v1, T(0));
+    iota_vector(v2, T(first_offset) - T(second_offset));
+
+    auto first1 = std::next(v1.begin(), first_offset);
+    auto last1 = std::next(first1, 6);
+    auto first2 = std::next(v2.begin(), second_offset);
+    using namespace hpx::execution;
+
+    auto check_mismatch = [&](auto expected1, auto expected2, auto... pred) {
+        auto check_result = [&](auto const& result) {
+            HPX_TEST(result.first == expected1);
+            HPX_TEST(result.second == expected2);
+        };
+        check_result(hpx::mismatch(seq, first1, last1, first2, pred...));
+        check_result(hpx::mismatch(par, first1, last1, first2, pred...));
+        check_result(
+            hpx::mismatch(seq(task), first1, last1, first2, pred...).get());
+        check_result(
+            hpx::mismatch(par(task), first1, last1, first2, pred...).get());
+    };
+
+    check_mismatch(last1, std::next(first2, 6));
+    *std::next(first2, 6) = T(9999);
+    check_mismatch(last1, std::next(first2, 6));
+
+    *std::next(first2, 5) = T(9999);
+    check_mismatch(std::next(first1, 5), std::next(first2, 5));
+    *std::next(first2, 3) = T(9999);
+    check_mismatch(std::next(first1, 3), std::next(first2, 3));
+    *first2 = T(9999);
+    check_mismatch(first1, first2);
+
+    iota_vector(v2, T(first_offset) - T(second_offset) + T(100));
+    check_mismatch(last1, std::next(first2, 6),
+        [](T left, T right) { return left + T(100) == right; });
+}
+
+template <typename T>
+void mismatch_zero_count_tests()
+{
+    using namespace hpx::execution;
+
+    hpx::partitioned_vector<T> first(3,
+        hpx::explicit_container_layout(std::vector<std::size_t>{1, 2},
+            {hpx::find_here(), hpx::find_here()}));
+    hpx::partitioned_vector<T> second_with_empty_partition(3,
+        hpx::explicit_container_layout(std::vector<std::size_t>{1, 0, 2},
+            {hpx::find_here(), hpx::find_here(), hpx::find_here()}));
+    iota_vector(first, T(0));
+    iota_vector(second_with_empty_partition, T(0));
+
+    auto check_empty_partition = [&](auto const& result) {
+        HPX_TEST(result.first == first.end());
+        HPX_TEST(result.second == second_with_empty_partition.end());
+    };
+    check_empty_partition(hpx::mismatch(seq, first.begin(), first.end(),
+        second_with_empty_partition.begin(),
+        second_with_empty_partition.end()));
+    check_empty_partition(hpx::mismatch(par, first.begin(), first.end(),
+        second_with_empty_partition.begin(),
+        second_with_empty_partition.end()));
+    check_empty_partition(hpx::mismatch(seq(task), first.begin(), first.end(),
+        second_with_empty_partition.begin(), second_with_empty_partition.end())
+            .get());
+    check_empty_partition(hpx::mismatch(par(task), first.begin(), first.end(),
+        second_with_empty_partition.begin(), second_with_empty_partition.end())
+            .get());
+
+    hpx::partitioned_vector<T> second_at_boundary(3,
+        hpx::explicit_container_layout(std::vector<std::size_t>{1, 2},
+            {hpx::find_here(), hpx::find_here()}));
+    iota_vector(second_at_boundary, T(0));
+    auto first2 = std::next(second_at_boundary.begin());
+
+    auto check_partition_boundary = [&](auto const& result) {
+        HPX_TEST(result.first == std::next(first.begin(), 2));
+        HPX_TEST(result.second == std::next(first2, 2));
+    };
+    auto compare_offset = [](T left, T right) { return left + T(1) == right; };
+    check_partition_boundary(hpx::mismatch(seq, first.begin(),
+        std::next(first.begin(), 2), first2, compare_offset));
+    check_partition_boundary(hpx::mismatch(par, first.begin(),
+        std::next(first.begin(), 2), first2, compare_offset));
+    check_partition_boundary(hpx::mismatch(seq(task), first.begin(),
+        std::next(first.begin(), 2), first2, compare_offset)
+            .get());
+    check_partition_boundary(hpx::mismatch(par(task), first.begin(),
+        std::next(first.begin(), 2), first2, compare_offset)
+            .get());
+}
+
+template <typename T>
 void mismatch_tests()
 {
     mismatch_empty_tests<T>();
+    mismatch_zero_count_tests<T>();
+    auto check_subranges =
+        [](std::vector<hpx::id_type> const& first_localities,
+            std::vector<hpx::id_type> const& second_localities) {
+            mismatch_subrange_tests<T>(
+                2, 2, 0, 0, first_localities, second_localities);
+            mismatch_subrange_tests<T>(
+                2, 2, 1, 0, first_localities, second_localities);
+            mismatch_subrange_tests<T>(
+                2, 2, 0, 1, first_localities, second_localities);
+            mismatch_subrange_tests<T>(
+                1, 3, 1, 0, first_localities, second_localities);
+            mismatch_subrange_tests<T>(
+                3, 1, 0, 1, first_localities, second_localities);
+            mismatch_subrange_tests<T>(
+                3, 2, 1, 0, first_localities, second_localities);
+        };
+    check_subranges({hpx::find_here()}, {hpx::find_here()});
 
     std::size_t const length = 64;
     std::vector<hpx::id_type> localities = hpx::find_all_localities();
+    if (localities.size() >= 2)
+    {
+        check_subranges(localities, localities);
+        check_subranges({localities[0]}, {localities[1]});
+        check_subranges({localities[1]}, {localities[0]});
+    }
 
     mismatch_tests_with_policy<T>(length, 1, hpx::container_layout);
     mismatch_tests_with_policy<T>(length, 3, hpx::container_layout(3));

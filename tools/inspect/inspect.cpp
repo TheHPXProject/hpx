@@ -440,6 +440,8 @@ namespace {
             leaf != ".git" &&
             // don't look at binaries
             leaf != "bin" && leaf != "bin.v2" && leaf != "build" &&
+            // verbatim license texts (REUSE), they can't carry a header
+            leaf != "LICENSES" &&
             // no point in checking doxygen xml output
             local.find("doc/xml") != 0 && local.find("doc\\xml") != 0 &&
             // ignore if tag file present

@@ -301,7 +301,7 @@ namespace hpx { namespace collectives {
     /// \returns The final reduced value after applying `op` to all contributions.
     ///
     template <typename T, typename F>
-    decltype(auto) reduce_here(hpx::launch::sync_policy, communicator comm,
+    std::decay_t<T> reduce_here(hpx::launch::sync_policy, communicator comm,
         T&& result, F&& op, generation_arg generation,
         this_site_arg this_site = this_site_arg());
 
@@ -563,7 +563,7 @@ namespace hpx::collectives {
                 return result;
             };
 
-            return fid.then(hpx::launch::sync, HPX_MOVE(reduction_data));
+            return detail::then_on_communicator(fid, HPX_MOVE(reduction_data));
         }
     }    // namespace detail
 
@@ -756,7 +756,7 @@ namespace hpx::collectives {
                 return result;
             };
 
-            return fid.then(hpx::launch::sync, HPX_MOVE(reduction_data));
+            return detail::then_on_communicator(fid, HPX_MOVE(reduction_data));
         }
     }    // namespace detail
 

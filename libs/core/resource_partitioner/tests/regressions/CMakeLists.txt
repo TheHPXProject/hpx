@@ -4,7 +4,9 @@
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-set(tests help_exit_4317_1 help_exit_4317_2)
+set(tests help_exit_4317_1 help_exit_4317_2 scheduler_mode_7811)
+
+set(scheduler_mode_7811_PARAMETERS THREADS_PER_LOCALITY 4)
 
 foreach(test ${tests})
   set(sources ${test}.cpp)

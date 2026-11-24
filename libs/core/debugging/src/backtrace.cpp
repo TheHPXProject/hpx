@@ -486,12 +486,30 @@ namespace hpx::util::stack_trace {
                     // whether or not the refresh call itself succeeds,
                     // so a persistently failing refresh cannot be
                     // retried in a tight loop either.
+                    //
+                    // Only an address inside a loaded module that DbgHelp
+                    // does not know about yet can be fixed by a refresh. A
+                    // failed lookup in a known module (one without symbols,
+                    // as in most release builds) must not trigger it: it
+                    // would use up the throttle window and leave a module
+                    // loaded right afterwards unresolved.
+                    auto const in_unknown_module = [&]() -> bool {
+                        MEMORY_BASIC_INFORMATION mbi;
+                        return VirtualQuery(reinterpret_cast<LPCVOID>(address),
+                                   &mbi, sizeof(mbi)) != 0 &&
+                            mbi.Type == MEM_IMAGE &&
+                            SymGetModuleBase64(process_handle, address) == 0;
+                    };
+
                     static ULONGLONG last_refresh_tick = 0;
                     constexpr ULONGLONG refresh_interval_ms = 500;
 
                     ULONGLONG const now = GetTickCount64();
-                    if (force_refresh || last_refresh_tick == 0 ||
-                        now - last_refresh_tick >= refresh_interval_ms)
+                    if (force_refresh ||
+                        (in_unknown_module() &&
+                            (last_refresh_tick == 0 ||
+                                now - last_refresh_tick >=
+                                    refresh_interval_ms)))
                     {
                         last_refresh_tick = now;
 

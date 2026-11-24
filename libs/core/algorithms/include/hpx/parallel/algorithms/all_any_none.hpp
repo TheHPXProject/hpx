@@ -459,9 +459,10 @@ namespace hpx::parallel {
 
                 if constexpr (!has_scheduler_executor)
                 {
+                    // no element of an empty range satisfies the predicate
                     if (first == last)
                     {
-                        return result::get(true);
+                        return result::get(false);
                     }
                 }
 

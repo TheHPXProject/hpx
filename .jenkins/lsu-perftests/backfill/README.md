@@ -20,8 +20,47 @@ upload, into a local clone that is pushed when the runs are ready.
 | `backfill.sh`        | runs the benchmarks of each commit in `commits.txt` on the held node and commits the run locally |
 | `after.sh`           | waits for a process to exit (and for a held job to run), then starts `backfill.sh`            |
 | `push.sh`            | pushes the runs committed locally to the history                                              |
+| `skip_commits.txt`   | the master commits whose runs are left out on purpose (`backfill_history.sh` skips them)      |
 
 A run takes about 17 minutes on medusa00 (build and benchmarks).
+
+## In the Jenkins job
+
+Every master build of the HPX-performance-history job adds the missing runs
+itself (`../backfill_history.sh`, called by `entry.sh` after the build has added
+its own run and set its status):
+
+- A commit is missing if it is a first parent of master, has no run in
+  `runs.tsv`, isn't in `skip_commits.txt` and was merged more than an hour ago
+  (its build may not be in Slurm yet).
+- A commit gets one run. All runs share the history node, so the allocation
+  serializes them; right before it starts the benchmarks of a commit,
+  `backfill.sh` looks at the history on GitHub again and skips the commit if
+  another build has added its run meanwhile, and `upload_history.sh` doesn't
+  add a master build's run if a backfill added that commit's run while the
+  build waited for the node. Nothing is done if another build is already
+  adding the missing runs (a lock in the work directory).
+- If anything is missing up to the built commit, the build asks for the
+  history node, for half an hour per commit and half an hour more for the
+  most commits a build adds (`PERFTEST_BACKFILL_MAX`, 6), and waits for it as
+  for its own run. The request may wait in the queue for hours, so once it is
+  granted, the build finds out again what is missing, now up to the tip of
+  master (fetched from `PERFTEST_HPX_REPO`), and releases the node at once if
+  nothing is. Otherwise it runs `backfill.sh` in that allocation and pushes
+  the runs with the build's token; a push rejected because another build
+  pushed meanwhile is tried again on top of it, as in step 4 below.
+- The work directory (`PERFTEST_BACKFILL_DIR`) and the tree the commits are
+  built in sit next to the workspace and are kept between builds. The tree's
+  path has as many characters as the workspace's (its name ends in `-bf`
+  instead of the last three characters), so this build's own reports stay
+  untouched for archiving. The reports of a run are removed from `runs/` once
+  the run is in the history; those of runs that weren't pushed are kept, and
+  the next build adds them from there.
+- The build line of such a run's README says which build added it
+  (`PERFTEST_BACKFILL_BY`). A failure is reported in the log, it doesn't change
+  the status of the build.
+
+The steps below are for adding runs by hand.
 
 ## What is different from a Jenkins run
 

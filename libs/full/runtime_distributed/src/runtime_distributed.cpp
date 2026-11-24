@@ -217,19 +217,69 @@ namespace hpx {
         runtime::init();
 
         init_global_data();
-        util::reinit_construct();
 
-        LPROGRESS_;
+        // If the rest fails (for instance, the bootstrap parcelport can't
+        // start), the destructor of this class doesn't run: don't leave the
+        // global runtime pointers referring to this object.
+        hpx::detail::try_catch_exception_ptr(
+            [&] {
+                util::reinit_construct();
 
-        components::server::get_error_dispatcher().set_error_sink(
-            &runtime_distributed::default_errorsink);
+                LPROGRESS_;
 
-        // now, launch AGAS and register all nodes, launch all other components
-        initialize_agas();
+                components::server::get_error_dispatcher().set_error_sink(
+                    &runtime_distributed::default_errorsink);
 
-        applier_.initialize(
-            reinterpret_cast<std::uint64_t>(runtime_support_.get()));
+                // now, launch AGAS and register all nodes, launch all other
+                // components
+                initialize_agas();
+
+                applier_.initialize(
+                    reinterpret_cast<std::uint64_t>(runtime_support_.get()));
+            },
+            [&](std::exception_ptr e) {
+                deinit_global_data();
+                std::rethrow_exception(HPX_MOVE(e));
+            });
     }
+
+#if defined(HPX_HAVE_NETWORKING)
+    namespace {
+
+        // Starts the bootstrap parcelport. One that fails is stopped, which
+        // joins the I/O threads run() may have started, and its error is
+        // rethrown: the construction of the runtime fails, and hpx::init
+        // reports the error.
+        void run_bootstrap_parcelport(parcelset::parcelport& pp)
+        {
+            std::exception_ptr error;
+            try
+            {
+                pp.run(false);
+                return;
+            }
+            catch (...)
+            {
+                error = std::current_exception();
+            }
+
+            // the parcelport's own error is the one reported
+            try
+            {
+                pp.stop(true);
+            }
+            // NOLINTNEXTLINE(bugprone-empty-catch)
+            catch (...)
+            {
+            }
+
+            HPX_THROW_EXCEPTION(hpx::error::network_error,
+                "hpx::runtime_distributed::initialize_agas",
+                "the bootstrap parcelport ({}) has failed to start: {}",
+                pp.type(), hpx::get_error_what(error));
+        }
+    }    // namespace
+#endif
 
     void runtime_distributed::initialize_agas()
     {
@@ -261,20 +311,8 @@ namespace hpx {
             parcelset::locality const published =
                 pp ? pp->here() : parcelset::locality();
 
-            hpx::detail::try_catch_exception_ptr(
-                [&]() {
-                    if (pp)
-                        pp->run(false);
-                },
-                [&](std::exception_ptr const& e) {
-                    std::cerr << hpx::util::format(
-                        "the bootstrap parcelport ({}) has failed to "
-                        "initialize on locality {}:\n{},\n"
-                        "bailing out\n",
-                        pp->type(), hpx::get_locality_id(),
-                        hpx::get_error_what(e));
-                    std::terminate();
-                });
+            if (pp)
+                run_bootstrap_parcelport(*pp);
 
             // Binding may settle an endpoint that was left open in the
             // configuration, which every other locality is free to do. The
@@ -287,6 +325,16 @@ namespace hpx {
             // condition and is left alone.
             if (pp && pp->here() != published)
             {
+                // the parcelport runs: stop it (joining its I/O threads)
+                // before the runtime's construction fails
+                try
+                {
+                    pp->stop(true);
+                }
+                // NOLINTNEXTLINE(bugprone-empty-catch)
+                catch (...)
+                {
+                }
                 HPX_THROW_EXCEPTION(hpx::error::network_error,
                     "runtime_distributed::initialize_agas",
                     "the AGAS root locality published {} and then bound {}; "
@@ -300,20 +348,8 @@ namespace hpx {
         }
         else
         {
-            hpx::detail::try_catch_exception_ptr(
-                [&]() {
-                    if (pp)
-                        pp->run(false);
-                },
-                [&](std::exception_ptr const& e) {
-                    std::cerr << hpx::util::format(
-                        "the bootstrap parcelport ({}) has failed to "
-                        "initialize on locality {}:\n{},\n"
-                        "bailing out\n",
-                        pp->type(), hpx::get_locality_id(),
-                        hpx::get_error_what(e));
-                    std::terminate();
-                });
+            if (pp)
+                run_bootstrap_parcelport(*pp);
 
             // The parcelport has bound by now, so its endpoint is final. It
             // was recorded when the parcelport was attached, which is before
@@ -429,6 +465,13 @@ namespace hpx {
             HPX_ASSERT(exception_);
             report_error(exception_, false);
             finalize(-1.0);    // make sure the application exits
+            if (post_main_ != nullptr)
+            {
+                post_main_();
+            }
+            return threads::thread_result_type(
+                threads::thread_schedule_state::terminated,
+                threads::invalid_thread_id);
         }
 
         auto result_value = runtime::run_helper(func, result, false);
@@ -652,6 +695,8 @@ namespace hpx {
             runtime_support_->stopped();    // re-activate shutdown HPX-thread
             thread_manager_->stop(blocking);    // wait for thread manager
 
+            stop_parcel_handler(blocking);
+
             deinit_global_data();
 
             // this disables all logging from the main thread
@@ -661,9 +706,6 @@ namespace hpx {
         }
 
         // stop the rest of the system
-#if defined(HPX_HAVE_NETWORKING)
-        parcel_handler_.stop(blocking);
-#endif
 #ifdef HPX_HAVE_TIMER_POOL
         LTM_(info).format("stop: stopping timer pool");
         timer_pool_->stop();
@@ -698,6 +740,18 @@ namespace hpx {
         return 0;
     }
 
+    // Stops the parcelports once no HPX thread runs anymore, but before the
+    // runtime pointer is cleared: their I/O threads may still complete sends
+    // and receive parcels until they have stopped, and the callbacks for those
+    // use the runtime (get_runtime_distributed()).
+    void runtime_distributed::stop_parcel_handler(
+        [[maybe_unused]] bool blocking)
+    {
+#if defined(HPX_HAVE_NETWORKING)
+        parcel_handler_.stop(blocking);
+#endif
+    }
+
     // Second step in termination: shut down all services.
     // This gets executed as a task in the timer_pool io_service and not as
     // a HPX thread!
@@ -707,6 +761,8 @@ namespace hpx {
         // wait for thread manager to exit
         runtime_support_->stopped();        // re-activate shutdown HPX-thread
         thread_manager_->stop(blocking);    // wait for thread manager
+
+        stop_parcel_handler(blocking);
 
         deinit_global_data();
 

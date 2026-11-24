@@ -24,6 +24,7 @@ namespace hpx::chrono {
 
     HPX_CXX_CORE_EXPORT using std::chrono::steady_clock;
 
+    /// Represents a time point measured by the HPX steady clock.
     HPX_CXX_CORE_EXPORT class steady_time_point
     {
         using value_type = steady_clock::time_point;

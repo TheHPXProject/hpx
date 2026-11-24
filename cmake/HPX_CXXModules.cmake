@@ -35,6 +35,12 @@ macro(hpx_check_cxx_modules_support)
         hpx_error(
           "Clang 16+ is required for C++20 modules support. Current version: ${CMAKE_CXX_COMPILER_VERSION}"
         )
+      elseif(CMAKE_CXX_COMPILER_VERSION VERSION_LESS "22.1")
+        # Clang 22.0 snapshots crash (exit code 139) while reading HPX's module
+        # interfaces back when compiling their consumers
+        hpx_warn(
+          "C++20 modules support with Clang versions before 22.1 may or may not work, some of them are known to crash while compiling code that imports HPX's modules. Clang 22.1+ is recommended. Current version: ${CMAKE_CXX_COMPILER_VERSION}"
+        )
       endif()
       set(HPX_MODULE_INTERFACE_EXTENSION ".cppm")
     elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")

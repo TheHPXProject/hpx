@@ -255,6 +255,24 @@ Registry client
         Returns a point-in-time snapshot of all fully joined, non-evicting
         peers.
 
+    .. cpp:function:: void evict_fenced(hpx::id_type const& peer_locality, std::uint64_t generation) const
+
+        Removes a joined peer whose local supervision state was fenced by
+        failure detection, keeping the terminal state as a tombstone so the
+        peer stays fenced until it is joined again. ``generation`` is the
+        ``peer_snapshot::generation`` of the entry to remove; the call is a
+        no-op if that entry is gone, or the peer's state is no longer
+        terminal. Fire-and-forget. If a lifecycle event of the peer is being
+        mirrored, or was mirrored, while the call checks the terminal state,
+        it does not remove anything; the failure-detection loop calls it again
+        on its next sweep. It also checks the local state a second time before
+        the removal, so a new epoch that changed the state before then, for
+        instance one a registry that joined its own locality published
+        directly, keeps the peer even if it was not mirrored yet. A new epoch
+        that changes the state after that check, and is not being mirrored
+        yet, ends as if it started right after the removal: it is not
+        mirrored, and the peer has to be joined again, see the manual.
+
     .. cpp:function:: hpx::future<bool> register_name()
     .. cpp:function:: bool register_name(hpx::launch::sync_policy, hpx::error_code& ec = hpx::throws)
     .. cpp:function:: hpx::future<hpx::id_type> unregister_name() const
@@ -275,8 +293,10 @@ Registry client
 
 .. cpp:struct:: hpx::supervision::server::peer_snapshot
 
-    Plain-data view of a single joined peer: ``peer_locality`` and
-    ``join_epoch``.
+    Plain-data view of a single joined peer: ``peer_locality``,
+    ``join_epoch`` and ``generation``. ``generation`` identifies the registry
+    entry itself, a peer that is left and joined again gets a new one even if
+    its ``join_epoch`` is the same.
 
 .. _supervision_dispatch_fenced_dispatch:
 
@@ -366,6 +386,11 @@ unit tests for this module deterministic:
 .. cpp:function:: void hpx::supervision::testing::suspend_heartbeat_for_testing()
 .. cpp:function:: bool hpx::supervision::testing::failure_detection_sweep_in_flight_for_testing()
 .. cpp:function:: void hpx::supervision::testing::stop_background_loops()
+.. cpp:function:: void hpx::supervision::testing::set_evict_fenced_hook_for_testing(hpx::function<void()> hook)
+.. cpp:function:: void hpx::supervision::testing::set_lifecycle_mirror_hook_for_testing(hpx::function<void()> hook)
+.. cpp:function:: void hpx::supervision::testing::set_evict_peer_hook_for_testing(hpx::function<void()> hook)
+.. cpp:function:: void hpx::supervision::testing::set_lifecycle_observer_hook_for_testing(hpx::function<void()> hook)
+.. cpp:function:: std::size_t hpx::supervision::testing::evict_peers_waiting_for_mirrors_for_testing()
 
 See the :ref:`API reference <modules_supervision_dispatch_api>` of this
 module for more details, and :ref:`modules_supervision` for the underlying

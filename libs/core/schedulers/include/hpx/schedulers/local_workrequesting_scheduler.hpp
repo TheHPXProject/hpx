@@ -323,6 +323,7 @@ namespace hpx::threads::policies {
             // adaptive stealing
             std::uint16_t num_recent_steals_ = 0;
             std::uint16_t num_recent_tasks_executed_ = 0;
+            std::uint8_t consecutive_high_priority_tasks_ = 0;
             bool stealhalf_ = true;
 
 #if defined(HPX_HAVE_WORKREQUESTING_LAST_VICTIM)
@@ -1038,15 +1039,34 @@ namespace hpx::threads::policies {
 
             auto& d = data_[num_thread].data_;
 
-            if (num_thread < num_high_priority_queues_ &&
+            // After 16 high-priority threads, try bound and normal work first.
+            // This also prevents starvation under a steady high-priority load.
+            // Bound work cannot be stolen by another worker.
+            constexpr std::uint8_t max_consecutive_high_priority_tasks = 16;
+            auto const get_other_thread = [&] {
+                return get_thread(d.bound_queue_, thrd) ||
+                    get_thread(d.queue_, thrd);
+            };
+
+            bool const found = d.consecutive_high_priority_tasks_ >=
+                    max_consecutive_high_priority_tasks &&
+                get_other_thread();
+            if (!found && num_thread < num_high_priority_queues_ &&
                 get_thread(d.high_priority_queue_, thrd))
             {
+                if (d.consecutive_high_priority_tasks_ <
+                    max_consecutive_high_priority_tasks)
+                {
+                    ++d.consecutive_high_priority_tasks_;
+                }
                 ++d.num_recent_tasks_executed_;
                 return true;
             }
 
-            if (get_thread(d.bound_queue_, thrd) || get_thread(d.queue_, thrd))
+            if (found || get_other_thread())
             {
+                d.consecutive_high_priority_tasks_ = 0;
+
                 // We found a task to run, however before running it we handle
                 // steal requests (assuming that there is more work left that
                 // could be used to satisfy steal requests).

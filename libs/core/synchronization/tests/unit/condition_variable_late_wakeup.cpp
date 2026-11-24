@@ -1,4 +1,5 @@
 //  Copyright (c) 2026 Hartmut Kaiser
+//  Copyright (c) 2026 Divyanshi Talreja
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -104,12 +105,94 @@ void test_round(bool notify_all)
     f.get();
 }
 
+// Exercise notification around a timed wait and check the next suspension.
+// This does not force a pause between observing the first suspension and
+// waking the waiter, so it is not a deterministic reproducer of #7916.
+void test_timed_round(bool notify_all)
+{
+    mutex_type mtx;
+    condition_variable cv;
+
+    hpx::threads::thread_id_type const waiter = hpx::threads::get_self_id();
+    std::atomic<bool> first_waiting{false};
+    std::atomic<bool> second_suspended{false};
+    std::atomic<bool> released{false};
+
+    std::unique_lock<mutex_type> l(mtx);
+    hpx::future<void> f = hpx::async([&] {
+        // Race the notification against an actual timed suspension: wait
+        // until the waiter is in it. The waiter doesn't suspend anywhere else
+        // after it set first_waiting, so the first suspension seen is the
+        // timed one. The wait is bounded: the timeout may end the suspension
+        // before it is seen, which is one of the accepted results.
+        for (std::size_t k = 0; k != 100000 &&
+            (!first_waiting.load() ||
+                hpx::threads::get_thread_state(waiter).state() !=
+                    hpx::threads::thread_schedule_state::suspended);
+            ++k)
+        {
+            hpx::this_thread::yield();
+        }
+
+        std::unique_lock<mutex_type> nl(mtx);
+        if (notify_all)
+        {
+            cv.notify_all(HPX_MOVE(nl));
+        }
+        else
+        {
+            cv.notify_one(HPX_MOVE(nl));
+        }
+
+        hpx::util::yield_while([&] {
+            return !second_suspended.load() ||
+                hpx::threads::get_thread_state(waiter).state() !=
+                hpx::threads::thread_schedule_state::suspended;
+        });
+        for (std::size_t k = 0; k != 100; ++k)
+        {
+            hpx::this_thread::yield();
+        }
+
+        released = true;
+        hpx::threads::set_thread_state(waiter,
+            hpx::threads::thread_schedule_state::pending,
+            hpx::threads::thread_restart_state::signaled);
+    });
+
+    first_waiting = true;
+    auto const result = cv.wait_until(
+        l, std::chrono::steady_clock::now() + std::chrono::milliseconds(2));
+    HPX_TEST(result == hpx::threads::thread_restart_state::signaled ||
+        result == hpx::threads::thread_restart_state::timeout);
+    l.unlock();
+
+    second_suspended = true;
+    while (!released.load())
+    {
+        hpx::this_thread::suspend(
+            hpx::threads::thread_schedule_state::suspended);
+        if (!released.load())
+        {
+            ++stray_wakeups;
+        }
+    }
+
+    f.get();
+}
+
 int hpx_main()
 {
     for (std::size_t i = 0; i != 200; ++i)
     {
         test_round(false);
         test_round(true);
+    }
+
+    for (std::size_t i = 0; i != 100; ++i)
+    {
+        test_timed_round(false);
+        test_timed_round(true);
     }
 
     HPX_TEST_EQ(stray_wakeups, static_cast<std::size_t>(0));

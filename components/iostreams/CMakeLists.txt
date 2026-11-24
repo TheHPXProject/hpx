@@ -28,7 +28,7 @@ set(iostreams_headers
 )
 
 set(iostreams_sources server/output_stream.cpp component_module.cpp
-                      manipulators.cpp standard_streams.cpp
+                      standard_streams.cpp
 )
 
 add_hpx_component(
@@ -50,10 +50,10 @@ target_compile_definitions(
 
 add_hpx_pseudo_dependencies(components.iostreams iostreams_component)
 
-# MSVC V1951 and V1952 exposes ICE compiling this in C++20 module mode
+# MSVC V1951 exposes ICE compiling this in C++20 module mode
 if(HPX_WITH_CXX_MODULES
    AND (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-   AND ((MSVC_VERSION EQUAL 1951) OR (MSVC_VERSION EQUAL 1952))
+   AND (MSVC_VERSION EQUAL 1951)
 )
   target_compile_definitions(
     iostreams_component PRIVATE HPX_HAVE_FORCE_NO_CXX_MODULES

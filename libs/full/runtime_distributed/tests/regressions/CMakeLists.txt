@@ -56,10 +56,10 @@ foreach(test ${tests})
     "modules.runtime_distributed" ${test} ${${test}_PARAMETERS}
   )
 
-  # MSVC V1951 and V1952 expose ICE compiling this in C++20 module mode
+  # MSVC before V1944 was not tested compiling this in C++20 module mode
   if(HPX_WITH_CXX_MODULES
      AND (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-     AND (MSVC_VERSION LESS_EQUAL 1952)
+     AND (MSVC_VERSION LESS 1944)
   )
     target_compile_definitions(
       ${test}_test PRIVATE HPX_HAVE_FORCE_NO_CXX_MODULES
@@ -78,14 +78,132 @@ if(HPX_WITH_FORCE_DISCONNECT)
     dijkstra_termination_disconnected_locality_7474_worker
   )
 
-  # MSVC V1951 and V1952 expose ICE compiling this in C++20 module mode
+  # MSVC before V1944 was not tested compiling this in C++20 module mode
   if(HPX_WITH_CXX_MODULES
      AND (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-     AND (MSVC_VERSION LESS_EQUAL 1952)
+     AND (MSVC_VERSION LESS 1944)
   )
     target_compile_definitions(
       dijkstra_termination_disconnected_locality_7474_worker
       PRIVATE HPX_HAVE_FORCE_NO_CXX_MODULES
     )
   endif()
+endif()
+
+if(HPX_WITH_NETWORKING)
+  set(sources startup_exception_8070.cpp)
+  source_group("Source Files" FILES ${sources})
+
+  add_hpx_executable(
+    startup_exception_8070_test INTERNAL_FLAGS
+    SOURCES ${sources}
+    EXCLUDE_FROM_ALL
+    HPX_PREFIX ${HPX_BUILD_PREFIX}
+    FOLDER "Tests/Regressions/Modules/Full/RuntimeDistributed"
+  )
+
+  # MSVC before V1944 was not tested compiling this in C++20 module mode
+  if(HPX_WITH_CXX_MODULES
+     AND (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+     AND (MSVC_VERSION LESS 1944)
+  )
+    target_compile_definitions(
+      startup_exception_8070_test PRIVATE HPX_HAVE_FORCE_NO_CXX_MODULES
+    )
+  endif()
+
+  add_hpx_regression_test(
+    "modules.runtime_distributed" startup_exception_8070_startup_loc0
+    EXECUTABLE startup_exception_8070
+    PSEUDO_DEPS_NAME startup_exception_8070
+    LOCALITIES 2
+    THREADS_PER_LOCALITY 2
+    TIMEOUT 60
+    ARGS "--phase=startup" "--failing-locality=0"
+  )
+
+  add_hpx_regression_test(
+    "modules.runtime_distributed" startup_exception_8070_startup_loc1
+    EXECUTABLE startup_exception_8070
+    PSEUDO_DEPS_NAME startup_exception_8070
+    LOCALITIES 2
+    THREADS_PER_LOCALITY 2
+    TIMEOUT 60
+    ARGS "--phase=startup" "--failing-locality=1"
+  )
+
+  add_hpx_regression_test(
+    "modules.runtime_distributed" startup_exception_8070_registration_loc0
+    EXECUTABLE startup_exception_8070
+    PSEUDO_DEPS_NAME startup_exception_8070
+    LOCALITIES 2
+    THREADS_PER_LOCALITY 2
+    PARCELPORTS tcp
+    TIMEOUT 60
+    ARGS "--phase=registration" "--failing-locality=0"
+  )
+
+  add_hpx_regression_test(
+    "modules.runtime_distributed" startup_exception_8070_registration_loc1
+    EXECUTABLE startup_exception_8070
+    PSEUDO_DEPS_NAME startup_exception_8070
+    LOCALITIES 2
+    THREADS_PER_LOCALITY 2
+    PARCELPORTS tcp
+    TIMEOUT 60
+    ARGS "--phase=registration" "--failing-locality=1"
+  )
+
+  add_hpx_regression_test(
+    "modules.runtime_distributed" startup_exception_8070_optional_registration
+    EXECUTABLE startup_exception_8070
+    PSEUDO_DEPS_NAME startup_exception_8070
+    LOCALITIES 2
+    THREADS_PER_LOCALITY 2
+    PARCELPORTS tcp
+    TIMEOUT 60
+    ARGS "--phase=optional-registration"
+  )
+
+  add_hpx_regression_test(
+    "modules.runtime_distributed" startup_exception_8070_pre_startup_loc0
+    EXECUTABLE startup_exception_8070
+    PSEUDO_DEPS_NAME startup_exception_8070
+    LOCALITIES 2
+    THREADS_PER_LOCALITY 2
+    TIMEOUT 60
+    ARGS "--phase=pre-startup" "--failing-locality=0"
+  )
+
+  add_hpx_regression_test(
+    "modules.runtime_distributed" startup_exception_8070_pre_startup_loc1
+    EXECUTABLE startup_exception_8070
+    PSEUDO_DEPS_NAME startup_exception_8070
+    LOCALITIES 2
+    THREADS_PER_LOCALITY 2
+    TIMEOUT 60
+    ARGS "--phase=pre-startup" "--failing-locality=1"
+  )
+endif()
+
+# a component created on another locality from a CUDA (or HIP) translation unit;
+# stdexec can't be compiled by nvcc with MSVC as the host compiler
+if(HPX_WITH_NETWORKING
+   AND (HPX_WITH_CUDA OR HPX_WITH_HIP)
+   AND NOT (MSVC AND CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA")
+)
+  set(sources create_component_nvcc.cu)
+  source_group("Source Files" FILES ${sources})
+
+  add_hpx_executable(
+    create_component_nvcc_test INTERNAL_FLAGS
+    SOURCES ${sources}
+    EXCLUDE_FROM_ALL
+    HPX_PREFIX ${HPX_BUILD_PREFIX}
+    FOLDER "Tests/Regressions/Modules/Full/RuntimeDistributed"
+  )
+
+  add_hpx_regression_test(
+    "modules.runtime_distributed" create_component_nvcc LOCALITIES 2
+  )
 endif()

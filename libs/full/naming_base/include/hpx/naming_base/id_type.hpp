@@ -49,7 +49,7 @@ namespace hpx {
         std::ostream& os, id_type const& id);
 
     ///////////////////////////////////////////////////////////////////////////
-    // the local gid is actually just a wrapper around the real thing
+    /// Represents the globally unique identifier of an HPX component.
     HPX_CXX_EXPORT struct id_type
     {
     private:
@@ -145,6 +145,14 @@ namespace hpx {
 
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_EXPORT inline id_type const invalid_id = id_type();
+
+    namespace lcos::detail {
+
+        // The definition lives in the components module. Declare it before
+        // future<id_type> can instantiate the primary shared-state template.
+        template <>
+        struct HPX_EXPORT future_data<hpx::id_type>;
+    }    // namespace lcos::detail
 
     namespace naming {
 

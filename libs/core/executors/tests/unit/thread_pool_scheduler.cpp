@@ -15,6 +15,7 @@
 #include <hpx/functional.hpp>
 #include <hpx/init.hpp>
 #include <hpx/modules/execution_base.hpp>
+#include <hpx/modules/tag_invoke.hpp>
 #include <hpx/modules/testing.hpp>
 #include <hpx/mutex.hpp>
 #include <hpx/thread.hpp>
@@ -373,6 +374,20 @@ void test_properties()
         HPX_TEST(executed);
     }
 #endif
+
+    {
+        std::size_t const first_core = 1;
+        auto exec_prop = ex::with_first_core(sched, first_core);
+        HPX_TEST_EQ(ex::get_first_core(exec_prop), first_core);
+
+        // Verify that bulk operations succeed with with_first_core on its own
+        // (without an explicit with_processing_units_count)
+        int const n = 10;
+        std::atomic<int> count{0};
+        tt::sync_wait(
+            ex::schedule(exec_prop) | ex::bulk(n, [&](int) { ++count; }));
+        HPX_TEST_EQ(count.load(), n);
+    }
 }
 
 void test_transfer_basic()

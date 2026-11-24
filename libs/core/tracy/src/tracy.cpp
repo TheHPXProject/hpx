@@ -13,13 +13,36 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
+#include <mutex>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
 
 #include <tracy/Tracy.hpp>
 #include <tracy/TracyC.h>
 
 namespace hpx::tracy {
+
+    namespace {
+
+        // Tracy keys a plot by the address of its name and reads the name
+        // later, so it must stay valid and be the same for the same name.
+        // The set is never freed, as Tracy can still read names during exit.
+        char const* plot_name(std::string const& name)
+        {
+            struct names_type
+            {
+                std::mutex mtx;
+                std::unordered_set<std::string> names;
+            };
+            static names_type* const names = new names_type;
+
+            std::lock_guard<std::mutex> l(names->mtx);
+            return names->names.insert(name).first->c_str();
+        }
+    }    // namespace
 
     void set_thread_name(char const* name) noexcept
     {
@@ -34,6 +57,56 @@ namespace hpx::tracy {
     void emit_appinfo(char const* text, std::size_t size) noexcept
     {
         TracyCAppInfo(text, size);
+    }
+
+    char const* fiber_name(char const* description, void const* id) noexcept
+    {
+        // Tracy reads the name later from its own thread, without this lock.
+        // That is safe: a stored string is never changed, moved or freed, even
+        // when the set or the map grows.
+        struct names_type
+        {
+            // Not an HPX lock: this runs in the scheduling loop, with no HPX
+            // thread for hpx::mutex to suspend, HPX spinlocks emit Tracy lock
+            // events, and either would make hpx_tracy depend on modules that
+            // depend on it. It is held for one insert, once per task.
+            std::mutex mtx;
+            std::unordered_set<std::string> names;
+            std::unordered_map<std::string, std::string> long_names;
+        };
+        static names_type* const names = new names_type;
+
+        // Tracy sends a name with a 16-bit length and asserts or cuts it
+        // above that, and its UI can't show long names anyway.
+        constexpr std::size_t max_description = 256;
+
+        char suffix[32];
+        std::snprintf(suffix, sizeof(suffix), "_%p", id);
+        std::size_t const size = std::strlen(description);
+        std::string name(description, size);
+        name += suffix;
+
+        std::lock_guard<std::mutex> l(names->mtx);
+        if (size < max_description)
+        {
+            return names->names.insert(HPX_MOVE(name)).first->c_str();
+        }
+
+        // A long description is cut to max_description bytes ending in a
+        // number no other cut name has, so two descriptions with the same
+        // start still get different names, and no cut name equals a short one.
+        // The map is keyed by the full name, so a task keeps its cut name.
+        auto it = names->long_names.find(name);
+        if (it == names->long_names.end())
+        {
+            std::string const number =
+                "~" + std::to_string(names->long_names.size());
+            std::string cut(description, max_description - number.size());
+            cut += number;
+            cut += suffix;
+            it = names->long_names.emplace(HPX_MOVE(name), HPX_MOVE(cut)).first;
+        }
+        return it->second.c_str();
     }
 
     namespace detail {
@@ -76,7 +149,7 @@ namespace hpx::tracy {
 
     void create_counter(std::string const& name) noexcept
     {
-        create_counter(name.c_str());
+        create_counter(plot_name(name));
     }
 
     // Pass a plot value to Tracy
@@ -87,7 +160,7 @@ namespace hpx::tracy {
 
     void sample_value(std::string const& name, double const value) noexcept
     {
-        sample_value(name.c_str(), value);
+        sample_value(plot_name(name), value);
     }
 
     void message(

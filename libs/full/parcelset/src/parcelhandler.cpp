@@ -121,6 +121,15 @@ namespace hpx::parcelset {
                 {
                     return true;
                 }
+
+                // Once the runtime has stopped (or is gone), nothing can handle
+                // a failed send anymore: the destination can't be looked up and
+                // rethrowing the error would terminate the I/O thread that
+                // reports it.
+                if (hpx::is_stopped())
+                {
+                    return true;
+                }
             }
             else if (hpx::tolerate_node_faults())
             {
@@ -151,6 +160,18 @@ namespace hpx::parcelset {
 #endif
 
             return false;
+        }
+
+        template <typename F>
+        void reschedule_parcel_send(char const* name, F&& f)
+        {
+            threads::thread_init_data data(
+                threads::make_thread_function_nullary(HPX_FORWARD(F, f)), name,
+                threads::thread_priority::boost,
+                threads::thread_schedule_hint(),
+                threads::thread_stacksize::medium,
+                threads::thread_schedule_state::pending, true);
+            threads::register_thread(data);
         }
     }    // namespace
 
@@ -244,30 +265,31 @@ namespace hpx::parcelset {
 
         if (hpx::is_networking_enabled())
         {
-            std::cerr << "Could not find usable bootstrap parcelport.\n";
-            std::cerr << hpx::util::format(
-                "Preconfigured bootstrap parcelport: '{}'\n",
+            // this locality can't start: the runtime's construction fails,
+            // and hpx::init reports the error
+            std::ostringstream strm;
+            hpx::util::format_to(strm,
+                "could not find a usable bootstrap parcelport (configured "
+                "bootstrap parcelport: '{}'), ",
                 get_config_entry(cfgkey, "tcp"));
-
             if (pports_.empty())
             {
-                std::cerr << "No available parcelports\n";
+                strm << "no parcelports are available";
             }
             else
             {
-                std::cerr << "List of available parcelports:\n";
+                strm << "available parcelports:";
                 for (auto const& pp : pports_)
                 {
-                    std::cerr << hpx::util::format(
-                        "  {}, priority: {}, can bootstrap: {}\n",
+                    hpx::util::format_to(strm,
+                        "\n  {}, priority: {}, can bootstrap: {}",
                         pp.second->type(), pp.first,
                         pp.second->can_bootstrap());
                 }
-                std::cerr << "\n";
             }
-
-            // terminate this locality as there is nothing else we can do
-            std::terminate();
+            HPX_THROW_EXCEPTION(hpx::error::network_error,
+                "hpx::parcelset::parcelhandler::get_bootstrap_parcelport", "{}",
+                strm.str());
         }
 
         return {};
@@ -277,13 +299,20 @@ namespace hpx::parcelset {
     {
         exception_list exceptions;
         std::vector<int> failed_pps;
+
+        // initialize_agas has started the bootstrap parcelport already (it
+        // failed there if there is none)
+        std::shared_ptr<parcelport> const bootstrap =
+            get_bootstrap_parcelport();
+        bool bootstrap_failed = false;
+
         for (pports_type::value_type& pp : pports_)
         {
             // protect against exceptions thrown by a parcelport during
             // initialization
             hpx::detail::try_catch_exception_ptr(
                 [&]() {
-                    if (pp.second != get_bootstrap_parcelport())
+                    if (pp.second != bootstrap)
                     {
                         if (pp.first > 0)
                             pp.second->run(false);
@@ -299,19 +328,50 @@ namespace hpx::parcelset {
                 [&](std::exception_ptr&& e) {
                     exceptions.add(HPX_MOVE(e));
                     failed_pps.push_back(pp.first);
+                    bootstrap_failed =
+                        bootstrap_failed || pp.second == bootstrap;
                 });
         }
 
         // handle exceptions
         if (exceptions.size() != 0)
         {
-            if (failed_pps.size() == pports_.size())
+            if (failed_pps.size() == pports_.size() || bootstrap_failed)
             {
-                std::cerr << hpx::util::format(
-                    "all parcelports failed initializing on locality {}, "
-                    "exiting:\n{}\n",
-                    agas::get_locality_id(), exceptions.get_message());
-                std::terminate();
+                // this locality can't communicate (with the bootstrap
+                // parcelport, AGAS and the other localities can't reach it):
+                // stop the parcelports (joining their I/O threads), the
+                // runtime's construction fails, and hpx::init reports the
+                // errors
+                for (auto const& pp : pports_)
+                {
+                    if (pp.first <= 0)
+                    {
+                        continue;
+                    }
+                    try
+                    {
+                        pp.second->stop();
+                    }
+                    // NOLINTNEXTLINE(bugprone-empty-catch)
+                    catch (...)
+                    {
+                    }
+                }
+                if (failed_pps.size() == pports_.size())
+                {
+                    HPX_THROW_EXCEPTION(hpx::error::network_error,
+                        "hpx::parcelset::parcelhandler::initialize",
+                        "all parcelports failed initializing on locality "
+                        "{}:\n{}",
+                        agas::get_locality_id(), exceptions.get_message());
+                }
+                HPX_THROW_EXCEPTION(hpx::error::network_error,
+                    "hpx::parcelset::parcelhandler::initialize",
+                    "the bootstrap parcelport ({}) failed initializing on "
+                    "locality {}:\n{}",
+                    bootstrap->type(), agas::get_locality_id(),
+                    exceptions.get_message());
             }
             else
             {
@@ -810,22 +870,29 @@ namespace hpx::parcelset {
             LPT_(debug).format("parcelhandler::put_parcel_impl: reschedule: {}",
                 p.parcel_id());
 
-            {
-                // reschedule request as an HPX thread to avoid hangs
-                void (parcelhandler::*put_parcel_ptr)(
-                    parcel, write_handler_type) = &parcelhandler::put_parcel;
+            // reschedule request as an HPX thread to avoid hangs
+            parcel hold_p = p;
+            write_handler_type hold_f = f;
 
-                threads::thread_init_data data(
-                    threads::make_thread_function_nullary(
-                        put_parcel_ptr, this, HPX_MOVE(p), HPX_MOVE(f)),
-                    "parcelhandler::put_parcel",
-                    threads::thread_priority::boost,
-                    threads::thread_schedule_hint(),
-                    threads::thread_stacksize::medium,
-                    threads::thread_schedule_state::pending, true);
-                threads::register_thread(data);
-                return;
-            }
+            reschedule_parcel_send("parcelhandler::put_parcel",
+                [this, p = HPX_MOVE(p), f = HPX_MOVE(f),
+                    hold_p = HPX_MOVE(hold_p),
+                    hold_f = HPX_MOVE(hold_f)]() mutable {
+                    hpx::detail::try_catch_exception_ptr(
+                        [&]() {
+                            this->put_parcel_impl(HPX_MOVE(p), HPX_MOVE(f));
+                        },
+                        [&](std::exception_ptr const& ep) {
+                            LPT_(error).format(
+                                "parcelhandler::put_parcel: rescheduled send "
+                                "of {} failed: {}",
+                                hold_p.parcel_id(), hpx::get_error_what(ep));
+                            error_code const ec = make_error_code(
+                                get_error(ep), throwmode::rethrow);
+                            hold_f(ec, hold_p);
+                        });
+                });
+            return;
         }
 
         // properly initialize parcel
@@ -999,17 +1066,33 @@ namespace hpx::parcelset {
                 parcels.size());
 
             // reschedule request as an HPX thread to avoid hangs
-            void (parcelhandler::*put_parcels_ptr)(std::vector<parcel>,
-                std::vector<write_handler_type>) = &parcelhandler::put_parcels;
+            std::vector<parcel> hold_parcels = parcels;
+            std::vector<write_handler_type> hold_handlers = handlers;
 
-            threads::thread_init_data data(
-                threads::make_thread_function_nullary(put_parcels_ptr, this,
-                    HPX_MOVE(parcels), HPX_MOVE(handlers)),
-                "parcelhandler::put_parcels", threads::thread_priority::boost,
-                threads::thread_schedule_hint(),
-                threads::thread_stacksize::medium,
-                threads::thread_schedule_state::pending, true);
-            threads::register_thread(data);
+            reschedule_parcel_send("parcelhandler::put_parcels",
+                [this, parcels = HPX_MOVE(parcels),
+                    handlers = HPX_MOVE(handlers),
+                    hold_parcels = HPX_MOVE(hold_parcels),
+                    hold_handlers = HPX_MOVE(hold_handlers)]() mutable {
+                    hpx::detail::try_catch_exception_ptr(
+                        [&]() {
+                            this->put_parcels_impl(
+                                HPX_MOVE(parcels), HPX_MOVE(handlers));
+                        },
+                        [&](std::exception_ptr const& ep) {
+                            LPT_(error).format(
+                                "parcelhandler::put_parcels: rescheduled send "
+                                "of {} parcels failed: {}",
+                                hold_parcels.size(), hpx::get_error_what(ep));
+                            error_code const ec = make_error_code(
+                                get_error(ep), throwmode::rethrow);
+                            for (std::size_t i = 0; i != hold_parcels.size();
+                                ++i)
+                            {
+                                hold_handlers[i](ec, hold_parcels[i]);
+                            }
+                        });
+                });
             return;
         }
 
@@ -1033,7 +1116,7 @@ namespace hpx::parcelset {
         nonresolved_parcels.reserve(num_parcels);
         nonresolved_handlers.reserve(num_parcels);
 
-        naming::gid_type dest_locality;
+        std::vector<char> resolved(num_parcels, 1);
         for (std::size_t i = 0; i != num_parcels; ++i)
         {
             parcel& p = parcels[i];
@@ -1041,29 +1124,34 @@ namespace hpx::parcelset {
             // properly initialize parcel
             init_parcel(p);
 
-            bool resolved_locally = true;
             naming::address& addr = p.addr();
-
             if (!addr)
             {
-                resolved_locally = agas::resolve_local(p.destination(), addr);
+                resolved[i] =
+                    agas::resolve_local(p.destination(), addr) ? 1 : 0;
             }
+        }
 
-            write_handler_type f = hpx::bind_front(
-                &detail::parcel_sent_handler, HPX_MOVE(handlers[i]));
-
-            // make sure all parcels go to the same locality
-            if (i == 0)
-            {
-                dest_locality = p.destination_locality();
-            }
-            else if (dest_locality != p.destination_locality())
+        for (std::size_t i = 1; i < num_parcels; ++i)
+        {
+            if (parcels[0].destination_locality() !=
+                parcels[i].destination_locality())
             {
                 HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
                     "parcelhandler::put_parcels",
                     "mismatched destinations, all parcels are expected to "
                     "target the same locality");
             }
+        }
+
+        for (std::size_t i = 0; i != num_parcels; ++i)
+        {
+            parcel& p = parcels[i];
+            bool const resolved_locally = resolved[i] != 0;
+            naming::address& addr = p.addr();
+
+            write_handler_type f = hpx::bind_front(
+                &detail::parcel_sent_handler, HPX_MOVE(handlers[i]));
 
             // If we were able to resolve the address(es) locally we would send
             // the parcel directly to the destination.

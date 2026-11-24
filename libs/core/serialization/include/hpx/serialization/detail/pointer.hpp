@@ -25,6 +25,7 @@
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <new>
 #include <string>
 #include <type_traits>
 #include <typeinfo>
@@ -38,8 +39,105 @@ namespace hpx::serialization::detail {
     // to be copy-constructible
     using ptr_helper_ptr = std::unique_ptr<ptr_helper>;
 
+    // A reference to an object whose address the output pointer tracker
+    // records. The tracker keeps the object alive for as long as it records
+    // the address: an object that died during serialization (e.g. a
+    // temporary a serialize() function created) could otherwise be replaced
+    // by another one at the same address, which would then be written as a
+    // back-reference to the first.
+    //
+    // It holds a copy of the smart pointer in place (a std::shared_ptr,
+    // boost::shared_ptr or intrusive pointer fits), so keeping the object
+    // alive costs a reference count increment, but no allocation.
+    HPX_CXX_CORE_EXPORT class kept_pointer
+    {
+        // moves the pointer from 'from' to 'to' (if 'to' isn't nullptr) and
+        // destroys it in 'from'
+        using manage_type = void (*)(void* to, void* from) noexcept;
+
+    public:
+        kept_pointer() = default;
+
+        template <typename Pointer>
+        explicit kept_pointer(Pointer const& ptr) noexcept(
+            std::is_nothrow_copy_constructible_v<Pointer>)
+        {
+            static_assert(sizeof(Pointer) <= sizeof(storage_) &&
+                    alignof(Pointer) <= alignof(void*),
+                "the smart pointer is too large to be kept in place");
+            static_assert(std::is_nothrow_move_constructible_v<Pointer>,
+                "the smart pointer must be moved without exceptions");
+
+            ::new (static_cast<void*>(storage_)) Pointer(ptr);
+            manage_ = &manage<Pointer>;
+        }
+
+        kept_pointer(kept_pointer const&) = delete;
+        kept_pointer& operator=(kept_pointer const&) = delete;
+
+        kept_pointer(kept_pointer&& rhs) noexcept
+          : manage_(std::exchange(rhs.manage_, nullptr))
+        {
+            if (manage_ != nullptr)
+            {
+                manage_(storage_, rhs.storage_);
+            }
+        }
+
+        kept_pointer& operator=(kept_pointer&& rhs) noexcept
+        {
+            if (this != &rhs)
+            {
+                reset();
+                manage_ = std::exchange(rhs.manage_, nullptr);
+                if (manage_ != nullptr)
+                {
+                    manage_(storage_, rhs.storage_);
+                }
+            }
+            return *this;
+        }
+
+        ~kept_pointer()
+        {
+            reset();
+        }
+
+    private:
+        template <typename Pointer>
+        static void manage(void* to, void* from) noexcept
+        {
+            auto* p = std::launder(static_cast<Pointer*>(from));
+            if (to != nullptr)
+            {
+                ::new (to) Pointer(HPX_MOVE(*p));
+            }
+            std::destroy_at(p);
+        }
+
+        void reset() noexcept
+        {
+            if (manage_ != nullptr)
+            {
+                manage_(nullptr, storage_);
+                manage_ = nullptr;
+            }
+        }
+
+        alignas(void*) unsigned char storage_[2 * sizeof(void*)];
+        manage_type manage_ = nullptr;
+    };
+
+    // the position of a tracked object in the archive, and its reference
+    HPX_CXX_CORE_EXPORT struct tracked_output_pointer
+    {
+        std::uint64_t pos;
+        kept_pointer keep_alive;
+    };
+
     using input_pointer_tracker = std::map<std::uint64_t, ptr_helper_ptr>;
-    using output_pointer_tracker = std::map<void const*, std::uint64_t>;
+    using output_pointer_tracker =
+        std::map<void const*, tracked_output_pointer>;
 }    // namespace hpx::serialization::detail
 
 namespace hpx::util {
@@ -75,6 +173,15 @@ namespace hpx::serialization {
     [[nodiscard]] HPX_CORE_EXPORT detail::ptr_helper& tracked_pointer(
         input_archive& ar, std::uint64_t pos);
 
+    // Returns the position the object at 'pos' was written at, or -1 if it
+    // wasn't written yet: then it records the position and keeps the object
+    // alive through 'keep_alive' until the archive is reset or destroyed.
+    HPX_CXX_CORE_EXPORT [[nodiscard]] HPX_CORE_EXPORT std::uint64_t
+    track_pointer(
+        output_archive& ar, void const* pos, detail::kept_pointer keep_alive);
+
+    // The same without keeping the object alive, for binaries built against
+    // the headers of earlier versions.
     HPX_CXX_CORE_EXPORT [[nodiscard]] HPX_CORE_EXPORT std::uint64_t
     track_pointer(output_archive& ar, void const* pos);
 
@@ -248,7 +355,8 @@ namespace hpx::serialization {
             if (valid)
             {
                 std::uint64_t const cur_pos = current_pos(ar);
-                std::uint64_t const pos = track_pointer(ar, ptr.get());
+                std::uint64_t const pos =
+                    track_pointer(ar, ptr.get(), detail::kept_pointer(ptr));
                 ar << pos;
                 if (pos == static_cast<std::uint64_t>(-1))
                 {
@@ -299,6 +407,10 @@ namespace hpx::serialization {
                     ptr = helper.t_;
                 }
             }
+            else
+            {
+                ptr.reset();
+            }
         }
 
         template <typename Pointer>
@@ -322,6 +434,10 @@ namespace hpx::serialization {
             if (valid)
             {
                 ptr = detail::pointer_input_dispatcher<Pointer>::type::call(ar);
+            }
+            else
+            {
+                ptr = Pointer(nullptr);
             }
         }
     }    // namespace detail

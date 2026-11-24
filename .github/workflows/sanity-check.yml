@@ -11,17 +11,48 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+  pull-requests: read
+
 jobs:
   commits_check_job:
     runs-on: ubuntu-latest
     name: Commits Check
     steps:
-    - name: Get PR Commits
-      id: 'get-pr-commits'
-      uses: tim-actions/get-pr-commits@master
+    - uses: actions/checkout@v7
       with:
-        token: ${{ secrets.GITHUB_TOKEN }}
+        persist-credentials: false
+        sparse-checkout: .github/ci-scripts
+
+    # The commits are read here instead of being passed to an action as an
+    # input: an input is an environment variable, limited to 128 KB, which the
+    # commits of a large pull request exceed
     - name: DCO Check
-      uses: tim-actions/dco@master
-      with:
-        commits: ${{ steps.get-pr-commits.outputs.commits }}
+      # bash runs with pipefail, a failure to get the commits fails the check
+      shell: bash
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        REPO: ${{ github.repository }}
+        PR: ${{ github.event.pull_request.number }}
+      run: |
+        # GitHub lists at most 250 commits of a pull request, more can't be
+        # checked (the count is read first, a push may add commits meanwhile)
+        expected=$(gh api "repos/${REPO}/pulls/${PR}" --jq '.commits')
+        commits=$(gh api --paginate "repos/${REPO}/pulls/${PR}/commits" |
+          jq -s 'add')
+        received=$(jq 'length' <<< "${commits}")
+        if [ "${received}" -lt "${expected}" ]; then
+          echo "::error::The DCO check got ${received} of the ${expected}" \
+            "commits of the pull request"
+          exit 1
+        fi
+        failed=$(jq -r -f .github/ci-scripts/dco.jq <<< "${commits}")
+        if [ -n "${failed}" ]; then
+          echo "::error::The DCO check failed"
+          echo "${failed}"
+          echo "All commits need a 'Signed-off-by: Name <email>' line naming"
+          echo "their author, for instance by committing with 'git commit -s'."
+          exit 1
+        fi
+        echo "All commits are signed off."

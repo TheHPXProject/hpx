@@ -27,7 +27,7 @@ namespace test {
     // Sentinel constructed from an Iterator just for the purpose of the
     // overloads tests
     template <typename IterType>
-        requires(hpx::traits::is_iterator<IterType>::value)
+        requires(hpx::traits::is_iterator_v<IterType>)
     struct sentinel_from_iterator
     {
         sentinel_from_iterator() = default;

@@ -153,6 +153,12 @@ namespace hpx {
     iostreams::ostream<> cout;
     iostreams::ostream<> cerr;
 
+    // The stringstream behind consolestream has to outlive it: consolestream
+    // writes what is left in its buffer to it when it is destroyed after the
+    // runtime has stopped. Objects constructed earlier are destroyed later.
+    [[maybe_unused]] static std::stringstream& console_stream_storage =
+        iostreams::detail::get_consolestream();
+
     // extension: singleton stringstream on console
     iostreams::ostream<> consolestream;
     std::stringstream const& get_consolestream()

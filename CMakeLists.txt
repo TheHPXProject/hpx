@@ -63,9 +63,9 @@ string(TIMESTAMP HPX_COPYRIGHT_YEAR "%Y")
 # ##############################################################################
 set(HPX_VERSION_MAJOR 2)
 set(HPX_VERSION_MINOR 0)
-set(HPX_VERSION_SUBMINOR 0)
-set(HPX_VERSION_DATE 20261031)
-set(HPX_VERSION_TAG "")
+set(HPX_VERSION_SUBMINOR 1)
+set(HPX_VERSION_DATE 20261231)
+set(HPX_VERSION_TAG "-rc1")
 
 set(HPX_VERSION
     "${HPX_VERSION_MAJOR}.${HPX_VERSION_MINOR}.${HPX_VERSION_SUBMINOR}"
@@ -1562,9 +1562,6 @@ if((HPX_WITH_NETWORKING AND HPX_WITH_PARCELPORT_MPI)
     # hpx_add_compile_flag() below does not add the extra options to the top
     # level directory
     hpx_add_config_define(OMPI_IMPORTS)
-    if(HPX_WITH_CUDA)
-      hpx_add_config_cond_define(NOMINMAX)
-    endif()
   endif()
 endif()
 
@@ -3041,6 +3038,13 @@ install(
 install(
   FILES "${PROJECT_SOURCE_DIR}/LICENSE_1_0.txt"
   DESTINATION ${CMAKE_INSTALL_DATADIR}/hpx
+  COMPONENT license
+)
+
+# license text in the location defined by REUSE (https://reuse.software/)
+install(
+  FILES "${PROJECT_SOURCE_DIR}/LICENSES/BSL-1.0.txt"
+  DESTINATION ${CMAKE_INSTALL_DATADIR}/hpx/LICENSES
   COMPONENT license
 )
 

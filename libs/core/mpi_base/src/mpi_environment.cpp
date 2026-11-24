@@ -463,13 +463,13 @@ namespace hpx::util {
             {
                 HPX_THROW_EXCEPTION(hpx::error::internal_server_error,
                     sl.function_name(),
-                    "MPI error (%s/%d): couldn't retrieve error string for "
-                    "code %d",
+                    "MPI error ({}/{}): couldn't retrieve error string for "
+                    "code {}",
                     sl.file_name(), sl.line(), error_code);
             }
 
             HPX_THROW_EXCEPTION(hpx::error::internal_server_error,
-                sl.function_name(), "MPI error (%s/%d): %s", sl.file_name(),
+                sl.function_name(), "MPI error ({}/{}): {}", sl.file_name(),
                 sl.line(), error_string);
         }
     }    // namespace

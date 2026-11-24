@@ -11,20 +11,38 @@
 #include <hpx/modules/lcos_local.hpp>
 #include <hpx/modules/synchronization.hpp>
 #include <hpx/modules/testing.hpp>
+#include <hpx/thread.hpp>
 
 #include <atomic>
 #include <cstddef>
+#include <memory>
 #include <mutex>
 #include <utility>
 #include <vector>
 
 ///////////////////////////////////////////////////////////////////////////////
 // and_gate hides base_and_gate's lock-free public overloads of get_future()/
-// get_shared_future()/set()/synchronize() (C++ name hiding), so tests against
-// and_gate always need to pass a Lock&. The condition variable used internally
-// to wake up synchronize() waiters only accepts
+// get_shared_future()/set()/synchronize()/next_generation() (C++ name hiding),
+// so tests against and_gate always need to pass a Lock&. The condition variable
+// used internally to wake up synchronize() waiters only accepts
 // std::unique_lock<hpx::spinlock>, so that is the lock type used throughout.
 using lock_type = std::unique_lock<hpx::spinlock>;
+
+///////////////////////////////////////////////////////////////////////////////
+void test_conditional_cv_releases_predicate()
+{
+    hpx::lcos::local::conditional_cv cv;
+    hpx::spinlock mtx;
+    auto capture = std::make_shared<int>(0);
+    std::weak_ptr<int> weak_capture = capture;
+
+    {
+        lock_type l(mtx);
+        cv.wait([capture = std::move(capture)] { return true; }, l);
+    }
+
+    HPX_TEST(weak_capture.expired());
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 void test_get_future_and_set()
@@ -407,8 +425,277 @@ void test_repeated_generations()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// synchronize_async() returns a ready future for a generation the gate has
+// reached. For a later generation, the future becomes ready only after
+// next_generation() has reached it and the released waiters were set.
+void test_synchronize_async()
+{
+    hpx::lcos::local::and_gate gate;
+    hpx::spinlock mtx;
+
+    lock_type l(mtx);
+    HPX_TEST(gate.synchronize_async(1, l).is_ready());
+
+    hpx::future<void> f2 = gate.synchronize_async(2, l);
+    hpx::future<void> f3 = gate.synchronize_async(3, l);
+    HPX_TEST(!f2.is_ready());
+    HPX_TEST(!f3.is_ready());
+
+    gate.next_generation(l);     // generation: 1 -> 2
+    HPX_TEST(!f2.is_ready());    // released, but not set yet
+
+    auto released = gate.take_released_waiters(l);
+    HPX_TEST(!released.empty());
+    released.set();
+    HPX_TEST(f2.is_ready());
+    HPX_TEST(!f3.is_ready());
+    f2.get();
+
+    gate.next_generation(l);    // generation: 2 -> 3
+    gate.take_released_waiters(l).set();
+    f3.get();
+}
+
+// A generation that next_generation() skips counts as reached.
+void test_synchronize_async_skipped_generation()
+{
+    hpx::lcos::local::and_gate gate;
+    hpx::spinlock mtx;
+
+    lock_type l(mtx);
+    hpx::future<void> f2 = gate.synchronize_async(2, l);
+    hpx::future<void> f3 = gate.synchronize_async(3, l);
+    hpx::future<void> f5 = gate.synchronize_async(5, l);
+
+    gate.next_generation(l, 2);    // generation: 1 -> 3, skips 2
+    gate.take_released_waiters(l).set();
+
+    f2.get();
+    f3.get();
+    HPX_TEST(!f5.is_ready());
+}
+
+// The released waiters run their continuations after the caller released its
+// lock, so an inline continuation can take that lock.
+void test_synchronize_async_continuation_without_lock()
+{
+    hpx::lcos::local::and_gate gate;
+    hpx::spinlock mtx;
+    bool took_lock = false;
+
+    lock_type l(mtx);
+    hpx::future<void> f = gate.synchronize_async(2, l).then(
+        hpx::launch::sync, [&](hpx::future<void>&& r) {
+            r.get();
+            lock_type inner(mtx, std::try_to_lock);
+            took_lock = inner.owns_lock();
+        });
+
+    gate.next_generation(l);
+    auto released = gate.take_released_waiters(l);
+    l.unlock();
+    released.set();
+
+    f.get();
+    HPX_TEST(took_lock);
+}
+
+void test_synchronize_async_error_paths()
+{
+    hpx::lcos::local::and_gate gate;
+    hpx::spinlock mtx;
+
+    {
+        lock_type l(mtx);
+        gate.next_generation(l);    // generation: 1 -> 2
+    }
+
+    // requesting a generation smaller than the current one is a sequencing
+    // error
+    {
+        lock_type l(mtx);
+        hpx::error_code ec(hpx::throwmode::lightweight);
+        hpx::future<void> f = gate.synchronize_async(
+            1, l, "test_synchronize_async_error_paths", ec);
+        HPX_TEST(ec);
+        HPX_TEST_EQ(ec.value(), static_cast<int>(hpx::error::invalid_status));
+        HPX_TEST(!f.valid());
+
+        // synchronize_async() unlocks l before reporting the error
+        HPX_TEST(!l.owns_lock());
+    }
+    {
+        lock_type l(mtx);
+        HPX_TEST_THROW(gate.synchronize_async(1, l), hpx::exception);
+    }
+}
+
+// A waiter that the gate still holds when it is destroyed reports a broken
+// promise.
+void test_synchronize_async_gate_destroyed()
+{
+    hpx::spinlock mtx;
+    hpx::future<void> f;
+    {
+        hpx::lcos::local::and_gate gate;
+        lock_type l(mtx);
+        f = gate.synchronize_async(2, l);
+    }
+    HPX_TEST(f.is_ready());
+    HPX_TEST(f.has_exception());
+}
+
+// A waiter that the gate still holds when it is move-assigned to reports a
+// broken promise. The released waiters were taken before, the gate asserts
+// that none is left.
+void test_synchronize_async_move_assigned_to()
+{
+    hpx::spinlock mtx;
+    hpx::lcos::local::and_gate target;
+    hpx::future<void> reached;
+    hpx::future<void> not_reached;
+    {
+        lock_type l(mtx);
+        reached = target.synchronize_async(2, l);
+        not_reached = target.synchronize_async(3, l);
+        target.next_generation(l);    // generation: 1 -> 2
+        auto released = target.take_released_waiters(l);
+        l.unlock();
+        released.set();
+    }
+    HPX_TEST(reached.is_ready());
+    HPX_TEST(!reached.has_exception());
+
+    target = hpx::lcos::local::and_gate();
+    HPX_TEST(not_reached.is_ready());
+    HPX_TEST(not_reached.has_exception());
+}
+
+// The next_generation() overload that takes no lock sets the released waiters
+// itself. and_gate hides that overload, since it has no mutex of its own. Thus
+// this test uses base_and_gate<hpx::spinlock>, whose synchronize_async() is
+// protected. Its mutex is private, so the test holds a separate lock for
+// synchronize_async(), which only asserts that a lock is held. The test runs
+// on one thread.
+struct async_gate : hpx::lcos::local::base_and_gate<hpx::spinlock>
+{
+    using base_and_gate::synchronize_async;
+};
+
+void test_synchronize_async_next_generation_without_lock()
+{
+    async_gate gate;
+    hpx::spinlock mtx;
+
+    hpx::future<void> f;
+    {
+        lock_type l(mtx);
+        f = gate.synchronize_async(2, l);
+    }
+    HPX_TEST(!f.is_ready());
+
+    gate.next_generation();    // generation: 1 -> 2
+    HPX_TEST(f.is_ready());
+    f.get();
+}
+
+// Asynchronous waiters move with the gate. The destroyed moved-from gate does
+// not break their promises, and the gate they moved to releases them.
+void test_synchronize_async_move()
+{
+    hpx::spinlock mtx;
+    hpx::future<void> f2;
+    hpx::future<void> f3;
+
+    hpx::lcos::local::and_gate target;
+    {
+        hpx::lcos::local::and_gate moved;
+        {
+            hpx::lcos::local::and_gate gate;
+            {
+                lock_type l(mtx);
+                f2 = gate.synchronize_async(2, l);
+                f3 = gate.synchronize_async(3, l);
+            }
+            moved = hpx::lcos::local::and_gate(std::move(gate));
+        }
+        HPX_TEST(!f2.is_ready());
+        HPX_TEST(!f3.is_ready());
+
+        lock_type l(mtx);
+        moved.next_generation(l);    // generation: 1 -> 2
+        auto released = moved.take_released_waiters(l);
+        l.unlock();
+        released.set();
+        f2.get();
+
+        target = std::move(moved);
+    }
+    HPX_TEST(!f3.is_ready());
+
+    lock_type l(mtx);
+    target.next_generation(l);    // generation: 2 -> 3
+    auto released = target.take_released_waiters(l);
+    l.unlock();
+    released.set();
+    HPX_TEST(f3.is_ready());
+    HPX_TEST(!f3.has_exception());
+    f3.get();
+}
+
+// Each continuation advances the gate, which releases the waiter for the next
+// generation, and its continuation runs inline. HPX bounds this recursion: at
+// the stack or depth limit it runs the continuation on a new thread. Thus some
+// of the continuations run on a thread other than the one that starts the
+// chain.
+void test_synchronize_async_long_chain()
+{
+    constexpr std::size_t num_generations = 10000;
+
+    hpx::spinlock mtx;
+    hpx::lcos::local::and_gate gate;
+    hpx::thread::id const starting_thread = hpx::this_thread::get_id();
+    std::atomic<std::size_t> num_on_other_thread(0);
+
+    auto advance = [&]() {
+        lock_type l(mtx);
+        gate.next_generation(l);
+        auto released = gate.take_released_waiters(l);
+        l.unlock();
+        released.set();
+    };
+
+    std::vector<hpx::future<void>> chain;
+    chain.reserve(num_generations);
+    {
+        lock_type l(mtx);
+        for (std::size_t g = 2; g != num_generations + 2; ++g)
+        {
+            chain.push_back(gate.synchronize_async(g, l).then(
+                hpx::launch::sync, [&](hpx::future<void>&& f) {
+                    f.get();
+                    if (hpx::this_thread::get_id() != starting_thread)
+                    {
+                        ++num_on_other_thread;
+                    }
+                    advance();
+                }));
+        }
+    }
+
+    advance();    // generation: 1 -> 2, starts the chain
+
+    for (auto& f : chain)
+    {
+        f.get();
+    }
+    HPX_TEST_LT(std::size_t(0), num_on_other_thread.load());
+}
+
+///////////////////////////////////////////////////////////////////////////////
 int hpx_main()
 {
+    test_conditional_cv_releases_predicate();
     test_get_future_and_set();
     test_get_shared_future_and_set();
     test_set_error_paths();
@@ -424,6 +711,15 @@ int hpx_main()
     test_move_assignment();
     test_concurrent_set();
     test_repeated_generations();
+    test_synchronize_async();
+    test_synchronize_async_skipped_generation();
+    test_synchronize_async_continuation_without_lock();
+    test_synchronize_async_error_paths();
+    test_synchronize_async_gate_destroyed();
+    test_synchronize_async_move_assigned_to();
+    test_synchronize_async_next_generation_without_lock();
+    test_synchronize_async_move();
+    test_synchronize_async_long_chain();
 
     return hpx::local::finalize();
 }

@@ -194,17 +194,22 @@ set(hpx_targets hpx wrap_main init plugin component)
 set(hpx_internal_targets hpx_full hpx_interface hpx_interface_wrap_main)
 
 add_library(hpx_interface_auto_wrap_main INTERFACE)
-if(MSVC)
-  # MSVC has no weak symbols, so instead we force-include hpx/hpx_main.hpp into
-  # all C++ sources of the executable, which redefines main() the same way as
-  # explicitly including the header would.
+if(MSVC OR CMAKE_CXX_SIMULATE_ID STREQUAL "MSVC")
+  # The MSVC ABI has no weak symbols (also with clang), so instead we
+  # force-include hpx/hpx_main.hpp into all C++ sources of the executable, which
+  # redefines main() the same way as explicitly including the header would.
+  if(CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "GNU")
+    set(_force_include "SHELL:-include hpx/hpx_main.hpp")
+  else()
+    set(_force_include "/FIhpx/hpx_main.hpp")
+  endif()
   target_link_libraries(
     hpx_interface_auto_wrap_main INTERFACE hpx_interface_wrap_main
   )
   target_compile_options(
     hpx_interface_auto_wrap_main
     INTERFACE
-      "$<$<AND:${_is_executable},$<COMPILE_LANGUAGE:CXX>>:/FIhpx/hpx_main.hpp>"
+      "$<$<AND:${_is_executable},$<COMPILE_LANGUAGE:CXX>>:${_force_include}>"
   )
   target_compile_definitions(
     hpx_interface_auto_wrap_main
@@ -446,7 +451,7 @@ foreach(lib ${HPX_LIBS})
 
     target_include_directories(hpx_${lib}_module PUBLIC
         $<BUILD_INTERFACE:${lib_module_basedir}>
-        $<INSTALL_INTERFACE:${CMAKE_INSTALL_LIBDIR}/cxx>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_LIBDIR}/cmake/${HPX_PACKAGE_NAME}/${lib}>
     )
 
     # Clang emits DWARF-5 records while compiling the TracyClient library

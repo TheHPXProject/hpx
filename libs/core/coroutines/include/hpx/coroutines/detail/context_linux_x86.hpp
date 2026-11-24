@@ -34,6 +34,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <stdexcept>
+#include <string>
 #include <sys/param.h>
 
 // Fix for musl. Use linux/param.h for EXEC_PAGESIZE
@@ -116,18 +117,27 @@ namespace hpx::threads::coroutines {
         if (static_cast<size_t>(addr_delta) <
             coroutine_stackoverflow_addr_epsilon)
         {
-            std::cerr << "Stack overflow in coroutine at address "
-                      << std::internal << std::hex
-                      << std::setw(sizeof(sigsegv_ptr) * 2 + 2)
-                      << std::setfill('0') << sigsegv_ptr << ".\n\n";
+            // the address as 0x and all its hex digits, without std::cerr,
+            // which isn't safe to use in a signal handler
+            char address[2 + 2 * sizeof(sigsegv_ptr) + 1] = {'0', 'x'};
+            auto value = reinterpret_cast<std::uintptr_t>(sigsegv_ptr);
+            for (std::size_t i = 2 * sizeof(sigsegv_ptr); i != 0; --i)
+            {
+                address[1 + i] = "0123456789abcdef"[value & 0xf];
+                value >>= 4;
+            }
+            address[sizeof(address) - 1] = '\0';
 
-            std::cerr
-                << "Configure the hpx runtime to allocate a larger coroutine "
-                   "stack size.\nUse the hpx.stacks.small_size, "
-                   "hpx.stacks.medium_size,\nhpx.stacks.large_size, or "
-                   "hpx.stacks.huge_size configuration\nflags to configure "
-                   "coroutine stack sizes.\n"
-                << std::endl;
+            write_on_terminate("Stack overflow in coroutine at address ");
+            write_on_terminate(address);
+            write_on_terminate(".\n\n");
+
+            write_on_terminate(
+                "Configure the hpx runtime to allocate a larger coroutine "
+                "stack size.\nUse the hpx.stacks.small_size, "
+                "hpx.stacks.medium_size,\nhpx.stacks.large_size, or "
+                "hpx.stacks.huge_size configuration\nflags to configure "
+                "coroutine stack sizes.\n\n");
         }
     }
 
@@ -139,24 +149,32 @@ namespace hpx::threads::coroutines {
             hpx::util::attach_debugger();
         }
 
+        // The stack trace below may still block on a lock held by the
+        // faulting thread (for instance in malloc), end the process anyway
+        start_signal_handler_watchdog();
+
         if (diagnostics_on_terminate)
         {
-            if (exception_verbosity >= 2)
+            if (exception_verbosity >= 2 && !build_string_on_terminate.empty())
             {
-                std::cerr << full_build_string() << "\n";
+                write_on_terminate(build_string_on_terminate.c_str());
+                write_on_terminate("\n");
             }
 
 #if defined(HPX_HAVE_STACKTRACES)
             if (exception_verbosity >= 1)
             {
-                std::cerr << "{stack-trace}: " << hpx::util::trace(trace_depth)
-                          << "\n";
+                std::string const trace = hpx::util::trace(trace_depth);
+                write_on_terminate("{stack-trace}: ");
+                write_on_terminate(trace.c_str());
+                write_on_terminate("\n");
             }
 #endif
 
-            char* reason = strsignal(signum);
-            std::cerr << "{what}: " << (reason ? reason : "Unknown signal")
-                      << std::endl;
+            char const* reason = strsignal(signum);
+            write_on_terminate("{what}: ");
+            write_on_terminate(reason ? reason : "Unknown signal");
+            write_on_terminate("\n");
 
             check_coroutine_stack_overflow(infoptr, ctxptr);
 
@@ -479,7 +497,9 @@ namespace hpx::threads::coroutines::detail::lx {
                 segv_stack.ss_size = SEGV_STACK_SIZE;
 
                 std::memset(&action, '\0', sizeof(action));
-                action.sa_flags = SA_SIGINFO | SA_ONSTACK;
+                // a second fault while printing the diagnostics ends the
+                // process instead of entering the handler again
+                action.sa_flags = SA_SIGINFO | SA_ONSTACK | SA_RESETHAND;
                 action.sa_sigaction = &sigsegv_handler;
 
                 sigaltstack(&segv_stack, nullptr);

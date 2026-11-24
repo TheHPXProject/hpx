@@ -40,12 +40,14 @@ namespace hpx::execution::experimental {
         }
 
         /// \cond NOINTERNAL
-        // discover the number of cores to use for parallelization
+        // discover the number of cores to use for parallelization (not
+        // noexcept: the executor's processing_units_count throws if the
+        // runtime isn't running)
         template <typename Executor>
         std::size_t processing_units_count(Executor&& exec,
             hpx::chrono::steady_duration const& duration =
                 hpx::chrono::null_duration,
-            std::size_t num_tasks = 0) const noexcept
+            std::size_t num_tasks = 0) const
         {
             std::size_t const available_pus =
                 hpx::execution::experimental::processing_units_count(

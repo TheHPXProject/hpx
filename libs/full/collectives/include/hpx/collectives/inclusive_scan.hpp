@@ -207,7 +207,7 @@ namespace hpx { namespace collectives {
     ///             directly returns the result.
     ///
     template <typename T, typename F>
-    decltype(auto) inclusive_scan(hpx::launch::sync_policy, communicator comm,
+    std::decay_t<T> inclusive_scan(hpx::launch::sync_policy, communicator comm,
         T&& result, F&& op, generation_arg generation,
         this_site_arg this_site = this_site_arg());
 }}    // namespace hpx::collectives
@@ -357,7 +357,8 @@ namespace hpx::collectives {
                 return result;
             };
 
-            return fid.then(hpx::launch::sync, HPX_MOVE(inclusive_scan_data));
+            return detail::then_on_communicator(
+                fid, HPX_MOVE(inclusive_scan_data));
         }
     }    // namespace detail
 

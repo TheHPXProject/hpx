@@ -5,11 +5,10 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 #include <hpx/assert.hpp>
-#include <hpx/executors/async.hpp>
-#include <hpx/executors/parallel_scheduler.hpp>
 #include <hpx/init.hpp>
 #include <hpx/modules/async_combinators.hpp>
 #include <hpx/modules/errors.hpp>
+#include <hpx/modules/executors.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/resource_partitioner.hpp>
 #include <hpx/modules/runtime_local.hpp>

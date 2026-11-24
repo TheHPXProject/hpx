@@ -90,11 +90,12 @@ namespace hpx::execution::experimental {
         }
 
         // As many cores as can be given chunks_per_core chunks of at least
-        // min_chunk_time each, at least one.
+        // min_chunk_time each, at least one. Not noexcept: the executor's
+        // processing_units_count throws if the runtime isn't running.
         template <typename Executor>
         std::size_t processing_units_count(Executor&& exec,
             hpx::chrono::steady_duration const& iteration_duration,
-            std::size_t const count) const noexcept
+            std::size_t const count) const
         {
             std::size_t const available_pus =
                 hpx::execution::experimental::processing_units_count(

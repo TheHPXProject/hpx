@@ -298,8 +298,7 @@ namespace hpx::parallel {
 
             if (level == 0)
             {
-                std::make_heap(first, end, comp);
-                std::sort_heap(first, middle, comp);
+                std::partial_sort(first, middle, end, comp);
                 return;
             }
 
@@ -449,7 +448,7 @@ namespace hpx::parallel {
 
         if (nmid > 1024)
         {
-            if (detail::is_sorted_sequential(first, middle, comp))
+            if (detail::is_sorted_sequential(first, first + nelem, comp))
             {
                 return first + nelem;
             }
@@ -486,7 +485,7 @@ namespace hpx::parallel {
 
         if (nmid > 1024)
         {
-            if (detail::is_sorted_sequential(first, middle, comp))
+            if (detail::is_sorted_sequential(first, first + nelem, comp))
             {
                 return hpx::make_ready_future(first + nelem);
             }

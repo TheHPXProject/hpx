@@ -93,8 +93,10 @@ namespace hpx_startup {
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx::detail {
 
+#if defined(HPX_HAVE_DISTRIBUTED_RUNTIME)
     // forward declarations only
     static void console_print(std::string const&);
+#endif
 
     int init_impl(
         hpx::function<int(hpx::program_options::variables_map&)> const& f,
@@ -964,35 +966,60 @@ namespace hpx {
 
                 // Command line handling should have updated this by now.
                 HPX_ASSERT(cmdline.rtcfg_.mode_ != runtime_mode::default_);
-                if (cmdline.rtcfg_.mode_ == runtime_mode::local)
-                {
-                    LPROGRESS_ << "creating local runtime";
-                    rt.reset(new hpx::runtime(cmdline.rtcfg_, true));
-                }
-                else
-                {
-#if defined(HPX_HAVE_DISTRIBUTED_RUNTIME)
-                    for (auto const& registry : component_registries)
-                    {
-                        hpx::register_startup_function([registry]() {
-                            registry->register_component_type();
-                        });
-                    }
 
-                    LPROGRESS_ << "creating distributed runtime";
-                    rt.reset(new hpx::runtime_distributed(cmdline.rtcfg_,
-                        &hpx::detail::pre_main, &hpx::detail::post_main));
+                // The runtime's constructor creates and starts the
+                // parcelports and bootstraps the localities: errors there
+                // (invalid settings, a parcelport that can't start) are
+                // reported like the other errors during startup, instead of
+                // leaving hpx::init. Its thread pools haven't started yet.
+                try
+                {
+                    if (cmdline.rtcfg_.mode_ == runtime_mode::local)
+                    {
+                        LPROGRESS_ << "creating local runtime";
+                        rt.reset(new hpx::runtime(cmdline.rtcfg_, true));
+                    }
+                    else
+                    {
+#if defined(HPX_HAVE_DISTRIBUTED_RUNTIME)
+                        for (auto const& registry : component_registries)
+                        {
+                            hpx::register_startup_function([registry]() {
+                                registry->register_component_type();
+                            });
+                        }
+
+                        LPROGRESS_ << "creating distributed runtime";
+                        rt.reset(new hpx::runtime_distributed(cmdline.rtcfg_,
+                            &hpx::detail::pre_main, &hpx::detail::post_main));
 #else
-                    HPX_THROW_EXCEPTION(hpx::error::invalid_status,
-                        "run_or_start",
-                        "Attempted to start the runtime in the mode \"{1}\", "
-                        "but HPX was compiled with "
-                        "HPX_WITH_DISTRIBUTED_RUNTIME=OFF, and \"{1}\" "
-                        "requires HPX_WITH_DISTRIBUTED_RUNTIME=ON. "
-                        "Recompile HPX with HPX_WITH_DISTRIBUTED_RUNTIME=ON or "
-                        "change the runtime mode.",
-                        get_runtime_mode_name(cmdline.rtcfg_.mode_));
+                        HPX_THROW_EXCEPTION(hpx::error::invalid_status,
+                            "run_or_start",
+                            "Attempted to start the runtime in the mode "
+                            "\"{1}\", but HPX was compiled with "
+                            "HPX_WITH_DISTRIBUTED_RUNTIME=OFF, and \"{1}\" "
+                            "requires HPX_WITH_DISTRIBUTED_RUNTIME=ON. "
+                            "Recompile HPX with "
+                            "HPX_WITH_DISTRIBUTED_RUNTIME=ON "
+                            "or change the runtime mode.",
+                            get_runtime_mode_name(cmdline.rtcfg_.mode_));
 #endif
+                    }
+                }
+                catch (hpx::exception const& e)
+                {
+                    resource::detail::delete_partitioner();
+                    std::cerr << "hpx::init: hpx::exception caught: "
+                              << hpx::get_error_what(e) << "\n";
+                    return -1;
+                }
+                catch (std::exception const& e)
+                {
+                    resource::detail::delete_partitioner();
+                    std::cerr
+                        << "hpx::init: std::exception caught: " << e.what()
+                        << "\n";
+                    return -1;
                 }
 
                 // Store application defined command line options

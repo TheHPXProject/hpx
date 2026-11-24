@@ -22,7 +22,8 @@ if(HPX_WITH_CXX20_COROUTINES)
   set(tests ${tests} coroutine_traits coroutine_utils)
 endif()
 
-if(HPX_WITH_CUDA)
+# stdexec can't be compiled by nvcc with MSVC as the host compiler
+if(HPX_WITH_CUDA AND NOT (MSVC AND CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA"))
   set(tests ${tests} stdexec_cuda)
 endif()
 
@@ -48,7 +49,6 @@ foreach(test ${tests})
   target_link_libraries(${test}_test PRIVATE hpx_execution_test_utilities)
 
   add_hpx_unit_test("modules.execution_base" ${test} ${${test}_PARAMETERS})
-  target_compile_definitions(${test}_test PRIVATE -DHPX_MODULE_STATIC_LINKING)
 
 endforeach()
 

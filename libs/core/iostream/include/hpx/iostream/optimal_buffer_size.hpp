@@ -19,6 +19,7 @@
 
 #include <hpx/config/warnings_prefix.hpp>
 
+#include <ios>
 #include <type_traits>
 
 namespace hpx::iostream {

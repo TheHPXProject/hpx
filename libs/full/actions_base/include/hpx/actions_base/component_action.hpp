@@ -72,16 +72,23 @@ namespace hpx::actions {
     }    // namespace detail
 
     ///////////////////////////////////////////////////////////////////////////
+    //  The specializations below pass Derived to basic_action as is, the
+    //  specializations for Derived == void at the end of this file make the
+    //  action its own derived type. The base classes don't name F: MSVC 19.52
+    //  fails with an internal compiler error (C1001) if the base class of an
+    //  action names the member function pointer of a component with more than
+    //  one base class, when the action is instantiated in a translation unit
+    //  importing the C++ module the component was exported from.
+
+    ///////////////////////////////////////////////////////////////////////////
     //  Specialized generic non-const component action types allowing to hold an
     //  arbitrary number of arguments
     template <typename Component, typename R, typename... Ps,
         R (Component::*F)(Ps...), typename Derived>
     struct action<R (Component::*)(Ps...), F, Derived>
-      : basic_action<Component, R(Ps...),
-            detail::action_type_t<action<R (Component::*)(Ps...), F, Derived>,
-                Derived>>
+      : basic_action<Component, R(Ps...), Derived>
     {
-        using derived_type = detail::action_type_t<action, Derived>;
+        using derived_type = Derived;
 
         static std::string get_action_name(naming::address_type lva)
         {
@@ -108,11 +115,9 @@ namespace hpx::actions {
     template <typename Component, typename R, typename... Ps,
         R (Component::*F)(Ps...) const, typename Derived>
     struct action<R (Component::*)(Ps...) const, F, Derived>
-      : basic_action<Component, R(Ps...),
-            detail::action_type_t<
-                action<R (Component::*)(Ps...) const, F, Derived>, Derived>>
+      : basic_action<Component, R(Ps...), Derived>
     {
-        using derived_type = detail::action_type_t<action, Derived>;
+        using derived_type = Derived;
 
         static std::string get_action_name(naming::address_type lva)
         {
@@ -139,11 +144,9 @@ namespace hpx::actions {
     template <typename Component, typename R, typename... Ps,
         R (Component::*F)(Ps...) noexcept, typename Derived>
     struct action<R (Component::*)(Ps...) noexcept, F, Derived>
-      : basic_action<Component, R(Ps...),
-            detail::action_type_t<
-                action<R (Component::*)(Ps...) noexcept, F, Derived>, Derived>>
+      : basic_action<Component, R(Ps...), Derived>
     {
-        using derived_type = detail::action_type_t<action, Derived>;
+        using derived_type = Derived;
 
         static std::string get_action_name(naming::address_type lva)
         {
@@ -170,12 +173,9 @@ namespace hpx::actions {
     template <typename Component, typename R, typename... Ps,
         R (Component::*F)(Ps...) const noexcept, typename Derived>
     struct action<R (Component::*)(Ps...) const noexcept, F, Derived>
-      : basic_action<Component, R(Ps...),
-            detail::action_type_t<
-                action<R (Component::*)(Ps...) const noexcept, F, Derived>,
-                Derived>>
+      : basic_action<Component, R(Ps...), Derived>
     {
-        using derived_type = detail::action_type_t<action, Derived>;
+        using derived_type = Derived;
 
         static std::string get_action_name(naming::address_type lva)
         {
@@ -194,6 +194,40 @@ namespace hpx::actions {
             return detail::component_invoke<Component, R>(
                 lva, comptype, F, HPX_FORWARD(Ts, vs)...);
         }
+    };
+
+    ///////////////////////////////////////////////////////////////////////////
+    //  Component actions without a derived type are their own derived type
+    template <typename Component, typename R, typename... Ps,
+        R (Component::*F)(Ps...)>
+    struct action<R (Component::*)(Ps...), F, void>
+      : action<R (Component::*)(Ps...), F,
+            action<R (Component::*)(Ps...), F, void>>
+    {
+    };
+
+    template <typename Component, typename R, typename... Ps,
+        R (Component::*F)(Ps...) const>
+    struct action<R (Component::*)(Ps...) const, F, void>
+      : action<R (Component::*)(Ps...) const, F,
+            action<R (Component::*)(Ps...) const, F, void>>
+    {
+    };
+
+    template <typename Component, typename R, typename... Ps,
+        R (Component::*F)(Ps...) noexcept>
+    struct action<R (Component::*)(Ps...) noexcept, F, void>
+      : action<R (Component::*)(Ps...) noexcept, F,
+            action<R (Component::*)(Ps...) noexcept, F, void>>
+    {
+    };
+
+    template <typename Component, typename R, typename... Ps,
+        R (Component::*F)(Ps...) const noexcept>
+    struct action<R (Component::*)(Ps...) const noexcept, F, void>
+      : action<R (Component::*)(Ps...) const noexcept, F,
+            action<R (Component::*)(Ps...) const noexcept, F, void>>
+    {
     };
     /// \endcond
 }    // namespace hpx::actions

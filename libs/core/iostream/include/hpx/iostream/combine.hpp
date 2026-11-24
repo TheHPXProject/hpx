@@ -18,7 +18,7 @@
 #include <hpx/iostream/operations.hpp>
 #include <hpx/iostream/traits.hpp>
 
-#include <iosfwd>
+#include <ios>
 #include <locale>
 #include <type_traits>
 

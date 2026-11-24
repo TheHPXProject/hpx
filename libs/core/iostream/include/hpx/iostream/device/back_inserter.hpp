@@ -14,7 +14,7 @@
 #include <hpx/config.hpp>
 #include <hpx/iostream/categories.hpp>
 
-#include <iosfwd>
+#include <ios>
 
 namespace hpx::iostream {
 

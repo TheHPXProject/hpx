@@ -79,7 +79,7 @@ void test_await_terminal_epoch_mismatch_never_resolves(
 
     reach_running_at_epoch(locality, target, 1);
 
-    auto const f = hpx::supervision::await_terminal(locality, target, 1);
+    auto f = hpx::supervision::await_terminal(locality, target, 1);
     HPX_TEST(!f.is_ready());
 
     // A higher epoch reaching a terminal event must not resolve a waiter
@@ -89,8 +89,26 @@ void test_await_terminal_epoch_mismatch_never_resolves(
     hpx::supervision::publish_event(hpx::launch::sync, locality, target,
         hpx::supervision::event::completed, 2);
 
-    hpx::this_thread::sleep_for(std::chrono::milliseconds(20));
-    HPX_TEST(f.is_ready() && f.has_exception());
+    // For a remote locality, the invalidation reaches the future only with
+    // the response of the await_terminal action, so wait for it instead of
+    // expecting it after a fixed delay.
+    if (!HPX_TEST(
+            f.wait_for(std::chrono::seconds(10)) == hpx::future_status::ready))
+    {
+        return;
+    }
+
+    bool caught_stale_state = false;
+    try
+    {
+        f.get();
+        HPX_TEST(false);
+    }
+    catch (hpx::exception const& e)
+    {
+        caught_stale_state = (e.get_error() == hpx::error::stale_state);
+    }
+    HPX_TEST(caught_stale_state);
 }
 
 // Concurrent publish_event() + await_terminal() stress test: while a batch

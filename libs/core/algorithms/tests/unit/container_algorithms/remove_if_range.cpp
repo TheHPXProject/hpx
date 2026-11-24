@@ -54,16 +54,21 @@ struct random_fill
 {
     random_fill(int rand_base, int range)
       : gen(std::rand())
-      , dist(rand_base - range / 2, rand_base + range / 2)
+      , base(static_cast<unsigned int>(rand_base))
+      , dist(-(range / 2), range / 2)
     {
     }
 
     int operator()()
     {
-        return dist(gen);
+        // add a random offset to rand_base modulo 2^32: rand_base +/- the
+        // range may not fit into an int, which would make the range of the
+        // distribution invalid
+        return static_cast<int>(base + static_cast<unsigned int>(dist(gen)));
     }
 
     std::mt19937 gen;
+    unsigned int base = 0;
     std::uniform_int_distribution<> dist;
 };
 

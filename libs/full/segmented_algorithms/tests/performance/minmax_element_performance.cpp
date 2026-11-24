@@ -25,8 +25,10 @@
 #include <vector>
 
 ///////////////////////////////////////////////////////////////////////////////
-// Define the vector types to be used.
+// partitioned_vector<int> is predefined in the partitioned_vector module
+#if defined(HPX_HAVE_STATIC_LINKING)
 HPX_REGISTER_PARTITIONED_VECTOR(int)
+#endif
 unsigned int seed = (unsigned int) std::random_device{}();
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -92,8 +94,6 @@ int hpx_main(hpx::program_options::variables_map& vm)
 
 int main(int argc, char* argv[])
 {
-    std::srand((unsigned int) std::time(nullptr));
-
     // initialize program
     std::vector<std::string> const cfg = {
         "hpx.os_threads=all", "hpx.run_hpx_main!=1"};

@@ -63,16 +63,26 @@ namespace hpx::serialization {
         return *it->second;
     }
 
-    std::uint64_t track_pointer(output_archive& ar, void const* pos)
+    std::uint64_t track_pointer(
+        output_archive& ar, void const* pos, detail::kept_pointer keep_alive)
     {
         auto& tracker = ar.get_extra_data<detail::output_pointer_tracker>();
 
         auto const it = tracker.find(pos);
         if (it == tracker.end())
         {
-            tracker.emplace(std::make_pair(pos, ar.bytes_written()));
+            // the object stays alive while its address is recorded, so no
+            // other object can appear at that address in this archive
+            tracker.emplace(pos,
+                detail::tracked_output_pointer{
+                    ar.bytes_written(), HPX_MOVE(keep_alive)});
             return static_cast<std::uint64_t>(-1);
         }
-        return it->second;
+        return it->second.pos;
+    }
+
+    std::uint64_t track_pointer(output_archive& ar, void const* pos)
+    {
+        return track_pointer(ar, pos, detail::kept_pointer());
     }
 }    // namespace hpx::serialization

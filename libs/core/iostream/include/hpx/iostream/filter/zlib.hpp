@@ -16,7 +16,7 @@
 #include <hpx/iostream/filter/symmetric.hpp>
 
 #include <cstdint>
-#include <iosfwd>
+#include <ios>
 #include <memory>
 #include <new>
 #include <type_traits>

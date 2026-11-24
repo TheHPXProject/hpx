@@ -20,6 +20,7 @@ set(tests
     stackful_direct_execution_7713
     stackless_direct_execution_7708
     wait_for_1751
+    wait_for_7915
 )
 
 if(HPX_WITH_THREAD_CUMULATIVE_COUNTS)

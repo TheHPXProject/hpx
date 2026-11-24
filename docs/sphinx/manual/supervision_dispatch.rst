@@ -443,6 +443,43 @@ peer's eviction from ``peers_``. Once evicted, the peer no longer appears in
 unregistered on the peer's locality so nothing is left listening for further
 events from a peer that has already reached a terminal state.
 
+A peer fenced by failure detection never reports a terminal event of its
+own, so no callback schedules its eviction. The failure-detection loop does
+it instead: its next sweep finds the peer's shadow already terminal and
+evicts the peer the same way, so it no longer appears in
+:hpx:func:`registry::snapshot_peers() <hpx::supervision::registry::snapshot_peers>` either. In both cases the eviction keeps the
+terminal shadow, so dispatch to the evicted peer stays fenced. The eviction
+doesn't make the shadow immutable, though: where the shadow is shared (a
+registry that joined its own locality, or several registries on one locality,
+see below), a publication at a higher epoch can still supersede the terminal
+state and admit dispatch again. Monitoring the peer is a different matter: the
+removed observers are gone, so the registry follows the peer again only once
+the peer is joined again.
+The failure-detection loop does not wait for the eviction to unregister the
+observers on the peer's locality, since that locality may be gone.
+
+A fenced peer can come back with a new epoch while the failure-detection loop
+evicts it. The eviction checks whether a lifecycle event of the peer was
+mirrored between its check of the shadow and the removal of the peer, and if
+one was, or is being mirrored right then, it does not remove the peer; the
+next sweep evicts it if its shadow is still terminal. A lifecycle event that
+arrives after the peer was removed is not mirrored at all, so the tombstone
+stays in place and the peer has to be joined again, as after any other
+eviction.
+
+The shadow can also change before the observer that mirrors a lifecycle
+event runs: a registry that joined its own locality shares the shadow with
+the peer's own lifecycle events, and several registries on one locality
+joining the same peer share it with each other's mirroring. So, right before
+it removes the peer, the eviction checks the shadow again and removes the peer
+only if the shadow is still exactly the terminal state it checked first. A new
+epoch that changed the shadow before that second check is therefore seen even
+if its event was not mirrored yet, and the peer stays joined and monitored
+(:hpx-issue:`8030`). A new epoch that changes the shadow after the second
+check, and whose event is not being mirrored yet when the peer is removed,
+overlaps the eviction and ends exactly as if it had started right after it:
+its event is not mirrored, and the peer has to be joined again.
+
 What this does and does not cover
 ---------------------------------
 

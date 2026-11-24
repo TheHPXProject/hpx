@@ -1,4 +1,5 @@
 //  Copyright (c) 2019 John Biddiscombe
+//  Copyright (c) 2026 Divyanshi Talreja
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -192,13 +193,13 @@ namespace hpx::threads::policies {
                 debug::dec<>(std::get<1>(rollover_counters_.data_)));
             thread_map_count_.data_ = 0;
             terminated_items_count_.data_ = 0;
-            if (bp_queue_)
+            if (owns_bp_queue())
                 bp_queue_->set_holder(this);
-            if (hp_queue_)
+            if (owns_hp_queue())
                 hp_queue_->set_holder(this);
-            if (np_queue_)
+            if (owns_np_queue())
                 np_queue_->set_holder(this);
-            if (lp_queue_)
+            if (owns_lp_queue())
                 lp_queue_->set_holder(this);
         }
 
@@ -445,14 +446,14 @@ namespace hpx::threads::policies {
                 tq_deb.debug(debug::str<>("create_thread "),
                     queue_data_print(this), "thread_priority::normal",
                     "run_now ", data.run_now);
-                return np_queue_->create_thread(data, tid, ec);
+                return np_queue_->create_thread(data, tid, thread_num, ec);
             }
             else if (bp_queue_ && (data.priority == thread_priority::bound))
             {
                 tq_deb.debug(debug::str<>("create_thread "),
                     queue_data_print(this), "thread_priority::bound",
                     "run_now ", data.run_now);
-                return bp_queue_->create_thread(data, tid, ec);
+                return bp_queue_->create_thread(data, tid, thread_num, ec);
             }
             else if (hp_queue_ &&
                 (data.priority == thread_priority::high ||
@@ -467,14 +468,14 @@ namespace hpx::threads::policies {
                 tq_deb.debug(debug::str<>("create_thread "),
                     queue_data_print(this), "thread_priority::high", "run_now ",
                     data.run_now);
-                return hp_queue_->create_thread(data, tid, ec);
+                return hp_queue_->create_thread(data, tid, thread_num, ec);
             }
             else if (lp_queue_ && (data.priority == thread_priority::low))
             {
                 tq_deb.debug(debug::str<>("create_thread "),
                     queue_data_print(this), "thread_priority::low", "run_now ",
                     data.run_now);
-                return lp_queue_->create_thread(data, tid, ec);
+                return lp_queue_->create_thread(data, tid, thread_num, ec);
             }
 
             tq_deb.error(debug::str<>("create_thread "), "priority?");
@@ -504,13 +505,11 @@ namespace hpx::threads::policies {
         }
 
         // ----------------------------------------------------------------
-        // Not thread safe. This function must only be called by the thread that
-        // owns the holder object. Creates a thread_data object using
-        // information from thread_init_data . If a thread data object is
-        // available on one of the heaps it will use that, otherwise a new one
-        // is created. Heaps store data ordered/sorted by stack size
-        void create_thread_object(
-            threads::thread_id_ref_type& tid, threads::thread_init_data& data)
+        // Only the owning worker may access the free lists. Other callers
+        // allocate a new thread object instead. Heaps store data by stack size.
+        void create_thread_object(threads::thread_id_ref_type& tid,
+            threads::thread_init_data& data,
+            [[maybe_unused]] bool const use_free_list)
         {
             HPX_ASSERT(data.stacksize >= thread_stacksize::minimal);
             HPX_ASSERT(data.stacksize <= thread_stacksize::maximal);
@@ -552,6 +551,12 @@ namespace hpx::threads::policies {
 
             // ASAN gets confused by reusing threads/stacks
 #if !defined(HPX_HAVE_ADDRESS_SANITIZER)
+            if (!use_free_list)
+            {
+                tid = allocate_thread_object(data, stacksize);
+                return;
+            }
+
             // Prefer recycled thread objects. If the heap is empty, first
             // move terminated threads back onto it so recursive async /
             // fork-join trees do not malloc under load.
@@ -593,25 +598,36 @@ namespace hpx::threads::policies {
             std::ptrdiff_t const stacksize =
                 get_thread_id_data(tid)->get_stack_size();
 
+            auto const cache_or_destroy = [&](thread_heap_type& heap) {
+                if (heap.size() < parameters_.cached_threads_count_)
+                {
+                    heap.push_front(tid);
+                }
+                else
+                {
+                    deallocate(get_thread_id_data(tid));
+                }
+            };
+
             if (stacksize == parameters_.small_stacksize_)
             {
-                thread_heap_small_.push_front(tid);
+                cache_or_destroy(thread_heap_small_);
             }
             else if (stacksize == parameters_.medium_stacksize_)
             {
-                thread_heap_medium_.push_front(tid);
+                cache_or_destroy(thread_heap_medium_);
             }
             else if (stacksize == parameters_.large_stacksize_)
             {
-                thread_heap_large_.push_front(tid);
+                cache_or_destroy(thread_heap_large_);
             }
             else if (stacksize == parameters_.huge_stacksize_)
             {
-                thread_heap_huge_.push_front(tid);
+                cache_or_destroy(thread_heap_huge_);
             }
             else if (stacksize == parameters_.nostack_stacksize_)
             {
-                thread_heap_nostack_.push_front(tid);
+                cache_or_destroy(thread_heap_nostack_);
             }
             else
             {
@@ -684,7 +700,8 @@ namespace hpx::threads::policies {
         {
             // only take from BP queue if we are not stealing
             if (!stealing && bp_queue_ &&
-                bp_queue_->get_next_thread(thrd, stealing, check_new))
+                bp_queue_->get_next_thread(
+                    thrd, stealing, check_new && owns_bp_queue()))
             {
                 tq_deb.debug(debug::str<>("next_thread_BP"),
                     queue_data_print(this),
@@ -694,7 +711,8 @@ namespace hpx::threads::policies {
             }
 
             if (hp_queue_ &&
-                hp_queue_->get_next_thread(thrd, stealing, check_new))
+                hp_queue_->get_next_thread(
+                    thrd, stealing, check_new, !stealing && owns_hp_queue()))
             {
                 tq_deb.debug(debug::str<>("get_next_thread_HP"),
                     queue_data_print(this),

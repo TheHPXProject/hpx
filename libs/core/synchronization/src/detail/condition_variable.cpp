@@ -1,5 +1,6 @@
 //  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c) 2013-2015 Agustin Berge
+//  Copyright (c) 2026 Divyanshi Talreja
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -130,7 +131,7 @@ namespace hpx::lcos::local::detail {
             if (id)
             {
                 auto const* thrd = threads::get_thread_id_data(id);
-                bool suspended = false;
+                threads::thread_state suspended_state;
                 util::yield_while(
                     [&] {
                         // The waiter returned from its suspension on its own.
@@ -143,17 +144,30 @@ namespace hpx::lcos::local::detail {
                         }
 
                         // pending: the waiter runs again without this wakeup
-                        auto const state = thrd->get_state().state();
-                        suspended =
-                            state == threads::thread_schedule_state::suspended;
-                        return state == threads::thread_schedule_state::active;
+                        auto const state = thrd->get_state();
+                        if (state.state() ==
+                            threads::thread_schedule_state::suspended)
+                        {
+                            suspended_state = state;
+                        }
+                        return state.state() ==
+                            threads::thread_schedule_state::active;
                     },
                     "condition_variable::resume_waiter", false);
 
-                if (!suspended)
+                if (suspended_state.state() !=
+                    threads::thread_schedule_state::suspended)
                 {
                     return;
                 }
+
+                // A timeout may have ended this suspension since it was
+                // observed. Do not let this notification wake a later wait.
+                threads::detail::set_suspended_thread_state(id,
+                    suspended_state.tag(),
+                    threads::thread_schedule_state::pending,
+                    threads::thread_restart_state::signaled, priority);
+                return;
             }
 
             ctx.resume(priority);

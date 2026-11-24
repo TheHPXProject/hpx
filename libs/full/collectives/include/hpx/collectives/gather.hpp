@@ -295,7 +295,8 @@ namespace hpx { namespace collectives {
     ///             directly returns the result.
     ///
     template <typename T>
-    decltype(auto) gather_here(hpx::launch::sync_policy, communicator comm,
+    std::vector<std::decay_t<T>>
+    gather_here(hpx::launch::sync_policy, communicator comm,
         T&& result, generation_arg generation,
         this_site_arg this_site = this_site_arg());
 
@@ -550,7 +551,8 @@ namespace hpx::collectives {
                 return result;
             };
 
-            return fid.then(hpx::launch::sync, HPX_MOVE(gather_here_data));
+            return detail::then_on_communicator(
+                fid, HPX_MOVE(gather_here_data));
         }
     }    // namespace detail
 
@@ -746,7 +748,8 @@ namespace hpx::collectives {
                 return result;
             };
 
-            return fid.then(hpx::launch::sync, HPX_MOVE(gather_there_data));
+            return detail::then_on_communicator(
+                fid, HPX_MOVE(gather_there_data));
         }
     }    // namespace detail
 

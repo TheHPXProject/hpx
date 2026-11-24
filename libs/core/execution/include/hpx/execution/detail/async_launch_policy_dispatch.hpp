@@ -57,6 +57,9 @@ namespace hpx::detail {
     }
 
     ///////////////////////////////////////////////////////////////////////////
+    // With HPX_HAVE_THREAD_DESCRIPTION_FULL desc can hold an address, not a
+    // name. A task created here is then described by that address, and a
+    // function run on the calling task is named <unknown> for the call.
     template <>
     struct async_launch_policy_dispatch<hpx::launch::sync_policy>
     {
@@ -76,7 +79,8 @@ namespace hpx::detail {
         call(Policy&&, hpx::threads::thread_description const& desc, F&& f,
             Ts&&... ts)
         {
-            auto ann = hpx::scoped_annotation(desc.get_description());
+            auto ann = hpx::scoped_annotation(
+                threads::detail::get_description_or(desc, "<unknown>"));
             return call_sync(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
         }
 
@@ -87,7 +91,8 @@ namespace hpx::detail {
         call(Policy&&, hpx::threads::thread_description const& desc,
             threads::thread_pool_base*, F&& f, Ts&&... ts)
         {
-            auto ann = hpx::scoped_annotation(desc.get_description());
+            auto ann = hpx::scoped_annotation(
+                threads::detail::get_description_or(desc, "<unknown>"));
             return call_sync(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
         }
     };
@@ -117,8 +122,8 @@ namespace hpx::detail {
             F&& f, Ts&&... ts)
         {
             return call(HPX_FORWARD(Policy, policy),
-                hpx::annotated_function(
-                    HPX_FORWARD(F, f), desc.get_description()),
+                hpx::annotated_function(HPX_FORWARD(F, f),
+                    threads::detail::get_description_or(desc, "<unknown>")),
                 HPX_FORWARD(Ts, ts)...);
         }
 
@@ -130,8 +135,8 @@ namespace hpx::detail {
             threads::thread_pool_base*, F&& f, Ts&&... ts)
         {
             return call(HPX_FORWARD(Policy, policy),
-                hpx::annotated_function(
-                    HPX_FORWARD(F, f), desc.get_description()),
+                hpx::annotated_function(HPX_FORWARD(F, f),
+                    threads::detail::get_description_or(desc, "<unknown>")),
                 HPX_FORWARD(Ts, ts)...);
         }
     };
@@ -159,8 +164,9 @@ namespace hpx::detail {
             lcos::local::futures_factory<result_type()> p(
                 util::deferred_call(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...));
 
-            if (threads::thread_id_ref_type tid =
-                    p.post(pool, desc.get_description(), HPX_MOVE(policy)))
+            if (threads::thread_id_ref_type tid = p.post(pool,
+                    threads::detail::get_description_or(desc, nullptr),
+                    HPX_MOVE(policy)))
             {
                 // keep thread alive, if needed
                 auto result = p.get_future();
@@ -204,8 +210,9 @@ namespace hpx::detail {
             lcos::local::futures_factory<result_type()> p(
                 util::deferred_call(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...));
 
-            if (threads::thread_id_ref_type tid =
-                    p.post(pool, desc.get_description(), HPX_MOVE(policy)))
+            if (threads::thread_id_ref_type tid = p.post(pool,
+                    threads::detail::get_description_or(desc, nullptr),
+                    HPX_MOVE(policy)))
             {
                 auto runs_as_child = hint.runs_as_child_mode();
                 if (runs_as_child ==
@@ -284,13 +291,13 @@ namespace hpx::detail {
             lcos::local::futures_factory<result_type()> p(
                 util::deferred_call(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...));
 
-            threads::thread_id_ref_type tid =
-                p.post(pool, desc.get_description(), policy);
+            threads::thread_id_ref_type tid = p.post(pool,
+                threads::detail::get_description_or(desc, nullptr), policy);
 
             // make sure this thread is executed last
             if (tid)
             {
-                run_forked_thread(tid, desc.get_description());
+                run_forked_thread(tid, desc);
 
                 auto runs_as_child = hint.runs_as_child_mode();
                 if (runs_as_child ==

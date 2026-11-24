@@ -13,6 +13,7 @@ set(tests
     schedule_hint_none_stale_queue_6978
     scheduler_mode_overrides
     shared_priority_queue_external_cleanup
+    shared_priority_queue_thread_creation
     steal_pending_early
     steal_staged_early
     thread_queue_get_next_threads
@@ -20,9 +21,16 @@ set(tests
 )
 
 if(HPX_WITH_WORK_REQUESTING_SCHEDULERS)
-  list(APPEND tests workrequesting_random_victim workrequesting_steal
-       workrequesting_scheduler_mode workrequesting_suspend_resume
+  list(
+    APPEND
+    tests
+    workrequesting_pending_boost
+    workrequesting_random_victim
+    workrequesting_steal
+    workrequesting_scheduler_mode
+    workrequesting_suspend_resume
   )
+  set(workrequesting_pending_boost_PARAMETERS THREADS_PER_LOCALITY 1)
 endif()
 
 set(min_tasks_to_steal_staged_PARAMETERS THREADS_PER_LOCALITY 4)
@@ -31,6 +39,7 @@ set(queue_length_all_threads_PARAMETERS THREADS_PER_LOCALITY 1)
 # with a single worker the task's last reference is dropped by the external
 # thread, see the test
 set(shared_priority_queue_external_cleanup_PARAMETERS THREADS_PER_LOCALITY 1)
+set(shared_priority_queue_thread_creation_PARAMETERS THREADS_PER_LOCALITY 2)
 
 set(steal_staged_early_PARAMETERS THREADS_PER_LOCALITY 4)
 set(steal_pending_early_PARAMETERS THREADS_PER_LOCALITY 4)
@@ -52,6 +61,22 @@ foreach(test ${tests})
 
   add_hpx_unit_test("modules.schedulers" ${test} ${${test}_PARAMETERS})
 endforeach()
+
+add_hpx_unit_test(
+  "modules.schedulers" shared_priority_queue_thread_creation_shared_queue
+  EXECUTABLE shared_priority_queue_thread_creation
+  PSEUDO_DEPS_NAME shared_priority_queue_thread_creation
+  THREADS_PER_LOCALITY 2
+  ARGS --shared-normal-queue --hpx:ini=hpx.thread_queue.cached_threads_count=8
+)
+
+add_hpx_unit_test(
+  "modules.schedulers" shared_priority_queue_thread_creation_shared_high_queue
+  EXECUTABLE shared_priority_queue_thread_creation
+  PSEUDO_DEPS_NAME shared_priority_queue_thread_creation
+  THREADS_PER_LOCALITY 2
+  ARGS --shared-high-queue --hpx:ini=hpx.thread_queue.cached_threads_count=8
+)
 
 # with a single worker nobody else could convert the staged tasks
 add_hpx_unit_test(
