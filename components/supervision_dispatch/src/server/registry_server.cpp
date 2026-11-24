@@ -87,6 +87,9 @@ namespace {
     // See hpx::supervision::testing::set_lifecycle_observer_hook_for_testing().
     testing_hook lifecycle_observer_hook;
 
+    // See hpx::supervision::testing::set_evict_peer_wait_hook_for_testing().
+    testing_hook evict_peer_wait_hook;
+
     // See
     // hpx::supervision::testing::evict_peers_waiting_for_mirrors_for_testing().
     std::atomic<std::size_t> evict_peers_waiting_for_mirrors{0};
@@ -137,6 +140,11 @@ namespace hpx::supervision::testing {
     void set_lifecycle_observer_hook_for_testing(hpx::function<void()> hook)
     {
         lifecycle_observer_hook.set(HPX_MOVE(hook));
+    }
+
+    void set_evict_peer_wait_hook_for_testing(hpx::function<void()> hook)
+    {
+        evict_peer_wait_hook.set(HPX_MOVE(hook));
     }
 
     std::size_t evict_peers_waiting_for_mirrors_for_testing()
@@ -810,6 +818,13 @@ namespace hpx::supervision::server {
         {
             std::unique_lock l(mtx_);
 
+            // The generation of the entry this call evicts. leave() passes
+            // any_generation and matches the entry by join_epoch only; it is
+            // bound to the entry it matched before waiting below, so it never
+            // removes an entry the peer re-joined with in the meantime, even
+            // at the same join_epoch.
+            std::uint64_t matched_generation = generation;
+
             auto it = peers_.end();
             for (;;)
             {
@@ -822,9 +837,23 @@ namespace hpx::supervision::server {
                 // this deferred task ran, possibly at the same join_epoch);
                 // only evict it if it is still the very entry this notification
                 // was published for.
-                if (it == peers_.end() || it->second.join_epoch != join_epoch ||
-                    (generation != any_generation &&
-                        it->second.generation != generation))
+                if (it == peers_.end() ||
+                    (matched_generation != any_generation &&
+                        it->second.generation != matched_generation))
+                {
+                    return;
+                }
+
+                // A terminal notification only evicts the lifecycle it was
+                // published for, so it backs off once the entry moved on to a
+                // newer epoch, also while it waited below. A leave() checks
+                // join_epoch only when it first finds the entry: once matched,
+                // it removes that entry even if a mirroring moved join_epoch
+                // forward while it waited, e.g. for fan_out_join() retracting
+                // a timed-out join.
+                bool const check_epoch = generation != any_generation ||
+                    matched_generation == any_generation;
+                if (check_epoch && it->second.join_epoch != join_epoch)
                 {
                     return;
                 }
@@ -849,8 +878,21 @@ namespace hpx::supervision::server {
                     break;
                 }
 
+                matched_generation = it->second.generation;
+
                 ++evict_peers_waiting_for_mirrors;
                 cond_.wait(l);
+
+                // The loop looks the entry up again, so the lock can be
+                // released while the testing hook runs. Only count the wait
+                // as finished once the lock is held again: from there it is
+                // held until this call decided below or waits again, so a test
+                // that sees the count drop and then takes the lock sees that
+                // decision.
+                l.unlock();
+                evict_peer_wait_hook.run();
+                l.lock();
+
                 --evict_peers_waiting_for_mirrors;
             }
 

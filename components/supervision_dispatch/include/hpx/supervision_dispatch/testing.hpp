@@ -15,6 +15,7 @@
 /// \page hpx::supervision::testing::set_lifecycle_mirror_hook_for_testing
 /// \page hpx::supervision::testing::set_evict_peer_hook_for_testing
 /// \page hpx::supervision::testing::set_lifecycle_observer_hook_for_testing
+/// \page hpx::supervision::testing::set_evict_peer_wait_hook_for_testing
 /// \page hpx::supervision::testing::evict_peers_waiting_for_mirrors_for_testing
 /// \headerfile hpx/supervision_dispatch.hpp
 
@@ -150,10 +151,25 @@ namespace hpx::supervision::testing {
     HPX_SUPERVISION_DISPATCH_EXPORT void
     set_lifecycle_observer_hook_for_testing(hpx::function<void()> hook);
 
+    /// Installs \p hook to be called by a registry::evict_peer() on this
+    /// locality each time it wakes up from waiting for the lifecycle
+    /// notifications being mirrored for the peer's entry to finish, before it
+    /// looks at the entry again. Pass an empty function to remove the hook.
+    /// Not part of the public dispatch API - exists only so tests can hold a
+    /// waiting eviction back deterministically.
+    ///
+    /// \param hook  The function to call, with no lock held.
+    HPX_SUPERVISION_DISPATCH_EXPORT void set_evict_peer_wait_hook_for_testing(
+        hpx::function<void()> hook);
+
     /// Returns the number of registry::evict_peer() calls on this locality
     /// currently waiting for the lifecycle notifications being mirrored for
-    /// the peer's entry to finish. Not part of the public dispatch API -
-    /// exists only so tests can tell that an eviction has reached that wait.
+    /// the peer's entry to finish, including one held by the hook installed
+    /// with set_evict_peer_wait_hook_for_testing(). A call stops counting
+    /// with the registry's lock held, and keeps it until it decided whether
+    /// to remove the entry or waits again. Not part of the public dispatch
+    /// API - exists only so tests can tell that an eviction has reached that
+    /// wait.
     HPX_SUPERVISION_DISPATCH_EXPORT std::size_t
     evict_peers_waiting_for_mirrors_for_testing();
 }    // namespace hpx::supervision::testing
