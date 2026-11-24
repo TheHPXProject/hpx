@@ -1677,7 +1677,7 @@ namespace hpx::segmented {
 
     HPX_CXX_EXPORT template <typename ExPolicy, typename Iter1, typename Iter2,
         typename Iter3, typename Comp = hpx::parallel::detail::less>
-        requires(hpx::is_execution_policy_v<ExPolicy> &&
+        requires(hpx::execution_policy<ExPolicy> &&
             detail::segmented_merge_iterator<Iter1> &&
             detail::segmented_merge_iterator<Iter2> &&
             detail::segmented_merge_iterator<Iter3>)

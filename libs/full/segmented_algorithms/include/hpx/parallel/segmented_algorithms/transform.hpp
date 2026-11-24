@@ -792,11 +792,9 @@ namespace hpx::segmented {
 
     HPX_CXX_EXPORT template <typename ExPolicy, typename SegIter,
         typename OutIter, typename F>
-        requires(hpx::is_execution_policy_v<ExPolicy> &&
-            hpx::traits::is_iterator_v<SegIter> &&
-            hpx::traits::is_segmented_iterator_v<SegIter> &&
-            hpx::traits::is_iterator_v<OutIter> &&
-            hpx::traits::is_segmented_iterator_v<OutIter>)
+        requires(hpx::execution_policy<ExPolicy> &&
+            hpx::segmented_iterator<SegIter> &&
+            hpx::segmented_iterator<OutIter>)
     hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
         hpx::parallel::util::in_out_result<SegIter, OutIter>>
     hpx_invoke(hpx::transform_t, ExPolicy&& policy, SegIter first, SegIter last,
@@ -874,13 +872,10 @@ namespace hpx::segmented {
 
     HPX_CXX_EXPORT template <typename ExPolicy, typename InIter1,
         typename InIter2, typename OutIter, typename F>
-        requires(hpx::is_execution_policy_v<ExPolicy> &&
-            hpx::traits::is_iterator_v<InIter1> &&
-            hpx::traits::is_segmented_iterator_v<InIter1> &&
-            hpx::traits::is_iterator_v<InIter2> &&
-            hpx::traits::is_segmented_iterator_v<InIter2> &&
-            hpx::traits::is_iterator_v<OutIter> &&
-            hpx::traits::is_segmented_iterator_v<OutIter>)
+        requires(hpx::execution_policy<ExPolicy> &&
+            hpx::segmented_iterator<InIter1> &&
+            hpx::segmented_iterator<InIter2> &&
+            hpx::segmented_iterator<OutIter>)
     hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
         hpx::parallel::util::in_in_out_result<InIter1, InIter2, OutIter>>
     hpx_invoke(hpx::transform_t, ExPolicy&& policy, InIter1 first1,
@@ -964,13 +959,10 @@ namespace hpx::segmented {
 
     HPX_CXX_EXPORT template <typename ExPolicy, typename InIter1,
         typename InIter2, typename OutIter, typename F>
-        requires(hpx::is_execution_policy_v<ExPolicy> &&
-            hpx::traits::is_iterator_v<InIter1> &&
-            hpx::traits::is_segmented_iterator_v<InIter1> &&
-            hpx::traits::is_iterator_v<InIter2> &&
-            hpx::traits::is_segmented_iterator_v<InIter2> &&
-            hpx::traits::is_iterator_v<OutIter> &&
-            hpx::traits::is_segmented_iterator_v<OutIter>)
+        requires(hpx::execution_policy<ExPolicy> &&
+            hpx::segmented_iterator<InIter1> &&
+            hpx::segmented_iterator<InIter2> &&
+            hpx::segmented_iterator<OutIter>)
     hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
         hpx::parallel::util::in_in_out_result<InIter1, InIter2, OutIter>>
     hpx_invoke(hpx::transform_t, ExPolicy&& policy, InIter1 first1,
