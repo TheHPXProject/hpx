@@ -1052,14 +1052,13 @@ namespace hpx::parcelset {
     private:
         // Send one parcel with one encode pass and no preprocessing pass.
         // Returns false, with p and f not changed, if the parcel must take
-        // the usual path: the destination can't take it now, parcels wait in
-        // a queue, the parcel has a serialization filter, or a value in it
-        // needs the preprocessing pass.
+        // the usual path: the destination can't take it now, the parcel has
+        // a serialization filter, or a value in it needs the preprocessing
+        // pass.
         bool try_send_fast(
             locality const& dest, parcel& p, write_handler_type& f)
         {
-            if (!can_send_immediate_impl(dest) ||
-                num_parcel_destinations_.load(std::memory_order_relaxed) != 0)
+            if (!can_send_immediate_impl(dest))
             {
                 return false;
             }

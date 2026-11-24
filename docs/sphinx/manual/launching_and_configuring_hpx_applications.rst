@@ -804,8 +804,8 @@ The ``hpx.parcel`` configuration section
      * This property defines whether a parcelport that sends parcels
        immediately (MPI, LCI or LCW with ``sendimm=1`` in its section)
        encodes a :term:`parcel` in one pass, without the preprocessing pass,
-       if the destination can take the parcel now, no parcels are queued,
-       and the parcel has no serialization filter.
+       if the destination can take the parcel now and the parcel has no
+       serialization filter.
        A parcel with a value that needs the preprocessing pass (a managed
        ``id_type``, a future or ``task_group`` that is not ready) stops that
        encode and takes the usual path; the work of the stopped encode is
