@@ -430,9 +430,14 @@ namespace hpx::parallel::detail {
     }
 
     // handle the case of different localities
-    HPX_CXX_EXPORT template <typename Algo>
+    //
+    // ConstInput tells whether the second range has const elements: the
+    // comparison then sees the captured values as const as well, as it does
+    // when both ranges are on the same locality
+    HPX_CXX_EXPORT template <typename Algo, bool ConstInput = false>
     struct captured_comparison
-      : algorithm<captured_comparison<Algo>, typename Algo::result_type>
+      : algorithm<captured_comparison<Algo, ConstInput>,
+            typename Algo::result_type>
     {
         constexpr captured_comparison() noexcept
           : algorithm<captured_comparison, typename Algo::result_type>(
@@ -448,7 +453,7 @@ namespace hpx::parallel::detail {
             Iterator first, Iterator last, Values values, Pred pred)
         {
             return algo.call2(policy(hpx::execution::non_task),
-                std::true_type(), first, last, values.begin(), pred);
+                std::true_type(), first, last, begin(values), pred);
         }
 
         template <typename ExPolicy, typename Iterator, typename Values,
@@ -457,7 +462,17 @@ namespace hpx::parallel::detail {
             Iterator first, Iterator last, Values values, Pred pred)
         {
             return algo.call2(policy(hpx::execution::non_task),
-                std::false_type(), first, last, values.begin(), pred);
+                std::false_type(), first, last, begin(values), pred);
+        }
+
+    private:
+        template <typename Values>
+        static auto begin(Values& values) noexcept
+        {
+            if constexpr (ConstInput)
+                return values.cbegin();
+            else
+                return values.begin();
         }
     };
 
@@ -477,6 +492,12 @@ namespace hpx::parallel::detail {
 
         // different localities
         using value_type = typename std::iterator_traits<Iterator2>::value_type;
+        using raw_iterator2 =
+            typename hpx::traits::segmented_local_iterator_traits<
+                Iterator2>::local_raw_iterator;
+        constexpr bool const_input = std::is_const_v<std::remove_reference_t<
+            typename std::iterator_traits<raw_iterator2>::reference>>;
+
         std::vector<indexed_partition_range<Iterator2>> ranges = {{0,
             {id2, first2, std::next(first2, std::distance(first1, last1))}}};
 
@@ -489,8 +510,9 @@ namespace hpx::parallel::detail {
                 auto captured = get_capture_result<ExPolicy>(HPX_MOVE(ready));
 
                 // compare A's chunk with captured values
-                return dispatch_async(id1, captured_comparison<Algo>(),
-                    HPX_MOVE(policy), is_seq, HPX_MOVE(algo), first1, last1,
+                return dispatch_async(id1,
+                    captured_comparison<Algo, const_input>(), HPX_MOVE(policy),
+                    is_seq, HPX_MOVE(algo), first1, last1,
                     HPX_MOVE(captured.values), HPX_MOVE(pred));
             });
     }
