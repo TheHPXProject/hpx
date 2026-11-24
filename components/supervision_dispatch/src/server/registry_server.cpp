@@ -882,13 +882,18 @@ namespace hpx::supervision::server {
 
                 ++evict_peers_waiting_for_mirrors;
                 cond_.wait(l);
-                --evict_peers_waiting_for_mirrors;
 
                 // The loop looks the entry up again, so the lock can be
-                // released while the testing hook runs.
+                // released while the testing hook runs. Only count the wait
+                // as finished once the lock is held again: from there it is
+                // held until this call decided below or waits again, so a test
+                // that sees the count drop and then takes the lock sees that
+                // decision.
                 l.unlock();
                 evict_peer_wait_hook.run();
                 l.lock();
+
+                --evict_peers_waiting_for_mirrors;
             }
 
             lifecycle_observer = it->second.lifecycle_observer;

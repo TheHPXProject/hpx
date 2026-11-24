@@ -164,8 +164,12 @@ namespace hpx::supervision::testing {
 
     /// Returns the number of registry::evict_peer() calls on this locality
     /// currently waiting for the lifecycle notifications being mirrored for
-    /// the peer's entry to finish. Not part of the public dispatch API -
-    /// exists only so tests can tell that an eviction has reached that wait.
+    /// the peer's entry to finish, including one held by the hook installed
+    /// with set_evict_peer_wait_hook_for_testing(). A call stops counting
+    /// with the registry's lock held, and keeps it until it decided whether
+    /// to remove the entry or waits again. Not part of the public dispatch
+    /// API - exists only so tests can tell that an eviction has reached that
+    /// wait.
     HPX_SUPERVISION_DISPATCH_EXPORT std::size_t
     evict_peers_waiting_for_mirrors_for_testing();
 }    // namespace hpx::supervision::testing
