@@ -212,7 +212,17 @@ namespace hpx::parcelset {
         buffer.data_point_.serialization_time_ = timer.elapsed_nanoseconds();
         buffer.data_point_.num_parcels_ = 1;
 #endif
-        p.size() = header_size + archive.bytes_written() - parcel_start;
+        // the preprocessing pass writes the data of zero-copy chunks into
+        // the archive, so it counts in the size
+        std::size_t size = header_size + archive.bytes_written() - parcel_start;
+        for (serialization::serialization_chunk const& c : buffer.chunks_)
+        {
+            if (c.type_ != serialization::chunk_type::chunk_type_index)
+            {
+                size += c.size_;
+            }
+        }
+        p.size() = size;
         p.num_chunks() = buffer.chunks_.size();
         detail::encode_finalize(buffer, archive.bytes_written());
         return true;
