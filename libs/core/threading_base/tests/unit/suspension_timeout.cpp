@@ -20,6 +20,9 @@
 // For each: the timeout wakes the thread, the threads that exist while it
 // waits, and a wake up before the timeout.
 //
+// Some checks hold only if this thread observes before a timer of the check
+// expires. On a loaded machine it may not; such a check then runs again.
+//
 // A thread created suspended to run at a given time (make_ready_future_after,
 // the thread of an interval_timer) waits with the timeout of the suspension
 // it was created in, so it needs no helper threads either.
@@ -65,6 +68,24 @@ namespace {
         }
     }
 
+    // run a check until it observed in time (it returns false if it didn't)
+    template <typename Check>
+    void run_in_time(Check check, char const* name)
+    {
+        for (int attempt = 0; attempt != 10; ++attempt)
+        {
+            if (check())
+                return;
+        }
+        HPX_TEST_MSG(false, name);
+    }
+
+    bool in_time(std::chrono::steady_clock::time_point start,
+        std::chrono::milliseconds timeout)
+    {
+        return std::chrono::steady_clock::now() - start < timeout;
+    }
+
     ///////////////////////////////////////////////////////////////////////////
     // the timeout of a suspension
 
@@ -88,10 +109,11 @@ namespace {
     }
 
     // while a thread sleeps, it is the only additional suspended thread
-    void test_suspension_timeout_threads()
+    bool test_suspension_timeout_threads()
     {
         std::int64_t const before = suspended_threads();
 
+        auto const start = std::chrono::steady_clock::now();
         std::atomic<bool> sleeping(false);
         hpx::future<void> sleeper = hpx::async(hpx::launch::task, [&sleeping] {
             sleeping = true;
@@ -100,21 +122,29 @@ namespace {
 
         wait_for_flag(sleeping);
         hpx::this_thread::sleep_for(std::chrono::milliseconds(50));
+        std::int64_t const suspended = suspended_threads();
+
+        // the sleeper may have woken up already
+        bool const observed = in_time(start, std::chrono::milliseconds(200));
+        sleeper.get();
+        if (!observed)
+            return false;
 
         // this thread sleeps no more, the sleeper does
-        HPX_TEST_EQ(suspended_threads(), before + 1);
-
-        sleeper.get();
+        HPX_TEST_EQ(suspended, before + 1);
+        return true;
     }
 
-    // a timeout whose suspension ended doesn't wake the thread later
-    void test_suspension_timeout_after_notify()
+    // a wait notified before its timeout cancels the timeout, which then
+    // doesn't wake the thread later
+    bool test_suspension_timeout_after_notify()
     {
         hpx::mutex mtx;
         hpx::condition_variable cv;
         bool notified = false;
 
         std::atomic<bool> waiting(false);
+        std::atomic<bool> notified_in_time(false);
         std::atomic<bool> suspended(false);
         std::atomic<thread_restart_state> second(thread_restart_state::unknown);
         hpx::threads::thread_id_type waiter_id;
@@ -124,8 +154,8 @@ namespace {
             {
                 std::unique_lock<hpx::mutex> lk(mtx);
                 waiting = true;
-                HPX_TEST(cv.wait_for(lk, std::chrono::milliseconds(50),
-                    [&] { return notified; }));
+                notified_in_time = cv.wait_for(lk,
+                    std::chrono::milliseconds(50), [&] { return notified; });
             }
 
             // the timeout of 50 ms of the wait above must not end this
@@ -144,6 +174,58 @@ namespace {
         wait_for_flag(suspended);
 
         // well after the timeout of the first wait
+        hpx::this_thread::sleep_for(std::chrono::milliseconds(200));
+        HPX_TEST(second.load() == thread_restart_state::unknown);
+
+        hpx::threads::set_thread_state(waiter_id,
+            thread_schedule_state::pending, thread_restart_state::signaled);
+        waiter.get();
+        HPX_TEST(second.load() == thread_restart_state::signaled);
+
+        // the notification may have come after the timeout
+        return notified_in_time.load();
+    }
+
+    // a timeout that wasn't cancelled and fires after its suspension has
+    // ended doesn't wake the thread in a later suspension
+    void test_suspension_timeout_after_end()
+    {
+        std::atomic<bool> suspended(false);
+        std::atomic<bool> suspended_again(false);
+        std::atomic<thread_restart_state> second(thread_restart_state::unknown);
+        hpx::threads::thread_id_type waiter_id;
+
+        hpx::future<void> waiter = hpx::async(hpx::launch::task, [&] {
+            waiter_id = hpx::threads::get_self_id();
+
+            // the tag of the suspension below, which ends before the timeout
+            // is set
+            std::int64_t const suspension_tag =
+                hpx::threads::get_self_id_data()->get_state().tag() + 1;
+
+            suspended = true;
+            HPX_TEST(
+                hpx::this_thread::suspend(thread_schedule_state::suspended) ==
+                thread_restart_state::signaled);
+
+            hpx::threads::detail::suspension_timeout const timeout =
+                hpx::threads::detail::suspension_timeout::set(
+                    after(std::chrono::milliseconds(10)), waiter_id,
+                    suspension_tag, hpx::threads::thread_priority::boost,
+                    hpx::throws);
+
+            suspended_again = true;
+            second =
+                hpx::this_thread::suspend(thread_schedule_state::suspended);
+        });
+
+        wait_for_flag(suspended);
+        hpx::threads::set_thread_state(waiter_id,
+            thread_schedule_state::pending, thread_restart_state::signaled);
+
+        wait_for_flag(suspended_again);
+
+        // well after the timeout
         hpx::this_thread::sleep_for(std::chrono::milliseconds(200));
         HPX_TEST(second.load() == thread_restart_state::unknown);
 
@@ -170,10 +252,11 @@ namespace {
 
     // while a thread waits for its timer, the timer's two helper threads
     // (at_timer and wake_timer) are suspended as well
-    void test_timer_threads()
+    bool test_timer_threads()
     {
         std::int64_t const before = suspended_threads();
 
+        auto const start = std::chrono::steady_clock::now();
         std::atomic<bool> started(false);
         std::atomic<bool> waiting(false);
         hpx::future<void> sleeper =
@@ -189,10 +272,16 @@ namespace {
         wait_for_flag(waiting);
         wait_for_flag(started);
         hpx::this_thread::sleep_for(std::chrono::milliseconds(50));
+        std::int64_t const suspended = suspended_threads();
 
-        HPX_TEST_EQ(suspended_threads(), before + 3);
-
+        // the timer may have fired already
+        bool const observed = in_time(start, std::chrono::milliseconds(200));
         sleeper.get();
+        if (!observed)
+            return false;
+
+        HPX_TEST_EQ(suspended, before + 3);
+        return true;
     }
 
     // a thread woken before its timer aborts the timer, which then doesn't
@@ -248,7 +337,7 @@ namespace {
     // threads created suspended to run at a given time
 
     // a future that becomes ready after a time: only its thread waits
-    void test_ready_future_after()
+    bool test_ready_future_after()
     {
         std::int64_t const before = suspended_threads();
 
@@ -257,12 +346,21 @@ namespace {
             hpx::make_ready_future_after(std::chrono::milliseconds(200), 42);
 
         hpx::this_thread::sleep_for(std::chrono::milliseconds(50));
-        HPX_TEST(!f.is_ready());
-        HPX_TEST_EQ(suspended_threads(), before + 1);
+        bool const ready = f.is_ready();
+        std::int64_t const suspended = suspended_threads();
+
+        // the future may be ready already
+        bool const observed = in_time(start, std::chrono::milliseconds(200));
 
         HPX_TEST_EQ(f.get(), 42);
         HPX_TEST(std::chrono::steady_clock::now() - start >=
             std::chrono::milliseconds(200));
+        if (!observed)
+            return false;
+
+        HPX_TEST(!ready);
+        HPX_TEST_EQ(suspended, before + 1);
+        return true;
     }
 
     // an interval timer runs its function every interval until it is
@@ -297,14 +395,17 @@ namespace {
 int hpx_main()
 {
     test_suspension_timeout();
-    test_suspension_timeout_threads();
-    test_suspension_timeout_after_notify();
+    run_in_time(
+        test_suspension_timeout_threads, "test_suspension_timeout_threads");
+    run_in_time(test_suspension_timeout_after_notify,
+        "test_suspension_timeout_after_notify");
+    test_suspension_timeout_after_end();
 
     test_timer();
-    test_timer_threads();
+    run_in_time(test_timer_threads, "test_timer_threads");
     test_timer_aborted();
 
-    test_ready_future_after();
+    run_in_time(test_ready_future_after, "test_ready_future_after");
     test_interval_timer();
 
     return hpx::local::finalize();
