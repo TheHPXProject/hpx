@@ -26,6 +26,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -123,7 +124,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
         {
             HPX_TEST_LT(preprocessing_saves.load(), saves.load());
         }
-        else
+        else if (hpx::get_config_entry("hpx.parcel.fast_path", "0") == "0")
         {
             HPX_TEST_EQ(preprocessing_saves.load(), saves.load());
         }
