@@ -4,7 +4,11 @@
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
+#include <hpx/config.hpp>
 #include <hpx/algorithm.hpp>
+#if defined(HPX_HAVE_DATAPAR)
+#include <hpx/execution.hpp>
+#endif
 #include <hpx/init.hpp>
 #include <hpx/modules/testing.hpp>
 #include <hpx/numeric.hpp>
@@ -54,7 +58,13 @@ void measureScanAlgorithms()
 
         auto const NUM_ITERATIONS = 5;
 
+#if defined(OUTPUT_TO_CSV)
+#if defined(HPX_HAVE_DATAPAR)
+        std::vector<std::array<double, 5>> data;
+#else
         std::vector<std::array<double, 3>> data;
+#endif
+#endif
 
         for (std::size_t s = start; s <= till; s *= 2)
         {
@@ -101,7 +111,7 @@ void measureScanAlgorithms()
                 auto end1 = std::chrono::high_resolution_clock::now();
 
                 // don't consider first 5 iterations
-                if (NUM_ITERATIONS < 5)
+                if (i < 5)
                 {
                     continue;
                 }
@@ -150,7 +160,7 @@ void measureScanAlgorithms()
                 auto end2 = std::chrono::high_resolution_clock::now();
 
                 // don't consider first 5 iterations
-                if (NUM_ITERATIONS < 5)
+                if (i < 5)
                 {
                     continue;
                 }
@@ -162,15 +172,106 @@ void measureScanAlgorithms()
                 parTime += time_span2.count();
             }
 
+#if defined(HPX_HAVE_DATAPAR)
+            double simdTime = 0;
+            double parSimdTime = 0;
+
+            if (alg == (int) ALGORITHM::INCLUSIVE_SCAN ||
+                alg == (int) ALGORITHM::EXCLUSIVE_SCAN)
+            {
+                for (int i = 0; i < NUM_ITERATIONS + 5; i++)
+                {
+                    std::vector<int> res2(s);
+                    auto t3 = std::chrono::high_resolution_clock::now();
+                    switch ((ALGORITHM) alg)
+                    {
+                    case ALGORITHM::INCLUSIVE_SCAN:
+                        hpx::inclusive_scan(hpx::execution::simd, arr.begin(),
+                            arr.end(), res2.begin(), std::plus<int>(), 0);
+                        break;
+                    case ALGORITHM::EXCLUSIVE_SCAN:
+                        hpx::exclusive_scan(hpx::execution::simd, arr.begin(),
+                            arr.end(), res2.begin(), 10, std::plus<int>{});
+                        break;
+                    default:
+                        break;
+                    };
+                    auto end3 = std::chrono::high_resolution_clock::now();
+
+                    // don't consider first 5 iterations
+                    if (i < 5)
+                    {
+                        continue;
+                    }
+
+                    std::chrono::duration<double> time_span3 =
+                        std::chrono::duration_cast<
+                            std::chrono::duration<double>>(end3 - t3);
+
+                    simdTime += time_span3.count();
+                }
+
+                for (int i = 0; i < NUM_ITERATIONS + 5; i++)
+                {
+                    std::vector<int> res3(s);
+                    auto t4 = std::chrono::high_resolution_clock::now();
+                    switch ((ALGORITHM) alg)
+                    {
+                    case ALGORITHM::INCLUSIVE_SCAN:
+                        hpx::inclusive_scan(hpx::execution::par_simd,
+                            arr.begin(), arr.end(), res3.begin(),
+                            std::plus<int>(), 0);
+                        break;
+                    case ALGORITHM::EXCLUSIVE_SCAN:
+                        hpx::exclusive_scan(hpx::execution::par_simd,
+                            arr.begin(), arr.end(), res3.begin(), 10,
+                            std::plus<int>{});
+                        break;
+                    default:
+                        break;
+                    };
+                    auto end4 = std::chrono::high_resolution_clock::now();
+
+                    // don't consider first 5 iterations
+                    if (i < 5)
+                    {
+                        continue;
+                    }
+
+                    std::chrono::duration<double> time_span4 =
+                        std::chrono::duration_cast<
+                            std::chrono::duration<double>>(end4 - t4);
+
+                    parSimdTime += time_span4.count();
+                }
+
+                simdTime /= NUM_ITERATIONS;
+                parSimdTime /= NUM_ITERATIONS;
+            }
+#endif
+
             seqTime /= NUM_ITERATIONS;
             parTime /= NUM_ITERATIONS;
 
 #if defined(OUTPUT_TO_CSV)
+#if defined(HPX_HAVE_DATAPAR)
+            data.push_back(std::array<double, 5>{
+                (double) s, seqTime, parTime, simdTime, parSimdTime});
+#else
             data.push_back(std::array<double, 3>{(double) s, seqTime, parTime});
+#endif
 #else
             std::cout << "N : " << s << '\n';
             std::cout << "SEQ: " << seqTime << '\n';
-            std::cout << "PAR: " << parTime << "\n\n";
+            std::cout << "PAR: " << parTime << '\n';
+#if defined(HPX_HAVE_DATAPAR)
+            if (simdTime > 0)
+            {
+                std::cout << "SIMD: " << simdTime << '\n';
+                std::cout << "PAR_SIMD: " << parSimdTime << '\n';
+            }
+#endif
+            std::cout << "\n";
 #endif
         }
 
@@ -178,8 +279,12 @@ void measureScanAlgorithms()
         std::ofstream outputFile(filenames[(ALGORITHM) alg]);
         for (auto& d : data)
         {
-            outputFile << d[0] << "," << d[1] << "," << d[2] << ","
-                       << ",\n";
+#if defined(HPX_HAVE_DATAPAR)
+            outputFile << d[0] << "," << d[1] << "," << d[2] << "," << d[3]
+                       << "," << d[4] << "\n";
+#else
+            outputFile << d[0] << "," << d[1] << "," << d[2] << "\n";
+#endif
         }
 #endif
     }
