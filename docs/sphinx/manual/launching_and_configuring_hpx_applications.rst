@@ -443,6 +443,34 @@ The ``hpx.tracing`` configuration section
        the next task creation. Only present on Tracy builds
        (``HPX_WITH_TRACY=ON``).
 
+The ``hpx.hip`` configuration section
+.....................................
+
+.. code-block:: ini
+
+   [hpx.hip]
+   warmup = ${HPX_HIP_WARMUP:current}
+
+.. _ini_hpx_hip:
+
+.. list-table::
+
+   * * Property
+     * Description
+   * * ``hpx.hip.warmup``
+     * The devices whose internal HIP runtime kernels are built when the
+       runtime starts, before ``hpx_main`` runs: ``none``, ``current`` (the
+       default: the device current on the runtime's threads, normally device
+       ``0``) or ``all`` (all visible devices). The HIP runtime builds these
+       kernels on the thread that first uses a device (a kernel launch, a
+       copy, a memset), which needs more stack than |hpx| threads have by
+       default (``hpx.stacks.small_size``); without the warm-up, a task that
+       is the first to use a device crashes with a stack overflow. The
+       warm-up runs as a pre-startup function on the thread that later runs
+       ``hpx_main``, which has a large stack (``hpx.stacks.large_size``), and
+       takes about two seconds per device. Only present when |hpx| was built
+       with HIP.
+
 The ``hpx.threadpools`` configuration section
 .............................................
 
