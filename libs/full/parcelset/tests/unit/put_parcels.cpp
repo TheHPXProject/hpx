@@ -394,6 +394,10 @@ void test_put_parcels_failing_batch_rescheduled(
     });
     os_thread.join();
 
+    // a handler writes got before it makes its future ready: read got only
+    // for the handlers that completed (one still pending after the timeout
+    // may write it at any time)
+    std::vector<bool> completed(num_parcels, false);
     for (std::size_t i = 0; i != num_parcels; ++i)
     {
         HPX_TEST(futures[i].wait_for(std::chrono::seconds(10)) ==
@@ -401,12 +405,17 @@ void test_put_parcels_failing_batch_rescheduled(
         if (futures[i].is_ready())
         {
             futures[i].get();
+            completed[i] = true;
         }
     }
 
     for (std::size_t i = 0; i != num_parcels; ++i)
     {
         HPX_TEST_EQ(states[i]->calls.load(), 1);
+        if (!completed[i])
+        {
+            continue;
+        }
         if (hpx::tolerate_node_faults())
         {
             HPX_TEST_EQ(states[i]->got.value(), expected_tolerated_error());

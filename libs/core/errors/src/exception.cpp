@@ -38,10 +38,11 @@ namespace hpx {
 
         // std::system_error appends the message of the error code to the
         // message of the exception (": HPX(network_error)"). A message that
-        // embeds the message of another error with the same code (e.g. the
-        // error that caused this one) would show it twice: remove it from
-        // the message, it is appended once. Codes that add no text (rethrow)
-        // are left alone.
+        // ends with the message of another error with the same code (e.g. the
+        // error that caused this one) would show it twice: remove it from the
+        // end of the message, it is appended once. The same text elsewhere in
+        // the message is the caller's and is kept. Codes that add no text
+        // (rethrow) are left alone.
         std::string without_code(std::string msg, std::error_code const& ec)
         {
             std::string const code = ec.message();
@@ -51,10 +52,9 @@ namespace hpx {
             }
 
             std::string const suffix = ": " + code;
-            for (auto pos = msg.find(suffix); pos != std::string::npos;
-                pos = msg.find(suffix, pos))
+            while (msg.ends_with(suffix))
             {
-                msg.erase(pos, suffix.size());
+                msg.erase(msg.size() - suffix.size());
             }
             return msg;
         }

@@ -131,6 +131,22 @@ int main()
                 "HPX(bad_parameter)");
         }
         HPX_TEST(exception_caught);
+
+        // the same code elsewhere in the message is the caller's and is kept
+        exception_caught = false;
+        try
+        {
+            HPX_THROW_EXCEPTION(hpx::error::no_success, "interior",
+                "remote status: HPX(no_success); local status: ok");
+        }
+        catch (hpx::exception const& e)
+        {
+            exception_caught = true;
+            HPX_TEST_EQ(hpx::get_error_what(e),
+                "remote status: HPX(no_success); local status: ok: "
+                "HPX(no_success)");
+        }
+        HPX_TEST(exception_caught);
     }
 
     return hpx::util::report_errors();
