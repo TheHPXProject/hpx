@@ -45,8 +45,7 @@ namespace hpx::threads::policies {
 
     namespace detail {
 
-        enum class polling_status
-        {
+        HPX_CXX_CORE_EXPORT enum class polling_status {
             /// Signals that a polling function currently has no more work to do
             idle = 0,
 

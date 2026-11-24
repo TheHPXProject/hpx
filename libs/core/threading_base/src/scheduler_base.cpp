@@ -6,6 +6,7 @@
 
 #include <hpx/config.hpp>
 #include <hpx/assert.hpp>
+#include <hpx/modules/errors.hpp>
 #include <hpx/modules/execution_base.hpp>
 
 #include <hpx/threading_base/detail/idle_callback.hpp>
