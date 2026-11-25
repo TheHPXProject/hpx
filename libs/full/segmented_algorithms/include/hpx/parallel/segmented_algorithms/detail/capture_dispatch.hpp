@@ -445,6 +445,125 @@ namespace hpx::parallel::detail {
             act, hpx::colocated(routing_partition_id), HPX_MOVE(ranges));
     }
 
+    template <typename InputLocal, typename OutputLocal>
+    struct captured_copy
+      : algorithm<captured_copy<InputLocal, OutputLocal>, std::size_t>
+    {
+        using output_traits =
+            hpx::traits::segmented_local_iterator_traits<OutputLocal>;
+        using raw_output_iterator = typename output_traits::local_raw_iterator;
+        using value_type =
+            typename std::iterator_traits<InputLocal>::value_type;
+
+        captured_copy()
+          : algorithm<captured_copy<InputLocal, OutputLocal>, std::size_t>(
+                "captured_copy")
+        {
+        }
+
+        template <typename ExPolicy>
+        static std::size_t sequential(ExPolicy policy,
+            std::vector<value_type> values, raw_output_iterator dest)
+        {
+            return invoke(HPX_MOVE(policy), HPX_MOVE(values), HPX_MOVE(dest),
+                std::true_type{});
+        }
+
+        template <typename ExPolicy>
+        static std::size_t parallel(ExPolicy policy,
+            std::vector<value_type> values, raw_output_iterator dest)
+        {
+            return invoke(HPX_MOVE(policy), HPX_MOVE(values), HPX_MOVE(dest),
+                std::false_type{});
+        }
+
+    private:
+        template <typename ExPolicy, typename IsSeq>
+        static std::size_t invoke(ExPolicy policy,
+            std::vector<value_type> values, raw_output_iterator dest, IsSeq)
+        {
+            using raw_input_iterator =
+                typename hpx::traits::segmented_local_iterator_traits<
+                    InputLocal>::local_raw_iterator;
+            constexpr bool const_input =
+                std::is_const_v<std::remove_reference_t<typename std::
+                        iterator_traits<raw_input_iterator>::reference>>;
+            auto input = [&]() {
+                if constexpr (const_input)
+                    return values.cbegin();
+                else
+                    return values.begin();
+            }();
+            auto end = [&]() {
+                if constexpr (const_input)
+                    return values.cend();
+                else
+                    return values.end();
+            }();
+            using local_result =
+                util::in_out_result<decltype(input), raw_output_iterator>;
+            copy<local_result>{}.call2(policy(hpx::execution::non_task),
+                IsSeq{}, input, end, HPX_MOVE(dest));
+            return values.size();
+        }
+    };
+
+    HPX_CXX_EXPORT template <typename Value, typename LocalIterator>
+    struct move_transmitter
+    {
+        using indexed_range_type = indexed_partition_range<LocalIterator>;
+        using range_list_type = std::vector<indexed_range_type>;
+        using result_type = collected_partition_values<Value>;
+
+        static result_type send_values(range_list_type ranges)
+        {
+            using iterator_traits =
+                hpx::traits::segmented_local_iterator_traits<LocalIterator>;
+
+            result_type result;
+            result.slices.reserve(ranges.size());
+
+            for (auto& indexed_range : ranges)
+            {
+                auto& range = indexed_range.range;
+                auto raw_first = iterator_traits::local(HPX_MOVE(range.first));
+                auto raw_last = iterator_traits::local(HPX_MOVE(range.last));
+                std::size_t const offset = result.values.size();
+
+                result.values.reserve(result.values.size() +
+                    static_cast<std::size_t>(
+                        std::distance(raw_first, raw_last)));
+                std::move(
+                    raw_first, raw_last, std::back_inserter(result.values));
+
+                result.slices.emplace_back(indexed_range.original_index, offset,
+                    result.values.size() - offset);
+            }
+            return result;
+        }
+    };
+
+    HPX_CXX_EXPORT template <typename Value, typename LocalIterator>
+    struct move_values_action
+      : hpx::actions::make_action<
+            collected_partition_values<Value> (*)(
+                std::vector<indexed_partition_range<LocalIterator>>),
+            &move_transmitter<Value, LocalIterator>::send_values,
+            move_values_action<Value, LocalIterator>>::type
+    {
+    };
+
+    HPX_CXX_EXPORT template <typename Value, typename LocalIterator>
+    hpx::future<collected_partition_values<Value>> capture_move_async(
+        hpx::id_type const& routing_partition_id,
+        std::vector<indexed_partition_range<LocalIterator>> ranges)
+    {
+        move_values_action<Value, LocalIterator> act;
+
+        return hpx::async(
+            act, hpx::colocated(routing_partition_id), HPX_MOVE(ranges));
+    }
+
     // handle the case of different localities
     //
     // ConstInput tells whether the second range has const elements: the
