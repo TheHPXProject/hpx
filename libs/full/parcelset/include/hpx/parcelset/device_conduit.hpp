@@ -62,6 +62,9 @@ namespace hpx::parcelset {
     ///
     /// and optionally (this base implements them doing nothing)
     ///
+    ///  - static constexpr bool moves_host_memory_impl()
+    ///    whether the conduit also moves host memory (false)
+    ///
     ///  - bool background_work_impl()
     ///    makes progress, called with the parcelports' background work
     ///  - void locality_removed_impl(
@@ -89,6 +92,11 @@ namespace hpx::parcelset {
             std::uint32_t const locality_id) const override
         {
             return derived().can_reach_impl(locality_id);
+        }
+
+        [[nodiscard]] bool moves_host_memory() const override
+        {
+            return Derived::moves_host_memory_impl();
         }
 
         [[nodiscard]] std::shared_ptr<
@@ -165,6 +173,11 @@ namespace hpx::parcelset {
         // the defaults of the optional functions of 'Derived' (hidden by
         // its own)
         static void config_defaults(std::vector<std::string>&) noexcept {}
+
+        [[nodiscard]] static constexpr bool moves_host_memory_impl() noexcept
+        {
+            return false;
+        }
 
         bool background_work_impl() noexcept
         {
@@ -414,12 +427,28 @@ namespace hpx::parcelset {
             std::vector<plugins::device_conduit_factory_base*>&
             get_device_conduit_factories();
 
-        /// The archive flags to add to the parcelport's flags for a message
-        /// to 'locality_id': enable_device_transport and enable_device_chunks
-        /// if the conduit reaches the destination, none otherwise. The
-        /// preprocessing pass of a parcel and its real serialization must use
-        /// the same flags.
+        /// The archive flags to add to the flags of the parcelport 'pp' for
+        /// a message to 'locality_id': enable_device_transport and
+        /// enable_device_chunks if the conduit reaches the destination and
+        /// it uses the same conduit, also enable_host_transport if the
+        /// conduit moves host memory, 'pp' lets it and the destination
+        /// receives host chunks that way, none otherwise. What the
+        /// destination does comes from its endpoint for 'pp' (see
+        /// locality_capabilities), as recorded by
+        /// record_destination_capabilities. The preprocessing pass of a
+        /// parcel and its real serialization must use the same flags.
         HPX_CXX_EXPORT HPX_EXPORT std::uint32_t device_conduit_flags(
+            parcelport const& pp, std::uint32_t locality_id) noexcept;
+
+        /// Records what the endpoints of 'locality_id' (as AGAS resolved
+        /// them) can do, for device_conduit_flags; once per locality. The
+        /// locality objects the parcelports keep for a destination may have
+        /// been created before (e.g. from the configuration), without it.
+        HPX_CXX_EXPORT HPX_EXPORT void record_destination_capabilities(
+            std::uint32_t locality_id, endpoints_type const& endpoints);
+
+        /// Forgets what was recorded for 'locality_id' (it was removed).
+        HPX_CXX_EXPORT HPX_EXPORT void forget_destination_capabilities(
             std::uint32_t locality_id) noexcept;
 
         /// Attaches the sending transport for a message to 'locality_id' to

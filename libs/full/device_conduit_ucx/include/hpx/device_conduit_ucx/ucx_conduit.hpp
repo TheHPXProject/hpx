@@ -60,6 +60,12 @@ namespace hpx::parcelset::device_conduits {
             return true;
         }
 
+        // UCX finds the memory type of each buffer itself
+        [[nodiscard]] static constexpr bool moves_host_memory_impl() noexcept
+        {
+            return true;
+        }
+
         void send_impl(std::uint32_t locality_id,
             serialization::detail::device_chunk_descriptor const& d,
             void const* p, std::size_t size,

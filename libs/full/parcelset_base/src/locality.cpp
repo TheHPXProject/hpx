@@ -23,11 +23,13 @@ namespace hpx::parcelset {
 
     locality::locality(locality const& other)
       : impl_(other.impl_ ? other.impl_->clone() : nullptr)
+      , capabilities_(other.capabilities_)
     {
     }
 
     locality::locality(locality&& other) noexcept
       : impl_(other.impl_ ? other.impl_->move() : nullptr)
+      , capabilities_(HPX_MOVE(other.capabilities_))
     {
     }
 
@@ -43,6 +45,7 @@ namespace hpx::parcelset {
             {
                 impl_.reset();
             }
+            capabilities_ = other.capabilities_;
         }
         return *this;
     }
@@ -59,6 +62,7 @@ namespace hpx::parcelset {
             {
                 impl_.reset();
             }
+            capabilities_ = HPX_MOVE(other.capabilities_);
         }
         return *this;
     }
@@ -117,6 +121,7 @@ namespace hpx::parcelset {
         }
 
         impl_->save(ar);
+        ar << capabilities_;
 #else
         HPX_THROW_EXCEPTION(hpx::error::invalid_status, "locality::save",
             "this shouldn't be called if networking is disabled");
@@ -137,6 +142,7 @@ namespace hpx::parcelset {
         impl_ = HPX_MOVE(create_locality(t).impl_);
         impl_->load(ar);
         HPX_ASSERT(impl_->valid());
+        ar >> capabilities_;
 #else
         HPX_THROW_EXCEPTION(hpx::error::invalid_status, "locality::load",
             "this shouldn't be called if networking is disabled");

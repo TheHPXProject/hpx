@@ -338,10 +338,15 @@ namespace hpx::serialization {
         /// \param memory   Whether \a address refers to device memory: the
         ///                 networking layer receives into it then (see
         ///                 serialization_chunk::is_device_memory).
+        /// \param may_arrive_later Whether the data may arrive after the
+        ///                 de-serialization if a device transport moves it,
+        ///                 also without zero-copy receive (as passed to
+        ///                 output_archive::save_binary_chunk by the sender).
         void load_binary_chunk(detail::fundamental_types expected,
             void* address, std::size_t const count,
             bool const allow_zero_copy_receive,
-            chunk_memory const memory = chunk_memory::host)
+            chunk_memory const memory = chunk_memory::host,
+            bool const may_arrive_later = false)
         {
             if (HPX_UNLIKELY(count == 0))
                 return;
@@ -352,8 +357,8 @@ namespace hpx::serialization {
             }
 
             if (HPX_UNLIKELY(enable_device_transport()) &&
-                load_with_device_transport(
-                    address, count, allow_zero_copy_receive))
+                load_with_device_transport(address, count,
+                    allow_zero_copy_receive || may_arrive_later))
             {
                 return;
             }

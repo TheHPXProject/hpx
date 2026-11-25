@@ -63,6 +63,17 @@ namespace hpx::serialization::detail {
             std::size_t size, std::function<void(std::exception_ptr)> done) = 0;
     };
 
+    // The smallest chunk of host memory a transport moves in archives with
+    // archive_flags::enable_host_transport (for objects that allow it, see
+    // output_archive::save_binary_chunk), the same in all archives of a
+    // process (the preprocessing pass and the serialization of a parcel must
+    // decide alike). Set by the parcel layer at startup; by default no host
+    // chunk is moved.
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT std::size_t
+    host_transport_threshold() noexcept;
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void set_host_transport_threshold(
+        std::size_t threshold) noexcept;
+
     // The transport of an archive (extra data); none if 'transport' is
     // empty.
     HPX_CXX_CORE_EXPORT struct device_transport

@@ -57,6 +57,11 @@ namespace hpx::parcelset {
         [[nodiscard]] virtual bool can_reach(
             std::uint32_t locality_id) const = 0;
 
+        /// Whether the conduit also moves host memory (the parcel layer
+        /// then lets it move large host chunks, where the parcelports are
+        /// configured to, see locality_capabilities::conduit_host_chunks).
+        [[nodiscard]] virtual bool moves_host_memory() const = 0;
+
         /// The transport for one message to 'locality_id' (can_reach is
         /// true). It keeps 'keep_alive' (the objects the message refers to,
         /// e.g. its parcels) until it has sent all data handed to it, which

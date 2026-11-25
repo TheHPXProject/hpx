@@ -123,6 +123,11 @@ namespace hpx::plugins {
                 "zero_copy_receive_optimization = ${HPX_PARCEL_" + name_uc +
                 "_ZERO_COPY_RECEIVE_OPTIMIZATION:"
                 "$[hpx.parcel.zero_copy_receive_optimization]}");
+            // host chunks through the device conduit (see
+            // parcelset::locality_capabilities::conduit_host_chunks)
+            fillini.emplace_back("conduit_host_chunks = ${HPX_PARCEL_" +
+                name_uc +
+                "_CONDUIT_HOST_CHUNKS:$[hpx.parcel.conduit_host_chunks]}");
             fillini.emplace_back(
                 "zero_copy_serialization_threshold = ${HPX_PARCEL_" + name_uc +
                 "_ZERO_COPY_SERIALIZATION_THRESHOLD:"

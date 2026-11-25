@@ -71,6 +71,30 @@ namespace hpx::parcelset {
 
     namespace {
 
+        // the endpoint of 'pp' with what its parcelport can do (published
+        // with it, see locality_capabilities)
+        locality endpoint_of(parcelport const& pp)
+        {
+            locality l = pp.here();
+
+            locality_capabilities caps;
+            if (pp.allow_zero_copy_receive_optimizations())
+            {
+                caps.flags |= locality_capabilities::zero_copy_receive;
+            }
+            if (device_conduit const* conduit = get_device_conduit();
+                conduit != nullptr)
+            {
+                caps.conduit = conduit->name();
+                if (conduit->moves_host_memory() && pp.conduit_host_chunks())
+                {
+                    caps.flags |= locality_capabilities::conduit_host_chunks;
+                }
+            }
+            l.set_capabilities(HPX_MOVE(caps));
+            return l;
+        }
+
         ///////////////////////////////////////////////////////////////////////////
         // these are the errors a send reports if the destination went away
         bool is_peer_gone_error(std::error_code const& ec)
@@ -247,6 +271,9 @@ namespace hpx::parcelset {
 
             // the conduit moving device memory below the parcelports
             detail::init_device_conduit(cfg);
+
+            // the endpoints name the conduit and what it receives
+            update_endpoints();
         }
     }
 
@@ -510,7 +537,7 @@ namespace hpx::parcelset {
         // add the endpoint of the new parcelport
         HPX_ASSERT(pp->type() == pp->here().type());
         if (priority > 0)
-            endpoints_[pp->type()] = pp->here();
+            endpoints_[pp->type()] = endpoint_of(*pp);
     }
 
     void parcelhandler::update_endpoints()
@@ -520,7 +547,7 @@ namespace hpx::parcelset {
             if (pp.first > 0 && pp.second)
             {
                 HPX_ASSERT(pp.second->type() == pp.second->here().type());
-                endpoints_[pp.second->type()] = pp.second->here();
+                endpoints_[pp.second->type()] = endpoint_of(*pp.second);
             }
         }
     }
@@ -588,6 +615,8 @@ namespace hpx::parcelset {
         {
             conduit->locality_removed(
                 naming::get_locality_id_from_gid(gid), forced);
+            detail::forget_destination_capabilities(
+                naming::get_locality_id_from_gid(gid));
         }
 
         agas::remove_resolved_locality(gid);
@@ -726,6 +755,10 @@ namespace hpx::parcelset {
         naming::gid_type const& dest_gid)
     {
         endpoints_type const& dest_endpoints = agas::resolve_locality(dest_gid);
+
+        // what the destination's endpoints can do, for the device conduit
+        detail::record_destination_capabilities(
+            naming::get_locality_id_from_gid(dest_gid), dest_endpoints);
 
         for (auto& [idx, pp] : pports_)
         {
@@ -1739,6 +1772,13 @@ namespace hpx::parcelset {
         // hpx::parcelset::device_conduit
         ini_defs.emplace_back(
             "device_conduit = ${HPX_PARCEL_DEVICE_CONDUIT:none}");
+        // also host chunks of at least 'conduit_host_threshold' bytes go
+        // through a device conduit that moves host memory (per parcelport,
+        // see hpx::parcelset::locality_capabilities)
+        ini_defs.emplace_back(
+            "conduit_host_chunks = ${HPX_PARCEL_CONDUIT_HOST_CHUNKS:0}");
+        ini_defs.emplace_back("conduit_host_threshold = "
+                              "${HPX_PARCEL_CONDUIT_HOST_THRESHOLD:1048576}");
         ini_defs.emplace_back(
             "zero_copy_optimization = ${HPX_PARCEL_ZERO_COPY_OPTIMIZATION:"
             "$[hpx.parcel.array_optimization]}");

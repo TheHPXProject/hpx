@@ -18,8 +18,12 @@
 
 #include <atomic>
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
+#include <map>
 #include <memory>
+#include <mutex>
+#include <shared_mutex>
 #include <string>
 #include <utility>
 #include <vector>
@@ -87,6 +91,15 @@ namespace hpx::parcelset {
             HPX_ASSERT(!conduit);
             conduit = factory->create(cfg);
             current_conduit.store(conduit.get(), std::memory_order_release);
+
+            // the smallest host chunk the conduit moves (where enabled)
+            if (conduit->moves_host_memory())
+            {
+                serialization::detail::set_host_transport_threshold(
+                    hpx::util::get_entry_as<std::size_t>(cfg,
+                        "hpx.parcel.conduit_host_threshold",
+                        std::size_t(1) << 20));
+            }
         }
 
         void reset_device_conduit() noexcept
@@ -111,17 +124,97 @@ namespace hpx::parcelset {
             conduit.reset();
         }
 
-        std::uint32_t device_conduit_flags(
+        namespace {
+
+            // what the endpoints of the destinations can do, by locality and
+            // parcelport (see record_destination_capabilities)
+            struct destination_capabilities
+            {
+                std::shared_mutex mtx;
+                std::map<std::pair<std::uint32_t, std::string>,
+                    locality_capabilities>
+                    entries;
+            };
+
+            destination_capabilities& destinations()
+            {
+                static destination_capabilities d;
+                return d;
+            }
+        }    // namespace
+
+        void record_destination_capabilities(
+            std::uint32_t const locality_id, endpoints_type const& endpoints)
+        {
+            if (get_device_conduit() == nullptr || endpoints.empty())
+            {
+                return;
+            }
+
+            auto& d = destinations();
+            {
+                std::shared_lock<std::shared_mutex> l(d.mtx);
+                if (d.entries.contains({locality_id, endpoints.begin()->first}))
+                {
+                    return;
+                }
+            }
+
+            std::unique_lock<std::shared_mutex> l(d.mtx);
+            for (auto const& [type, endpoint] : endpoints)
+            {
+                d.entries.insert_or_assign(
+                    {locality_id, type}, endpoint.capabilities());
+            }
+        }
+
+        void forget_destination_capabilities(
             std::uint32_t const locality_id) noexcept
+        {
+            auto& d = destinations();
+            std::unique_lock<std::shared_mutex> l(d.mtx);
+            std::erase_if(d.entries, [&](auto const& entry) {
+                return entry.first.first == locality_id;
+            });
+        }
+
+        std::uint32_t device_conduit_flags(
+            parcelport const& pp, std::uint32_t const locality_id) noexcept
         {
             device_conduit const* c = get_device_conduit();
             if (c == nullptr || !c->can_reach(locality_id))
             {
                 return 0;
             }
-            return static_cast<std::uint32_t>(
-                serialization::archive_flags::enable_device_transport |
-                serialization::archive_flags::enable_device_chunks);
+
+            // the destination uses the same conduit (its endpoint names it);
+            // otherwise, or if it isn't known (yet), the parcelport moves the
+            // data
+            bool host_chunks = false;
+            {
+                auto& d = destinations();
+                std::shared_lock<std::shared_mutex> l(d.mtx);
+                auto const it = d.entries.find({locality_id, pp.type()});
+                if (it == d.entries.end() || it->second.conduit != c->name())
+                {
+                    return 0;
+                }
+                host_chunks =
+                    it->second.has(locality_capabilities::conduit_host_chunks);
+            }
+
+            auto flags = serialization::archive_flags::enable_device_transport |
+                serialization::archive_flags::enable_device_chunks;
+
+            // and large host chunks, if this parcelport lets the conduit
+            // move them and the destination receives them that way
+            if (host_chunks && c->moves_host_memory() &&
+                pp.conduit_host_chunks())
+            {
+                flags =
+                    flags | serialization::archive_flags::enable_host_transport;
+            }
+            return static_cast<std::uint32_t>(flags);
         }
 
         void attach_device_conduit_sender(

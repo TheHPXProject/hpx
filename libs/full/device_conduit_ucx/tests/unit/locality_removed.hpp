@@ -77,6 +77,16 @@ HPX_PLAIN_ACTION(check_device_data, check_device_data_action)
 inline void put_device_data(device_like const&) {}
 HPX_PLAIN_ACTION(put_device_data, put_device_data_action)
 
+// host data, moved by the conduit as well (hpx.parcel.conduit_host_chunks)
+inline bool check_host_data(std::vector<char> const& d, char const first)
+{
+    return d == pattern(d.size(), first);
+}
+HPX_PLAIN_ACTION(check_host_data, check_host_data_action)
+
+inline void put_host_data(std::vector<char> const&) {}
+HPX_PLAIN_ACTION(put_host_data, put_host_data_action)
+
 inline bool worker_is_running()
 {
     return hpx::is_running();

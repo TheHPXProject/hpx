@@ -202,11 +202,14 @@ namespace hpx::parcelset {
                 buffer.chunks_.reserve(num_chunks);
 
                 // a device conduit moves the device memory of the parcels if
-                // it reaches their destination (the same for all of them)
+                // it reaches their destination (the same for all of them),
+                // and their large host chunks if the destination receives
+                // them that way
                 std::uint32_t const destination =
                     ps[0].destination_locality_id();
                 archive_flags = archive_flags |
-                    static_cast<int>(detail::device_conduit_flags(destination));
+                    static_cast<int>(
+                        detail::device_conduit_flags(pp, destination));
 
                 // mark start of serialization
 #if defined(HPX_HAVE_PARCELPORT_COUNTERS)

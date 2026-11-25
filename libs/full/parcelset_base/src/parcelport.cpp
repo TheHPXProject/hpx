@@ -84,6 +84,11 @@ namespace hpx::parcelset {
         {
             async_serialization_ = true;
         }
+
+        // host chunks through the device conduit need the chunks
+        conduit_host_chunks_ = allow_zero_copy_optimizations_ &&
+            hpx::util::get_entry_as<int>(
+                ini, key + ".conduit_host_chunks", 0) != 0;
     }
 
     int parcelport::priority() const noexcept
@@ -417,6 +422,11 @@ namespace hpx::parcelset {
     bool parcelport::allow_zero_copy_receive_optimizations() const noexcept
     {
         return allow_zero_copy_receive_optimizations_;
+    }
+
+    bool parcelport::conduit_host_chunks() const noexcept
+    {
+        return conduit_host_chunks_;
     }
 
     bool parcelport::async_serialization() const noexcept
