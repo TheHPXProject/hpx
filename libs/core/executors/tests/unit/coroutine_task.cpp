@@ -752,6 +752,188 @@ void test_receiver_environment_query()
     HPX_TEST(called);
 }
 
+///////////////////////////////////////////////////////////////////////////////
+// 10. P3552R3 change_coroutine_scheduler
+ex::task<void> task_changing_scheduler(
+    ex::task_scheduler orig_sch, ex::task_scheduler target_sch)
+{
+    auto initial_sch = co_await ex::read_env(ex::get_scheduler);
+    HPX_TEST(initial_sch == orig_sch);
+
+    auto prev = co_await ex::change_coroutine_scheduler(target_sch);
+    HPX_TEST(prev == orig_sch);
+
+    auto current_sch = co_await ex::read_env(ex::get_scheduler);
+    HPX_TEST(current_sch == target_sch);
+
+    co_return;
+}
+
+void test_change_coroutine_scheduler()
+{
+    auto orig = ex::task_scheduler(ex::get_parallel_scheduler());
+    auto target = ex::task_scheduler(ex::inline_scheduler{});
+
+    auto t = task_changing_scheduler(orig, target);
+    auto res = tt::sync_wait(HPX_MOVE(t));
+    HPX_TEST(res.has_value());
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// 11. P3552R3 Scheduler Affinity
+inline thread_local int g_active_execution_resource = 0;
+
+template <int Id>
+struct test_resource_scheduler
+{
+    ex::inline_scheduler base_{};
+
+    friend bool operator==(test_resource_scheduler const&,
+        test_resource_scheduler const&) noexcept = default;
+
+    auto schedule() const noexcept
+    {
+        return ex::schedule(base_) |
+            ex::then([]() noexcept { g_active_execution_resource = Id; });
+    }
+
+    auto query(ex::get_completion_scheduler_t<ex::set_value_t>) const noexcept
+    {
+        return *this;
+    }
+};
+
+ex::task<int> task_with_scheduler_affinity(
+    ex::task_scheduler orig_sch, ex::task_scheduler other_sch)
+{
+    co_await ex::change_coroutine_scheduler(orig_sch);
+    HPX_TEST_EQ(g_active_execution_resource, 1);
+
+    // Await sender completing on other_sch
+    int val = co_await (ex::schedule(other_sch) | ex::then([] {
+        HPX_TEST_EQ(g_active_execution_resource, 2);
+        return 42;
+    }));
+
+    // Coroutine must resume on orig_sch
+    auto current_sch = co_await ex::read_env(ex::get_scheduler);
+    HPX_TEST(current_sch == orig_sch);
+    HPX_TEST_EQ(g_active_execution_resource, 1);
+
+    co_return val;
+}
+
+void test_scheduler_affinity()
+{
+    g_active_execution_resource = 0;
+    auto orig = ex::task_scheduler(test_resource_scheduler<1>{});
+    auto other = ex::task_scheduler(test_resource_scheduler<2>{});
+
+    auto t = task_with_scheduler_affinity(orig, other);
+    auto res = tt::sync_wait(HPX_MOVE(t));
+    HPX_TEST(res.has_value());
+    HPX_TEST_EQ(hpx::get<0>(res.value()), 42);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// 12. Nested Task Affinity Preservation
+ex::task<int> child_task_switching_scheduler(ex::task_scheduler new_sch)
+{
+    co_await ex::change_coroutine_scheduler(new_sch);
+    HPX_TEST_EQ(g_active_execution_resource, 2);
+    co_return 100;
+}
+
+ex::task<int> parent_task_testing_affinity(
+    ex::task_scheduler parent_sch, ex::task_scheduler child_sch)
+{
+    co_await ex::change_coroutine_scheduler(parent_sch);
+    HPX_TEST_EQ(g_active_execution_resource, 1);
+
+    auto before_sch = co_await ex::read_env(ex::get_scheduler);
+    HPX_TEST(before_sch == parent_sch);
+
+    int val = co_await child_task_switching_scheduler(child_sch);
+    HPX_TEST_EQ(val, 100);
+
+    // Parent must resume on parent_sch even though child switched to child_sch
+    auto after_sch = co_await ex::read_env(ex::get_scheduler);
+    HPX_TEST(after_sch == parent_sch);
+    HPX_TEST_EQ(g_active_execution_resource, 1);
+
+    co_return val + 1;
+}
+
+ex::task<int&> child_task_switching_scheduler_reference(
+    ex::task_scheduler new_sch, int& val)
+{
+    co_await ex::change_coroutine_scheduler(new_sch);
+    HPX_TEST_EQ(g_active_execution_resource, 2);
+    co_return val;
+}
+
+ex::task<void> parent_task_testing_reference_affinity(
+    ex::task_scheduler parent_sch, ex::task_scheduler child_sch, int& original)
+{
+    co_await ex::change_coroutine_scheduler(parent_sch);
+    HPX_TEST_EQ(g_active_execution_resource, 1);
+
+    int& res =
+        co_await child_task_switching_scheduler_reference(child_sch, original);
+
+    // Assert exact object identity
+    HPX_TEST_EQ(&res, &original);
+
+    // Parent must resume on parent_sch even though child switched to
+    // child_sch
+    auto after_sch = co_await ex::read_env(ex::get_scheduler);
+    HPX_TEST(after_sch == parent_sch);
+    HPX_TEST_EQ(g_active_execution_resource, 1);
+}
+
+void test_nested_task_affinity()
+{
+    g_active_execution_resource = 0;
+    auto parent_sch = ex::task_scheduler(test_resource_scheduler<1>{});
+    auto child_sch = ex::task_scheduler(test_resource_scheduler<2>{});
+
+    auto t = parent_task_testing_affinity(parent_sch, child_sch);
+    auto res = tt::sync_wait(HPX_MOVE(t));
+    HPX_TEST(res.has_value());
+    HPX_TEST_EQ(hpx::get<0>(res.value()), 101);
+
+    // Test parent scheduler affinity and object identity for task<T&>
+    g_active_execution_resource = 0;
+    int original = 42;
+    auto t_ref =
+        parent_task_testing_reference_affinity(parent_sch, child_sch, original);
+    auto res_ref = tt::sync_wait(HPX_MOVE(t_ref));
+    HPX_TEST(res_ref.has_value());
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// 13. Inline Scheduler Bypass (No Rescheduling Hop)
+struct inline_task_env
+{
+    using scheduler_type = ex::inline_scheduler;
+};
+
+ex::task<int, inline_task_env> inline_task_coroutine()
+{
+    int v = co_await ex::just(42);
+    auto sched = co_await ex::read_env(ex::get_scheduler);
+    static_assert(std::is_same_v<decltype(sched), ex::inline_scheduler>);
+    co_return v + 1;
+}
+
+void test_inline_scheduler_no_hop()
+{
+    auto t = inline_task_coroutine();
+    auto res = tt::sync_wait(HPX_MOVE(t));
+    HPX_TEST(res.has_value());
+    HPX_TEST_EQ(hpx::get<0>(res.value()), 43);
+}
+
 int hpx_main()
 {
     test_basic_task();
@@ -763,6 +945,10 @@ int hpx_main()
     test_reference_task();
     test_environment_traits();
     test_receiver_environment_query();
+    test_change_coroutine_scheduler();
+    test_scheduler_affinity();
+    test_nested_task_affinity();
+    test_inline_scheduler_no_hop();
 
     return hpx::local::finalize();
 }
