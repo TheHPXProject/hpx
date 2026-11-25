@@ -10,10 +10,10 @@
 // receivers form rounds of several chunks, in an order the senders don't
 // know), and, where each locality has two GPUs, data from each GPU of a
 // locality to each GPU of the others (a component per GPU names it as its
-// target, the data is received there). The data is GPU memory (NCCL moves nothing else); the test checks it
-// on the host. NCCL needs a GPU of its own for each locality: localities on
-// the same node use different GPUs, the test is skipped where a node has
-// fewer GPUs than localities.
+// target, the data is received there). The data is GPU memory (NCCL moves
+// nothing else); the test checks it on the host. NCCL needs a GPU of its
+// own for each locality: localities on the same node use different GPUs, the
+// test is skipped where a node has fewer GPUs than localities.
 //
 // The test allocates and frees its device memory stream ordered: cudaFree
 // waits for all work on the GPU, including NCCL kernels waiting for the other
@@ -356,21 +356,22 @@ struct on_gpu : hpx::components::component_base<on_gpu>
     }
 
     // the data has arrived on this component's GPU
-    void check(device_buffer const& d, std::size_t const size, char const first)
+    void arrived(
+        device_buffer const& d, std::size_t const size, char const first)
     {
         HPX_TEST_EQ(d.gpu, target.handle.device);
         HPX_TEST_EQ(gpu_of(d.data.get()), target.handle.device);
         HPX_TEST(d.to_host() == pattern(size, first));
     }
 
-    HPX_DEFINE_COMPONENT_ACTION(on_gpu, check)
+    HPX_DEFINE_COMPONENT_ACTION(on_gpu, arrived)
 
     gpu_target target;
 };
 
 using on_gpu_type = hpx::components::component<on_gpu>;
 HPX_REGISTER_COMPONENT(on_gpu_type, on_gpu)
-HPX_REGISTER_ACTION(on_gpu::check_action, on_gpu_check_action)
+HPX_REGISTER_ACTION(on_gpu::arrived_action, on_gpu_arrived_action)
 
 // sends data from each of the GPUs 'first_gpu' .. 'first_gpu + count - 1' of
 // this locality to each of the components 'targets' (on the other
@@ -387,7 +388,7 @@ void exchange_gpus(std::vector<hpx::id_type> const& targets,
             {
                 char const first =
                     static_cast<char>('a' + (gpu + static_cast<int>(i)) % 20);
-                checks.push_back(hpx::async<on_gpu::check_action>(targets[i],
+                checks.push_back(hpx::async<on_gpu::arrived_action>(targets[i],
                     device_buffer::from_host(pattern(size, first), gpu), size,
                     first));
             }

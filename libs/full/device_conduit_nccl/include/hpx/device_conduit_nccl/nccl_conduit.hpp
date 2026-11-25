@@ -46,9 +46,7 @@ namespace hpx::parcelset::device_conduits {
         template <typename Archive>
         void serialize(Archive& ar, unsigned)
         {
-            // clang-format off
             ar & round & sender_device & receiver_device & tags & sizes & id;
-            // clang-format on
         }
     };
 
