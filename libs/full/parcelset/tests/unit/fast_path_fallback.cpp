@@ -122,7 +122,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
         HPX_TEST_EQ(saves.load(), 20);
         if (vm.count("fast-path") != 0)
         {
-            HPX_TEST_LT(preprocessing_saves.load(), saves.load());
+            HPX_TEST_EQ(preprocessing_saves.load(), 0);
         }
         else if (hpx::get_config_entry("hpx.parcel.fast_path", "0") == "0")
         {
