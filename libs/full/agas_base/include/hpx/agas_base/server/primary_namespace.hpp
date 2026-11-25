@@ -112,6 +112,7 @@ namespace hpx::agas::server {
     HPX_CXX_EXPORT inline constexpr char const* const
         primary_namespace_service_name = "primary/";
 
+    /// Implements the AGAS primary namespace service.
     HPX_CXX_EXPORT struct HPX_EXPORT primary_namespace
       : components::fixed_component_base<primary_namespace>
     {

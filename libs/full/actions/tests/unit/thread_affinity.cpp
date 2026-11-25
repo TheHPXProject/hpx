@@ -52,8 +52,8 @@ std::size_t thread_affinity_worker(std::size_t desired)
         hwloc_topology_load(topo);
 
         int const pu_depth = hwloc_get_type_or_below_depth(topo, HWLOC_OBJ_PU);
-        hwloc_obj_t const pu_obj =
-            hwloc_get_obj_by_depth(topo, pu_depth, logical_idx);
+        hwloc_obj_t const pu_obj = hwloc_get_obj_by_depth(
+            topo, pu_depth, static_cast<unsigned>(logical_idx));
         idx = pu_obj->os_index;
 
         // retrieve the current affinity mask

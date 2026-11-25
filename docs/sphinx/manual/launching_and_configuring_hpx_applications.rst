@@ -443,6 +443,34 @@ The ``hpx.tracing`` configuration section
        the next task creation. Only present on Tracy builds
        (``HPX_WITH_TRACY=ON``).
 
+The ``hpx.hip`` configuration section
+.....................................
+
+.. code-block:: ini
+
+   [hpx.hip]
+   warmup = ${HPX_HIP_WARMUP:current}
+
+.. _ini_hpx_hip:
+
+.. list-table::
+
+   * * Property
+     * Description
+   * * ``hpx.hip.warmup``
+     * The devices whose internal HIP runtime kernels are built when the
+       runtime starts, before ``hpx_main`` runs: ``none``, ``current`` (the
+       default: the device current on the runtime's threads, normally device
+       ``0``) or ``all`` (all visible devices). The HIP runtime builds these
+       kernels on the thread that first uses a device (a kernel launch, a
+       copy, a memset), which needs more stack than |hpx| threads have by
+       default (``hpx.stacks.small_size``); without the warm-up, a task that
+       is the first to use a device crashes with a stack overflow. The
+       warm-up runs as a pre-startup function on the thread that later runs
+       ``hpx_main``, which has a large stack (``hpx.stacks.large_size``), and
+       takes about two seconds per device. Only present when |hpx| was built
+       with HIP.
+
 The ``hpx.threadpools`` configuration section
 .............................................
 
@@ -636,6 +664,7 @@ default, which stands for the defaults compiled into |hpx|.
    [hpx.task_size_chunk_size]
    min_chunk_time_us = ${HPX_TASK_SIZE_CHUNK_SIZE_MIN_CHUNK_TIME_US}
    chunks_per_core = ${HPX_TASK_SIZE_CHUNK_SIZE_CHUNKS_PER_CORE}
+   copy_bytes_per_ns = ${HPX_TASK_SIZE_CHUNK_SIZE_COPY_BYTES_PER_NS}
 
 .. _ini_hpx_task_size_chunk_size:
 
@@ -649,6 +678,12 @@ default, which stands for the defaults compiled into |hpx|.
    * * ``hpx.task_size_chunk_size.chunks_per_core``
      * The value of this property defines the number of chunks each core gets
        for load balancing, from ``1`` up to ``1024``. The default is ``8``.
+   * * ``hpx.task_size_chunk_size.copy_bytes_per_ns``
+     * The value of this property defines the number of bytes a core copies in
+       a nanosecond, from ``1`` up to ``4096``. The algorithms that copy or
+       move trivially copyable elements without calling a function derive the
+       task size of a chunk from it. The default is ``16``, about the rate for
+       data that is not in the caches.
 
 The ``hpx.components`` configuration section
 ............................................
@@ -904,6 +939,9 @@ equivalent CMake variable is ``HPX_WITH_PARCELPORT_MPI`` and has to be set to
    max_background_threads =  ${HPX_PARCEL_MPI_MAX_BACKGROUND_THREADS:$[hpx.parcel.max_background_threads]}
    ack_handshake = 0
    max_header_receives = ${HPX_HAVE_PARCELPORT_MPI_MAX_HEADER_RECEIVES:0}
+   device_memory = ${HPX_HAVE_PARCELPORT_MPI_DEVICE_MEMORY:1}
+   send_device_memory = ${HPX_HAVE_PARCELPORT_MPI_SEND_DEVICE_MEMORY:1}
+   receive_device_memory = ${HPX_HAVE_PARCELPORT_MPI_RECEIVE_DEVICE_MEMORY:1}
 
 .. _ini_hpx_parcel_mpi:
 
@@ -993,6 +1031,23 @@ equivalent CMake variable is ``HPX_WITH_PARCELPORT_MPI`` and has to be set to
        from ``HPX_HAVE_PARCELPORT_MPI_MAX_HEADER_RECEIVES`` (``0`` if not
        defined). A value of ``0`` automatically sizes the pool based on the
        communicator size: ``min(64, max(16, 2 * communicator_size))``.
+   * * ``hpx.parcel.mpi.device_memory``
+     * This property defines whether the MPI parcelport sends and receives
+       device (GPU) memory directly, if the MPI library supports it (CUDA- or
+       ROCm-aware MPI, see ``HPX_WITH_PARCELPORT_CUDA_SUPPORT`` and
+       ``HPX_WITH_PARCELPORT_HIP_SUPPORT``). Otherwise device data is staged
+       through pinned host memory. The default is ``1``.
+   * * ``hpx.parcel.mpi.send_device_memory``
+     * This property defines whether the MPI parcelport sends device memory
+       directly (if ``hpx.parcel.mpi.device_memory`` allows it). Set it to
+       ``0`` on systems where the network card reads device memory much slower
+       than host memory (e.g. if it is not attached to the same PCIe switch as
+       the GPU): the data is then copied to pinned host memory first. The
+       default is ``1``.
+   * * ``hpx.parcel.mpi.receive_device_memory``
+     * This property defines whether the MPI parcelport receives into device
+       memory directly (if ``hpx.parcel.mpi.device_memory`` allows it),
+       whatever memory the sender sent the data from. The default is ``1``.
 
 The ``hpx.agas`` configuration section
 ......................................

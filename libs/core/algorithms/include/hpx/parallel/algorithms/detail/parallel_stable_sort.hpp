@@ -149,7 +149,8 @@ namespace hpx::parallel::detail {
         parallel_stable_sort_helper_t sorter(
             first, last, HPX_FORWARD(Compare, comp));
 
-        return sorter(HPX_FORWARD(Exec, exec), cores, chunk_size);
+        return sorter(HPX_FORWARD(Exec, exec),
+            static_cast<std::uint32_t>(cores), chunk_size);
     }
 
     HPX_CXX_CORE_EXPORT template <typename Exec, typename Iter, typename Sent>

@@ -57,17 +57,21 @@ struct random_fill
 {
     random_fill(std::size_t rand_base, std::size_t range)
       : gen(std::rand())
-      , dist(static_cast<int>(rand_base - range / 2),
-            static_cast<int>(rand_base + range / 2))
+      , base(static_cast<unsigned int>(rand_base))
+      , dist(-static_cast<int>(range / 2), static_cast<int>(range / 2))
     {
     }
 
     int operator()()
     {
-        return dist(gen);
+        // add a random offset to rand_base modulo 2^32: rand_base +/- the
+        // range may not fit into an int, which would make the range of the
+        // distribution invalid
+        return static_cast<int>(base + static_cast<unsigned int>(dist(gen)));
     }
 
     std::mt19937 gen;
+    unsigned int base = 0;
     std::uniform_int_distribution<> dist;
 };
 
@@ -324,6 +328,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
 
     std::cout << "using seed: " << seed << std::endl;
     std::srand(seed);
+    g.seed(seed);
 
     test_remove();
     return hpx::local::finalize();

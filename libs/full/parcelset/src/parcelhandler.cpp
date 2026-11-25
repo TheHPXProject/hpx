@@ -34,6 +34,7 @@
 #include <hpx/modules/naming_base.hpp>
 #include <hpx/modules/parcelset_base.hpp>
 #include <hpx/modules/plugin_factories.hpp>
+#include <hpx/parcelset/device_conduit.hpp>
 #include <hpx/parcelset/init_parcelports.hpp>
 #include <hpx/parcelset/message_handler_fwd.hpp>
 #include <hpx/parcelset/parcelhandler.hpp>
@@ -221,7 +222,11 @@ namespace hpx::parcelset {
         LPROGRESS_;
     }
 
-    parcelhandler::~parcelhandler() = default;
+    parcelhandler::~parcelhandler()
+    {
+        // the parcelports are stopped, nothing is sent anymore
+        detail::reset_device_conduit();
+    }
 
     void parcelhandler::set_notification_policies(
         util::runtime_configuration const& cfg, threads::threadmanager* tm,
@@ -239,6 +244,9 @@ namespace hpx::parcelset {
                 std::shared_ptr<parcelport> pp(factory->create(cfg, notifier));
                 attach_parcelport(pp);
             }
+
+            // the conduit moving device memory below the parcelports
+            detail::init_device_conduit(cfg);
         }
     }
 
@@ -265,46 +273,69 @@ namespace hpx::parcelset {
 
         if (hpx::is_networking_enabled())
         {
-            std::cerr << "Could not find usable bootstrap parcelport.\n";
-            std::cerr << hpx::util::format(
-                "Preconfigured bootstrap parcelport: '{}'\n",
+            // this locality can't start: the runtime's construction fails,
+            // and hpx::init reports the error
+            std::ostringstream strm;
+            hpx::util::format_to(strm,
+                "could not find a usable bootstrap parcelport (configured "
+                "bootstrap parcelport: '{}'), ",
                 get_config_entry(cfgkey, "tcp"));
-
             if (pports_.empty())
             {
-                std::cerr << "No available parcelports\n";
+                strm << "no parcelports are available";
             }
             else
             {
-                std::cerr << "List of available parcelports:\n";
+                strm << "available parcelports:";
                 for (auto const& pp : pports_)
                 {
-                    std::cerr << hpx::util::format(
-                        "  {}, priority: {}, can bootstrap: {}\n",
+                    hpx::util::format_to(strm,
+                        "\n  {}, priority: {}, can bootstrap: {}",
                         pp.second->type(), pp.first,
                         pp.second->can_bootstrap());
                 }
-                std::cerr << "\n";
             }
-
-            // terminate this locality as there is nothing else we can do
-            std::terminate();
+            HPX_THROW_EXCEPTION(hpx::error::network_error,
+                "hpx::parcelset::parcelhandler::get_bootstrap_parcelport", "{}",
+                strm.str());
         }
 
         return {};
+    }
+
+    void parcelhandler::on_start_thread(std::size_t const local_thread_num,
+        std::size_t const global_thread_num, char const* pool_name,
+        char const* postfix) const
+    {
+        // the parcelports are attached before any of the runtime's threads
+        // start (set_notification_policies), parcelports that fail to
+        // initialize are removed while the threads of others may run
+        std::lock_guard<std::mutex> l(pports_mtx_);
+        for (auto const& pp : pports_)
+        {
+            pp.second->on_start_thread(
+                local_thread_num, global_thread_num, pool_name, postfix);
+        }
     }
 
     void parcelhandler::initialize()
     {
         exception_list exceptions;
         std::vector<int> failed_pps;
+
+        // initialize_agas has started the bootstrap parcelport already (it
+        // failed there if there is none)
+        std::shared_ptr<parcelport> const bootstrap =
+            get_bootstrap_parcelport();
+        bool bootstrap_failed = false;
+
         for (pports_type::value_type& pp : pports_)
         {
             // protect against exceptions thrown by a parcelport during
             // initialization
             hpx::detail::try_catch_exception_ptr(
                 [&]() {
-                    if (pp.second != get_bootstrap_parcelport())
+                    if (pp.second != bootstrap)
                     {
                         if (pp.first > 0)
                             pp.second->run(false);
@@ -320,19 +351,50 @@ namespace hpx::parcelset {
                 [&](std::exception_ptr&& e) {
                     exceptions.add(HPX_MOVE(e));
                     failed_pps.push_back(pp.first);
+                    bootstrap_failed =
+                        bootstrap_failed || pp.second == bootstrap;
                 });
         }
 
         // handle exceptions
         if (exceptions.size() != 0)
         {
-            if (failed_pps.size() == pports_.size())
+            if (failed_pps.size() == pports_.size() || bootstrap_failed)
             {
-                std::cerr << hpx::util::format(
-                    "all parcelports failed initializing on locality {}, "
-                    "exiting:\n{}\n",
-                    agas::get_locality_id(), exceptions.get_message());
-                std::terminate();
+                // this locality can't communicate (with the bootstrap
+                // parcelport, AGAS and the other localities can't reach it):
+                // stop the parcelports (joining their I/O threads), the
+                // runtime's construction fails, and hpx::init reports the
+                // errors
+                for (auto const& pp : pports_)
+                {
+                    if (pp.first <= 0)
+                    {
+                        continue;
+                    }
+                    try
+                    {
+                        pp.second->stop();
+                    }
+                    // NOLINTNEXTLINE(bugprone-empty-catch)
+                    catch (...)
+                    {
+                    }
+                }
+                if (failed_pps.size() == pports_.size())
+                {
+                    HPX_THROW_EXCEPTION(hpx::error::network_error,
+                        "hpx::parcelset::parcelhandler::initialize",
+                        "all parcelports failed initializing on locality "
+                        "{}:\n{}",
+                        agas::get_locality_id(), exceptions.get_message());
+                }
+                HPX_THROW_EXCEPTION(hpx::error::network_error,
+                    "hpx::parcelset::parcelhandler::initialize",
+                    "the bootstrap parcelport ({}) failed initializing on "
+                    "locality {}:\n{}",
+                    bootstrap->type(), agas::get_locality_id(),
+                    exceptions.get_message());
             }
             else
             {
@@ -351,6 +413,9 @@ namespace hpx::parcelset {
                 {
                     std::cerr << "  " << it->second->type() << "\n";
                     it->second->stop();
+
+                    // not while it is stopped, stop() joins its threads
+                    std::lock_guard<std::mutex> l(pports_mtx_);
                     pports_.erase(it);
                 }
             }
@@ -481,7 +546,8 @@ namespace hpx::parcelset {
     /// \brief Make sure the specified locality is not held by any connection
     ///        caches anymore
     void parcelhandler::remove_from_connection_cache(
-        naming::gid_type const& gid, endpoints_type const& endpoints)
+        naming::gid_type const& gid, endpoints_type const& endpoints,
+        bool const forced)
     {
         {
             std::lock_guard<mutex_type> l(mtx_);
@@ -516,6 +582,14 @@ namespace hpx::parcelset {
 
             remove_handler(dest);
         }
+
+        // the device conduit releases its connection to the locality
+        if (device_conduit* conduit = get_device_conduit())
+        {
+            conduit->locality_removed(
+                naming::get_locality_id_from_gid(gid), forced);
+        }
+
         agas::remove_resolved_locality(gid);
     }
 
@@ -533,6 +607,12 @@ namespace hpx::parcelset {
         if (!is_networking_enabled_)
         {
             return did_some_work;
+        }
+
+        // the device conduit moves data next to the parcelports
+        if (device_conduit* conduit = get_device_conduit())
+        {
+            did_some_work = conduit->background_work();
         }
 
         LPT_(debug).format(
@@ -1655,6 +1735,10 @@ namespace hpx::parcelset {
                 "endian_out = ${HPX_PARCEL_ENDIAN_OUT:little}");
         ini_defs.emplace_back(
             "array_optimization = ${HPX_PARCEL_ARRAY_OPTIMIZATION:1}");
+        // moves zero-copy chunks of device memory between localities, see
+        // hpx::parcelset::device_conduit
+        ini_defs.emplace_back(
+            "device_conduit = ${HPX_PARCEL_DEVICE_CONDUIT:none}");
         ini_defs.emplace_back(
             "zero_copy_optimization = ${HPX_PARCEL_ZERO_COPY_OPTIMIZATION:"
             "$[hpx.parcel.array_optimization]}");
@@ -1679,6 +1763,13 @@ namespace hpx::parcelset {
 
         for (plugins::parcelport_factory_base* f :
             parcelhandler::get_parcelport_factories())
+        {
+            f->get_plugin_info(ini_defs);
+        }
+
+        // the device conduits
+        for (plugins::device_conduit_factory_base* f :
+            detail::get_device_conduit_factories())
         {
             f->get_plugin_info(ini_defs);
         }

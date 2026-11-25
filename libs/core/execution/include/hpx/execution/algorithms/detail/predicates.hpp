@@ -426,7 +426,7 @@ namespace hpx::parallel::detail {
 #define HPX_TASK_SIZE_BUILTIN_OPERATION(op)                                    \
     template <>                                                                \
     struct hpx::traits::is_transparent_builtin_operation<                      \
-        hpx::parallel::detail::op> : std::true_type                            \
+        ::hpx::parallel::detail::op> : std::true_type                          \
     {                                                                          \
     } /**/
 

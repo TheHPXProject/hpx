@@ -21,9 +21,21 @@
 namespace ex = hpx::execution::experimental;
 namespace tt = hpx::this_thread::experimental;
 
+void test_sync_wait_receiver_scheduler()
+{
+    auto snd = ex::get_scheduler() | ex::let_value([](auto sched) {
+        return ex::schedule(sched) | ex::then([] { return 42; });
+    });
+    auto result = tt::sync_wait(snd);
+    HPX_TEST(result.has_value());
+    HPX_TEST_EQ(hpx::get<0>(*result), 42);
+}
+
 // NOLINTBEGIN(bugprone-unchecked-optional-access)
 int hpx_main()
 {
+    test_sync_wait_receiver_scheduler();
+
     // Success path
     {
         std::atomic<bool> start_called{false};
@@ -124,6 +136,8 @@ int hpx_main()
 
 int main(int argc, char* argv[])
 {
+    test_sync_wait_receiver_scheduler();
+
     HPX_TEST_EQ_MSG(hpx::local::init(hpx_main, argc, argv), 0,
         "HPX main exited with non-zero status");
 

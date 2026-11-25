@@ -12,6 +12,7 @@
 #include <hpx/modules/testing.hpp>
 #include <hpx/thread.hpp>
 
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <vector>
@@ -114,7 +115,7 @@ void tree_boot(
     detail::wait(promises);
 }
 
-bool woken = false;
+std::atomic<bool> woken(false);
 
 ///////////////////////////////////////////////////////////////////////////////
 void test_dummy_thread(std::uint64_t)
@@ -163,9 +164,24 @@ int hpx_main(variables_map& vm)
         before.get();
         after.get();
 
-        set_thread_state(thread_id.noref(),
-            hpx::threads::thread_schedule_state::pending,
-            hpx::threads::thread_restart_state::terminate);
+        // A request for the state a thread is already in does nothing: the
+        // terminate request is lost if the thread is still pending from the
+        // request above (it may not have run yet). A request for a thread that
+        // is running is carried out later by a helper task nothing waits for,
+        // so the requests above may also arrive after the terminate request
+        // and suspend the thread again. Repeat the terminate request whenever
+        // the thread is suspended until it has terminated.
+        while (!woken)
+        {
+            if (hpx::threads::get_thread_state(thread_id.noref()).state() ==
+                hpx::threads::thread_schedule_state::suspended)
+            {
+                set_thread_state(thread_id.noref(),
+                    hpx::threads::thread_schedule_state::pending,
+                    hpx::threads::thread_restart_state::terminate);
+            }
+            hpx::this_thread::yield();
+        }
     }
 
     hpx::local::finalize();

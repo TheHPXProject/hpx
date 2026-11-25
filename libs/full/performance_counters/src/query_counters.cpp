@@ -538,13 +538,18 @@ namespace hpx::util {
     {
         if (format_ == "csv" || format_ == "csv-short")
         {
+            // values only holds the scalar or only the array counters, so
+            // values[idx] belongs to infos[indices[idx]]. The csv text does
+            // not use the info, but sample_counter names the value with it.
             bool first = true;
-            for (std::size_t i = 0; i != values.size(); ++i)
+            std::size_t idx = 0;
+            for (std::size_t const i : indices)
             {
                 if (!first && output != nullptr)
                     *output << ",";
                 first = false;
-                print_value_csv(output, infos[i], values[i]);
+                print_value_csv(output, infos[i], values[idx]);
+                ++idx;
             }
             if (output != nullptr)
                 *output << "\n";
@@ -689,6 +694,11 @@ namespace hpx::util {
         std::vector<performance_counters::counter_value> values =
             counters_.get_counter_values(launch::sync, reset, ec);
 
+        // On error values is empty, and print_values would index it with
+        // the entries of indices.
+        if (ec)
+            return false;
+
         HPX_ASSERT(values.size() == indices.size());
 
         // Output the performance counter value.
@@ -744,6 +754,11 @@ namespace hpx::util {
 
         std::vector<performance_counters::counter_values_array> values =
             counters_.get_counter_values_array(launch::sync, reset, ec);
+
+        // On error values is empty, and print_values would index it with
+        // the entries of indices.
+        if (ec)
+            return false;
 
         HPX_ASSERT(values.size() == indices.size());
 

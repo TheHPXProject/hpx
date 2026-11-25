@@ -17,6 +17,11 @@ namespace hpx::parcelset {
 
     HPX_CXX_EXPORT extern HPX_EXPORT void (*init_static_parcelport_factories)(
         std::vector<plugins::parcelport_factory_base*>& factories);
-}
+
+    // the device conduits compiled into HPX (see the parcelports module)
+    HPX_CXX_EXPORT extern HPX_EXPORT void (
+        *init_static_device_conduit_factories)(
+        std::vector<plugins::device_conduit_factory_base*>& factories);
+}    // namespace hpx::parcelset
 
 #endif

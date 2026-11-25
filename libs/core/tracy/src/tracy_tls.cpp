@@ -63,12 +63,9 @@ namespace hpx::tracy {
             return region;
         }
 
-        // True while this OS thread is executing inside a Tracy fiber context.
-        // rename_region (called by mark_event) must be a no-op in that case:
-        // the zone ctx in TLS belongs to the OS-thread zone opened before
-        // FiberEnter, but Tracy's internal zone stack has switched to the
-        // fiber's stack - calling TracyCZoneName on the OS zone while inside
-        // a fiber causes a "zone name destination doesn't match" crash.
+        // True while this OS thread is inside a Tracy fiber. rename_region is
+        // then a no-op, as its zone is on the OS thread's zone stack, not the
+        // fiber's, and push_zone counts the zones it opens on the fiber.
         bool& in_fiber() noexcept
         {
             thread_local bool flag = false;
@@ -83,19 +80,24 @@ namespace hpx::tracy {
             return s.id == 0 && s.active == 0 && s.connectionId == 0;
         }
 
-        // Store the zone ctx that was opened on the fiber's stack.
-        // enter_fiber opens a zone (so the fiber track is visible in Tracy),
-        // and leave_fiber closes it.
-        // zone_name and color are cached so that suspend_fiber_zone can
-        // reopen the running zone with the same label/color after the
-        // task resumes from self_.yield().
+        // Under TRACY_ON_DEMAND Tracy drops the end and the text of a zone
+        // opened while an earlier profiler was connected.
+        constexpr bool same_connection(
+            zone_ctx_storage const& a, zone_ctx_storage const& b) noexcept
+        {
+            return a.active != 0 && b.active != 0 &&
+                a.connectionId == b.connectionId;
+        }
+
+        // The innermost zone HPX keeps on this worker's fiber (the task's zone,
+        // or the one enter_fiber opens for a resumed task) and how many
+        // push_zone zones are open on top of it. Per worker, so a suspended
+        // task carries both in its suspended_fiber_zone instead.
         struct fiber_zone_data
         {
             zone_ctx_storage ctx_value{};
-            char const* zone_name = "fiber";
-            std::uint32_t color = 0;
+            std::uint32_t zones_above = 0;
             bool active = false;
-            bool just_entered = false;
         };
 
         fiber_zone_data& current_fiber_zone() noexcept
@@ -104,13 +106,19 @@ namespace hpx::tracy {
             return fz;
         }
 
-        void open_fiber_zone(fiber_zone_data& fz, char const* zone_name,
-            std::uint32_t color) noexcept
+        zone_ctx_storage open_zone(
+            char const* zone_name, std::uint32_t color) noexcept
         {
             TracyCZoneC(ctx, color, 1);
             TracyCZoneName(ctx, zone_name, std::strlen(zone_name));
+            return to_storage(ctx);
+        }
 
-            fz.ctx_value = to_storage(ctx);
+        void open_fiber_zone(fiber_zone_data& fz, char const* zone_name,
+            std::uint32_t color) noexcept
+        {
+            fz.ctx_value = open_zone(zone_name, color);
+            fz.zones_above = 0;
             fz.active = true;
         }
     }    // namespace
@@ -179,11 +187,7 @@ namespace hpx::tracy {
         {
             char const* safe_zone_name = intern_zone_label(zone_name, "fiber");
 
-            auto& fz = current_fiber_zone();
-            open_fiber_zone(fz, safe_zone_name, color);
-            fz.zone_name = safe_zone_name;
-            fz.color = color;
-            fz.just_entered = true;
+            open_fiber_zone(current_fiber_zone(), safe_zone_name, color);
         }
 
         HPX_CORE_EXPORT void stop_fiber_zone() noexcept
@@ -194,77 +198,72 @@ namespace hpx::tracy {
                 TracyCZoneEnd(to_tracy(fz.ctx_value));
                 fz.active = false;
                 fz.ctx_value = {};
+                fz.zones_above = 0;
             }
         }
 
-        // Close the running fiber zone and open a "suspended" zone (grey) so
-        // the fiber track shows a distinct bar during the suspension gap.
-        // Called just before self_.yield() inside execution_agent::do_yield().
-        // Only touches current_fiber_zone() - never calls stop_region() so the
-        // OS-thread zone (current_region()) is completely untouched.
-        HPX_CORE_EXPORT void suspend_fiber_zone(
+        // Open a zone for the time the task is suspended, on top of the task's
+        // zone and of any zone the task opened (HPX_TRACING_MARK_EVENT), as
+        // those can stay open across the suspension. Both zones go with the
+        // task, so leave_fiber leaves them open.
+        HPX_CORE_EXPORT suspended_fiber_zone suspend_fiber_zone(
             char const* suspend_reason) noexcept
         {
+            // Not active if the task has no fiber, or if an enclosing region
+            // opened a suspension zone and the task has not been switched out
+            // since; that zone already covers this one.
             auto& fz = current_fiber_zone();
-            fz.just_entered = false;
             if (!fz.active)
-                return;
+                return {};
 
-            // Close the running zone.
-            TracyCZoneEnd(to_tracy(fz.ctx_value));
-            fz.active = false;
-
-            // Open a grey "suspended" zone on the fiber stack.
-            // 0xAAAAAA = medium grey, distinguishable from any
-            // worker-index color.
             constexpr std::uint32_t suspended_color = 0xAAAAAA;
-            char const* safe_reason =
-                intern_zone_label(suspend_reason, "suspend");
-
-            open_fiber_zone(fz, safe_reason, suspended_color);
-            // zone_name and color are preserved from start_fiber_zone so that
-            // resume_fiber_zone can restore the original running zone.
+            suspended_fiber_zone const suspended{
+                open_zone(intern_zone_label(suspend_reason, "suspend"),
+                    suspended_color),
+                fz.ctx_value, fz.zones_above, true};
+            fz.active = false;
+            fz.ctx_value = {};
+            fz.zones_above = 0;
+            return suspended;
         }
 
-        // Close the "suspended" zone and reopen the original running zone.
-        // Called immediately after self_.yield() returns inside do_yield(),
-        // i.e. when the task has been rescheduled onto a worker thread.
-        // zone_name / color default to nullptr/0 which means "use the cached
-        // values from start_fiber_zone".
+        // If the task was switched out, enter_fiber has opened a zone on top
+        // of the suspension zone; Tracy ends a fiber's zones in reverse order,
+        // so close that one first. If not (the region ended without a yield),
+        // there is none. Either way this worker then holds the task's zone.
         HPX_CORE_EXPORT void resume_fiber_zone(
-            char const* zone_name, std::uint32_t color) noexcept
+            suspended_fiber_zone const& suspended) noexcept
         {
             auto& fz = current_fiber_zone();
-            if (fz.just_entered)
+            if (!suspended.open || !in_fiber())
+                return;
+
+            if (fz.active)
             {
-                fz.just_entered = false;
-                return;
+                // After a reconnect while the task was switched out, Tracy
+                // drops the events of the saved zones and of those the task
+                // opened before, so keep the zone enter_fiber opened, with no
+                // zones counted above it.
+                if (!same_connection(fz.ctx_value, suspended.suspension))
+                    return;
+                TracyCZoneEnd(to_tracy(fz.ctx_value));
             }
-            if (!fz.active)
-                return;
-
-            // Close the suspended (grey) zone.
-            TracyCZoneEnd(to_tracy(fz.ctx_value));
-            fz.active = false;
-
-            // Reopen the running zone with cached or supplied name/color.
-            char const* name =
-                (zone_name != nullptr) ? zone_name : fz.zone_name;
-            char const* safe_name = intern_zone_label(name, "fiber");
-            std::uint32_t col = (color != 0) ? color : fz.color;
-
-            open_fiber_zone(fz, safe_name, col);
+            TracyCZoneEnd(to_tracy(suspended.suspension));
+            fz.ctx_value = suspended.task;
+            fz.zones_above = suspended.zones_above;
+            fz.active = true;
         }
 
-        // Embed text into the currently-active fiber zone so it appears in
-        // Tracy's "Zone Info" popup when the user clicks the colored bar on
-        // the timeline. Uses the same ctx stored by open_fiber_zone.
+        // The text shows in Tracy's zone information window. Skipped while a
+        // push_zone zone is on top, as Tracy accepts zone text only for the
+        // innermost zone and stops a verifying capture otherwise; the same
+        // text is also sent as a message.
         HPX_CORE_EXPORT void add_zone_text_to_fiber(
             char const* txt, std::size_t size) noexcept
         {
             auto& fz = current_fiber_zone();
             if (txt == nullptr || size == 0 || !fz.active ||
-                ctx_is_empty(fz.ctx_value))
+                fz.zones_above != 0 || ctx_is_empty(fz.ctx_value))
                 return;
 
             // TracyCZoneText sends the text via the zone validation protocol.
@@ -363,6 +362,13 @@ namespace hpx::tracy {
             char const* safe_name = intern_zone_label(name, "event");
             TracyCZoneC(ctx, 0x0078D7, 1);
             TracyCZoneName(ctx, safe_name, std::strlen(safe_name));
+
+            // Inside a fiber the zone goes on top of the task's zone, so
+            // add_zone_text_to_fiber must not add text until it is closed.
+            if (ctx.active && in_fiber())
+            {
+                ++current_fiber_zone().zones_above;
+            }
             return to_storage(ctx);
         }
 
@@ -372,6 +378,15 @@ namespace hpx::tracy {
             if (!ctx_is_empty(ctx_value))
             {
                 TracyCZoneEnd(to_tracy(ctx_value));
+            }
+
+            // A zone opened before the task had a fiber, or one that
+            // resume_fiber_zone dropped from the count after a reconnect, is
+            // not counted; the check keeps the count from wrapping around.
+            auto& fz = current_fiber_zone();
+            if (ctx_value.active && in_fiber() && fz.zones_above != 0)
+            {
+                --fz.zones_above;
             }
         }
     }    // namespace detail

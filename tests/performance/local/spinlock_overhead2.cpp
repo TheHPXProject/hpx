@@ -188,7 +188,7 @@ double null_function(std::size_t i)
         std::lock_guard<test::local_spinlock> l(mtx[idx]);
         d = global_init[idx];
     }
-    for (std::uint64_t j = 0.; j < num_iterations; ++j)
+    for (std::uint64_t j = 0; j < num_iterations; ++j)
     {
         d += 1. / (2. * static_cast<double>(j) + 1.);
     }

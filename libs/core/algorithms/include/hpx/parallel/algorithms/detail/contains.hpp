@@ -7,7 +7,6 @@
 
 #include <hpx/config.hpp>
 #include <hpx/modules/functional.hpp>
-#include <hpx/parallel/algorithms/detail/distance.hpp>
 #include <hpx/parallel/util/loop.hpp>
 
 #include <cstddef>
@@ -24,13 +23,8 @@ namespace hpx::parallel::detail {
         constexpr bool operator()(
             Iterator first, Sentinel last, T const& val, Proj&& proj) const
         {
-            using difference_type =
-                typename std::iterator_traits<Iterator>::difference_type;
-            difference_type distance =
-                hpx::parallel::detail::distance(first, last);
-            if (distance <= 0)
-                return false;
-
+            // no length prepass: it would consume a single-pass input range
+            // before the search starts (loop_pred stops at last anyway)
             auto const itr =
                 util::loop_pred<std::decay_t<hpx::execution::sequenced_policy>>(
                     first, last, [&val, &proj](auto const& cur) {

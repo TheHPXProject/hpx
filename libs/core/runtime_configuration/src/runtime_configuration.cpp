@@ -222,10 +222,26 @@ namespace hpx::util {
                 HPX_PP_EXPAND(HPX_TRACING_SAMPLE_RATE)) "}",
 #endif
 
+#if defined(HPX_HAVE_THRUST)
+            // memory of hpx::thrust::pooled_allocator: device or pinned;
+            // bytes each of its pools keeps for reuse (empty: an eighth of
+            // the device's memory)
+            "[hpx.thrust]",
+            "memory = ${HPX_THRUST_MEMORY:device}",
+            "max_cached = ${HPX_THRUST_MAX_CACHED}",
+#endif
+
 #if defined(HPX_HAVE_NETWORKING)
             // by default, enable networking
             "[hpx.parcel]",
             "enable = 1",
+#endif
+
+#if defined(HPX_HAVE_HIP)
+            // devices whose HIP runtime kernels are built at startup: none,
+            // current or all (see libs/core/async_cuda/src/hip_warmup.cpp)
+            "[hpx.hip]",
+            "warmup = ${HPX_HIP_WARMUP:current}",
 #endif
 
             "[hpx.stacks]",
@@ -315,6 +331,8 @@ namespace hpx::util {
             "[hpx.task_size_chunk_size]",
             "min_chunk_time_us = ${HPX_TASK_SIZE_CHUNK_SIZE_MIN_CHUNK_TIME_US}",
             "chunks_per_core = ${HPX_TASK_SIZE_CHUNK_SIZE_CHUNKS_PER_CORE}",
+            "copy_bytes_per_ns = "
+            "${HPX_TASK_SIZE_CHUNK_SIZE_COPY_BYTES_PER_NS}",
 
             "[hpx.commandline]",
             // enable aliasing

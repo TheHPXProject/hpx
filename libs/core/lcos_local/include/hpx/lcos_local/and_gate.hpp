@@ -455,6 +455,7 @@ namespace hpx::lcos::local {
             return generation_value <= generation_;
         }
 
+        /// Manages the lifetime of a registered gate condition.
         struct manage_condition
         {
             manage_condition(

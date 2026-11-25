@@ -82,6 +82,12 @@ namespace hpx::parcelset {
 
         void initialize();
 
+        /// Called on each OS thread the runtime starts, before it runs any
+        /// work; forwards to all parcelports (parcelport::on_start_thread).
+        void on_start_thread(std::size_t local_thread_num,
+            std::size_t global_thread_num, char const* pool_name,
+            char const* postfix) const;
+
         void flush_parcels() const;
 
         /// \brief Stop all parcel ports associated with this parcelhandler
@@ -226,8 +232,11 @@ namespace hpx::parcelset {
 
         /// \brief Make sure the specified locality is not held by any
         /// connection caches anymore
-        void remove_from_connection_cache(
-            naming::gid_type const& gid, endpoints_type const& endpoints);
+        ///
+        /// \param forced  Whether the locality was removed with
+        ///                hpx::force_disconnect (instead of leaving).
+        void remove_from_connection_cache(naming::gid_type const& gid,
+            endpoints_type const& endpoints, bool forced = false);
 
         /// \brief return the endpoints associated with this parcelhandler
         /// \returns all connection information for the enabled parcelports
@@ -482,6 +491,11 @@ namespace hpx::parcelset {
         using pports_type =
             std::map<int, std::shared_ptr<parcelport>, std::greater<int>>;
         pports_type pports_;
+
+        // guards the traversal of pports_ in on_start_thread, which runs on
+        // the threads of the parcelports, against the removal of parcelports
+        // that failed to initialize
+        mutable std::mutex pports_mtx_;
 
         std::map<std::string, int> priority_;
 

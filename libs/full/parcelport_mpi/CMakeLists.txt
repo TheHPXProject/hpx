@@ -42,6 +42,21 @@ add_hpx_module(
   CMAKE_SUBDIRS examples tests
 )
 
+# device memory is sent directly if the MPI library supports the GPU backend
+# (checked in hpx_check_mpi_gpu_aware) and the transport in use handles device
+# memory at runtime (HPX_PARCELPORT_MPI_GPU_QUERY)
+if(HPX_WITH_PARCELPORT_CUDA_SUPPORT AND HPX_MPI_CUDA_AWARE)
+  target_compile_definitions(
+    hpx_parcelport_mpi
+    PRIVATE HPX_PARCELPORT_MPI_GPU_QUERY=${HPX_MPI_CUDA_QUERY}
+  )
+elseif(HPX_WITH_PARCELPORT_HIP_SUPPORT AND HPX_MPI_HIP_AWARE)
+  target_compile_definitions(
+    hpx_parcelport_mpi
+    PRIVATE HPX_PARCELPORT_MPI_GPU_QUERY=${HPX_MPI_HIP_QUERY}
+  )
+endif()
+
 set(HPX_STATIC_PARCELPORT_PLUGINS
     ${HPX_STATIC_PARCELPORT_PLUGINS} parcelport_mpi
     CACHE INTERNAL "" FORCE

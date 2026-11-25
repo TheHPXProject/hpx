@@ -25,4 +25,14 @@ namespace hpx::parcelset
 @parcelport_init_definitions@    }
 }
 
+@device_conduit_export_declarations@
+namespace hpx::parcelset
+{
+    inline void init_static_device_conduit_factories_impl(
+        [[maybe_unused]] std::vector<plugins::device_conduit_factory_base *>&
+            factories)
+    {
+@device_conduit_init_definitions@    }
+}
+
 #endif

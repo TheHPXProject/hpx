@@ -86,20 +86,21 @@ namespace hpx::threads::coroutines::detail ::posix::pth {
 #define HPX_COROUTINE_POSIX_IMPL "Pth implementation"
 #define HPX_COROUTINE_DECLARE_CONTEXT(name) pth_uctx_t name
 #define HPX_COROUTINE_CREATE_CONTEXT(ctx)                                      \
-    hpx::threads::coroutines::detail::posix::pth::check_(                      \
+    ::hpx::threads::coroutines::detail::posix::pth::check_(                    \
         pth_uctx_create(&(ctx)))
 #define HPX_COROUTINE_MAKE_CONTEXT(                                            \
     ctx, stack, size, startfunc, startarg, exitto)                             \
     /* const sigset_t* sigmask = nullptr: we don't expect per-context */       \
     /* signal masks */                                                         \
-    hpx::threads::coroutines::detail::posix::pth::check_(                      \
+    ::hpx::threads::coroutines::detail::posix::pth::check_(                    \
         pth_uctx_make(*(ctx), static_cast<char*>(stack), (size), nullptr,      \
             (startfunc), (startarg), (exitto)))
 #define HPX_COROUTINE_SWAP_CONTEXT(from, to)                                   \
-    hpx::threads::coroutines::detail::posix::pth::check_(pth_uctx_switch(      \
-        *(from), *(to))) #define HPX_COROUTINE_DESTROY_CONTEXT(ctx)            \
-        hpx::threads::coroutines::detail::posix::pth::check_(                  \
-            pth_uctx_destroy(ctx))
+    ::hpx::threads::coroutines::detail::posix::pth::check_(                    \
+        pth_uctx_switch(*(from), *(to)))
+#define HPX_COROUTINE_DESTROY_CONTEXT(ctx)                                     \
+    ::hpx::threads::coroutines::detail::posix::pth::check_(                    \
+        pth_uctx_destroy(ctx))
 
 #else    // generic Posix platform (e.g. OS X >= 10.5)
 
@@ -158,7 +159,7 @@ namespace hpx::threads::coroutines::detail::posix::ucontext {
 #define HPX_COROUTINE_CREATE_CONTEXT(ctx) /* nop */
 #define HPX_COROUTINE_MAKE_CONTEXT(                                            \
     ctx, stack, size, startfunc, startarg, exitto)                             \
-    hpx::threads::coroutines::detail::posix::ucontext::make_context(           \
+    ::hpx::threads::coroutines::detail::posix::ucontext::make_context(         \
         ctx, stack, size, startfunc, startarg, exitto)
 #define HPX_COROUTINE_SWAP_CONTEXT(pfrom, pto) ::swapcontext((pfrom), (pto))
 #define HPX_COROUTINE_DESTROY_CONTEXT(ctx) /* nop */

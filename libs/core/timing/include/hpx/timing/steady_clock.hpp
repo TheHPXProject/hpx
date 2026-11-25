@@ -24,6 +24,7 @@ namespace hpx::chrono {
 
     HPX_CXX_CORE_EXPORT using std::chrono::steady_clock;
 
+    /// Represents a time point measured by the HPX steady clock.
     HPX_CXX_CORE_EXPORT class steady_time_point
     {
         using value_type = steady_clock::time_point;
@@ -85,6 +86,13 @@ namespace hpx::chrono {
         [[nodiscard]] steady_clock::time_point from_now() const noexcept
         {
             return steady_clock::now() + _rel_time;
+        }
+
+        // A duration is true if it is not zero, in particular, null_duration
+        // is false.
+        [[nodiscard]] explicit constexpr operator bool() const noexcept
+        {
+            return _rel_time != value_type::zero();
         }
 
     private:

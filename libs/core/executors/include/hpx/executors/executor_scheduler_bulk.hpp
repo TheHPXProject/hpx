@@ -14,6 +14,7 @@
 #include <hpx/execution_base/completion_scheduler.hpp>
 #include <hpx/execution_base/completion_signatures.hpp>
 #include <hpx/execution_base/execution.hpp>
+#include <hpx/execution_base/get_env.hpp>
 #include <hpx/execution_base/receiver.hpp>
 #include <hpx/execution_base/sender.hpp>
 #include <hpx/executors/executor_scheduler.hpp>
@@ -36,6 +37,14 @@ namespace hpx::execution::experimental {
             HPX_NO_UNIQUE_ADDRESS std::decay_t<Receiver> receiver_;
             HPX_NO_UNIQUE_ADDRESS std::decay_t<Shape> shape_;
             HPX_NO_UNIQUE_ADDRESS std::decay_t<F> f_;
+
+            using env_type = decltype(hpx::execution::experimental::get_env(
+                std::declval<std::decay_t<Receiver> const&>()));
+
+            env_type get_env() const noexcept
+            {
+                return hpx::execution::experimental::get_env(receiver_);
+            }
 
             template <typename Error>
             void set_error(Error&& error) noexcept

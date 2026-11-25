@@ -22,6 +22,8 @@ jobs:
       get-cmake: true
       vcpkg: true
       msvc-dev-env: true
+      # module interfaces can only be used by the compiler that wrote them
+      match-msvc-toolset: true
       configure: |
         cmake . -Bbuild -GNinja \
             -DCMAKE_BUILD_TYPE=Release \

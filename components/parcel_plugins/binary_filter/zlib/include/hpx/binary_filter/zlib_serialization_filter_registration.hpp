@@ -22,7 +22,7 @@
             /* instance returned from this function */                         \
             static serialization::binary_filter* call()                        \
             {                                                                  \
-                return hpx::create_binary_filter(                              \
+                return ::hpx::create_binary_filter(                            \
                     "zlib_serialization_filter", true);                        \
             }                                                                  \
         };                                                                     \

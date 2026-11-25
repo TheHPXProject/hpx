@@ -16,7 +16,7 @@
 // from hpx/component_base/component_commandline.hpp
 #define HPX_DEFINE_COMPONENT_COMMANDLINE_OPTIONS(add_options_function)         \
     namespace hpx::components::commandline_options_provider {                  \
-        hpx::program_options::options_description add_commandline_options()    \
+        ::hpx::program_options::options_description add_commandline_options()  \
         {                                                                      \
             return add_options_function();                                     \
         }                                                                      \
@@ -35,13 +35,13 @@
 #define HPX_REGISTER_COMMANDLINE_MODULE(add_options_function)                  \
     HPX_REGISTER_COMMANDLINE_OPTIONS()                                         \
     HPX_REGISTER_COMMANDLINE_REGISTRY(                                         \
-        hpx::components::component_commandline, commandline_options)           \
+        ::hpx::components::component_commandline, commandline_options)         \
     HPX_DEFINE_COMPONENT_COMMANDLINE_OPTIONS(add_options_function)             \
     /**/
 #define HPX_REGISTER_COMMANDLINE_MODULE_DYNAMIC(add_options_function)          \
     HPX_REGISTER_COMMANDLINE_OPTIONS_DYNAMIC()                                 \
     HPX_REGISTER_COMMANDLINE_REGISTRY_DYNAMIC(                                 \
-        hpx::components::component_commandline, commandline_options)           \
+        ::hpx::components::component_commandline, commandline_options)         \
     HPX_DEFINE_COMPONENT_COMMANDLINE_OPTIONS(add_options_function)             \
     /**/
 
@@ -52,7 +52,7 @@
         bool HPX_PP_CAT(HPX_PLUGIN_COMPONENT_PREFIX, _startup)(                \
             startup_function_type & startup_func, bool& pre_startup)           \
         {                                                                      \
-            hpx::function<bool(startup_function_type&, bool&)> tmp =           \
+            ::hpx::function<bool(startup_function_type&, bool&)> tmp =         \
                 static_cast<bool (*)(startup_function_type&, bool&)>(          \
                     startup_);                                                 \
             if (!!tmp)                                                         \
@@ -64,7 +64,7 @@
         bool HPX_PP_CAT(HPX_PLUGIN_COMPONENT_PREFIX, _shutdown)(               \
             shutdown_function_type & shutdown_func, bool& pre_shutdown)        \
         {                                                                      \
-            hpx::function<bool(shutdown_function_type&, bool&)> tmp =          \
+            ::hpx::function<bool(shutdown_function_type&, bool&)> tmp =        \
                 static_cast<bool (*)(shutdown_function_type&, bool&)>(         \
                     shutdown_);                                                \
             if (!!tmp)                                                         \
@@ -98,7 +98,7 @@
     HPX_REGISTER_STARTUP_SHUTDOWN_FUNCTIONS()                                  \
     HPX_REGISTER_STARTUP_SHUTDOWN_MODULE_(startup, shutdown)                   \
     HPX_REGISTER_STARTUP_SHUTDOWN_REGISTRY(                                    \
-        hpx::components::startup_shutdown_provider::HPX_PP_CAT(                \
+        ::hpx::components::startup_shutdown_provider::HPX_PP_CAT(              \
             HPX_PLUGIN_COMPONENT_PREFIX, _provider),                           \
         startup_shutdown)                                                      \
     /**/
@@ -106,7 +106,7 @@
     HPX_REGISTER_STARTUP_SHUTDOWN_FUNCTIONS_DYNAMIC()                          \
     HPX_REGISTER_STARTUP_SHUTDOWN_MODULE_(startup, shutdown)                   \
     HPX_REGISTER_STARTUP_SHUTDOWN_REGISTRY_DYNAMIC(                            \
-        hpx::components::startup_shutdown_provider::HPX_PP_CAT(                \
+        ::hpx::components::startup_shutdown_provider::HPX_PP_CAT(              \
             HPX_PLUGIN_COMPONENT_PREFIX, _provider),                           \
         startup_shutdown)                                                      \
     /**/
@@ -124,7 +124,7 @@
     HPX_REGISTER_STARTUP_SHUTDOWN_FUNCTIONS()                                  \
     HPX_REGISTER_STARTUP_SHUTDOWN_MODULE_(startup, 0)                          \
     HPX_REGISTER_STARTUP_SHUTDOWN_REGISTRY(                                    \
-        hpx::components::startup_shutdown_provider::HPX_PP_CAT(                \
+        ::hpx::components::startup_shutdown_provider::HPX_PP_CAT(              \
             HPX_PLUGIN_COMPONENT_PREFIX, _provider),                           \
         startup_shutdown)                                                      \
     /**/
@@ -132,7 +132,7 @@
     HPX_REGISTER_STARTUP_SHUTDOWN_FUNCTIONS_DYNAMIC()                          \
     HPX_REGISTER_STARTUP_SHUTDOWN_MODULE_(startup, 0)                          \
     HPX_REGISTER_STARTUP_SHUTDOWN_REGISTRY_DYNAMIC(                            \
-        hpx::components::startup_shutdown_provider::HPX_PP_CAT(                \
+        ::hpx::components::startup_shutdown_provider::HPX_PP_CAT(              \
             HPX_PLUGIN_COMPONENT_PREFIX, _provider),                           \
         startup_shutdown)                                                      \
     /**/
@@ -141,7 +141,7 @@
     HPX_REGISTER_STARTUP_SHUTDOWN_FUNCTIONS()                                  \
     HPX_REGISTER_STARTUP_SHUTDOWN_MODULE_(0, shutdown)                         \
     HPX_REGISTER_STARTUP_SHUTDOWN_REGISTRY(                                    \
-        hpx::components::startup_shutdown_provider::HPX_PP_CAT(                \
+        ::hpx::components::startup_shutdown_provider::HPX_PP_CAT(              \
             HPX_PLUGIN_COMPONENT_PREFIX, _provider),                           \
         startup_shutdown)                                                      \
     /**/
@@ -149,7 +149,7 @@
     HPX_REGISTER_STARTUP_SHUTDOWN_FUNCTIONS_DYNAMIC()                          \
     HPX_REGISTER_STARTUP_SHUTDOWN_MODULE_(0, shutdown)                         \
     HPX_REGISTER_STARTUP_SHUTDOWN_REGISTRY_DYNAMIC(                            \
-        hpx::components::startup_shutdown_provider::HPX_PP_CAT(                \
+        ::hpx::components::startup_shutdown_provider::HPX_PP_CAT(              \
             HPX_PLUGIN_COMPONENT_PREFIX, _provider),                           \
         startup_shutdown)                                                      \
     /**/
@@ -179,7 +179,7 @@
         struct component_type_database<HPX_PP_STRIP_PARENS(component)>         \
         {                                                                      \
             inline static components::component_type value =                   \
-                to_int(hpx::components::component_enum_type::invalid);         \
+                to_int(::hpx::components::component_enum_type::invalid);       \
                                                                                \
             HPX_ALWAYS_EXPORT static components::component_type get() noexcept \
             {                                                                  \
@@ -282,7 +282,7 @@
     /**/
 
 #define HPX_ASSERT_COMPONENT_NOT_REGISTERED_ELSEWHERE(Component)               \
-    static_assert(!hpx::traits::component_registered_elsewhere_v<Component>,   \
+    static_assert(!::hpx::traits::component_registered_elsewhere_v<Component>, \
         "this component type is already registered by the library that "       \
         "declares it; a component type must be registered in exactly one "     \
         "module, remove this registration and use the declaration only");      \

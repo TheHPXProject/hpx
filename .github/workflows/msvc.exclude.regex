@@ -1,0 +1,25 @@
+#  Copyright (c) 2026 The STE||AR Group
+#
+#  SPDX-License-Identifier: BSL-1.0
+#  Distributed under the Boost Software License, Version 1.0. (See accompanying
+#  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+
+# Tests left out by the Windows workflow building with Visual Studio 2026, as
+# regular expressions matched anywhere in the test name (as by ctest
+# --exclude-regex, see generate_test_matrix.py --exclude-regex).
+#
+# MSVC 19.52 (toolset 14.52) doesn't compile stdexec's when_all (C7602 in
+# __when_all.hpp, reported as Developer Community issue 11177367): the tests
+# using it are left out until a fixed toolset is available.
+
+tests.regressions.modules.algorithms.rotate_7861
+tests.regressions.modules.execution.fibonacci_sr
+tests.unit.modules.algorithms.algorithms.rotate_sender
+tests.unit.modules.execution.algorithm_run_loop
+tests.unit.modules.execution.algorithm_transfer_when_all
+tests.unit.modules.execution.algorithm_when_all
+tests.unit.modules.execution.algorithm_when_all_vector
+tests.unit.modules.executors.coroutine_task
+tests.unit.modules.executors.parallel_scheduler$
+tests.unit.modules.executors.scheduler_executor
+tests.unit.modules.executors.thread_pool_scheduler

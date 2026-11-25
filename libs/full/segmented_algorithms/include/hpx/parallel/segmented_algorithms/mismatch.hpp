@@ -304,13 +304,15 @@ namespace hpx::parallel::detail {
                     ++batch_end;
                 }
 
-                (void) hpx::wait_all_nothrow(segments);
+                // report the errors of all comparisons of the batch, also of
+                // those that come after a mismatch
+                auto const local_dists =
+                    get_capture_results<ExPolicy>(HPX_MOVE(segments));
 
-                for (std::size_t i = 0; i != segments.size(); ++i)
+                for (std::size_t i = 0; i != local_dists.size(); ++i)
                 {
                     auto const& data = seg_data[batch_begin + i];
-                    auto const local_dist =
-                        get_capture_result<ExPolicy>(HPX_MOVE(segments[i]));
+                    auto const& local_dist = local_dists[i];
                     local_iterator_type1 res1 = std::get<2>(data);
                     std::advance(res1, local_dist.first);
                     local_iterator_type2 res2 = std::get<3>(data);

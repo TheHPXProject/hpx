@@ -17,3 +17,17 @@ if(UNIX)
     "modules.runtime_local" abort_signal THREADS_PER_LOCALITY 2
   )
 endif()
+
+add_hpx_executable(
+  throwing_startup_function_test INTERNAL_FLAGS
+  SOURCES throwing_startup_function.cpp
+  EXCLUDE_FROM_ALL
+  HPX_PREFIX ${HPX_BUILD_PREFIX}
+  FOLDER "Tests/Regressions/Modules/Core/RuntimeLocal"
+)
+
+add_hpx_regression_test(
+  "modules.runtime_local" throwing_startup_function
+  THREADS_PER_LOCALITY 2
+  TIMEOUT 60
+)

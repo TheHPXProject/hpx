@@ -138,6 +138,7 @@ unset(HPX_ENABLED_MODULES CACHE)
 unset(HPX_CORE_ENABLED_MODULES CACHE)
 unset(HPX_FULL_ENABLED_MODULES CACHE)
 unset(HPX_STATIC_PARCELPORT_PLUGINS CACHE)
+unset(HPX_STATIC_DEVICE_CONDUIT_PLUGINS CACHE)
 
 # ##############################################################################
 # Set up dummy compiler flags targets
@@ -642,16 +643,32 @@ endif()
 set(HPX_WITH_THRUST_DEFAULT OFF)
 if(HPX_WITH_CUDA)
   set(HPX_WITH_THRUST_DEFAULT ON)
+elseif(HPX_WITH_HIP AND NOT DEFINED CACHE{HPX_WITH_THRUST})
+  # rocThrust is a separate ROCm package, ON only if it is installed (looked up
+  # the way HPX_SetupHIP does; not if HPX_WITH_THRUST is given)
+  include(HPX_HIPPrefixPath)
+  set(_hpx_prefix_path ${CMAKE_PREFIX_PATH})
+  hpx_add_hip_prefix_path()
+  find_package(rocthrust CONFIG QUIET)
+  set(CMAKE_PREFIX_PATH ${_hpx_prefix_path})
+  unset(_hpx_prefix_path)
+  if(rocthrust_FOUND)
+    set(HPX_WITH_THRUST_DEFAULT ON)
+  endif()
 endif()
 
 hpx_option(
   HPX_WITH_THRUST
   BOOL
-  "Enable support for NVIDIA Thrust integration (default: ON when CUDA is enabled, OFF otherwise)"
+  "Enable support for Thrust integration (NVIDIA Thrust with CUDA, rocThrust with HIP; default: ON with CUDA, ON with HIP if rocThrust is found, OFF otherwise)"
   ${HPX_WITH_THRUST_DEFAULT}
   ADVANCED
   CATEGORY "Build Targets"
 )
+# the condition libs/core/thrust builds the module under
+if(HPX_WITH_THRUST AND (HPX_WITH_CUDA OR HPX_WITH_HIP))
+  hpx_add_config_define(HPX_HAVE_THRUST)
+endif()
 
 # ## HPX STDEXEC configuration ##
 
@@ -1511,6 +1528,19 @@ if(HPX_WITH_NETWORKING)
   if(HPX_WITH_PARCELPORT_TCP)
     hpx_add_config_define(HPX_HAVE_PARCELPORT_TCP)
   endif()
+
+  # device conduits move device memory between localities below the parcelports
+  # (hpx::parcelset::device_conduit)
+  hpx_option(
+    HPX_WITH_DEVICE_CONDUIT_UCX
+    BOOL
+    "Enable the UCX based device conduit (uses the UCX of the MPI library if it is UCX based; set UCX_ROOT otherwise)."
+    OFF
+    CATEGORY "Parcelport"
+  )
+  if(HPX_WITH_DEVICE_CONDUIT_UCX)
+    hpx_add_config_define(HPX_HAVE_DEVICE_CONDUIT_UCX)
+  endif()
   hpx_option(
     HPX_WITH_PARCELPORT_COUNTERS BOOL
     "Enable performance counters reporting parcelport statistics." OFF
@@ -2136,9 +2166,6 @@ if(WIN32)
   if(MSVC)
     hpx_add_target_compile_option(-Ox PUBLIC CONFIGURATIONS Release)
 
-    # even VS2017 has an ICE when compiling with -Ob2
-    hpx_add_target_compile_option(-Ob1 PUBLIC CONFIGURATIONS Release)
-
     # VS2012 and above has a special flag for improving the debug experience by
     # adding more symbol information to the build (-d2Zi)
     hpx_add_target_compile_option(-d2Zi+ PUBLIC CONFIGURATIONS RelWithDebInfo)
@@ -2604,6 +2631,67 @@ if((HPX_WITH_NETWORKING AND HPX_WITH_PARCELPORT_MPI)
 )
   hpx_setup_mpi()
 endif()
+
+# parcelports moving GPU device memory themselves, one option per GPU backend,
+# ON by default if the MPI library supports the backend. The results of the
+# checks are defined only if they ran in this configuration (not left over from
+# an earlier one with another backend or without the MPI parcelport).
+foreach(_gpu CUDA HIP)
+  unset(HPX_MPI_${_gpu}_AWARE CACHE)
+  unset(HPX_MPI_${_gpu}_QUERY CACHE)
+endforeach()
+if(HPX_WITH_NETWORKING AND HPX_WITH_CUDA)
+  set(_parcelport_cuda_support_default OFF)
+  if(HPX_WITH_PARCELPORT_MPI)
+    hpx_check_mpi_gpu_aware(CUDA)
+    if(HPX_MPI_CUDA_AWARE)
+      set(_parcelport_cuda_support_default ON)
+    endif()
+  endif()
+  hpx_option(
+    HPX_WITH_PARCELPORT_CUDA_SUPPORT
+    BOOL
+    "Enable parcelports to send and receive CUDA device memory directly if the network library supports it (CUDA-aware MPI, later NCCL); without it device memory is copied through host memory. Default: ON if the MPI library is CUDA-aware."
+    ${_parcelport_cuda_support_default}
+    CATEGORY "Parcelport"
+  )
+  if(HPX_WITH_PARCELPORT_CUDA_SUPPORT)
+    if(HPX_WITH_PARCELPORT_MPI AND NOT HPX_MPI_CUDA_AWARE)
+      hpx_info(
+        "Warning: HPX_WITH_PARCELPORT_CUDA_SUPPORT is ON, but the MPI"
+        "library is not known to be CUDA-aware: the MPI parcelport copies"
+        "device memory through host memory"
+      )
+    endif()
+    hpx_add_config_define(HPX_HAVE_PARCELPORT_CUDA_SUPPORT)
+  endif()
+endif()
+if(HPX_WITH_NETWORKING AND HPX_WITH_HIP)
+  set(_parcelport_hip_support_default OFF)
+  if(HPX_WITH_PARCELPORT_MPI)
+    hpx_check_mpi_gpu_aware(HIP)
+    if(HPX_MPI_HIP_AWARE)
+      set(_parcelport_hip_support_default ON)
+    endif()
+  endif()
+  hpx_option(
+    HPX_WITH_PARCELPORT_HIP_SUPPORT
+    BOOL
+    "Enable parcelports to send and receive HIP device memory directly if the network library supports it (ROCm-aware MPI); without it device memory is copied through host memory. Default: ON if the MPI library is ROCm-aware."
+    ${_parcelport_hip_support_default}
+    CATEGORY "Parcelport"
+  )
+  if(HPX_WITH_PARCELPORT_HIP_SUPPORT)
+    if(HPX_WITH_PARCELPORT_MPI AND NOT HPX_MPI_HIP_AWARE)
+      hpx_info(
+        "Warning: HPX_WITH_PARCELPORT_HIP_SUPPORT is ON, but the MPI"
+        "library is not known to be ROCm-aware: the MPI parcelport copies"
+        "device memory through host memory"
+      )
+    endif()
+    hpx_add_config_define(HPX_HAVE_PARCELPORT_HIP_SUPPORT)
+  endif()
+endif()
 if(HPX_WITH_NETWORKING AND HPX_WITH_PARCELPORT_LCI)
   include(HPX_SetupLCI)
   hpx_setup_lci()
@@ -2775,6 +2863,11 @@ add_hpx_pseudo_target(core)
 # ##############################################################################
 # collect names of static parcelports
 set(HPX_STATIC_PARCELPORT_PLUGINS
+    ""
+    CACHE INTERNAL "" FORCE
+)
+# collect names of the device conduits compiled into HPX
+set(HPX_STATIC_DEVICE_CONDUIT_PLUGINS
     ""
     CACHE INTERNAL "" FORCE
 )

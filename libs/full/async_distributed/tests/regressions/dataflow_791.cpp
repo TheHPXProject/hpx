@@ -62,7 +62,7 @@ void getBlockList(vector<vector<block>>& blocks, std::size_t numBlocks);
 
 void Print_Matrix(vector<double>& v);
 void InitMatrix3();
-void initLoop(int i);
+void initLoop(std::size_t i);
 
 vector<double> A;
 vector<double> L;
@@ -351,7 +351,7 @@ void InitMatrix3()
     hpx::wait_all(futures);
 }
 
-void initLoop(int i)
+void initLoop(std::size_t i)
 {
     for (std::size_t j = 0; j < size; j++)
         for (std::size_t k = 0; k < size; k++)

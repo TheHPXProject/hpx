@@ -18,11 +18,11 @@
 ///////////////////////////////////////////////////////////////////////////////
 // from file: hpx/serialization/serialization_fwd.hpp
 #define HPX_SERIALIZATION_SPLIT_MEMBER()                                       \
-    void serialize(hpx::serialization::input_archive& ar, unsigned)            \
+    void serialize(::hpx::serialization::input_archive& ar, unsigned)          \
     {                                                                          \
         load(ar, 0);                                                           \
     }                                                                          \
-    void serialize(hpx::serialization::output_archive& ar, unsigned) const     \
+    void serialize(::hpx::serialization::output_archive& ar, unsigned) const   \
     {                                                                          \
         save(ar, 0);                                                           \
     }                                                                          \
@@ -40,12 +40,12 @@
     /**/
 #define HPX_SERIALIZATION_SPLIT_FREE_2(PREFIX, T)                              \
     PREFIX HPX_FORCEINLINE void serialize(                                     \
-        hpx::serialization::input_archive& ar, T& t, unsigned)                 \
+        ::hpx::serialization::input_archive& ar, T& t, unsigned)               \
     {                                                                          \
         load(ar, t, 0);                                                        \
     }                                                                          \
     PREFIX HPX_FORCEINLINE void serialize(                                     \
-        hpx::serialization::output_archive& ar, T& t, unsigned)                \
+        ::hpx::serialization::output_archive& ar, T& t, unsigned)              \
     {                                                                          \
         save(ar, const_cast<std::add_const_t<T>&>(t), 0);                      \
     }                                                                          \
@@ -63,13 +63,13 @@
     /**/
 #define HPX_SERIALIZATION_SPLIT_FREE_TEMPLATE_3(PREFIX, TEMPLATE, ARGS)        \
     PREFIX HPX_PP_STRIP_PARENS(TEMPLATE)                                       \
-    HPX_FORCEINLINE void serialize(hpx::serialization::input_archive& ar,      \
+    HPX_FORCEINLINE void serialize(::hpx::serialization::input_archive& ar,    \
         HPX_PP_STRIP_PARENS(ARGS) & t, unsigned)                               \
     {                                                                          \
         load(ar, t, 0);                                                        \
     }                                                                          \
     PREFIX HPX_PP_STRIP_PARENS(TEMPLATE)                                       \
-    HPX_FORCEINLINE void serialize(hpx::serialization::output_archive& ar,     \
+    HPX_FORCEINLINE void serialize(::hpx::serialization::output_archive& ar,   \
         HPX_PP_STRIP_PARENS(ARGS) & t, unsigned)                               \
     {                                                                          \
         save(ar, const_cast<std::add_const_t<HPX_PP_STRIP_PARENS(ARGS)>&>(t),  \
@@ -105,35 +105,35 @@
     virtual std::string hpx_serialization_get_name() const Override            \
     {                                                                          \
         [[maybe_unused]] auto& _ =                                             \
-            hpx::serialization::detail::register_class_name<                   \
+            ::hpx::serialization::detail::register_class_name<                 \
                 Class>::instance(); /* force instantiation */                  \
         return Class::hpx_serialization_get_name_impl();                       \
     }                                                                          \
     /**/
 
 #define HPX_SERIALIZATION_ADD_INTRUSIVE_MEMBERS(Class, Override)               \
-    virtual void load(hpx::serialization::input_archive& ar, unsigned n)       \
+    virtual void load(::hpx::serialization::input_archive& ar, unsigned n)     \
         Override                                                               \
     {                                                                          \
-        serialize<hpx::serialization::input_archive>(ar, n);                   \
+        serialize<::hpx::serialization::input_archive>(ar, n);                 \
     }                                                                          \
-    virtual void save(hpx::serialization::output_archive& ar, unsigned n)      \
+    virtual void save(::hpx::serialization::output_archive& ar, unsigned n)    \
         const Override                                                         \
     {                                                                          \
         const_cast<Class*>(this)                                               \
-            ->serialize<hpx::serialization::output_archive>(ar, n);            \
+            ->serialize<::hpx::serialization::output_archive>(ar, n);          \
     }
 
 #define HPX_SERIALIZATION_ADD_INTRUSIVE_MEMBERS_SPLITTED(Override)             \
-    virtual void load(hpx::serialization::input_archive& ar, unsigned n)       \
+    virtual void load(::hpx::serialization::input_archive& ar, unsigned n)     \
         Override                                                               \
     {                                                                          \
-        load<hpx::serialization::input_archive>(ar, n);                        \
+        load<::hpx::serialization::input_archive>(ar, n);                      \
     }                                                                          \
-    virtual void save(hpx::serialization::output_archive& ar, unsigned n)      \
+    virtual void save(::hpx::serialization::output_archive& ar, unsigned n)    \
         const Override                                                         \
     {                                                                          \
-        save<hpx::serialization::output_archive>(ar, n);                       \
+        save<::hpx::serialization::output_archive>(ar, n);                     \
     }                                                                          \
     /**/
 
@@ -235,7 +235,7 @@
 
 #define HPX_SERIALIZATION_POLYMORPHIC_TEMPLATE_2(Class, Override)              \
     HPX_SERIALIZATION_POLYMORPHIC_WITH_NAME_3(                                 \
-        Class, hpx::util::debug::type_id<Class>(), Override)                   \
+        Class, ::hpx::util::debug::type_id<Class>(), Override)                 \
     /**/
 
 #define HPX_SERIALIZATION_POLYMORPHIC_TEMPLATE_1(Class)                        \
@@ -253,7 +253,7 @@
 
 #define HPX_SERIALIZATION_POLYMORPHIC_TEMPLATE_SPLITTED_2(Class, Override)     \
     HPX_SERIALIZATION_POLYMORPHIC_WITH_NAME_SPLITTED_3(                        \
-        Class, hpx::util::debug::type_id<T>(), Override)                       \
+        Class, ::hpx::util::debug::type_id<T>(), Override)                     \
     /**/
 
 #define HPX_SERIALIZATION_POLYMORPHIC_TEMPLATE_SPLITTED_1(Class)               \
@@ -282,7 +282,7 @@
             HPX_PP_CAT(register_class_helper_, Class)()                        \
             {                                                                  \
                 [[maybe_unused]] auto& _ =                                     \
-                    hpx::serialization::detail::register_class<                \
+                    ::hpx::serialization::detail::register_class<              \
                         /**/ Class>::instance(); /* force instantiation */     \
             }                                                                  \
         } HPX_PP_CAT(register_class_helper_instance_, Class);                  \
@@ -294,7 +294,7 @@
                 return Name;                                                   \
             }                                                                  \
         };                                                                     \
-        inline hpx::serialization::detail::register_class</**/ Class>          \
+        inline ::hpx::serialization::detail::register_class</**/ Class>        \
             HPX_PP_CAT(hpx_register_class_instance_, __LINE__){};              \
     }                                                                          \
     /**/
@@ -354,19 +354,20 @@
     Prefix, Parameters, Template)                                              \
     HPX_SERIALIZATION_REGISTER_CLASS_NAME_TEMPLATE(Prefix, Parameters,         \
         Template,                                                              \
-        (hpx::util::debug::type_id<HPX_PP_STRIP_PARENS(Template)>()))          \
+        (::hpx::util::debug::type_id<HPX_PP_STRIP_PARENS(Template)>()))        \
     HPX_PP_STRIP_PARENS(Parameters)                                            \
-    hpx::serialization::detail::register_class<HPX_PP_STRIP_PARENS(Template)>  \
+    ::hpx::serialization::detail::register_class<HPX_PP_STRIP_PARENS(          \
+        Template)>                                                             \
         HPX_PP_STRIP_PARENS(Template)::hpx_register_class_instance{};          \
     /**/
 
 #define HPX_SERIALIZATION_POLYMORPHIC_TEMPLATE_SEMIINTRUSIVE(Template)         \
-    static hpx::serialization::detail::register_class<Template>                \
+    static ::hpx::serialization::detail::register_class<Template>              \
         hpx_register_class_instance;                                           \
                                                                                \
-    virtual hpx::serialization::detail::register_class</**/ Template>&         \
+    virtual ::hpx::serialization::detail::register_class</**/ Template>&       \
     hpx_get_register_class_instance(                                           \
-        hpx::serialization::detail::register_class</**/ Template>*) const      \
+        ::hpx::serialization::detail::register_class</**/ Template>*) const    \
     {                                                                          \
         return hpx_register_class_instance;                                    \
     }                                                                          \
@@ -470,12 +471,12 @@
             HPX_PP_CAT(register_class_helper_, __LINE__)()                     \
             {                                                                  \
                 [[maybe_unused]] static auto& _ =                              \
-                    hpx::serialization::detail::register_class<                \
+                    ::hpx::serialization::detail::register_class<              \
                         /**/ Class>::instance(); /* force instantiation */     \
             }                                                                  \
         } HPX_PP_CAT(register_class_helper_instance_, __LINE__);               \
                                                                                \
-        inline hpx::serialization::detail::register_class</**/ Class>          \
+        inline ::hpx::serialization::detail::register_class</**/ Class>        \
             HPX_PP_CAT(hpx_register_class_instance_, __LINE__){};              \
     }                                                                          \
                                                                                \

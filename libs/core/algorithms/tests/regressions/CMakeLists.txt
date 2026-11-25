@@ -16,6 +16,8 @@ set(tests
     for_loop_2281
     for_loop_5735
     for_loop_with_auto_chunk_size
+    guided_chunk_size_8115
+    guided_chunk_size_scan_merge
     includes_chunk_boundary
     includes_empty_ranges
     is_sorted_until_chunk_boundary
@@ -26,6 +28,7 @@ set(tests
     partial_sort_early_return
     prefetching_iterator
     ranges_distinct_sentinel_8003
+    ranges_distinct_sentinel_8129
     reduce_3641
     reduce_with_auto_chunk_size
     reverse_rotate_copy_result

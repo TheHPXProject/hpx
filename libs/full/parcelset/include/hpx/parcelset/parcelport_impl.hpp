@@ -30,6 +30,7 @@
 #include <hpx/parcelset/connection_cache.hpp>
 #include <hpx/parcelset/detail/call_for_each.hpp>
 #include <hpx/parcelset/detail/parcel_await.hpp>
+#include <hpx/parcelset/device_conduit.hpp>
 #include <hpx/parcelset/encode_parcels.hpp>
 
 #include <atomic>
@@ -107,6 +108,51 @@ namespace hpx::parcelset {
             return hpx::util::get_entry_as<std::size_t>(ini,
                 key + ".max_connections_per_locality",
                 HPX_PARCEL_MAX_CONNECTIONS_PER_LOCALITY);
+        }
+
+        // A parcelport that can send device memory directly (e.g. MPI built
+        // with CUDA or ROCm support) says so by providing
+        // connection_handler_traits<>::send_device_memory(ini), one that can
+        // receive into device memory directly by providing
+        // connection_handler_traits<>::receive_device_memory(ini). The two
+        // are separate: on some systems the network card reads device memory
+        // much slower than it writes into it, there staging the data on the
+        // sending side but receiving it directly is faster.
+        template <typename Traits>
+        using send_device_memory_t = decltype(Traits::send_device_memory(
+            std::declval<util::runtime_configuration const&>()));
+
+        static bool send_device_memory(util::runtime_configuration const& ini)
+        {
+            using traits = connection_handler_traits<ConnectionHandler>;
+            if constexpr (hpx::util::is_detected_v<send_device_memory_t,
+                              traits>)
+            {
+                return traits::send_device_memory(ini);
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        template <typename Traits>
+        using receive_device_memory_t = decltype(Traits::receive_device_memory(
+            std::declval<util::runtime_configuration const&>()));
+
+        static bool receive_device_memory(
+            util::runtime_configuration const& ini)
+        {
+            using traits = connection_handler_traits<ConnectionHandler>;
+            if constexpr (hpx::util::is_detected_v<receive_device_memory_t,
+                              traits>)
+            {
+                return traits::receive_device_memory(ini);
+            }
+            else
+            {
+                return false;
+            }
         }
 
         static std::size_t zero_copy_serialization_threshold(
@@ -188,6 +234,21 @@ namespace hpx::parcelset {
                 archive_flags_ = archive_flags_ |
                     serialization::archive_flags::disable_receive_data_chunking;
             }
+
+            // zero-copy chunks may refer to device memory if the parcelport
+            // sends device memory itself
+            if (this->allow_zero_copy_optimizations() &&
+                send_device_memory(ini) && this->use_device_memory())
+            {
+                archive_flags_ = archive_flags_ |
+                    serialization::archive_flags::enable_device_chunks;
+            }
+
+            // zero-copy chunks may be received into device memory if the
+            // parcelport receives device memory itself
+            receive_device_memory_ =
+                this->allow_zero_copy_receive_optimizations() &&
+                receive_device_memory(ini) && this->use_device_memory();
         }
 
         parcelport_impl(parcelport_impl const&) = delete;
@@ -200,6 +261,13 @@ namespace hpx::parcelset {
         ~parcelport_impl() override
         {
             connection_cache_.clear();
+        }
+
+        // whether zero-copy chunks may be received into device memory
+        // directly (see receive_device_memory)
+        [[nodiscard]] constexpr bool receives_device_memory() const noexcept
+        {
+            return receive_device_memory_;
         }
 
         bool can_bootstrap() const override
@@ -218,6 +286,15 @@ namespace hpx::parcelset {
                 io_service_pool_.join();
 
             return success;
+        }
+
+        // Early parcel handling is finished: from now on the background work
+        // sends the parcels queued for a busy destination (see
+        // can_send_immediate_impl). A connection handler that overrides this
+        // has to call it.
+        void initialized() override
+        {
+            initialized_.store(true, std::memory_order_release);
         }
 
         void flush_parcels() override
@@ -275,11 +352,15 @@ namespace hpx::parcelset {
             // needs to be kept alive as long as there are futures not ready
             // or GIDs to be split. This is necessary to preserve the identity
             // of the 'this' pointer.
-            detail::parcel_await_apply(HPX_MOVE(p), HPX_MOVE(f), archive_flags_,
+            // the same flags as for the real serialization (encode_parcels)
+            std::uint32_t const flags = archive_flags_ |
+                detail::device_conduit_flags(p.destination_locality_id());
+            detail::parcel_await_apply(
+                HPX_MOVE(p), HPX_MOVE(f), flags,
                 [this, dest](parcel&& p, write_handler_type&& f) {
                     if (connection_handler_traits<
                             ConnectionHandler>::send_immediate_parcels::value &&
-                        can_send_immediate_impl())
+                        can_send_immediate_impl(dest))
                     {
                         send_immediate_impl(dest, &f, &p, 1);
                     }
@@ -289,7 +370,8 @@ namespace hpx::parcelset {
                         enqueue_parcel(dest, HPX_MOVE(p), HPX_MOVE(f));
                         get_connection_and_send_parcels(dest);
                     }
-                });
+                },
+                this->get_zero_copy_serialization_threshold());
         }
 
         void put_parcels(locality const& dest, std::vector<parcel> parcels,
@@ -333,13 +415,17 @@ namespace hpx::parcelset {
             // needs to be kept alive as long as there are futures not ready
             // or GIDs to be split. This is necessary to preserve the identity
             // of the 'this' pointer.
-            detail::parcels_await_apply(HPX_MOVE(parcels), HPX_MOVE(handlers),
-                archive_flags_,
+            // the same flags as for the real serialization (encode_parcels)
+            std::uint32_t const flags = archive_flags_ |
+                detail::device_conduit_flags(
+                    parcels[0].destination_locality_id());
+            detail::parcels_await_apply(
+                HPX_MOVE(parcels), HPX_MOVE(handlers), flags,
                 [this, dest](std::vector<parcel>&& parcels,
                     std::vector<write_handler_type>&& handlers) {
                     if (connection_handler_traits<
                             ConnectionHandler>::send_immediate_parcels::value &&
-                        can_send_immediate_impl())
+                        can_send_immediate_impl(dest))
                     {
                         send_immediate_impl(dest, handlers.data(),
                             parcels.data(), parcels.size());
@@ -350,7 +436,8 @@ namespace hpx::parcelset {
                             dest, HPX_MOVE(parcels), HPX_MOVE(handlers));
                         get_connection_and_send_parcels(dest);
                     }
-                });
+                },
+                this->get_zero_copy_serialization_threshold());
         }
 
         void send_early_parcel(locality const& dest, parcel p) override
@@ -547,6 +634,40 @@ namespace hpx::parcelset {
                               ConnectionHandler>::send_immediate_parcels::value)
             {
                 return connection_handler().can_send_immediate();
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        // Whether a parcel to the given destination may be sent right away.
+        // A connection handler that sends parcels immediately may refuse it
+        // for a busy destination (can_send_immediate(locality const&)): the
+        // parcels to it are then queued, and trigger_pending_work() sends
+        // them together from the background work once the destination is
+        // free again. Until the parcelport is initialized (bootstrap is
+        // over), nothing would send queued parcels: the worker threads don't
+        // run yet, so the (early) parcels are always sent right away then.
+        bool can_send_immediate_impl(locality const& dest)
+        {
+            if constexpr (connection_handler_traits<
+                              ConnectionHandler>::send_immediate_parcels::value)
+            {
+                if constexpr (requires(ConnectionHandler& ch) {
+                                  ch.can_send_immediate(dest);
+                              })
+                {
+                    if (!initialized_.load(std::memory_order_acquire))
+                    {
+                        return connection_handler().can_send_immediate();
+                    }
+                    return connection_handler().can_send_immediate(dest);
+                }
+                else
+                {
+                    return connection_handler().can_send_immediate();
+                }
             }
             else
             {
@@ -932,7 +1053,14 @@ namespace hpx::parcelset {
                     ConnectionHandler>::send_immediate_parcels::value &&
                 can_send_immediate_impl())
             {
-                send_immediate_impl(locality_id, nullptr, nullptr, 0);
+                // A parcelport that sends immediately may still report a
+                // destination as busy: its parcels then stay queued and are
+                // sent together (one message) by a later background work
+                // call, once the destination is free again.
+                if (can_send_immediate_impl(locality_id))
+                {
+                    send_immediate_impl(locality_id, nullptr, nullptr, 0);
+                }
                 return;
             }
 
@@ -1114,10 +1242,14 @@ namespace hpx::parcelset {
         using mutex_type = hpx::spinlock;
 
         int archive_flags_;
+        bool receive_device_memory_ = false;
         hpx::util::atomic_count operations_in_flight_;
 
         std::atomic<std::size_t> num_thread_;
         std::size_t const max_background_thread_;
+
+        // set once early parcel handling is finished (see initialized)
+        std::atomic<bool> initialized_ = false;
     };
 }    // namespace hpx::parcelset
 

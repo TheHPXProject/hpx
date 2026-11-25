@@ -254,21 +254,21 @@ namespace hpx::datapar::experimental {
         // ----------------------------------------------------------------------
         //  get and set
         // ----------------------------------------------------------------------
-        T get(int idx) const
+        T get(std::size_t idx) const
         {
-            if (idx < 0 || idx > static_cast<int>(size()))
+            if (idx >= size())
                 return -1;
             return vec[idx];
         }
 
-        T operator[](int idx) const
+        T operator[](std::size_t idx) const
         {
             return get(idx);
         }
 
-        void set(int idx, T val)
+        void set(std::size_t idx, T val)
         {
-            if (idx < 0 || idx > static_cast<int>(size()))
+            if (idx >= size())
                 return;
             vec[idx] = val;
         }
@@ -771,22 +771,22 @@ namespace hpx::datapar::experimental {
         // ----------------------------------------------------------------------
         //  get and set
         // ----------------------------------------------------------------------
-        bool get(int idx) const
+        bool get(std::size_t idx) const
         {
-            if (idx < 0 || idx > static_cast<int>(size()))
+            if (idx >= size())
                 return false;
 
             return mask[idx];
         }
 
-        bool operator[](int idx) const
+        bool operator[](std::size_t idx) const
         {
             return get(idx);
         }
 
-        void set(int idx, bool val)
+        void set(std::size_t idx, bool val)
         {
-            if (idx < 0 || idx > static_cast<int>(size()))
+            if (idx >= size())
                 return;
 
             mask[idx] = val;

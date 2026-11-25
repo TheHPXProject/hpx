@@ -11,4 +11,4 @@
 
 // from hpx/futures/future.hpp
 #define HPX_MAKE_EXCEPTIONAL_FUTURE(T, errorcode, f, msg)                      \
-    hpx::make_exceptional_future<T>(HPX_GET_EXCEPTION(errorcode, f, msg)) /**/
+    ::hpx::make_exceptional_future<T>(HPX_GET_EXCEPTION(errorcode, f, msg)) /**/

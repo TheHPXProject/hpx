@@ -24,6 +24,7 @@
 
 #include <cstddef>
 #include <limits>
+#include <new>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -92,6 +93,11 @@ namespace hpx::compute::host {
             static pointer allocate(
                 size_type n, void const* /* hint */ = nullptr)
             {
+                if (max_size() < n)
+                {
+                    throw std::bad_array_new_length();
+                }
+
                 return static_cast<pointer>(
                     hpx::threads::create_topology().allocate(n * sizeof(T)));
             }
@@ -105,7 +111,8 @@ namespace hpx::compute::host {
             {
                 try
                 {
-                    hpx::threads::create_topology().deallocate(p, n);
+                    hpx::threads::create_topology().deallocate(
+                        p, n * sizeof(T));
                 }
                 // NOLINTNEXTLINE(bugprone-empty-catch)
                 catch (...)
@@ -118,9 +125,9 @@ namespace hpx::compute::host {
             // the call allocate(n, 0) could succeed. In most implementations,
             // this returns std::numeric_limits<size_type>::max() /
             // sizeof(value_type).
-            static size_type max_size() noexcept
+            static constexpr size_type max_size() noexcept
             {
-                return (std::numeric_limits<size_type>::max)();
+                return (std::numeric_limits<size_type>::max)() / sizeof(T);
             }
 
             template <typename U, typename Iter>

@@ -27,6 +27,13 @@ namespace hpx::tracy {
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void emit_appinfo(
         char const* text, std::size_t size) noexcept;
 
+    // Tracy keys a fiber by the address of its name and asks for the text
+    // only once, later. This returns "<description>_<id>" from a set that is
+    // never freed, so the same text always gets the same, valid address. A
+    // description of 256 bytes or more is cut, with a number to keep it unique.
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT char const* fiber_name(
+        char const* description, void const* id) noexcept;
+
     namespace detail {
 
         HPX_CORE_EXPORT void enter_fiber(char const* fiber_name,

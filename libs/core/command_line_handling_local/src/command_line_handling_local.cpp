@@ -893,13 +893,15 @@ namespace hpx::local::detail {
         options.reserve(static_cast<std::size_t>(argc) + ini_config_.size());
 
         // extract all command line arguments from configuration settings and
-        // remove them from this list
-        auto const it =
-            std::stable_partition(ini_config_.begin(), ini_config_.end(),
-                [](std::string const& e) { return e.find("--hpx:") != 0; });
-
-        std::move(it, ini_config_.end(), std::back_inserter(options));
-        ini_config_.erase(it, ini_config_.end());
+        // remove them from this list, keeping the order of both (this
+        // doesn't use std::stable_partition, whose temporary buffer is
+        // deprecated in some standard libraries)
+        auto const is_option = [](std::string const& e) {
+            return e.starts_with("--hpx:");
+        };
+        std::ranges::copy_if(
+            ini_config_, std::back_inserter(options), is_option);
+        std::erase_if(ini_config_, is_option);
 
         // store the command line options that came from the configuration
         // settings in the registry

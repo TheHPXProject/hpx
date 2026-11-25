@@ -113,8 +113,7 @@ namespace hpx::execution::experimental {
             std::size_t const cores, std::size_t const count) const noexcept
         {
             // return chunk size which will create the required amount of work
-            if (iteration_duration.value() !=
-                std::chrono::steady_clock::duration::zero())
+            if (iteration_duration)
             {
                 auto const ns =
                     std::chrono::duration_cast<std::chrono::nanoseconds>(

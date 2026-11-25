@@ -27,6 +27,12 @@
 #include <hpx/parcelport_mpi/receiver.hpp>
 #include <hpx/parcelport_mpi/sender.hpp>
 
+// set by CMake to the query of a CUDA- or ROCm-aware MPI library (e.g.
+// MPIX_Query_cuda_support), declared in Open MPI's mpi-ext.h, in MPICH's mpi.h
+#if defined(HPX_PARCELPORT_MPI_GPU_QUERY) && __has_include(<mpi-ext.h>)
+#include <mpi-ext.h>
+#endif
+
 #include <asio/io_context.hpp>
 #include <asio/version.hpp>
 #if ASIO_VERSION >= 103400
@@ -70,6 +76,52 @@ namespace hpx::parcelset {
         static constexpr char const* pool_name_postfix() noexcept
         {
             return "-mpi";
+        }
+
+        // Whether the MPI library handles device pointers (CUDA- or
+        // ROCm-aware MPI) and hpx.parcel.mpi.device_memory isn't 0.
+        static bool device_memory(util::runtime_configuration const& ini)
+        {
+            if (hpx::util::get_entry_as<int>(
+                    ini, "hpx.parcel.mpi.device_memory", 1) == 0)
+            {
+                return false;
+            }
+#if defined(HPX_PARCELPORT_MPI_GPU_QUERY)
+            // the query is valid only once MPI is initialized; the MPI
+            // parcelport exists also if MPI isn't enabled
+            int initialized = 0;
+            if (!util::mpi_environment::enabled() ||
+                MPI_Initialized(&initialized) != MPI_SUCCESS || !initialized)
+            {
+                return false;
+            }
+            return HPX_PARCELPORT_MPI_GPU_QUERY() == 1;
+#else
+            return false;
+#endif
+        }
+
+        // Zero-copy chunks may refer to device memory if the MPI library
+        // handles device pointers and hpx.parcel.mpi.send_device_memory isn't
+        // 0 (otherwise they are staged through pinned host memory).
+        static bool send_device_memory(util::runtime_configuration const& ini)
+        {
+            return hpx::util::get_entry_as<int>(
+                       ini, "hpx.parcel.mpi.send_device_memory", 1) != 0 &&
+                device_memory(ini);
+        }
+
+        // Zero-copy chunks may be received into device memory directly,
+        // whatever memory the sender sent them from, if the MPI library
+        // handles device pointers and hpx.parcel.mpi.receive_device_memory
+        // isn't 0.
+        static bool receive_device_memory(
+            util::runtime_configuration const& ini)
+        {
+            return hpx::util::get_entry_as<int>(
+                       ini, "hpx.parcel.mpi.receive_device_memory", 1) != 0 &&
+                device_memory(ini);
         }
     };
 
@@ -432,7 +484,18 @@ struct hpx::traits::plugin_config_data<
             "sendimm = 0\n"
             "ack_handshake = 0\n"
             "max_header_receives = "
-            "${HPX_HAVE_PARCELPORT_MPI_MAX_HEADER_RECEIVES:0}\n";
+            "${HPX_HAVE_PARCELPORT_MPI_MAX_HEADER_RECEIVES:0}\n"
+
+            // send and receive device memory directly if the MPI library
+            // supports it (CUDA- or ROCm-aware MPI), each direction can be
+            // turned off separately: staging on the sending side is faster
+            // where the network card reads device memory slowly
+            "device_memory = "
+            "${HPX_HAVE_PARCELPORT_MPI_DEVICE_MEMORY:1}\n"
+            "send_device_memory = "
+            "${HPX_HAVE_PARCELPORT_MPI_SEND_DEVICE_MEMORY:1}\n"
+            "receive_device_memory = "
+            "${HPX_HAVE_PARCELPORT_MPI_RECEIVE_DEVICE_MEMORY:1}\n";
     }
 };    // namespace hpx::traits
 

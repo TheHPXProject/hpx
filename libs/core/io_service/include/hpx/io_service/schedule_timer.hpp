@@ -19,6 +19,8 @@
 #include <type_traits>
 #include <utility>
 
+#include <hpx/config/warnings_prefix.hpp>
+
 namespace hpx::io::experimental {
 
     namespace detail {
@@ -322,3 +324,5 @@ namespace hpx::io::experimental {
             context, time_point);
     }
 }    // namespace hpx::io::experimental
+
+#include <hpx/config/warnings_suffix.hpp>

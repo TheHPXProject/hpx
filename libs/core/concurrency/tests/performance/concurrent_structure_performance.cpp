@@ -187,7 +187,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
                         for (std::uint64_t j = 0; j < num_ops / num_threads;
                             ++j)
                         {
-                            vec.push_back(j);
+                            vec.push_back(static_cast<int>(j));
                         }
                     });
                 }

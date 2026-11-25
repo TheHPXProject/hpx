@@ -100,7 +100,8 @@ namespace hpx::detail {
     }
 
     template <typename Callback>
-    void invoke_callback(Callback&& cb, std::error_code const& ec)
+    void invoke_callback(
+        Callback&& cb, [[maybe_unused]] std::error_code const& ec)
     {
         // invoke callback
 #if defined(HPX_HAVE_NETWORKING)

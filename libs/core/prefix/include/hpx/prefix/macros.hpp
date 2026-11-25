@@ -24,12 +24,12 @@
 
 #if !defined(HPX_DEFAULT_INI_PATH)
 #define HPX_DEFAULT_INI_PATH                                                   \
-    hpx::util::find_prefixes("/share/" HPX_BASE_DIR_NAME "/ini") /**/
+    ::hpx::util::find_prefixes("/share/" HPX_BASE_DIR_NAME "/ini") /**/
 #endif
 #if !defined(HPX_DEFAULT_INI_FILE)
 #define HPX_DEFAULT_INI_FILE                                                   \
-    hpx::util::find_prefixes("/share/" HPX_BASE_DIR_NAME "/hpx.ini") /**/
+    ::hpx::util::find_prefixes("/share/" HPX_BASE_DIR_NAME "/hpx.ini") /**/
 #endif
 #if !defined(HPX_DEFAULT_COMPONENT_PATH)
-#define HPX_DEFAULT_COMPONENT_PATH hpx::util::find_prefixes("/hpx") /**/
+#define HPX_DEFAULT_COMPONENT_PATH ::hpx::util::find_prefixes("/hpx") /**/
 #endif

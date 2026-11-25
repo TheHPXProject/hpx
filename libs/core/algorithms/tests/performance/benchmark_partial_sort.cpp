@@ -27,6 +27,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
 {
     if (vm.count("seed"))
         seed = vm["seed"].as<unsigned int>();
+    gen.seed(seed);
 
     unsigned int test_count = vm["test_count"].as<unsigned int>();
 

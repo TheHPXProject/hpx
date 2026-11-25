@@ -27,7 +27,9 @@
 #include <hpx/modules/threading_base.hpp>
 
 #include <memory>
+#include <new>
 #include <string>
+#include <thread>
 #include <type_traits>
 #include <utility>
 
@@ -147,8 +149,13 @@ namespace hpx::cuda::experimental {
             {
                 future_data* this_ = static_cast<future_data*>(user_data);
 
-                auto on_exit = hpx::experimental::scope_exit(
-                    [&] { hpx::lcos::detail::intrusive_ptr_release(this_); });
+                // continuations run by making the future ready here are
+                // handed to HPX threads (see set_on_completed)
+                in_stream_callback() = true;
+                auto on_exit = hpx::experimental::scope_exit([&] {
+                    in_stream_callback() = false;
+                    hpx::lcos::detail::intrusive_ptr_release(this_);
+                });
 
                 if (error != cudaSuccess)
                 {
@@ -163,6 +170,102 @@ namespace hpx::cuda::experimental {
                 this_->set_data(hpx::util::unused);
                 cud_debug.debug(debug::str<>("set data callback"), "event",
                     debug::ptr(this_));
+            }
+
+            // stream_callback makes this future ready on a thread of the CUDA
+            // runtime, which must not run HPX work (and must not call CUDA).
+            // Continuations that would run there are handed to an HPX thread
+            // instead. Continuations run anywhere else (the future is ready
+            // already, or became ready while they were attached) run right
+            // away on that thread, as usual.
+            void set_on_completed(
+                typename lcos::detail::future_data_refcnt_base::
+                    completed_callback_type&& f) override
+            {
+                using base_type = lcos::detail::future_data_allocator<void,
+                    Allocator, future_data>;
+                using callback_type = std::decay_t<decltype(f)>;
+
+                // nothing to run, or the future is ready already: the base
+                // implementation ignores it or runs it right away
+                if (!f || this->is_ready())
+                {
+                    base_type::set_on_completed(HPX_MOVE(f));
+                    return;
+                }
+
+                // allocated here, so a failure reaches the caller; shared, so
+                // it can still be handed to another thread if no HPX thread
+                // can be created (nothing may throw into the CUDA runtime)
+                auto shared_f = std::make_shared<callback_type>(HPX_MOVE(f));
+
+                base_type::set_on_completed([shared_f]() {
+                    if (!in_stream_callback())
+                    {
+                        auto local = HPX_MOVE(*shared_f);
+                        local();
+                        return;
+                    }
+
+                    bool registered = false;
+                    try
+                    {
+                        // the HPX thread moves the function out, so its
+                        // captures are destroyed there, never on the CUDA
+                        // runtime's thread (which only releases the empty
+                        // function)
+                        hpx::threads::thread_init_data data(
+                            hpx::threads::make_thread_function_nullary(
+                                [shared_f]() {
+                                    auto local = HPX_MOVE(*shared_f);
+                                    local();
+                                }),
+                            "cuda_future_on_completed",
+                            hpx::threads::thread_priority::boost);
+
+                        hpx::error_code ec(hpx::throwmode::lightweight);
+                        hpx::threads::register_work(data, ec);
+                        registered = !ec;
+                    }
+                    catch (...)
+                    {
+                        // not registered either
+                    }
+                    if (registered)
+                    {
+                        return;
+                    }
+
+                    // No new HPX threads anymore (shutdown): an OS thread
+                    // runs it, never this one (it must not call CUDA). An
+                    // exception goes to the run_on_completed error handler,
+                    // as for any other continuation.
+                    try
+                    {
+                        std::thread([shared_f]() {
+                            auto local = HPX_MOVE(*shared_f);
+                            base_type::run_on_completed(HPX_MOVE(local));
+                        }).detach();
+                        return;
+                    }
+                    // NOLINTNEXTLINE(bugprone-empty-catch)
+                    catch (...)
+                    {
+                    }
+
+                    // Not even that: the continuation is kept, it never runs
+                    // (its captures must not be destroyed on this thread).
+                    // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
+                    [[maybe_unused]] auto* kept = new (std::nothrow)
+                        std::shared_ptr<callback_type>(shared_f);
+                });
+            }
+
+            // whether the calling thread runs stream_callback
+            static bool& in_stream_callback() noexcept
+            {
+                thread_local bool in_callback = false;
+                return in_callback;
             }
 
             hpx::runtime* rt_;

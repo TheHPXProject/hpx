@@ -94,6 +94,7 @@ namespace hpx::lcos {
     public:
         spmd_block() = default;
 
+        /// Creates an SPMD block for one image of a distributed action.
         explicit spmd_block(std::string const& name,
             std::size_t images_per_locality, std::size_t num_images,
             std::size_t image_id)
@@ -105,32 +106,38 @@ namespace hpx::lcos {
         {
         }
 
+        /// Returns the number of images launched on each locality.
         std::size_t get_images_per_locality() const
         {
             return images_per_locality_;
         }
 
+        /// Returns the total number of images in the block.
         std::size_t get_num_images() const
         {
             return num_images_;
         }
 
+        /// Returns the index of this image in the block.
         std::size_t this_image() const
         {
             return image_id_;
         }
 
+        /// Synchronizes all images in the block.
         void sync_all() const
         {
             barrier_->wait();
         }
 
+        /// Asynchronously synchronizes all images in the block.
         hpx::future<void> sync_all(hpx::launch::async_policy const&) const
         {
             return barrier_->wait(hpx::launch::async);
         }
 
         // Synchronous versions of sync_images()
+        /// Synchronizes the images in the given set.
         void sync_images(std::set<std::size_t> const& images) const
         {
             using list_type = std::set<std::size_t>;
@@ -170,6 +177,7 @@ namespace hpx::lcos {
             }
         }
 
+        /// Synchronizes the images in the given vector.
         void sync_images(std::vector<std::size_t> const& input_images) const
         {
             std::set<std::size_t> images(
@@ -177,6 +185,7 @@ namespace hpx::lcos {
             sync_images(images);
         }
 
+        /// Synchronizes the images in the given iterator range.
         template <typename Iterator>
         typename std::enable_if<std::input_iterator<Iterator>>::type
         sync_images(Iterator begin, Iterator end) const
@@ -185,6 +194,7 @@ namespace hpx::lcos {
             sync_images(images);
         }
 
+        /// Synchronizes the specified images.
         template <typename... I>
         typename std::enable_if<
             util::all_of<typename std::is_integral<I>::type...>::value>::type
@@ -195,6 +205,7 @@ namespace hpx::lcos {
         }
 
         // Asynchronous versions of sync_images()
+        /// Asynchronously synchronizes the images in the given set.
         hpx::future<void> sync_images(
             hpx::launch::async_policy const& /* policy */,
             std::set<std::size_t> const& images) const
@@ -231,6 +242,7 @@ namespace hpx::lcos {
             return hpx::make_ready_future();
         }
 
+        /// Asynchronously synchronizes the images in the given vector.
         hpx::future<void> sync_images(hpx::launch::async_policy const& policy,
             std::vector<std::size_t> const& input_images) const
         {
@@ -239,6 +251,7 @@ namespace hpx::lcos {
             return sync_images(policy, images);
         }
 
+        /// Asynchronously synchronizes the images in the given iterator range.
         template <typename Iterator>
         typename std::enable_if<std::input_iterator<Iterator>,
             hpx::future<void>>::type
@@ -249,6 +262,7 @@ namespace hpx::lcos {
             return sync_images(policy, images);
         }
 
+        /// Asynchronously synchronizes the specified images.
         template <typename... I>
         typename std::enable_if<
             util::all_of<typename std::is_integral<I>::type...>::value,
@@ -342,6 +356,8 @@ namespace hpx::lcos {
         };
     }    // namespace detail
 
+    /// Launches an SPMD action on all localities and returns a future that
+    /// becomes ready when all images have completed.
     HPX_CXX_EXPORT template <typename F, typename... Args>
         requires(hpx::traits::is_action_v<F>)
     hpx::future<void> define_spmd_block(std::string&& name,
