@@ -80,6 +80,14 @@ if(HPX_WITH_NETWORKING AND HPX_WITH_DEVICE_CONDUIT_UCX)
   hpx_setup_ucx()
 endif()
 
+# NCCL or RCCL (device conduit)
+if(HPX_WITH_NETWORKING AND HPX_WITH_DEVICE_CONDUIT_NCCL)
+  set(NCCL_ROOT "@NCCL_ROOT@")
+  set(RCCL_ROOT "@RCCL_ROOT@")
+  include(HPX_SetupNCCL)
+  hpx_setup_nccl()
+endif()
+
 # LCW
 if(HPX_WITH_NETWORKING AND HPX_WITH_PARCELPORT_LCW)
   if(HPX_WITH_FETCH_LCW)
