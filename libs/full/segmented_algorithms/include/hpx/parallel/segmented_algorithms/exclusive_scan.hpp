@@ -259,11 +259,9 @@ namespace hpx::segmented {
 
     HPX_CXX_EXPORT template <typename ExPolicy, typename FwdIter1,
         typename FwdIter2, typename T, typename Op = std::plus<T>>
-        requires(hpx::is_execution_policy_v<ExPolicy> &&
-            hpx::traits::is_iterator_v<FwdIter1> &&
-            hpx::traits::is_segmented_iterator_v<FwdIter1> &&
-            hpx::traits::is_iterator_v<FwdIter2> &&
-            hpx::traits::is_segmented_iterator_v<FwdIter2> &&
+        requires(hpx::execution_policy<ExPolicy> &&
+            hpx::segmented_iterator<FwdIter1> &&
+            hpx::segmented_iterator<FwdIter2> &&
             hpx::is_invocable_v<Op,
                 typename std::iterator_traits<FwdIter1>::value_type,
                 typename std::iterator_traits<FwdIter1>::value_type>)

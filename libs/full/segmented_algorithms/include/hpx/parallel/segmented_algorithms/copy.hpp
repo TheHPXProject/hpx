@@ -352,11 +352,9 @@ namespace hpx::segmented {
     // execution-policy overload
     HPX_CXX_EXPORT template <typename ExPolicy, typename SegIter,
         typename OutIter>
-        requires(hpx::is_execution_policy_v<ExPolicy> &&
-            hpx::traits::is_iterator_v<SegIter> &&
-            hpx::traits::is_segmented_iterator_v<SegIter> &&
-            hpx::traits::is_iterator_v<OutIter> &&
-            hpx::traits::is_segmented_iterator_v<OutIter>)
+        requires(hpx::execution_policy<ExPolicy> &&
+            hpx::segmented_iterator<SegIter> &&
+            hpx::segmented_iterator<OutIter>)
     hpx::parallel::util::detail::algorithm_result_t<ExPolicy, OutIter>
     hpx_invoke(hpx::copy_t, ExPolicy&& policy, SegIter first, SegIter last,
         OutIter dest)
