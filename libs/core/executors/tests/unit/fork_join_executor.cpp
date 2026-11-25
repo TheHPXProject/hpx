@@ -537,8 +537,58 @@ void test_get_scheduler()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+void test_subset_pu_mask_on_higher_worker()
+{
+    std::cerr << "test_subset_pu_mask_on_higher_worker\n";
+
+    std::size_t const num_workers = hpx::get_num_worker_threads();
+    if (num_workers < 2)
+    {
+        return;
+    }
+
+    auto const& rp = hpx::resource::get_partitioner();
+    std::size_t const subset_threads = num_workers / 2;
+
+    hpx::threads::mask_type pu_mask(hpx::threads::hardware_concurrency());
+    for (std::size_t i = 0; i != subset_threads; ++i)
+    {
+        hpx::threads::set(pu_mask, rp.get_pu_num(i));
+    }
+
+    hpx::execution::parallel_executor target_exec(
+        hpx::threads::thread_schedule_hint(
+            static_cast<std::int16_t>(num_workers - 1)));
+
+    hpx::async(target_exec, [&pu_mask, subset_threads]() {
+        HPX_TEST_LTE(subset_threads, hpx::get_worker_thread_num());
+
+        for (auto const sched : {fork_join_executor::loop_schedule::static_,
+                 fork_join_executor::loop_schedule::dynamic})
+        {
+            fork_join_executor exec{pu_mask,
+                hpx::threads::thread_priority::bound,
+                hpx::threads::thread_stacksize::small_, sched};
+
+            std::vector<int> input(64);
+            std::iota(input.begin(), input.end(), 1);
+            std::atomic<int> sum{0};
+
+            hpx::parallel::execution::bulk_sync_execute(
+                exec,
+                [&sum](
+                    int val) { sum.fetch_add(val, std::memory_order_relaxed); },
+                input);
+            HPX_TEST_EQ(sum.load(), 64 * 65 / 2);
+        }
+    }).get();
+}
+
+///////////////////////////////////////////////////////////////////////////////
 int hpx_main()
 {
+    test_subset_pu_mask_on_higher_worker();
+
     static_check_executor();
 
     // P2300 get_scheduler bridge test

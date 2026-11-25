@@ -365,9 +365,10 @@ namespace hpx::execution::experimental {
                 // thread is not part of the PU-mask, then it will be associated
                 // with the first queue.
 
-                // Note the current thread could also be the main thread, in
-                // which case its number will be equal to the number of worker
-                // threads.
+                // Note the current thread could also be an external thread or an
+                // HPX worker thread outside [0, num_threads_), in which case it
+                // will not participate in parallel regions and uses the extra
+                // slot at index num_threads_.
                 main_thread_ = hpx::get_worker_thread_num();
 
                 if (rp.get_affinity_data().affinities_disabled() ||
@@ -410,29 +411,28 @@ namespace hpx::execution::experimental {
 
                 bool const main_thread_is_waiting =
                     main_thread_ >= num_threads_;
-                std::size_t main_pu_num = get_first_core(pu_mask_);
-                if (main_thread_ != static_cast<std::size_t>(-1) &&
-                    !main_thread_is_waiting)
-                {
-                    main_pu_num = rp.get_pu_num(main_thread_);
-                }
-
-                if (!hpx::threads::test(pu_mask_, main_pu_num) ||
-                    num_threads_ == 1)
-                {
-                    main_thread_ok = true;
-                    main_thread_ = t++;
-                    main_pu_num = rp.get_pu_num(main_thread_);
-                    set_state_main_thread(thread_state::idle);
-                }
-
-                // explicitly make the main thread ready, if needed
+                std::size_t main_pu_num = 0;
                 if (main_thread_is_waiting)
                 {
+                    // The calling thread does not participate in parallel
+                    // regions; map its state to the extra slot num_threads_.
+                    main_thread_ = num_threads_;
                     set_state_main_thread(thread_state::idle);
                 }
+                else
+                {
+                    main_pu_num = rp.get_pu_num(main_thread_);
+                    if (!hpx::threads::test(pu_mask_, main_pu_num) ||
+                        num_threads_ == 1)
+                    {
+                        main_thread_ok = true;
+                        main_thread_ = t++;
+                        main_pu_num = rp.get_pu_num(main_thread_);
+                        set_state_main_thread(thread_state::idle);
+                    }
+                }
 
-                if (num_threads_ > 1)
+                if (num_threads_ > 1 || main_thread_is_waiting)
                 {
                     std::size_t const num_pus = pool_->get_os_thread_count();
 
@@ -440,7 +440,8 @@ namespace hpx::execution::experimental {
                         ++pu)
                     {
                         std::size_t const pu_num = rp.get_pu_num(pu);
-                        if (!main_thread_ok && pu == main_thread_)
+                        if (!main_thread_is_waiting && !main_thread_ok &&
+                            pu == main_thread_)
                         {
                             // the initializing thread is expected to
                             // participate in evaluating parallel regions
@@ -541,11 +542,9 @@ namespace hpx::execution::experimental {
             }
 
             static std::size_t get_region_data_size(
-                std::size_t const num_threads,
-                threads::thread_pool_base const* pool)
+                std::size_t const num_threads)
             {
-                return hpx::get_worker_thread_num() ==
-                        pool->get_os_thread_count() ?
+                return hpx::get_worker_thread_num() >= num_threads ?
                     num_threads + 1 :
                     num_threads;
             }
@@ -565,7 +564,7 @@ namespace hpx::execution::experimental {
                     pool_->timestamp_scale()))
               , num_threads_(pool_->get_os_thread_count())
               , pu_mask_(full_mask(num_threads_))
-              , region_data_(get_region_data_size(num_threads_, pool_))
+              , region_data_(get_region_data_size(num_threads_))
             {
                 HPX_ASSERT(pool_);
 
@@ -586,7 +585,7 @@ namespace hpx::execution::experimental {
                     pool_->timestamp_scale()))
               , num_threads_(hpx::threads::count(pu_mask))
               , pu_mask_(pu_mask)
-              , region_data_(get_region_data_size(num_threads_, pool_))
+              , region_data_(get_region_data_size(num_threads_))
             {
                 HPX_ASSERT(pool_);
                 if (pool_ == nullptr || num_threads_ == 0 ||
