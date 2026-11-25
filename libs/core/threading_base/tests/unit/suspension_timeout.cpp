@@ -69,12 +69,12 @@ namespace {
     }
 
     // run a check until it observed in time (it returns false if it didn't)
-    template <typename Check>
-    void run_in_time(Check check, char const* name)
+    template <typename F>
+    void run_in_time(F observe, char const* name)
     {
         for (int attempt = 0; attempt != 10; ++attempt)
         {
-            if (check())
+            if (observe())
                 return;
         }
         HPX_TEST_MSG(false, name);

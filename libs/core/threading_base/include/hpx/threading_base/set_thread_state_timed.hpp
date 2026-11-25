@@ -58,7 +58,7 @@ namespace hpx::threads::detail {
 
         /// Set a timer that makes the given thread pending with
         /// thread_restart_state::timeout at the given time, but only while it
-        /// is still in the suspension tagged with  suspension_tag (see
+        /// is still in the suspension tagged with suspension_tag (see
         /// set_suspended_thread_state). A thread setting such a timer on
         /// itself has to suspend right after setting it, the tag of that
         /// suspension is the tag of its current state plus one. Unlike
