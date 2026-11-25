@@ -28,7 +28,7 @@ static_assert(hpx::parallel::detail::transform_reduce_chunk_size<std::int8_t,
 static_assert(hpx::parallel::detail::transform_reduce_chunk_size<std::int16_t,
                   int, int>() == (std::numeric_limits<std::int16_t>::max)());
 static_assert(hpx::parallel::detail::transform_reduce_chunk_size<std::int64_t,
-                  int, int>() == 32 * 1024 * 1024);
+                  int, int>() == std::int64_t(32) * 1024 * 1024);
 
 ///////////////////////////////////////////////////////////////////////////////
 struct multiply
@@ -174,7 +174,7 @@ void transform_reduce_binary_multiple_exceptions()
     hpx::partitioned_vector<int> second(
         2, 1, hpx::explicit_container_layout({1, 1}, owners));
 
-    auto check = [&](auto policy) {
+    auto check_exceptions = [&](auto policy) {
         try
         {
             auto operation = hpx::transform_reduce(policy, first.begin(),
@@ -190,8 +190,8 @@ void transform_reduce_binary_multiple_exceptions()
         }
     };
 
-    check(hpx::execution::par);
-    check(hpx::execution::par(hpx::execution::task));
+    check_exceptions(hpx::execution::par);
+    check_exceptions(hpx::execution::par(hpx::execution::task));
 }
 
 hpx::threads::thread_id_type expected_reduction_thread;
