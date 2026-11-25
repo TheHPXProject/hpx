@@ -190,8 +190,8 @@ namespace hpx::threads::policies {
     /// or <prefix>.csv if the pool isn't known), none if the entry is empty.
     /// Throws hpx::exception (bad_parameter) for an invalid period.
     HPX_CXX_CORE_EXPORT
-        [[nodiscard]] HPX_CORE_EXPORT std::optional<tuner_recording_options>
-        get_tuner_recording_options(scheduler_tuner_context const& context);
+    [[nodiscard]] HPX_CORE_EXPORT std::optional<tuner_recording_options>
+    get_tuner_recording_options(scheduler_tuner_context const& context);
 
     /// Create a tuner of type Tuner (from the arguments after context) for
     /// the factory of a registered tuner (see register_scheduler_tuner): a
