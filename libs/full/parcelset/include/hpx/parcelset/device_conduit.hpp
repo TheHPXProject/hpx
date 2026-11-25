@@ -45,6 +45,8 @@ namespace hpx::parcelset {
     ///        serialization::detail::device_chunk_descriptor const& d,
     ///        void const* p, std::size_t size,
     ///        hpx::move_only_function<void(std::exception_ptr)> sent)
+    ///    (or taking 'd' by non-const reference to set d.extra, which the
+    ///    receiver gets with the descriptor, e.g. the sending GPU)
     ///    starts sending the data, calls 'sent' once the memory may be
     ///    reused (the message's objects are kept alive until then), with
     ///    the error if the data couldn't be sent: the parcel has left
@@ -69,8 +71,9 @@ namespace hpx::parcelset {
     ///  - static void config_defaults(std::vector<std::string>& ini)
     ///    adds the defaults of its configuration entries
     ///
-    /// The descriptor of a chunk holds the sending locality and a tag unique
-    /// for it. Conduits are registered with HPX_REGISTER_DEVICE_CONDUIT
+    /// The descriptor of a chunk holds the sending locality, a tag unique
+    /// for it, and what the conduit's send_impl sets in 'extra' (0 if it
+    /// sets nothing). Conduits are registered with HPX_REGISTER_DEVICE_CONDUIT
     /// (compiled into HPX) or a static hpx::plugins::device_conduit_factory<>
     /// object (e.g. in the application).
     HPX_CXX_EXPORT template <typename Derived>
@@ -202,7 +205,8 @@ namespace hpx::parcelset {
                 void const* p, std::size_t const size) override
             {
                 device_conduit_impl& b = base(conduit_);
-                serialization::detail::device_chunk_descriptor const d{
+                // send_impl may set d.extra
+                serialization::detail::device_chunk_descriptor d{
                     hpx::get_locality_id(),
                     b.next_tag_.fetch_add(1, std::memory_order_relaxed)};
 

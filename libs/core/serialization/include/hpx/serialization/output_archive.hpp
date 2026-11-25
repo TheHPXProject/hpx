@@ -471,6 +471,7 @@ namespace hpx::serialization {
             }
             save(descriptor.source);
             save(descriptor.tag);
+            save(descriptor.extra);
             return true;
         }
 

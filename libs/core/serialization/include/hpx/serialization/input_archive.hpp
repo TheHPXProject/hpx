@@ -426,6 +426,7 @@ namespace hpx::serialization {
             detail::device_chunk_descriptor descriptor;
             load(descriptor.source);
             load(descriptor.tag);
+            load(descriptor.extra);
 
             auto const* transport =
                 try_get_extra_data<detail::device_transport>();
