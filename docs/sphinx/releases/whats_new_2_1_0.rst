@@ -85,10 +85,13 @@ Breaking changes
   option to ``OFF``.
 - The SONAME of the |hpx| libraries now holds the full version (for instance
   ``libhpx.so.2.1.0`` instead of ``libhpx.so.2``), as |hpx| keeps no ABI
-  compatibility between releases. Applications and libraries built against an
-  earlier release no longer start with the libraries of this one, instead of
-  running with a mismatched ABI; rebuild them. This also applies to the
-  components and plugins of |hpx|. Windows is not affected.
+  compatibility between releases. ``libhpx_core`` had no version in its
+  SONAME before. In addition, every binary built against |hpx| now refers to
+  the symbol ``hpx_check_version_2_1_0`` of the core library, also on
+  Windows. Applications and libraries built against an earlier release no
+  longer start with the libraries of this one, instead of running with a
+  mismatched ABI; rebuild them. Defining ``HPX_NO_VERSION_CHECK`` before
+  including any |hpx| header leaves out the reference to that symbol.
 
 Supervision Module
 ==================

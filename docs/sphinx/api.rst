@@ -18,7 +18,9 @@ functionality without a deprecation period.
 We do not provide any ABI compatibility guarantees between any versions, debug
 and release builds, and builds with different C++ standards. The shared
 libraries of |hpx| therefore carry the full version in their SONAME (for
-instance ``libhpx.so.2.1.0``): an application built against one release does
+instance ``libhpx.so.2.1.0``), and every binary built against |hpx| refers to
+a symbol of the core library that names the full version (for instance
+``hpx_check_version_2_1_0``): an application built against one release does
 not start with the libraries of another release, it has to be rebuilt.
 
 ..

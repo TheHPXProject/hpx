@@ -50,11 +50,15 @@
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
-// The version check enforces the major and minor version numbers to match for
-// every compilation unit to be compiled.
+// The name of the symbol the version check refers to, it holds the full
+// version (for instance hpx_check_version_2_1_0): HPX keeps no ABI
+// compatibility between releases.
 #define HPX_CHECK_VERSION                                                      \
     HPX_PP_CAT(hpx_check_version_,                                             \
-        HPX_PP_CAT(HPX_VERSION_MAJOR, HPX_PP_CAT(_, HPX_VERSION_MINOR)))       \
+        HPX_PP_CAT(HPX_VERSION_MAJOR,                                          \
+            HPX_PP_CAT(_,                                                      \
+                HPX_PP_CAT(HPX_VERSION_MINOR,                                  \
+                    HPX_PP_CAT(_, HPX_VERSION_SUBMINOR)))))                    \
     /**/
 
 // The version check enforces the major and minor version numbers to match for
@@ -66,27 +70,37 @@
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx {
     // Helper data structures allowing to automatically detect version problems
-    // between applications and the core libraries.
-    HPX_CORE_EXPORT extern char const HPX_CHECK_VERSION[];
+    // between applications and the core libraries. C linkage keeps the symbol
+    // name undecorated for the linker directive below.
+    extern "C" HPX_CORE_EXPORT char const HPX_CHECK_VERSION[];
     HPX_CORE_EXPORT extern char const HPX_CHECK_BOOST_VERSION[];
 }    // namespace hpx
 
 ///////////////////////////////////////////////////////////////////////////////
 #if !defined(HPX_CORE_EXPORTS) && !defined(HPX_NO_VERSION_CHECK)
 
-// This is instantiated for each translation unit outside the HPX core
-// library, forcing to resolve the variable HPX_CHECK_VERSION.
-namespace {
-    // Note: this function is never executed.
-#if defined(__GNUG__) || defined(__clang__)
-    __attribute__((unused))
+// Every binary built from a translation unit outside the HPX core library
+// refers to HPX_CHECK_VERSION. Such a binary doesn't load with the core
+// library of another release (the loader reports the missing symbol), instead
+// of running with a mismatched ABI. The reference has to survive optimization.
+#if defined(_MSC_VER)
+// MSVC has no attribute that keeps an unreferenced variable: let the linker
+// include the symbol instead (32-bit x86 prefixes C names with '_')
+#if defined(_M_IX86)
+#define HPX_CHECK_VERSION_SYMBOL "_" HPX_PP_STRINGIZE(HPX_CHECK_VERSION)
+#else
+#define HPX_CHECK_VERSION_SYMBOL HPX_PP_STRINGIZE(HPX_CHECK_VERSION)
 #endif
-    char const*
-    check_hpx_version()
-    {
-        char const* versions[] = {
-            hpx::HPX_CHECK_VERSION, hpx::HPX_CHECK_BOOST_VERSION};
-        return versions[0];
-    }
+#if !defined(HPX_MODULE_STATIC_LINKING) && !defined(HPX_HAVE_STATIC_LINKING)
+#pragma comment(linker, "/include:__imp_" HPX_CHECK_VERSION_SYMBOL)
+#else
+#pragma comment(linker, "/include:" HPX_CHECK_VERSION_SYMBOL)
+#endif
+#undef HPX_CHECK_VERSION_SYMBOL
+#elif defined(__GNUC__) || defined(__clang__)
+namespace {
+    __attribute__((used)) char const* const hpx_check_version_reference =
+        hpx::HPX_CHECK_VERSION;
 }    // namespace
+#endif
 #endif
