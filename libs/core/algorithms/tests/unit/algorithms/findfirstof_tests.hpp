@@ -111,6 +111,14 @@ void test_find_first_of_sender(
     base_iterator test_index = std::begin(c) + find_first_of_pos;
 
     HPX_TEST(index == iterator(test_index));
+
+    // nothing to search for: the result is the end of the range
+    auto snd_empty =
+        tt::sync_wait(ex::just(iterator(std::begin(c)), iterator(std::end(c)),
+                          std::begin(h), std::begin(h)) |
+            hpx::find_first_of(ex_policy.on(exec)));
+
+    HPX_TEST(hpx::get<0>(snd_empty.value()) == iterator(std::end(c)));
 }
 
 template <typename ExPolicy, typename IteratorTag>

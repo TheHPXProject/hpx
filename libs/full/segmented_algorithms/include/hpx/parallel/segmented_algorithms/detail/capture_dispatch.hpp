@@ -66,6 +66,22 @@ namespace hpx::parallel::detail {
         return ready.get();
     }
 
+    // Waits for the futures of the work a segmented algorithm has started,
+    // when starting more of it fails: destroying a future doesn't wait for its
+    // action, and the caller may reuse the destination as soon as the
+    // exception arrives. A slot reserved for work that didn't start holds no
+    // shared state. Called through try_catch_exception_ptr, so that the wait
+    // happens outside the handler.
+    HPX_CXX_EXPORT template <typename Futures>
+    void wait_for_started(Futures& started)
+    {
+        for (auto& operation : started)
+        {
+            if (operation.valid())
+                operation.wait();
+        }
+    }
+
     HPX_CXX_EXPORT template <typename ExPolicy, typename T>
     HPX_FORCEINLINE hpx::future<T> handle_capture_exceptions(
         hpx::future<T>&& operation)
