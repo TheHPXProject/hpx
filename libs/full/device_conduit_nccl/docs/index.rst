@@ -29,8 +29,8 @@ GPUDirect RDMA with ROCm needs where it is available only through DMA-BUF).
 
 NCCL matches the sends and receives between two ranks by the order they are
 issued in, and its communicators are not thread safe. The conduit uses one
-communicator of two ranks for each direction between two localities, created
-when the first device data goes that way (the receiving locality creates its
+communicator of two ranks for each direction between two localities (and
+pair of GPUs, see below), created when the first device data goes that way (the receiving locality creates its
 identifier and sends it with its first request). The receiving locality
 decides the order: it collects the receives of the chunks it has decoded into
 numbered rounds, posts them as one group, and asks the sending locality for the
@@ -42,9 +42,20 @@ for instance nodes with several network ports.
 
 The communicators are non-blocking: no thread waits in NCCL, the conduit
 polls the communicators and the CUDA events of the rounds in its background
-work. A channel uses the GPU of the first chunk it moves: the conduit supports
-one GPU per locality, and localities on the same node need different GPUs
-(NCCL does not allow two ranks of a communicator on the same GPU).
+work.
+
+A rank of an NCCL communicator belongs to one GPU, so a channel is a
+direction between two localities and a pair of GPUs: the GPU of the sent data
+and the GPU of the memory it is received into. The sender puts its GPU into
+the chunk's descriptor, the receiver chooses its GPU by allocating the memory
+(device data in a parcel is received on the GPU of the parcel's destination,
+see the ``thrust`` module). Communicators are created for the pairs of GPUs
+that are used only; each costs some GPU memory and its setup. Localities on
+the same node must not use the same GPU for one channel (NCCL does not allow
+two ranks of a communicator on the same GPU). The results of remote calls are
+received on the GPU of the default target
+(``hpx::cuda::experimental::get_default_target()``, GPU 0 unless set): where
+several localities share a node, set it to a different GPU in each.
 
 With RCCL the communicators are blocking instead: RCCL (2.22) hangs or
 crashes when the non-blocking initializations of two communicators overlap in

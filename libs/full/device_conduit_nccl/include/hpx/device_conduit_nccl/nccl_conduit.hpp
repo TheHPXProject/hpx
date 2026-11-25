@@ -22,18 +22,23 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <tuple>
 #include <vector>
 
 namespace hpx::parcelset::device_conduits {
 
     /// What the receiver of device chunks tells their sender: the receives
-    /// of round 'round' are (or will be) posted, in the order of 'tags',
-    /// with the sizes in 'sizes'. The sender posts the matching sends in the
-    /// same order, rounds strictly by number. 'id' is the ncclUniqueId of
-    /// the communicator of the two (with the first round only).
+    /// of round 'round' of the channel from GPU 'sender_device' of the
+    /// sender to GPU 'receiver_device' of the receiver are (or will be)
+    /// posted, in the order of 'tags', with the sizes in 'sizes'. The sender
+    /// posts the matching sends in the same order, rounds strictly by
+    /// number. 'id' is the ncclUniqueId of the channel's communicator (with
+    /// the first round only).
     struct nccl_conduit_round
     {
         std::uint64_t round = 0;
+        std::int32_t sender_device = -1;
+        std::int32_t receiver_device = -1;
         std::vector<std::uint64_t> tags;
         std::vector<std::uint64_t> sizes;
         std::vector<char> id;
@@ -42,7 +47,7 @@ namespace hpx::parcelset::device_conduits {
         void serialize(Archive& ar, unsigned)
         {
             // clang-format off
-            ar & round & tags & sizes & id;
+            ar & round & sender_device & receiver_device & tags & sizes & id;
             // clang-format on
         }
     };
@@ -51,10 +56,13 @@ namespace hpx::parcelset::device_conduits {
     /// parcels with NCCL (or RCCL, in HIP builds) point-to-point operations.
     ///
     /// NCCL matches sends and receives between two ranks by the order they
-    /// are issued in (it has no tags), its communicators aren't thread safe,
-    /// and HPX decodes several parcels at once. So the conduit uses one
-    /// communicator of two ranks per direction of a pair of localities (a
-    /// channel), and lets the receiver decide the order: it collects the
+    /// are issued in (it has no tags), a rank belongs to one GPU, its
+    /// communicators aren't thread safe, and HPX decodes several parcels at
+    /// once. So the conduit uses one communicator of two ranks per direction
+    /// of a pair of localities and pair of GPUs (a channel: the GPU of the
+    /// sent data and the one of the memory receiving it; the sender puts its
+    /// GPU into the chunk's descriptor), and lets the receiver decide the
+    /// order: it collects the
     /// receives of the chunks it has decoded into numbered rounds, sends the
     /// sender the tags of each round (an action), and posts the receives of
     /// the round as one NCCL group. The sender holds its chunks until their
@@ -64,8 +72,11 @@ namespace hpx::parcelset::device_conduits {
     ///
     /// The communicators are non-blocking: no thread waits in NCCL, the
     /// conduit polls the state of the communicators and the CUDA events of
-    /// the rounds in its background work. A channel uses the GPU of the
-    /// first chunk it moves (one GPU per locality).
+    /// the rounds in its background work. With RCCL they are blocking, their
+    /// blocking calls run on a thread of each channel. Communicators are
+    /// created for the pairs of GPUs used only; localities on the same node
+    /// must not use the same GPU (two ranks of a communicator can't share
+    /// one).
     class HPX_EXPORT nccl_conduit : public device_conduit_impl<nccl_conduit>
     {
     public:
@@ -85,9 +96,10 @@ namespace hpx::parcelset::device_conduits {
             return true;
         }
 
+        // sets d.extra to the GPU of the data
         void send_impl(std::uint32_t locality_id,
-            serialization::detail::device_chunk_descriptor const& d,
-            void const* p, std::size_t size,
+            serialization::detail::device_chunk_descriptor& d, void const* p,
+            std::size_t size,
             hpx::move_only_function<void(std::exception_ptr)> sent);
 
         void recv_impl(serialization::detail::device_chunk_descriptor const& d,
@@ -107,26 +119,36 @@ namespace hpx::parcelset::device_conduits {
         void round_ready(std::uint32_t receiver, nccl_conduit_round round);
 
         struct channel;
+        struct outbox;
 
     private:
-        // the channel for sending to (or receiving from) 'locality_id',
-        // created the first time
-        std::shared_ptr<channel> get_channel(
-            std::uint32_t locality_id, bool sending);
+        // a channel: the other locality, the GPU here, the GPU there
+        using channel_key = std::tuple<std::uint32_t, int, int>;
 
-        // the channel for sending to 'locality_id' (also if the locality was
-        // removed), nullptr if there is none
-        std::shared_ptr<channel> find_sender(std::uint32_t locality_id);
+        // the channel receiving from 'key', created the first time
+        std::shared_ptr<channel> get_receiver(channel_key const& key);
+
+        // the chunks held for sending to 'locality_id', created the first
+        // time
+        std::shared_ptr<outbox> get_outbox(std::uint32_t locality_id);
+
+        // the channel sending to 'key', created the first time if chunks
+        // were sent to the locality (also if it was removed since), nullptr
+        // otherwise
+        std::shared_ptr<channel> find_sender(channel_key const& key);
 
         // makes progress on one channel, returns whether it did anything
         bool progress(channel& c);
 
         hpx::spinlock channels_mtx_;
-        std::map<std::uint32_t, std::shared_ptr<channel>> senders_;
-        std::map<std::uint32_t, std::shared_ptr<channel>> receivers_;
+        std::map<channel_key, std::shared_ptr<channel>> senders_;
+        std::map<channel_key, std::shared_ptr<channel>> receivers_;
+        std::map<std::uint32_t, std::shared_ptr<outbox>> outboxes_;
 
-        // the channels of removed localities, until they are idle
+        // the channels and outboxes of removed localities, until they are
+        // idle
         std::vector<std::shared_ptr<channel>> removed_;
+        std::vector<std::shared_ptr<outbox>> removed_outboxes_;
     };
 }    // namespace hpx::parcelset::device_conduits
 
