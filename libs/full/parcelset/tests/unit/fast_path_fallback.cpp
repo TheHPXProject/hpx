@@ -8,8 +8,8 @@
 // preprocessing pass. Arguments that need that pass (a managed id_type, a
 // future that is not ready) must stop that encode and take the usual path.
 // This test sends such arguments to another locality and checks the results.
-// With --fast-path it also checks that some parcels skipped the preprocessing
-// pass, without it that none did.
+// With --fast-path it also checks that 20 single parcels all skipped the
+// preprocessing pass, without it that none did.
 
 #include <hpx/config.hpp>
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
@@ -109,7 +109,8 @@ int hpx_main(hpx::program_options::variables_map& vm)
         there = hpx::find_remote_localities()[0];
     }
 
-    // one parcel at a time, so the destination is free for each of them
+    // one parcel at a time, so the destination is free for each of them (no
+    // parcelport has a per-destination can_send_immediate check yet)
     if (remote)
     {
         for (std::int32_t i = 0; i != 20; ++i)
@@ -194,7 +195,7 @@ int main(int argc, char* argv[])
 
     // clang-format off
     desc_commandline.add_options()
-        ("fast-path", "expect the fast path to send some of the parcels")
+        ("fast-path", "expect the fast path to send the single parcels")
         ;
     // clang-format on
 
