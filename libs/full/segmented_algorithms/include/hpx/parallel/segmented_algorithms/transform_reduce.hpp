@@ -7,6 +7,7 @@
 #pragma once
 
 #include <hpx/config.hpp>
+#include <hpx/assert.hpp>
 #include <hpx/modules/algorithms.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/functional.hpp>
@@ -303,10 +304,16 @@ namespace hpx::parallel::detail {
             auto end1 =
                 sit1 == send1 ? traits1::local(last1) : traits1::end(sit1);
             auto end2 = traits2::end(sit2);
-            difference_type count = (std::min) (static_cast<difference_type>(
-                                                    std::distance(beg1, end1)),
-                static_cast<difference_type>(std::distance(beg2, end2)));
-            count = (std::min) (count, max_chunk_size);
+            auto const distance1 = std::distance(beg1, end1);
+            auto const distance2 = std::distance(beg2, end2);
+            using count_type = std::common_type_t<decltype(distance1),
+                decltype(distance2), difference_type>;
+            HPX_ASSERT(distance1 >= 0 && distance2 >= 0 && remaining >= 0);
+            difference_type const count = static_cast<difference_type>(
+                (std::min) ({static_cast<count_type>(distance1),
+                    static_cast<count_type>(distance2),
+                    static_cast<count_type>(max_chunk_size),
+                    static_cast<count_type>(remaining)}));
             auto chunk_end1 = std::next(beg1, count);
             if (count != 0)
             {
