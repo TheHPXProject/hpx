@@ -154,6 +154,14 @@ namespace hpx::threads {
                 "hpx.thread_queue.high_priority_queues",
                 thread_pool_init.num_threads_);
 
+        if (num_high_priority_queues == 0)
+        {
+            HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
+                "threadmanager::create_scheduler_local_workrequesting_tuned_"
+                "fifo",
+                "hpx.thread_queue.high_priority_queues must be at least 1");
+        }
+
         detail::check_num_high_priority_queues(
             thread_pool_init.num_threads_, num_high_priority_queues);
 

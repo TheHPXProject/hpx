@@ -239,6 +239,7 @@ namespace hpx::execution::experimental {
                 // Fixed data for the duration of the executor.
                 std::size_t const num_threads_;
                 std::size_t const thread_index_;
+                std::size_t const worker_index_;
                 loop_schedule const schedule_;
                 hpx::spinlock& exception_mutex_;
                 std::exception_ptr& exception_;
@@ -278,7 +279,7 @@ namespace hpx::execution::experimental {
                         std::equal_to<>(), allow_yielding_);
 
                     HPX_ASSERT(!priority_bound_ ||
-                        thread_index_ == hpx::get_worker_thread_num());
+                        worker_index_ == hpx::get_worker_thread_num());
                     while (HPX_LIKELY(state != thread_state::stopping))
                     {
                         {
@@ -296,7 +297,7 @@ namespace hpx::execution::experimental {
                             std::equal_to<>(), allow_yielding_);
 
                         HPX_ASSERT(!priority_bound_ ||
-                            thread_index_ == hpx::get_worker_thread_num());
+                            worker_index_ == hpx::get_worker_thread_num());
                     }
 
                     HPX_ASSERT(
@@ -473,7 +474,7 @@ namespace hpx::execution::experimental {
                         auto const policy =
                             launch::async_policy(priority_, stacksize_,
                                 threads::thread_schedule_hint{
-                                    static_cast<std::int16_t>(t)});
+                                    static_cast<std::int16_t>(pu)});
 
                         hpx::threads::thread_description desc(
                             generate_annotation(pu_num, "fork_join_executor"));
@@ -481,6 +482,7 @@ namespace hpx::execution::experimental {
                             launch::async_policy>::call(policy, desc, pool_,
                             thread_function{.num_threads_ = num_threads_,
                                 .thread_index_ = t,
+                                .worker_index_ = pu,
                                 .schedule_ = schedule_,
                                 .exception_mutex_ = exception_mutex_,
                                 .exception_ = exception_,

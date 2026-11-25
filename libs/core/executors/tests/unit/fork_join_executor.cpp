@@ -557,6 +557,8 @@ void test_subset_pu_mask_on_higher_worker()
     }
 
     hpx::execution::parallel_executor target_exec(
+        hpx::threads::thread_priority::bound,
+        hpx::threads::thread_stacksize::default_,
         hpx::threads::thread_schedule_hint(
             static_cast<std::int16_t>(num_workers - 1)));
 
@@ -584,10 +586,53 @@ void test_subset_pu_mask_on_higher_worker()
     }).get();
 }
 
+void test_singleton_non_prefix_pu_mask()
+{
+    std::cerr << "test_singleton_non_prefix_pu_mask\n";
+
+    std::size_t const num_workers = hpx::get_num_worker_threads();
+    if (num_workers < 2)
+    {
+        return;
+    }
+
+    auto const& rp = hpx::resource::get_partitioner();
+    std::size_t const target_worker = num_workers - 1;
+
+    hpx::threads::mask_type pu_mask(hpx::threads::hardware_concurrency());
+    hpx::threads::set(pu_mask, rp.get_pu_num(target_worker));
+
+    // Dispatch the setup task bound to worker 1 (>= num_threads_ == 1) so
+    // the spawned worker thread must target pool worker target_worker rather
+    // than slot index 0.
+    hpx::execution::parallel_executor caller_exec(
+        hpx::threads::thread_priority::bound,
+        hpx::threads::thread_stacksize::default_,
+        hpx::threads::thread_schedule_hint(static_cast<std::int16_t>(1)));
+
+    hpx::async(caller_exec, [&pu_mask, target_worker]() {
+        HPX_TEST_EQ(hpx::get_worker_thread_num(), std::size_t(1));
+
+        fork_join_executor exec{pu_mask, hpx::threads::thread_priority::bound};
+
+        std::vector<int> input(8, 1);
+        std::atomic<int> sum{0};
+        hpx::parallel::execution::bulk_sync_execute(
+            exec,
+            [&sum, target_worker](int val) {
+                HPX_TEST_EQ(hpx::get_worker_thread_num(), target_worker);
+                sum.fetch_add(val, std::memory_order_relaxed);
+            },
+            input);
+        HPX_TEST_EQ(sum.load(), 8);
+    }).get();
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 int hpx_main()
 {
     test_subset_pu_mask_on_higher_worker();
+    test_singleton_non_prefix_pu_mask();
 
     static_check_executor();
 

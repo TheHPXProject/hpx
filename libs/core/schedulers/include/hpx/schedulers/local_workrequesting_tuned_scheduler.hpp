@@ -101,4 +101,3 @@ namespace hpx::threads::policies {
 #include <hpx/config/warnings_suffix.hpp>
 
 #endif
-
