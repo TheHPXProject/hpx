@@ -28,9 +28,6 @@
 
 #if defined(HPX_HAVE_HIP)
 #include <rccl/rccl.h>
-#if !defined(cudaMemoryTypeDevice)
-#define cudaMemoryTypeDevice hipMemoryTypeDevice
-#endif
 #else
 #include <nccl.h>
 #endif
@@ -41,6 +38,8 @@
 #include <unistd.h>
 #endif
 
+#include <atomic>
+#include <condition_variable>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -51,6 +50,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -192,6 +192,169 @@ namespace hpx::parcelset::device_conduits {
             return HPX_FORWARD(F, f)();
         }
 
+#if defined(HPX_HAVE_HIP)
+        // RCCL (2.22) fails when the non-blocking initializations of two
+        // communicators overlap in a process (it hangs or crashes), which
+        // happens here with a communicator per direction. With RCCL, the
+        // communicators are blocking, and their calls that may wait for the
+        // peer (the initialization, issuing a group) run on a thread of the
+        // channel, one at a time; the progress polls their result as it polls
+        // a non-blocking communicator.
+        class blocking_calls
+        {
+            struct state
+            {
+                std::mutex mtx;
+                std::condition_variable cv;
+                std::function<ncclResult_t(ncclComm_t&)> task;
+                bool stop = false;
+                std::atomic<ncclResult_t> result{ncclSuccess};
+
+                // the communicator an initialization has created (until the
+                // channel takes it), or the one handed back by release
+                ncclComm_t comm = nullptr;
+
+                // handed back by release
+                cudaStream_t stream = nullptr;
+                int device = -1;
+            };
+
+        public:
+            blocking_calls() = default;
+            blocking_calls(blocking_calls const&) = delete;
+            blocking_calls& operator=(blocking_calls const&) = delete;
+
+            ~blocking_calls()
+            {
+                release(nullptr, nullptr, -1);
+            }
+
+            // runs 'task' on the thread (no other one is running); the task
+            // gets the communicator to create (for an initialization)
+            void start(std::function<ncclResult_t(ncclComm_t&)> task)
+            {
+                if (!thread_.joinable())
+                {
+                    // the thread, and the threads RCCL creates from it, use
+                    // all CPUs of the process (see with_process_cpus)
+                    try
+                    {
+                        thread_ = with_process_cpus(
+                            [s = state_] { return std::thread(&run, s); });
+                    }
+                    catch (...)
+                    {
+                        // the channel fails as with an error of RCCL
+                        state_->result.store(
+                            ncclSystemError, std::memory_order_release);
+                        return;
+                    }
+                }
+                {
+                    std::lock_guard<std::mutex> l(state_->mtx);
+                    state_->result.store(
+                        ncclInProgress, std::memory_order_relaxed);
+                    state_->task = HPX_MOVE(task);
+                }
+                state_->cv.notify_one();
+            }
+
+            // the result of the last task, ncclInProgress while it runs
+            [[nodiscard]] ncclResult_t result() const noexcept
+            {
+                return state_->result.load(std::memory_order_acquire);
+            }
+
+            // the communicator the last initialization has created (once
+            // its result is there)
+            [[nodiscard]] ncclComm_t take_comm() noexcept
+            {
+                std::lock_guard<std::mutex> l(state_->mtx);
+                return std::exchange(state_->comm, nullptr);
+            }
+
+            // stops the thread: it aborts 'comm' and destroys 'stream' (and
+            // a communicator an initialization still running creates) once
+            // its current call has returned, which may wait for the peer
+            void release(
+                ncclComm_t const comm, cudaStream_t const stream, int device)
+            {
+                if (!thread_.joinable())
+                {
+                    return;
+                }
+                {
+                    std::lock_guard<std::mutex> l(state_->mtx);
+                    if (comm != nullptr)
+                    {
+                        state_->comm = comm;
+                    }
+                    state_->stream = stream;
+                    state_->device = device;
+                    state_->stop = true;
+                }
+                state_->cv.notify_one();
+                if (result() == ncclInProgress)
+                {
+                    thread_.detach();
+                }
+                else
+                {
+                    thread_.join();
+                }
+            }
+
+        private:
+            static void run(std::shared_ptr<state> const s)
+            {
+                std::unique_lock<std::mutex> l(s->mtx);
+                for (;;)
+                {
+                    s->cv.wait(l, [&] { return s->task || s->stop; });
+                    if (s->stop)
+                    {
+                        // released: a task not started yet is dropped
+                        break;
+                    }
+                    auto task = HPX_MOVE(s->task);
+                    s->task = nullptr;
+                    l.unlock();
+
+                    // only the channel's initialization sets the
+                    // communicator; the channel reads it after the result
+                    ncclComm_t comm = nullptr;
+                    ncclResult_t const result = task(comm);
+
+                    l.lock();
+                    if (comm != nullptr)
+                    {
+                        s->comm = comm;
+                    }
+                    s->result.store(result, std::memory_order_release);
+                }
+
+                // released
+                if (s->comm != nullptr)
+                {
+                    (void) ncclCommAbort(s->comm);
+                    s->comm = nullptr;
+                }
+                if (s->stream != nullptr)
+                {
+                    if (s->device >= 0)
+                    {
+                        (void) cudaSetDevice(s->device);
+                    }
+                    (void) cudaStreamDestroy(s->stream);
+                    s->stream = nullptr;
+                }
+            }
+
+            std::shared_ptr<state> state_ = std::make_shared<state>();
+            std::thread thread_;
+        };
+#endif
+
         using completion_type =
             hpx::move_only_function<void(std::exception_ptr)>;
 
@@ -320,6 +483,16 @@ namespace hpx::parcelset::device_conduits {
         // aborts the communicator, destroys the stream (with comm_mtx held)
         void release_nccl() noexcept
         {
+#if defined(HPX_HAVE_HIP)
+            // RCCL: a call of the channel's thread may still use them (and
+            // wait for the peer), so they can't be released here as NCCL's
+            // non-blocking communicator is (ncclCommAbort stops what is in
+            // progress); the thread releases them when the call has returned
+            calls.release(comm, stream, device);
+            comm = nullptr;
+            stream = nullptr;
+            initializing = false;
+#endif
             device_guard const g(device);
             if (comm != nullptr)
             {
@@ -381,6 +554,14 @@ namespace hpx::parcelset::device_conduits {
 
         // the communicator has been initialized (non-blocking)
         bool comm_ready = false;
+
+#if defined(HPX_HAVE_HIP)
+        // RCCL: the thread making the blocking calls (NCCL's non-blocking
+        // communicator needs none), and whether it is creating the
+        // communicator
+        blocking_calls calls;
+        bool initializing = false;
+#endif
 
         // the last group returned ncclInProgress: the communicator must
         // become ready again before the next NCCL call and the event of the
@@ -729,7 +910,14 @@ namespace hpx::parcelset::device_conduits {
         {
             // create the communicator once the id is there and the GPU is
             // known (from the first round)
+#if defined(HPX_HAVE_HIP)
+            // RCCL: the communicator exists only once the channel's thread
+            // has created it (NCCL's non-blocking initialization sets it
+            // right away and finishes in the background)
+            if (c.comm == nullptr && !c.initializing)
+#else
             if (c.comm == nullptr)
+#endif
             {
                 int device = -1;
                 {
@@ -757,6 +945,22 @@ namespace hpx::parcelset::device_conduits {
                     break;
                 }
 
+#if defined(HPX_HAVE_HIP)
+                // RCCL: a blocking initialization (it waits for the peer to
+                // initialize its side), made by the channel's thread instead
+                // of a non-blocking one made here, since RCCL fails when the
+                // non-blocking initializations of two communicators overlap
+                // (see blocking_calls). The thread was created with the CPUs
+                // of the process, so with_process_cpus isn't needed.
+                c.calls.start([id, device, rank = c.sending ? 1 : 0](
+                                  ncclComm_t& comm) {
+                    (void) cudaSetDevice(device);
+                    ncclConfig_t config = NCCL_CONFIG_INITIALIZER;
+                    config.blocking = 1;
+                    return ncclCommInitRankConfig(&comm, 2, id, rank, &config);
+                });
+                c.initializing = true;
+#else
                 ncclConfig_t config = NCCL_CONFIG_INITIALIZER;
                 config.blocking = 0;
                 ncclResult_t const result = with_process_cpus([&] {
@@ -769,6 +973,7 @@ namespace hpx::parcelset::device_conduits {
                         conduit_progress, "ncclCommInitRankConfig", result);
                     break;
                 }
+#endif
                 did_work = true;
             }
 
@@ -777,6 +982,28 @@ namespace hpx::parcelset::device_conduits {
             if (!c.comm_ready || c.group_pending)
             {
                 ncclResult_t state = ncclSuccess;
+#if defined(HPX_HAVE_HIP)
+                // RCCL: the communicator is blocking, there is nothing to
+                // poll in it; the initialization or group is done once the
+                // call of the channel's thread has returned, its result is
+                // what ncclCommGetAsyncError reports for NCCL
+                state = c.calls.result();
+                if (state == ncclInProgress)
+                {
+                    break;
+                }
+                if (c.initializing)
+                {
+                    c.initializing = false;
+                    c.comm = c.calls.take_comm();
+                    if (state != ncclSuccess)
+                    {
+                        error = nccl_error(conduit_progress,
+                            "ncclCommInitRankConfig", state, c.comm);
+                        break;
+                    }
+                }
+#else
                 if (ncclResult_t const result =
                         ncclCommGetAsyncError(c.comm, &state);
                     result != ncclSuccess)
@@ -789,6 +1016,7 @@ namespace hpx::parcelset::device_conduits {
                 {
                     break;
                 }
+#endif
                 if (state != ncclSuccess)
                 {
                     error = nccl_error(
@@ -860,6 +1088,44 @@ namespace hpx::parcelset::device_conduits {
                 break;
             }
 
+#if defined(HPX_HAVE_HIP)
+            // RCCL: the communicator is blocking, so ncclGroupEnd may wait
+            // (for the peer, when the connection is set up with the first
+            // group). Unlike NCCL's non-blocking group, which returns
+            // ncclInProgress and finishes on a thread of NCCL, the group is
+            // issued by the channel's thread, and the result is polled the
+            // same way (as if ncclGroupEnd had returned ncclInProgress).
+            std::vector<std::pair<void*, std::size_t>> chunks;
+            chunks.reserve(r.operations.size());
+            for (auto const& op : r.operations)
+            {
+                chunks.emplace_back(op.p, op.size);
+            }
+            c.calls.start(
+                [chunks = HPX_MOVE(chunks), sending = c.sending, comm = c.comm,
+                    stream = c.stream, device = c.device](ncclComm_t&) {
+                    (void) cudaSetDevice(device);
+                    ncclResult_t result = ncclGroupStart();
+                    if (result != ncclSuccess)
+                    {
+                        return result;
+                    }
+                    for (auto const& [p, size] : chunks)
+                    {
+                        // the receiver is rank 0, the sender rank 1
+                        result = sending ?
+                            ncclSend(p, size, ncclInt8, 0, comm, stream) :
+                            ncclRecv(p, size, ncclInt8, 1, comm, stream);
+                        if (result != ncclSuccess)
+                        {
+                            break;
+                        }
+                    }
+                    ncclResult_t const end = ncclGroupEnd();
+                    return result == ncclSuccess ? end : result;
+                });
+            ncclResult_t const result = ncclInProgress;
+#else
             ncclResult_t result = ncclGroupStart();
             if (result == ncclSuccess)
             {
@@ -881,6 +1147,7 @@ namespace hpx::parcelset::device_conduits {
                     result = end;
                 }
             }
+#endif
             if (result != ncclSuccess && result != ncclInProgress)
             {
                 for (auto& op : r.operations)

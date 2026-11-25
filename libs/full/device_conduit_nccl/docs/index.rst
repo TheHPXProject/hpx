@@ -46,6 +46,14 @@ work. A channel uses the GPU of the first chunk it moves: the conduit supports
 one GPU per locality, and localities on the same node need different GPUs
 (NCCL does not allow two ranks of a communicator on the same GPU).
 
+With RCCL the communicators are blocking instead: RCCL (2.22) hangs or
+crashes when the non-blocking initializations of two communicators overlap in
+a process, which happens here with a communicator per direction. The calls
+that may wait for the other locality, the initialization of a communicator and
+issuing a group, run on a thread of the channel, one at a time; the conduit
+polls their results in its background work as it polls a non-blocking
+communicator with NCCL.
+
 NCCL moves data with kernels that wait on the GPU until the other locality
 has started its part of the transfer. Functions that wait for all work on the
 GPU, such as ``cudaFree`` and ``cudaDeviceSynchronize``, therefore must not be
@@ -54,6 +62,14 @@ transfer the other cannot start, and both hang. Use memory that is allocated
 once, such as the pooled allocator of ``hpx::thrust`` (the default for
 ``thrust::device_vector`` sent in parcels), or stream-ordered allocation
 (``cudaMallocAsync`` and ``cudaFreeAsync``).
+
+With HIP the rule is broader: HIP runs the streams of a GPU on a few in-order
+hardware queues (``GPU_MAX_HW_QUEUES``), and RCCL creates several streams of
+its own, so waiting for any stream may wait for an RCCL kernel queued before
+it on the same hardware queue. This includes stream-ordered allocation
+followed by ``hipStreamSynchronize``, and the work ``hipFreeAsync`` queues.
+Allocate the device memory of transfers once and reuse it (``hipMalloc`` does
+not wait for the GPU), and synchronize only the streams whose work is needed.
 
 See the :ref:`API reference <modules_device_conduit_nccl_api>` of this module
 for more details.

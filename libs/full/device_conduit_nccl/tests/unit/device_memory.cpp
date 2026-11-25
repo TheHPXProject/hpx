@@ -15,7 +15,12 @@
 //
 // The test allocates and frees its device memory stream ordered: cudaFree
 // waits for all work on the GPU, including NCCL kernels waiting for the other
-// locality, which may itself wait in cudaFree (a deadlock).
+// locality, which may itself wait in cudaFree (a deadlock). With HIP, it
+// allocates with hipMalloc and reuses the memory instead of freeing it: HIP
+// runs the streams of a GPU on a few in-order hardware queues, so waiting for
+// a stream (also the one of stream-ordered allocations) may wait for an RCCL
+// kernel queued before it on the same hardware queue, which waits for the
+// other locality.
 
 #include <hpx/config.hpp>
 
@@ -34,17 +39,13 @@
 #include <iostream>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <utility>
 #include <vector>
 
 #if !defined(HPX_WINDOWS)
 #include <unistd.h>
-#endif
-
-#if defined(HPX_HAVE_HIP)
-#define cudaMallocAsync hipMallocAsync
-#define cudaFreeAsync hipFreeAsync
 #endif
 
 namespace detail = hpx::serialization::detail;
@@ -58,6 +59,21 @@ int device()
     return count == 0 ? 0 : static_cast<int>(hpx::get_locality_id()) % count;
 }
 
+#if defined(HPX_HAVE_HIP)
+// the device memory released by the test, by size, for reuse (never freed,
+// see above)
+std::map<std::size_t, std::vector<void*>>& released_memory()
+{
+    static std::map<std::size_t, std::vector<void*>> memory;
+    return memory;
+}
+
+std::mutex& released_memory_mutex()
+{
+    static std::mutex mtx;
+    return mtx;
+}
+#else
 // the stream of the allocations of this locality
 cudaStream_t allocation_stream()
 {
@@ -70,6 +86,7 @@ cudaStream_t allocation_stream()
     }();
     return stream;
 }
+#endif
 
 // the node of this locality and its number of GPUs
 std::pair<std::string, int> node_info()
@@ -104,12 +121,33 @@ struct device_buffer
         {
             // on this locality's GPU (from any worker thread)
             HPX_TEST_EQ(cudaSetDevice(device()), cudaSuccess);
-            cudaStream_t const stream = allocation_stream();
             void* p = nullptr;
+#if defined(HPX_HAVE_HIP)
+            {
+                std::lock_guard<std::mutex> l(released_memory_mutex());
+                auto& released = released_memory()[size];
+                if (!released.empty())
+                {
+                    p = released.back();
+                    released.pop_back();
+                }
+            }
+            if (p == nullptr)
+            {
+                HPX_TEST_EQ(cudaMalloc(&p, size), cudaSuccess);
+            }
+            data =
+                std::shared_ptr<char>(static_cast<char*>(p), [size](char* q) {
+                    std::lock_guard<std::mutex> l(released_memory_mutex());
+                    released_memory()[size].push_back(q);
+                });
+#else
+            cudaStream_t const stream = allocation_stream();
             HPX_TEST_EQ(cudaMallocAsync(&p, size, stream), cudaSuccess);
             HPX_TEST_EQ(cudaStreamSynchronize(stream), cudaSuccess);
             data = std::shared_ptr<char>(static_cast<char*>(p),
                 [stream](char* q) { (void) cudaFreeAsync(q, stream); });
+#endif
         }
     }
 
