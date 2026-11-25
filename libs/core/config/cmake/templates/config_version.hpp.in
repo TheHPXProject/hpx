@@ -71,14 +71,19 @@
 namespace hpx {
     // Helper data structures allowing to automatically detect version problems
     // between applications and the core libraries. C linkage keeps the symbol
-    // name undecorated for the linker directive below.
-    HPX_CXX_CORE_EXPORT extern "C" HPX_CORE_EXPORT char const
-        HPX_CHECK_VERSION[];
+    // name undecorated for the linker directive below. No HPX_CXX_CORE_EXPORT:
+    // hpx/config.hpp is included in the global module fragment of the C++
+    // module interface units, where 'export' isn't allowed.
+    extern "C" HPX_CORE_EXPORT char const HPX_CHECK_VERSION[];
     HPX_CORE_EXPORT extern char const HPX_CHECK_BOOST_VERSION[];
 }    // namespace hpx
 
 ///////////////////////////////////////////////////////////////////////////////
-#if !defined(HPX_CORE_EXPORTS) && !defined(HPX_NO_VERSION_CHECK)
+// HPX_MODULE_STATIC_LINKING is defined by unit tests that are compiled like
+// parts of a module but link with the core library: they can't refer to the
+// imported symbol.
+#if !defined(HPX_CORE_EXPORTS) && !defined(HPX_NO_VERSION_CHECK) &&           \
+    !defined(HPX_MODULE_STATIC_LINKING)
 
 // Every binary built from a translation unit outside the HPX core library
 // refers to HPX_CHECK_VERSION. Such a binary doesn't load with the core
@@ -92,7 +97,7 @@ namespace hpx {
 #else
 #define HPX_CHECK_VERSION_SYMBOL HPX_PP_STRINGIZE(HPX_CHECK_VERSION)
 #endif
-#if !defined(HPX_MODULE_STATIC_LINKING) && !defined(HPX_HAVE_STATIC_LINKING)
+#if !defined(HPX_HAVE_STATIC_LINKING)
 #pragma comment(linker, "/include:__imp_" HPX_CHECK_VERSION_SYMBOL)
 #else
 #pragma comment(linker, "/include:" HPX_CHECK_VERSION_SYMBOL)
