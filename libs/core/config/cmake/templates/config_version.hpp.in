@@ -72,7 +72,8 @@ namespace hpx {
     // Helper data structures allowing to automatically detect version problems
     // between applications and the core libraries. C linkage keeps the symbol
     // name undecorated for the linker directive below.
-    extern "C" HPX_CORE_EXPORT char const HPX_CHECK_VERSION[];
+    HPX_CXX_CORE_EXPORT extern "C" HPX_CORE_EXPORT char const
+        HPX_CHECK_VERSION[];
     HPX_CORE_EXPORT extern char const HPX_CHECK_BOOST_VERSION[];
 }    // namespace hpx
 
