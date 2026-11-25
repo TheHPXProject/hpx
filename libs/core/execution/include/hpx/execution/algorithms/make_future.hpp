@@ -8,12 +8,12 @@
 #pragma once
 
 #include <hpx/assert.hpp>
-#include <hpx/async_base/query_dispatch.hpp>
 #include <hpx/execution/algorithms/detail/inject_scheduler.hpp>
 #include <hpx/execution/algorithms/detail/partial_algorithm.hpp>
 #include <hpx/execution/algorithms/detail/single_result.hpp>
 #include <hpx/execution/algorithms/run_loop.hpp>
 #include <hpx/modules/allocator_support.hpp>
+#include <hpx/modules/async_base.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/execution_base.hpp>
 #include <hpx/modules/futures.hpp>

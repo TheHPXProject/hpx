@@ -9,15 +9,14 @@
 #include <hpx/config.hpp>
 
 #include <hpx/assert.hpp>
-#include <hpx/functional/invoke.hpp>
 #include <hpx/modules/algorithms.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/futures.hpp>
+#include <hpx/modules/tag_invoke.hpp>
 #include <hpx/modules/tracing.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/segmented_algorithms/detail/capture_dispatch.hpp>
-#include <hpx/parallel/util/detail/handle_local_exceptions.hpp>
 
 #include <algorithm>
 #include <cstddef>

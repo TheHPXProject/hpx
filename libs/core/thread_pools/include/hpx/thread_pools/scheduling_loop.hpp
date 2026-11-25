@@ -8,9 +8,9 @@
 
 #include <hpx/config.hpp>
 #include <hpx/assert.hpp>
-#include <hpx/hardware/timestamp.hpp>
 #include <hpx/modules/execution_base.hpp>
 #include <hpx/modules/functional.hpp>
+#include <hpx/modules/hardware.hpp>
 #include <hpx/modules/threading_base.hpp>
 #include <hpx/modules/tracing.hpp>
 #include <hpx/thread_pools/detail/background_thread.hpp>
