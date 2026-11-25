@@ -527,6 +527,45 @@ void remove_copy_bad_alloc_test()
     test_remove_copy_bad_alloc<std::forward_iterator_tag>();
 }
 
+// With a policy the value may be list-initialized: its type is then the one
+// the projection yields.
+void test_remove_copy_list_initialized()
+{
+    using namespace hpx::execution;
+
+    {
+        std::vector<int> c{1, 2, 3, 2, 5};
+        std::vector<int> dest(c.size(), -1);
+        auto res = hpx::ranges::remove_copy(seq, c, dest.begin(), {2});
+        HPX_TEST(res.in == c.end());
+        HPX_TEST(res.out == dest.begin() + 3);
+        HPX_TEST(dest[0] == 1 && dest[1] == 3 && dest[2] == 5);
+    }
+    {
+        std::vector<int> c{1, 2, 3, 2, 5};
+        std::vector<int> dest(c.size(), -1);
+        auto res = hpx::ranges::remove_copy(
+            par, c.begin(), c.end(), dest.begin(), {2});
+        HPX_TEST(res.out == dest.begin() + 3);
+        HPX_TEST(dest[0] == 1 && dest[1] == 3 && dest[2] == 5);
+    }
+    {
+        std::vector<projected_element> c{{1, 0}, {2, 1}, {3, 2}, {2, 3}};
+        std::vector<projected_element> dest(c.size());
+        auto proj = [](projected_element const& e) -> int { return e.key; };
+        auto res = hpx::ranges::remove_copy(par, c, dest.begin(), {2}, proj);
+        HPX_TEST(res.out == dest.begin() + 2);
+        HPX_TEST(dest[0].tag == 0 && dest[1].tag == 2);
+    }
+    {
+        std::vector<int> c{1, 2, 3, 2, 5};
+        std::vector<int> dest(c.size(), -1);
+        auto f = hpx::ranges::remove_copy(par(task), c, dest.begin(), {2});
+        auto res = f.get();
+        HPX_TEST(res.out == dest.begin() + 3);
+    }
+}
+
 int hpx_main(hpx::program_options::variables_map& vm)
 {
     unsigned int seed = (unsigned int) std::time(nullptr);
@@ -540,6 +579,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
     remove_copy_exception_test();
     remove_copy_bad_alloc_test();
     test_remove_copy_projection();
+    test_remove_copy_list_initialized();
     return hpx::local::finalize();
 }
 
