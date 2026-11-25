@@ -99,9 +99,20 @@ namespace hpx {
 #endif
 #undef HPX_CHECK_VERSION_SYMBOL
 #elif defined(__GNUC__) || defined(__clang__)
+// 'used' keeps the variable from the compiler, 'retain' (ELF only) keeps its
+// section from the linker's garbage collection (--gc-sections)
+#if defined(__ELF__) && defined(__has_attribute)
+#if __has_attribute(retain)
+#define HPX_CHECK_VERSION_KEEP __attribute__((used, retain))
+#endif
+#endif
+#if !defined(HPX_CHECK_VERSION_KEEP)
+#define HPX_CHECK_VERSION_KEEP __attribute__((used))
+#endif
 namespace {
-    __attribute__((used)) char const* const hpx_check_version_reference =
+    HPX_CHECK_VERSION_KEEP char const* const hpx_check_version_reference =
         hpx::HPX_CHECK_VERSION;
 }    // namespace
+#undef HPX_CHECK_VERSION_KEEP
 #endif
 #endif
