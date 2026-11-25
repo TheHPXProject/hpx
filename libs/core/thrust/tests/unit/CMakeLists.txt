@@ -12,10 +12,14 @@ set(tests thrust_policy_traits)
 # stdexec can't be compiled by nvcc with MSVC as the host compiler (the CUDA
 # tests include hpx/modules/thrust.hpp, which may include stdexec)
 if(NOT (MSVC AND CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA"))
-  list(APPEND tests thrust_policy_test thrust_pooled_allocator
-       thrust_serialization
+  list(APPEND tests thrust_multi_device thrust_policy_test
+       thrust_pooled_allocator thrust_serialization
   )
 endif()
+# the current GPU belongs to the OS thread, the test checks it on one
+set(thrust_multi_device_PARAMETERS THREADS_PER_LOCALITY 1)
+set(thrust_multi_device_CUDA ON)
+set(thrust_multi_device_SOURCES thrust_serialization_archives.cpp)
 set(thrust_policy_traits_PARAMETERS THREADS_PER_LOCALITY 4)
 set(thrust_policy_test_PARAMETERS THREADS_PER_LOCALITY 4)
 set(thrust_policy_test_CUDA ON)

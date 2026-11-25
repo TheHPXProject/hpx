@@ -465,6 +465,24 @@ namespace hpx::parcelset::detail {
         return std::make_pair(lva, comptype);
     }
 
+    namespace {
+
+        void set_receive_device(
+            serialization::input_archive& ar, int const device)
+        {
+            if (device >= 0)
+            {
+                ar.get_extra_data<serialization::detail::receive_device>()
+                    .device = device;
+            }
+            else if (auto* receive_device = ar.try_get_extra_data<
+                         serialization::detail::receive_device>())
+            {
+                receive_device->device = -1;
+            }
+        }
+    }    // namespace
+
     bool parcel::load_schedule(serialization::input_archive& ar,
         std::size_t num_thread, bool& deferred_schedule)
     {
@@ -489,6 +507,12 @@ namespace hpx::parcelset::detail {
 
         // make sure the target has not been migrated away
         auto const r = action_->was_object_migrated(data_.dest_, p.first);
+
+        // device data in the arguments goes to the target's GPU, if it has
+        // one; set for every parcel, an archive may hold several
+        set_receive_device(
+            ar, r.first ? -1 : action_->get_target_device(p.first));
+
         if (r.first)
         {
             // If the object was migrated, just load the action and return.

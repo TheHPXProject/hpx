@@ -5,6 +5,7 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 #include <hpx/config.hpp>
+#include <hpx/assert.hpp>
 #include <hpx/modules/async_cuda.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/futures.hpp>
@@ -19,49 +20,102 @@
 #include <cstddef>
 #include <cstdio>
 #include <memory>
+#include <mutex>
+#include <thread>
 #include <utility>
 
 namespace hpx::serialization::detail {
 
     namespace {
 
-        // A few CUDA streams for the staging copies, created on first use
-        // (on the device current then; one GPU per locality) and kept for
-        // the lifetime of the process: creating a stream per transfer costs
-        // more than small and medium transfers take. They are blocking
-        // streams, which orders them after the legacy default stream only,
-        // not after per-thread default streams or other streams. The data
-        // must be complete before it is serialized (see
+        // A few CUDA streams per GPU for the staging copies, created when a
+        // GPU is used first (other GPUs get no context) and kept for the
+        // lifetime of the process: creating a stream per transfer costs more
+        // than small and medium transfers take. They are blocking streams,
+        // which orders them after the legacy default stream only, not after
+        // per-thread default streams or other streams. The data must be
+        // complete before it is serialized (see
         // hpx/thrust/serialization/device_vector.hpp).
-        cudaStream_t staging_stream()
+        class staging_streams
         {
-            struct streams
+            struct device_streams
             {
-                streams()
+                std::once_flag created_;
+                std::array<cudaStream_t, 4> streams_{};
+                std::atomic<std::size_t> next_{0};
+            };
+
+        public:
+            staging_streams()
+            {
+                int count = 0;
+                if (cudaGetDeviceCount(&count) != cudaSuccess)
                 {
-                    for (std::size_t i = 0; i != streams_.size(); ++i)
+                    (void) cudaGetLastError();
+                    count = 0;
+                }
+                count_ = count;
+                devices_ = std::make_unique<device_streams[]>(
+                    static_cast<std::size_t>(count));
+            }
+
+            // the next stream of 'device' (created on that GPU)
+            cudaStream_t get(int const device)
+            {
+                if (device < 0 || device >= count_)
+                {
+                    HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
+                        "hpx::serialization::detail::staging_streams::get",
+                        "invalid device {} ({} visible)", device, count_);
+                }
+
+                auto& d = devices_[static_cast<std::size_t>(device)];
+                std::call_once(d.created_, [&] {
+                    scoped_device const on_device(device);
+                    for (std::size_t i = 0; i != d.streams_.size(); ++i)
                     {
                         if (cudaError_t const error =
-                                cudaStreamCreate(&streams_[i]);
+                                cudaStreamCreate(&d.streams_[i]);
                             error != cudaSuccess)
                         {
                             // the next call tries again: release the streams
                             // created so far
                             for (std::size_t j = 0; j != i; ++j)
                             {
-                                (void) cudaStreamDestroy(streams_[j]);
+                                (void) cudaStreamDestroy(d.streams_[j]);
                             }
                             hpx::cuda::experimental::check_cuda_error(error);
                         }
                     }
-                }
+                });
+                return d.streams_[d.next_++ % d.streams_.size()];
+            }
 
-                std::array<cudaStream_t, 4> streams_{};
-                std::atomic<std::size_t> next_{0};
-            };
+        private:
+            int count_ = 0;
+            std::unique_ptr<device_streams[]> devices_;
+        };
 
-            static streams pool;
-            return pool.streams_[pool.next_++ % pool.streams_.size()];
+        // a staging stream of 'device'
+        cudaStream_t staging_stream(int const device)
+        {
+            static staging_streams streams;
+            return streams.get(device);
+        }
+
+        int current_device()
+        {
+            int device = 0;
+            hpx::cuda::experimental::check_cuda_error(cudaGetDevice(&device));
+            return device;
+        }
+
+        // the GPU of device memory, the current one if the runtime can't
+        // tell
+        int device_of_or_current(void const* p)
+        {
+            int const device = device_of(p);
+            return device >= 0 ? device : current_device();
         }
 
         // Pinned host memory from the pool (allocating it takes long), the
@@ -108,25 +162,42 @@ namespace hpx::serialization::detail {
             std::size_t size_;
         };
 
-        // Pinned host copy of device memory, filled asynchronously on a
-        // staging stream. A zero-copy chunk of a serialized device_vector
-        // refers to it, and the parcel keeps it alive until the parcel has
-        // been sent.
+        // Pinned host copy of device memory on GPU 'device', filled
+        // asynchronously on a staging stream of that GPU. A zero-copy chunk of
+        // a serialized device_vector refers to it, and the parcel keeps it
+        // alive until the parcel has been sent.
         class device_host_copy
         {
         public:
-            device_host_copy(void const* device_data, std::size_t const size)
+            device_host_copy(int const device, void const* device_data,
+                std::size_t const size)
               : buffer_(size)
-              , stream_(staging_stream())
+              , stream_(staging_stream(device))
             {
-                hpx::cuda::experimental::check_cuda_error(
-                    cudaMemcpyAsync(buffer_.data(), device_data, size,
-                        cudaMemcpyDeviceToHost, stream_));
+                {
+                    scoped_device const on_device(device);
+                    hpx::cuda::experimental::check_cuda_error(
+                        cudaMemcpyAsync(buffer_.data(), device_data, size,
+                            cudaMemcpyDeviceToHost, stream_));
+                    try
+                    {
+                        // the source may be pooled memory, given back (e.g.
+                        // by a temporary vector) before the copy has read it;
+                        // the pool records an event on the copy's stream,
+                        // created on the copy's GPU (nothing here suspends)
+                        hpx::thrust::detail::pool_note_read(
+                            device_data, stream_);
+                    }
+                    catch (...)
+                    {
+                        // the buffer goes back to the pool, never under a
+                        // copy
+                        (void) cudaStreamSynchronize(stream_);
+                        throw;
+                    }
+                }
                 try
                 {
-                    // the source may be pooled memory, given back (e.g. by a
-                    // temporary vector) before the copy has read it
-                    hpx::thrust::detail::pool_note_read(device_data, stream_);
                     ready_ = hpx::cuda::experimental::detail::
                         get_future_with_callback(stream_);
                 }
@@ -218,16 +289,20 @@ namespace hpx::serialization::detail {
         }
 
         // Copies a received staging buffer to device memory asynchronously
-        // on a staging stream and calls 'done' once the copy has finished.
-        // The CUDA future hands that continuation to an HPX thread.
-        void copy_to_device(void* device_data,
+        // on a staging stream of 'device' (the GPU of 'device_data') and
+        // calls 'done' once the copy has finished. The CUDA future hands that
+        // continuation to an HPX thread. Runs after the load, on any thread.
+        void copy_to_device(int const device, void* device_data,
             std::shared_ptr<pinned_host_buffer> staging, std::size_t const size,
             post_receive_actions::done_type done)
         {
-            cudaStream_t const stream = staging_stream();
-            hpx::cuda::experimental::check_cuda_error(
-                cudaMemcpyAsync(device_data, staging->data(), size,
-                    cudaMemcpyHostToDevice, stream));
+            cudaStream_t const stream = staging_stream(device);
+            {
+                scoped_device const on_device(device);
+                hpx::cuda::experimental::check_cuda_error(
+                    cudaMemcpyAsync(device_data, staging->data(), size,
+                        cudaMemcpyHostToDevice, stream));
+            }
 
             // The continuation gets a copy of 'staging', this function keeps
             // its own until it returns: if handing on the completion fails,
@@ -299,11 +374,16 @@ namespace hpx::serialization::detail {
             return checked(buffer);
         }
 
+        // the copy runs on the GPU of the data
+        int const device = device_of_or_current(device_data);
 #if defined(HPX_DEBUG)
-        warn_if_device_busy();
+        {
+            scoped_device const on_device(device);
+            warn_if_device_busy();
+        }
 #endif
         std::shared_ptr<device_host_copy> copy(
-            new device_host_copy(device_data, bytes),
+            new device_host_copy(device, device_data, bytes),
             device_host_copy_deleter{});
 
         // the parcel waits for the copy if it isn't done yet; registered
@@ -336,12 +416,62 @@ namespace hpx::serialization::detail {
         auto staging = std::make_shared<pinned_host_buffer>(bytes);
         void* data = staging->data();
 
+        // the copy runs later, on another thread: remember the GPU
+        int const device = device_of_or_current(device_data);
         ar.get_extra_data<post_receive_actions>().add(
-            [staging = HPX_MOVE(staging), device_data, bytes](
+            [staging = HPX_MOVE(staging), device, device_data, bytes](
                 post_receive_actions::done_type done) {
-                copy_to_device(device_data, staging, bytes, HPX_MOVE(done));
+                copy_to_device(
+                    device, device_data, staging, bytes, HPX_MOVE(done));
             });
         return data;
+    }
+
+    int device_of(void const* p) noexcept
+    {
+        cudaPointerAttributes attributes{};
+        if (cudaPointerGetAttributes(&attributes, p) != cudaSuccess)
+        {
+            // older runtimes report unregistered host memory as an error
+            (void) cudaGetLastError();
+            return -1;
+        }
+#if defined(HPX_HAVE_HIP) && defined(HIP_VERSION_MAJOR) && HIP_VERSION_MAJOR < 6
+        // ROCm 6 renamed hipPointerAttribute_t::memoryType to type
+        auto const type = attributes.memoryType;
+#else
+        auto const type = attributes.type;
+#endif
+        return type == cudaMemoryTypeDevice ? attributes.device : -1;
+    }
+
+    scoped_device::scoped_device(int const device)
+#if defined(HPX_DEBUG)
+      : thread_(std::this_thread::get_id())
+#endif
+    {
+        if (device < 0)
+        {
+            return;
+        }
+        int current = -1;
+        hpx::cuda::experimental::check_cuda_error(cudaGetDevice(&current));
+        if (current != device)
+        {
+            hpx::cuda::experimental::check_cuda_error(cudaSetDevice(device));
+            previous_ = current;
+        }
+    }
+
+    scoped_device::~scoped_device()
+    {
+        HPX_ASSERT_MSG(thread_ == std::this_thread::get_id(),
+            "the HPX thread has suspended while a scoped_device was active");
+        if (previous_ >= 0)
+        {
+            // errors are ignored, they show up on the next call
+            (void) cudaSetDevice(previous_);
+        }
     }
 
     void warn_if_device_busy() noexcept
