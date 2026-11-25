@@ -139,10 +139,42 @@ void test_fill()
     test_fill_sent(par_unseq);
 }
 
+// With a policy the value may be list-initialized, as for count and contains.
+void test_fill_list_initialized()
+{
+    using namespace hpx::execution;
+
+    auto check = [](std::vector<int> const& c, std::size_t n) {
+        HPX_TEST_EQ(c.size(), std::size_t(10));
+        for (std::size_t i = 0; i < c.size(); ++i)
+            HPX_TEST_EQ(c[i], i < n ? 7 : 0);
+    };
+
+    {
+        std::vector<int> c(10, 0);
+        auto it = hpx::ranges::fill(seq, c, {7});
+        HPX_TEST(it == c.end());
+        check(c, 10);
+    }
+    {
+        std::vector<int> c(10, 0);
+        auto it = hpx::ranges::fill(par, c.begin(), c.end(), {7});
+        HPX_TEST(it == c.end());
+        check(c, 10);
+    }
+    {
+        std::vector<int> c(10, 0);
+        auto f = hpx::ranges::fill(par(task), c, {7});
+        HPX_TEST(f.get() == c.end());
+        check(c, 10);
+    }
+}
+
 void fill_test()
 {
     test_fill<std::random_access_iterator_tag>();
     test_fill<std::forward_iterator_tag>();
+    test_fill_list_initialized();
 }
 
 ////////////////////////////////////////////////////////////////////////////
