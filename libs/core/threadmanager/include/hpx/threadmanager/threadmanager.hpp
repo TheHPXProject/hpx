@@ -11,6 +11,7 @@
 #include <hpx/config.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/execution_base.hpp>
+#include <hpx/modules/functional.hpp>
 #include <hpx/modules/io_service.hpp>
 #include <hpx/modules/resource_partitioner.hpp>
 #include <hpx/modules/runtime_configuration.hpp>
@@ -138,17 +139,14 @@ namespace hpx::threads {
         void wait() const;
         bool wait_for(hpx::chrono::steady_duration const& rel_time) const;
 
+        // Returns false if stop was requested on stop_token or the timeout
+        // has passed before all threads were done
         template <typename StopToken>
         bool wait_for(StopToken&& stop_token,
             hpx::chrono::steady_duration const& rel_time) const
         {
-            auto const shutdown_check_count =
-                hpx::util::get_entry_as<std::size_t>(
-                    rtcfg_, "hpx.shutdown_check_count", 10);
-            return hpx::util::detail::yield_while_count_timeout(
-                [this]() { return is_busy(); },
-                HPX_FORWARD(StopToken, stop_token), shutdown_check_count,
-                rel_time);
+            return wait_for_impl(rel_time,
+                [&stop_token]() { return stop_token.stop_requested(); });
         }
 
         // \brief Suspend all thread pools.
@@ -292,6 +290,9 @@ namespace hpx::threads {
 #endif
 
     private:
+        bool wait_for_impl(hpx::chrono::steady_duration const& rel_time,
+            hpx::function_ref<bool()> stop_requested) const;
+
         policies::thread_queue_init_parameters get_init_parameters() const;
         policies::scheduling_policy_init_parameters
         get_scheduling_policy_init_parameters() const;
