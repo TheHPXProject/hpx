@@ -399,6 +399,12 @@ foreach(lib ${HPX_LIBS})
     target_compile_definitions(hpx_${lib} PRIVATE HPX_${uppercase_lib}_EXPORTS)
     set_target_properties(hpx_${lib} PROPERTIES POSITION_INDEPENDENT_CODE ON)
     set_target_properties(hpx_${lib} PROPERTIES FOLDER "Core")
+    if(DEFINED HPX_LIBRARY_VERSION AND DEFINED HPX_SOVERSION)
+      set_target_properties(
+        hpx_${lib} PROPERTIES VERSION ${HPX_LIBRARY_VERSION} SOVERSION
+                                                             ${HPX_SOVERSION}
+      )
+    endif()
 
     add_subdirectory(${lib})
 
