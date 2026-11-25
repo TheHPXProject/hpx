@@ -15,3 +15,8 @@
 
 template class HPX_CORE_EXPORT hpx::threads::detail::scheduled_thread_pool<
     hpx::threads::policies::local_priority_tuned_scheduler<>>;
+
+#if defined(HPX_HAVE_WORK_REQUESTING_SCHEDULERS)
+template class HPX_CORE_EXPORT hpx::threads::detail::scheduled_thread_pool<
+    hpx::threads::policies::local_workrequesting_tuned_scheduler<>>;
+#endif

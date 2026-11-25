@@ -1008,6 +1008,11 @@ namespace hpx::threads {
                     thread_pool_init, thread_queue_init, numa_sensitive);
                 break;
 
+            case resource::scheduling_policy::local_workrequesting_tuned_fifo:
+                create_scheduler_local_workrequesting_tuned_fifo(
+                    thread_pool_init, thread_queue_init, numa_sensitive);
+                break;
+
             case resource::scheduling_policy::abp_priority_fifo:
                 create_scheduler_abp_priority_fifo(
                     thread_pool_init, thread_queue_init, numa_sensitive);

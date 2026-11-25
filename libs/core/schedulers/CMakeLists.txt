@@ -26,8 +26,10 @@ set(schedulers_headers
 )
 
 if(HPX_WITH_WORK_REQUESTING_SCHEDULERS)
-  set(schedulers_headers ${schedulers_headers}
-                         hpx/schedulers/local_workrequesting_scheduler.hpp
+  set(schedulers_headers
+      ${schedulers_headers}
+      hpx/schedulers/local_workrequesting_scheduler.hpp
+      hpx/schedulers/local_workrequesting_tuned_scheduler.hpp
   )
 endif()
 
