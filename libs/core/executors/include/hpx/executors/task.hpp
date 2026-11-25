@@ -57,11 +57,109 @@ namespace hpx::execution::experimental {
     template <typename Error>
     with_error(Error) -> with_error<Error>;
 
+    ///////////////////////////////////////////////////////////////////////////
+    // change_coroutine_scheduler: P3552R3 scheduler migration type
+    HPX_CXX_CORE_EXPORT template <typename Scheduler>
+    struct change_coroutine_scheduler
+    {
+        Scheduler scheduler;
+    };
+
+    template <typename Scheduler>
+    change_coroutine_scheduler(Scheduler)
+        -> change_coroutine_scheduler<Scheduler>;
+
+    ///////////////////////////////////////////////////////////////////////////
+    // inline_scheduler: expose P2300 inline_scheduler
+    HPX_CXX_CORE_EXPORT using inline_scheduler = stdexec::inline_scheduler;
+
     HPX_CXX_CORE_EXPORT template <typename T = void,
         typename TaskEnv = default_task_environment>
     class [[nodiscard]] task;
 
     namespace detail {
+
+        template <typename T>
+        struct is_task : std::false_type
+        {
+        };
+
+        template <typename T, typename Env>
+        struct is_task<task<T, Env>> : std::true_type
+        {
+            using value_type = T;
+        };
+
+        template <typename T>
+        inline constexpr bool is_task_v = is_task<std::decay_t<T>>::value;
+
+        template <typename Snd, typename RefType, typename Promise>
+        struct reference_unwrapping_awaiter
+        {
+            using inner_awaiter_t = decltype(std::declval<hpx::execution::
+                    experimental::with_awaitable_senders<Promise>&>()
+                    .await_transform(std::declval<Snd>()));
+
+            inner_awaiter_t inner_;
+
+            explicit reference_unwrapping_awaiter(Snd&& snd, Promise& p)
+              : inner_(p.hpx::execution::experimental::
+                        template with_awaitable_senders<
+                            Promise>::await_transform(HPX_FORWARD(Snd, snd)))
+            {
+            }
+
+            decltype(auto) await_ready() noexcept(
+                noexcept(inner_.await_ready()))
+            {
+                return inner_.await_ready();
+            }
+
+            template <typename CoroHandle>
+            decltype(auto) await_suspend(CoroHandle h) noexcept(
+                noexcept(inner_.await_suspend(h)))
+            {
+                return inner_.await_suspend(h);
+            }
+
+            RefType await_resume() noexcept(noexcept(inner_.await_resume()))
+            {
+                return *inner_.await_resume();
+            }
+        };
+
+        ///////////////////////////////////////////////////////////////////////
+        // Scheduler affinity helper for P3552R3 task
+        template <typename Sender, typename Scheduler>
+        constexpr decltype(auto) apply_scheduler_affinity(
+            Sender&& sender, Scheduler const& sch)
+        {
+            using sch_t = std::decay_t<Scheduler>;
+            using sender_t = std::decay_t<Sender>;
+            if constexpr (std::is_same_v<sch_t, inline_scheduler>)
+            {
+                return HPX_FORWARD(Sender, sender);
+            }
+            else if constexpr (is_task_v<sender_t>)
+            {
+                return hpx::execution::experimental::continues_on(
+                    HPX_FORWARD(Sender, sender), sch);
+            }
+            else if constexpr (
+                !requires(Sender const& s) {
+                    hpx::execution::experimental::get_completion_scheduler<
+                        hpx::execution::experimental::set_value_t>(
+                        hpx::execution::experimental::get_env(s));
+                })
+            {
+                return HPX_FORWARD(Sender, sender);
+            }
+            else
+            {
+                return hpx::execution::experimental::continues_on(
+                    HPX_FORWARD(Sender, sender), sch);
+            }
+        }
 
         template <typename Env, typename Default, typename = void>
         struct env_allocator
@@ -212,7 +310,9 @@ namespace hpx::execution::experimental {
         concept valid_task_error = is_valid_task_error_v<Error, Sig>;
 
         template <typename ErrorVariant>
-        struct contains_exception_ptr;
+        struct contains_exception_ptr : std::false_type
+        {
+        };
 
         template <typename... Ts>
         struct contains_exception_ptr<std::variant<Ts...>>
@@ -430,6 +530,48 @@ namespace hpx::execution::experimental {
         };
 
         ///////////////////////////////////////////////////////////////////////
+        // Internal awaitable identification traits
+        template <typename T>
+        struct is_with_error : std::false_type
+        {
+        };
+
+        template <typename Error>
+        struct is_with_error<with_error<Error>> : std::true_type
+        {
+        };
+
+        template <typename T>
+        inline constexpr bool is_with_error_v =
+            is_with_error<std::decay_t<T>>::value;
+
+        template <typename T>
+        struct is_change_coroutine_scheduler : std::false_type
+        {
+        };
+
+        template <typename Scheduler>
+        struct is_change_coroutine_scheduler<
+            change_coroutine_scheduler<Scheduler>> : std::true_type
+        {
+        };
+
+        template <typename T>
+        inline constexpr bool is_change_coroutine_scheduler_v =
+            is_change_coroutine_scheduler<std::decay_t<T>>::value;
+
+        template <typename S>
+        inline constexpr bool is_read_env_v = requires {
+            typename stdexec::tag_of_t<std::decay_t<S>>;
+            requires std::is_same_v<stdexec::tag_of_t<std::decay_t<S>>,
+                std::decay_t<decltype(hpx::execution::experimental::read_env)>>;
+        };
+
+        template <typename T>
+        inline constexpr bool is_internal_awaitable_v = is_with_error_v<T> ||
+            is_change_coroutine_scheduler_v<T> || is_read_env_v<T>;
+
+        ///////////////////////////////////////////////////////////////////////
         // task_promise: C++26 P3552 coroutine promise type
         HPX_CXX_CORE_EXPORT template <typename T,
             typename TaskEnv = default_task_environment>
@@ -536,6 +678,108 @@ namespace hpx::execution::experimental {
                     error_variant_type(std::in_place_type<target_error_t>,
                         HPX_FORWARD(decltype(e.error), e.error)));
                 return final_awaiter{};
+            }
+
+            using hpx::execution::experimental::with_awaitable_senders<
+                task_promise<T, TaskEnv>>::await_transform;
+
+            template <typename NewScheduler>
+                requires(
+                    std::is_constructible_v<scheduler_type, NewScheduler> ||
+                    std::is_convertible_v<NewScheduler, scheduler_type>)
+            auto await_transform(change_coroutine_scheduler<NewScheduler> ccs)
+            {
+                static_assert(
+                    std::is_constructible_v<scheduler_type, NewScheduler> ||
+                        std::is_convertible_v<NewScheduler, scheduler_type>,
+                    "NewScheduler must be convertible or constructible to "
+                    "scheduler_type");
+
+                if (!scheduler_.has_value())
+                {
+                    if constexpr (std::is_constructible_v<scheduler_type,
+                                      parallel_scheduler> ||
+                        std::is_convertible_v<parallel_scheduler,
+                            scheduler_type>)
+                    {
+                        scheduler_.emplace(hpx::execution::experimental::
+                                get_parallel_scheduler());
+                    }
+                    else if constexpr (std::is_default_constructible_v<
+                                           scheduler_type>)
+                    {
+                        scheduler_.emplace();
+                    }
+                }
+                scheduler_type prev = HPX_MOVE(*scheduler_);
+                *scheduler_ = scheduler_type(HPX_MOVE(ccs.scheduler));
+
+                auto snd = hpx::execution::experimental::schedule(*scheduler_) |
+                    hpx::execution::experimental::then(
+                        [prev = HPX_MOVE(prev)]() mutable noexcept
+                            -> scheduler_type { return HPX_MOVE(prev); });
+
+                return this->hpx::execution::experimental::
+                    template with_awaitable_senders<task_promise<T,
+                        TaskEnv>>::await_transform(HPX_MOVE(snd));
+            }
+
+            template <typename Sender>
+                requires(!is_internal_awaitable_v<Sender> &&
+                    hpx::execution::experimental::is_sender_v<
+                        std::decay_t<Sender>>)
+            decltype(auto) await_transform(Sender&& s)
+            {
+                using sender_t = std::decay_t<Sender>;
+                if constexpr (detail::is_task_v<sender_t> &&
+                    std::is_reference_v<
+                        typename detail::is_task<sender_t>::value_type>)
+                {
+                    using val_t =
+                        typename detail::is_task<sender_t>::value_type;
+                    using sch_t = std::decay_t<scheduler_type>;
+                    if constexpr (std::is_same_v<sch_t, inline_scheduler>)
+                    {
+                        return this->hpx::execution::experimental::
+                            template with_awaitable_senders<task_promise<T,
+                                TaskEnv>>::await_transform(HPX_FORWARD(Sender,
+                                s));
+                    }
+                    else
+                    {
+                        auto ptr_sender = hpx::execution::experimental::then(
+                            HPX_FORWARD(Sender, s), [](auto&& ref) noexcept {
+                                return std::addressof(ref);
+                            });
+                        auto cont_sender =
+                            hpx::execution::experimental::continues_on(
+                                HPX_MOVE(ptr_sender), *scheduler_);
+                        return detail::reference_unwrapping_awaiter<
+                            decltype(cont_sender), val_t,
+                            task_promise<T, TaskEnv>>{
+                            HPX_MOVE(cont_sender), *this};
+                    }
+                }
+                else
+                {
+                    return this->hpx::execution::experimental::
+                        template with_awaitable_senders<
+                            task_promise<T, TaskEnv>>::
+                            await_transform(detail::apply_scheduler_affinity(
+                                HPX_FORWARD(Sender, s), *scheduler_));
+                }
+            }
+
+            template <typename Awaitable>
+                requires(!is_change_coroutine_scheduler_v<Awaitable> &&
+                    (!hpx::execution::experimental::is_sender_v<
+                         std::decay_t<Awaitable>> ||
+                        is_internal_awaitable_v<Awaitable>) )
+            decltype(auto) await_transform(Awaitable&& a)
+            {
+                return this->hpx::execution::experimental::
+                    template with_awaitable_senders<task_promise<T,
+                        TaskEnv>>::await_transform(HPX_FORWARD(Awaitable, a));
             }
 
             struct env_type
@@ -715,15 +959,64 @@ namespace hpx::execution::experimental {
                     using provided_sched_t =
                         decltype(hpx::execution::experimental::get_scheduler(
                             hpx::execution::experimental::get_env(rcvr_)));
-                    if constexpr (std::is_constructible_v<
-                                      typename promise_type::scheduler_type,
-                                      provided_sched_t> ||
+                    if constexpr (requires(provided_sched_t const& s) {
+                                      s.get_run_loop();
+                                  })
+                    {
+                        if constexpr (std::is_constructible_v<
+                                          typename promise_type::scheduler_type,
+                                          parallel_scheduler> ||
+                            std::is_convertible_v<parallel_scheduler,
+                                typename promise_type::scheduler_type>)
+                        {
+                            coro_.promise().scheduler_.emplace(hpx::execution::
+                                    experimental::get_parallel_scheduler());
+                        }
+                        else if constexpr (std::is_constructible_v<
+                                               typename promise_type::
+                                                   scheduler_type,
+                                               provided_sched_t> ||
+                            std::is_convertible_v<provided_sched_t,
+                                typename promise_type::scheduler_type>)
+                        {
+                            coro_.promise().scheduler_.emplace(
+                                hpx::execution::experimental::get_scheduler(
+                                    hpx::execution::experimental::get_env(
+                                        rcvr_)));
+                        }
+                        else if constexpr (std::is_default_constructible_v<
+                                               typename promise_type::
+                                                   scheduler_type>)
+                        {
+                            coro_.promise().scheduler_.emplace();
+                        }
+                    }
+                    else if constexpr (std::is_constructible_v<
+                                           typename promise_type::
+                                               scheduler_type,
+                                           provided_sched_t> ||
                         std::is_convertible_v<provided_sched_t,
                             typename promise_type::scheduler_type>)
                     {
                         coro_.promise().scheduler_.emplace(
                             hpx::execution::experimental::get_scheduler(
                                 hpx::execution::experimental::get_env(rcvr_)));
+                    }
+                    else if constexpr (std::is_constructible_v<
+                                           typename promise_type::
+                                               scheduler_type,
+                                           parallel_scheduler> ||
+                        std::is_convertible_v<parallel_scheduler,
+                            typename promise_type::scheduler_type>)
+                    {
+                        coro_.promise().scheduler_.emplace(hpx::execution::
+                                experimental::get_parallel_scheduler());
+                    }
+                    else if constexpr (std::is_default_constructible_v<
+                                           typename promise_type::
+                                               scheduler_type>)
+                    {
+                        coro_.promise().scheduler_.emplace();
                     }
                     else
                     {
@@ -732,8 +1025,21 @@ namespace hpx::execution::experimental {
                                 typename promise_type::scheduler_type>,
                             "scheduler_type must be default constructible if "
                             "receiver provides no valid scheduler");
-                        coro_.promise().scheduler_.emplace();
                     }
+                }
+                else if constexpr (std::is_constructible_v<
+                                       typename promise_type::scheduler_type,
+                                       parallel_scheduler> ||
+                    std::is_convertible_v<parallel_scheduler,
+                        typename promise_type::scheduler_type>)
+                {
+                    coro_.promise().scheduler_.emplace(
+                        hpx::execution::experimental::get_parallel_scheduler());
+                }
+                else if constexpr (std::is_default_constructible_v<
+                                       typename promise_type::scheduler_type>)
+                {
+                    coro_.promise().scheduler_.emplace();
                 }
                 else
                 {
@@ -741,7 +1047,6 @@ namespace hpx::execution::experimental {
                                       typename promise_type::scheduler_type>,
                         "scheduler_type must be default constructible if "
                         "receiver provides no valid scheduler");
-                    coro_.promise().scheduler_.emplace();
                 }
             }
 
@@ -920,6 +1225,15 @@ namespace hpx::execution::experimental {
             }
         }
 
+        struct env
+        {
+        };
+
+        [[nodiscard]] constexpr env get_env() const noexcept
+        {
+            return {};
+        }
+
         template <typename Receiver>
         detail::task_operation_state<T, TaskEnv, Receiver> connect(
             Receiver&& rcvr) &&
@@ -944,7 +1258,9 @@ namespace hpx::execution::experimental {
             hpx::coroutine_handle<promise_type> coro_;
             hpx::coroutine_handle<> continuation_{};
             std::optional<stop_callback_type> stop_callback_{};
-            void* parent_promise_{nullptr};
+            std::conditional_t<std::is_void_v<ParentPromise>, void*,
+                ParentPromise*>
+                parent_promise_{nullptr};
             hpx::coroutine_handle<> (*unhandled_stopped_fn_)(void*){nullptr};
 
             explicit awaiter(hpx::coroutine_handle<promise_type> coro) noexcept
@@ -988,7 +1304,17 @@ namespace hpx::execution::experimental {
 
                 // 1. Extract unhandled_stopped continuation for symmetric
                 // transfer
-                parent_promise_ = &parent.promise();
+                if constexpr (!std::is_void_v<ParentPromise>)
+                {
+                    if constexpr (std::is_same_v<ParentPromise, ParentPromise2>)
+                    {
+                        parent_promise_ = &parent.promise();
+                    }
+                }
+                else
+                {
+                    parent_promise_ = &parent.promise();
+                }
                 unhandled_stopped_fn_ =
                     [](void* p) noexcept -> hpx::coroutine_handle<> {
                     return static_cast<ParentPromise2*>(p)->unhandled_stopped();
@@ -1054,6 +1380,22 @@ namespace hpx::execution::experimental {
                                 hpx::execution::experimental::get_scheduler(
                                     parent.promise().get_env()));
                         }
+                        else if constexpr (std::is_constructible_v<
+                                               typename promise_type::
+                                                   scheduler_type,
+                                               parallel_scheduler> ||
+                            std::is_convertible_v<parallel_scheduler,
+                                typename promise_type::scheduler_type>)
+                        {
+                            coro_.promise().scheduler_.emplace(hpx::execution::
+                                    experimental::get_parallel_scheduler());
+                        }
+                        else if constexpr (std::is_default_constructible_v<
+                                               typename promise_type::
+                                                   scheduler_type>)
+                        {
+                            coro_.promise().scheduler_.emplace();
+                        }
                         else
                         {
                             static_assert(
@@ -1061,8 +1403,23 @@ namespace hpx::execution::experimental {
                                     typename promise_type::scheduler_type>,
                                 "scheduler_type must be default constructible "
                                 "if receiver provides no valid scheduler");
-                            coro_.promise().scheduler_.emplace();
                         }
+                    }
+                    else if constexpr (std::is_constructible_v<
+                                           typename promise_type::
+                                               scheduler_type,
+                                           parallel_scheduler> ||
+                        std::is_convertible_v<parallel_scheduler,
+                            typename promise_type::scheduler_type>)
+                    {
+                        coro_.promise().scheduler_.emplace(hpx::execution::
+                                experimental::get_parallel_scheduler());
+                    }
+                    else if constexpr (std::is_default_constructible_v<
+                                           typename promise_type::
+                                               scheduler_type>)
+                    {
+                        coro_.promise().scheduler_.emplace();
                     }
                     else
                     {
@@ -1071,7 +1428,32 @@ namespace hpx::execution::experimental {
                                 typename promise_type::scheduler_type>,
                             "scheduler_type must be default constructible if "
                             "receiver provides no valid scheduler");
+                    }
+                }
+                else
+                {
+                    if constexpr (std::is_constructible_v<
+                                      typename promise_type::scheduler_type,
+                                      parallel_scheduler> ||
+                        std::is_convertible_v<parallel_scheduler,
+                            typename promise_type::scheduler_type>)
+                    {
+                        coro_.promise().scheduler_.emplace(hpx::execution::
+                                experimental::get_parallel_scheduler());
+                    }
+                    else if constexpr (std::is_default_constructible_v<
+                                           typename promise_type::
+                                               scheduler_type>)
+                    {
                         coro_.promise().scheduler_.emplace();
+                    }
+                    else
+                    {
+                        static_assert(
+                            std::is_default_constructible_v<
+                                typename promise_type::scheduler_type>,
+                            "scheduler_type must be default constructible if "
+                            "parent provides no valid scheduler");
                     }
                 }
 
