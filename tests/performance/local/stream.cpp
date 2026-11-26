@@ -20,6 +20,9 @@
 #include <hpx/config.hpp>
 
 #include <hpx/algorithm.hpp>
+#if defined(HPX_HAVE_DATAPAR)
+#include <hpx/datapar.hpp>
+#endif
 #include <hpx/execution.hpp>
 #include <hpx/format.hpp>
 #include <hpx/init.hpp>
@@ -279,7 +282,7 @@ struct multiply_step
     //         (used in invoke()) to get the return type
 
     template <typename U>
-    HPX_HOST_DEVICE HPX_FORCEINLINE constexpr T operator()(U val) const noexcept
+    HPX_HOST_DEVICE HPX_FORCEINLINE constexpr U operator()(U val) const noexcept
     {
         return val * factor_;
     }
@@ -295,7 +298,7 @@ struct add_step
     //         (used in invoke()) to get the return type
 
     template <typename U>
-    HPX_HOST_DEVICE HPX_FORCEINLINE constexpr T operator()(
+    HPX_HOST_DEVICE HPX_FORCEINLINE constexpr U operator()(
         U val1, U val2) const noexcept
     {
         return val1 + val2;
@@ -315,7 +318,7 @@ struct triad_step
     //         (used in invoke()) to get the return type
 
     template <typename U>
-    HPX_HOST_DEVICE HPX_FORCEINLINE constexpr T operator()(
+    HPX_HOST_DEVICE HPX_FORCEINLINE constexpr U operator()(
         U val1, U val2) const noexcept
     {
         return val1 + val2 * factor_;
@@ -325,23 +328,7 @@ struct triad_step
 };
 
 ///////////////////////////////////////////////////////////////////////////////
-// The function of a kernel, with the nano task size if Sized, so that
-// task_size_chunk_size can chunk the loop.
-template <bool Sized, typename F>
-auto kernel(F f)
-{
-    if constexpr (Sized)
-    {
-        return hpx::nano_task(HPX_MOVE(f));
-    }
-    else
-    {
-        return f;
-    }
-}
-
-///////////////////////////////////////////////////////////////////////////////
-template <bool Sized = false, typename Allocator, typename Policy>
+template <typename Allocator, typename Policy>
 std::vector<std::vector<double>> run_benchmark(std::size_t warmup_iterations,
     std::size_t iterations, std::size_t size, Allocator&& alloc,
     Policy&& policy)
@@ -416,15 +403,15 @@ std::vector<std::vector<double>> run_benchmark(std::size_t warmup_iterations,
 
         // Scale
         hpx::transform(policy, c.begin(), c.end(), b.begin(),
-            kernel<Sized>(multiply_step<STREAM_TYPE>(scalar)));
+            hpx::nano_task(multiply_step<STREAM_TYPE>(scalar)));
 
         // Add
         hpx::ranges::transform(policy, a.begin(), a.end(), b.begin(), b.end(),
-            c.begin(), kernel<Sized>(add_step<STREAM_TYPE>()));
+            c.begin(), hpx::nano_task(add_step<STREAM_TYPE>()));
 
         // Triad
         hpx::ranges::transform(policy, b.begin(), b.end(), c.begin(), c.end(),
-            a.begin(), kernel<Sized>(triad_step<STREAM_TYPE>(scalar)));
+            a.begin(), hpx::nano_task(triad_step<STREAM_TYPE>(scalar)));
     }
 
     ///////////////////////////////////////////////////////////////////////////
@@ -446,19 +433,19 @@ std::vector<std::vector<double>> run_benchmark(std::size_t warmup_iterations,
         // Scale
         timing[1][iteration] = mysecond();
         hpx::transform(policy, c.begin(), c.end(), b.begin(),
-            kernel<Sized>(multiply_step<STREAM_TYPE>(scalar)));
+            hpx::nano_task(multiply_step<STREAM_TYPE>(scalar)));
         timing[1][iteration] = mysecond() - timing[1][iteration];
 
         // Add
         timing[2][iteration] = mysecond();
         hpx::ranges::transform(policy, a.begin(), a.end(), b.begin(), b.end(),
-            c.begin(), kernel<Sized>(add_step<STREAM_TYPE>()));
+            c.begin(), hpx::nano_task(add_step<STREAM_TYPE>()));
         timing[2][iteration] = mysecond() - timing[2][iteration];
 
         // Triad
         timing[3][iteration] = mysecond();
         hpx::ranges::transform(policy, b.begin(), b.end(), c.begin(), c.end(),
-            a.begin(), kernel<Sized>(triad_step<STREAM_TYPE>(scalar)));
+            a.begin(), hpx::nano_task(triad_step<STREAM_TYPE>(scalar)));
         timing[3][iteration] = mysecond() - timing[3][iteration];
     }
 
@@ -486,6 +473,15 @@ int hpx_main(hpx::program_options::variables_map& vm)
     std::size_t executor = vm["executor"].as<std::size_t>();
     csv = vm.count("csv") > 0;
     header = vm.count("header") > 0;
+    bool const simd = vm.count("simd") > 0;
+
+#if !defined(HPX_HAVE_DATAPAR)
+    if (simd)
+    {
+        HPX_THROW_EXCEPTION(hpx::error::commandline_option_error, "hpx_main",
+            "--simd needs HPX_WITH_DATAPAR=ON");
+    }
+#endif
 
     HPX_UNUSED(chunk_size);
 
@@ -500,16 +496,31 @@ int hpx_main(hpx::program_options::variables_map& vm)
     // the loops are chunked by task_size_chunk_size, based on the task size
     // of the kernels' functions. Copy has no function, it is chunked as by
     // default.
-    auto run = [&](auto&& alloc, auto&& policy) {
+    auto run_policy = [&](auto&& alloc, auto&& policy) {
         if (chunker == "task_size")
         {
-            return run_benchmark<true>(warmup_iterations, iterations,
-                vector_size, HPX_FORWARD(decltype(alloc), alloc),
+            return run_benchmark(warmup_iterations, iterations, vector_size,
+                HPX_FORWARD(decltype(alloc), alloc),
                 policy.with(
                     hpx::execution::experimental::task_size_chunk_size()));
         }
-        return run_benchmark<false>(warmup_iterations, iterations, vector_size,
+        return run_benchmark(warmup_iterations, iterations, vector_size,
             HPX_FORWARD(decltype(alloc), alloc),
+            HPX_FORWARD(decltype(policy), policy));
+    };
+
+    // Runs the benchmark with the given policy, or with --simd with par_simd
+    // on the policy's executor. The allocator keeps the given policy, so the
+    // arrays are placed the same way in both cases.
+    auto run = [&](auto&& alloc, auto&& policy) {
+#if defined(HPX_HAVE_DATAPAR)
+        if (simd)
+        {
+            return run_policy(HPX_FORWARD(decltype(alloc), alloc),
+                hpx::execution::par_simd.on(policy.executor()));
+        }
+#endif
+        return run_policy(HPX_FORWARD(decltype(alloc), alloc),
             HPX_FORWARD(decltype(policy), policy));
     };
 
@@ -553,6 +564,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
                 << hpx::get_os_thread_count() << "\n"
             << "Chunking policy requested: " << chunker << "\n"
             << "Executor requested: " << executor << "\n"
+            << "SIMD (par_simd) requested: " << (simd ? "yes" : "no") << "\n"
             << "-------------------------------------------------------------\n"
             ;
     }
@@ -744,8 +756,8 @@ int hpx_main(hpx::program_options::variables_map& vm)
             "block_fork_join_executor", "parallel_scheduler",
             "suspending_fork_join_executor",
             "shared_suspending_fork_join_executor"};
-        hpx::util::format_to(std::cout, "{},{},{},", executors[executor],
-            hpx::get_os_thread_count(), vector_size);
+        hpx::util::format_to(std::cout, "{}{},{},{},", simd ? "par_simd_" : "",
+            executors[executor], hpx::get_os_thread_count(), vector_size);
     }
     else
     {
@@ -798,6 +810,8 @@ int main(int argc, char* argv[])
     cmdline.add_options()
         (   "csv", "output results as csv")
         (   "header", "print header for csv results")
+        (   "simd", "use par_simd on the chosen executor (needs "
+            "HPX_WITH_DATAPAR=ON)")
         (   "vector_size",
             hpx::program_options::value<std::size_t>()->default_value(1024),
             "size of vector (default: 1024)")
