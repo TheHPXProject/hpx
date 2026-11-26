@@ -233,8 +233,8 @@ namespace hpx::util {
 
         void expand(std::unique_lock<mutex_type>& l, std::string&,
             std::string::size_type) const;
-        void expand_bracket(std::unique_lock<mutex_type>& l, std::string&,
-            std::string::size_type) const;
+        std::string::size_type expand_bracket(std::unique_lock<mutex_type>& l,
+            std::string&, std::string::size_type) const;
         void expand_brace(std::unique_lock<mutex_type>& l, std::string&,
             std::string::size_type) const;
 
@@ -243,23 +243,27 @@ namespace hpx::util {
 
         void expand_only(std::unique_lock<mutex_type>& l, std::string&,
             std::string::size_type, std::string const& expand_this) const;
-        void expand_bracket_only(std::unique_lock<mutex_type>& l, std::string&,
+        std::string::size_type expand_bracket_only(
+            std::unique_lock<mutex_type>& l, std::string&,
             std::string::size_type, std::string const& expand_this) const;
         void expand_brace_only(std::unique_lock<mutex_type>& l, std::string&,
             std::string::size_type, std::string const& expand_this) const;
 
     public:
+        /// Expands the references to other entries ($[key] or
+        /// $[key:default]) and to environment variables (${name} or
+        /// ${name:default}) in \p str. Written as $${ or $$[, a '$' followed by
+        /// '{' or '[' is a literal one: "$${HOME}" expands to "${HOME}". Any
+        /// other "$$" is left as it is.
         std::string expand(std::string const& str) const
         {
             std::unique_lock<mutex_type> l(mtx_);
             return expand(l, str);
         }
 
-        void expand(std::string& str, std::string::size_type len) const
-        {
-            std::unique_lock<mutex_type> l(mtx_);
-            expand(l, str, len);
-        }
+        /// Expands \p str in place as expand(str) does, the characters after
+        /// position \p len only (all for std::string::npos).
+        void expand(std::string& str, std::string::size_type len) const;
 
         void set_root(section* r, bool recursive = false)
         {
