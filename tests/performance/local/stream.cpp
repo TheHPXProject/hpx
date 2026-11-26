@@ -653,10 +653,38 @@ int hpx_main(hpx::program_options::variables_map& vm)
 
             timing = run(std::move(alloc), std::move(policy));
         }
+        else if (executor == 7)
+        {
+            // Suspending fork-join executor and allocator with it.
+            using executor_type =
+                hpx::execution::experimental::suspending_fork_join_executor;
+
+            executor_type exec;
+            auto policy = hpx::execution::par.on(exec);
+            hpx::compute::host::detail::policy_allocator<STREAM_TYPE,
+                decltype(policy)>
+                alloc(policy);
+
+            timing = run(std::move(alloc), std::move(policy));
+        }
+        else if (executor == 8)
+        {
+            // Shared suspending fork-join executor and allocator with it.
+            using executor_type = hpx::execution::experimental::
+                shared_suspending_fork_join_executor;
+
+            executor_type exec;
+            auto policy = hpx::execution::par.on(exec);
+            hpx::compute::host::detail::policy_allocator<STREAM_TYPE,
+                decltype(policy)>
+                alloc(policy);
+
+            timing = run(std::move(alloc), std::move(policy));
+        }
         else
         {
             HPX_THROW_EXCEPTION(hpx::error::commandline_option_error,
-                "hpx_main", "Invalid executor id given (0-6 allowed");
+                "hpx_main", "Invalid executor id given (0-8 allowed");
         }
     }
     time_total = mysecond() - time_total;
@@ -710,10 +738,12 @@ int hpx_main(hpx::program_options::variables_map& vm)
                 "max,add_bytes,add_bw,add_avg,add_min,add_max,triad_bytes,"
                 "triad_bw,triad_avg,triad_min,triad_max\n");
         }
-        std::size_t const num_executors = 7;
+        std::size_t const num_executors = 9;
         char const* executors[num_executors] = {"parallel-serial", "block",
             "parallel-parallel", "fork_join_executor", "scheduler_executor",
-            "block_fork_join_executor", "parallel_scheduler"};
+            "block_fork_join_executor", "parallel_scheduler",
+            "suspending_fork_join_executor",
+            "shared_suspending_fork_join_executor"};
         hpx::util::format_to(std::cout, "{},{},{},", executors[executor],
             hpx::get_os_thread_count(), vector_size);
     }
@@ -790,7 +820,7 @@ int main(int argc, char* argv[])
             "size of vector (default: 1024)")
         (   "executor",
             hpx::program_options::value<std::size_t>()->default_value(2),
-            "executor to use (0-5) (default: 2, parallel_executor)")
+            "executor to use (0-8) (default: 2, parallel_executor)")
         ;
     // clang-format on
 

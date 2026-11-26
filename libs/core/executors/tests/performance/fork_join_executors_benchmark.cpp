@@ -4,8 +4,8 @@
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-// Compares parallel_executor, fork_join_executor, and
-// suspending_fork_join_executor:
+// Compares parallel_executor, fork_join_executor,
+// suspending_fork_join_executor, and shared_suspending_fork_join_executor:
 //
 //  - region: the time of one bulk_sync_execute with a trivial body, for
 //    regions that follow each other directly (latency for small sizes,
@@ -69,7 +69,7 @@ double median(std::vector<double> v)
 void print(std::string const& executor, std::string const& test,
     std::size_t const size, std::size_t const gap_us, double const ns)
 {
-    std::cout << std::left << std::setw(32) << executor << std::setw(12) << test
+    std::cout << std::left << std::setw(40) << executor << std::setw(12) << test
               << std::right << std::setw(10) << size << std::setw(8) << gap_us
               << std::setw(14) << std::fixed << std::setprecision(0) << ns
               << "\n"
@@ -180,7 +180,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
     std::cout << "threads: " << hpx::get_num_worker_threads()
               << ", regions: " << opts.regions << ", batches: " << opts.batches
               << "\n";
-    std::cout << std::left << std::setw(32) << "executor" << std::setw(12)
+    std::cout << std::left << std::setw(40) << "executor" << std::setw(12)
               << "test" << std::right << std::setw(10) << "size" << std::setw(8)
               << "gap_us" << std::setw(14) << "ns" << "\n";
 
@@ -196,6 +196,10 @@ int hpx_main(hpx::program_options::variables_map& vm)
         ex::suspending_fork_join_executor const exec;
         run_benchmarks("suspending_fork_join_executor", exec, opts);
     }
+    {
+        ex::shared_suspending_fork_join_executor const exec;
+        run_benchmarks("shared_suspending_fork_join_executor", exec, opts);
+    }
 
     if (opts.other_work_size != 0)
     {
@@ -209,6 +213,11 @@ int hpx_main(hpx::program_options::variables_map& vm)
         {
             ex::suspending_fork_join_executor const exec;
             print("suspending_fork_join_executor", "other_work",
+                opts.other_work_size, 0, time_other_work(&exec, opts));
+        }
+        {
+            ex::shared_suspending_fork_join_executor const exec;
+            print("shared_suspending_fork_join_executor", "other_work",
                 opts.other_work_size, 0, time_other_work(&exec, opts));
         }
     }
