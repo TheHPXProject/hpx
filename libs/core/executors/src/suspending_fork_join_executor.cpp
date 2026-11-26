@@ -10,6 +10,7 @@
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/execution_base.hpp>
 #include <hpx/modules/format.hpp>
+#include <hpx/modules/functional.hpp>
 #include <hpx/modules/resource_partitioner.hpp>
 #include <hpx/modules/synchronization.hpp>
 #include <hpx/modules/thread_support.hpp>
@@ -137,6 +138,22 @@ namespace hpx::execution::experimental::detail {
     hpx::threads::mask_type suspending_fork_join_default_pu_mask()
     {
         return full_pu_mask(threads::detail::get_self_or_default_pool());
+    }
+
+    bool suspending_fork_join_caller_on(
+        hpx::threads::mask_cref_type mask) noexcept
+    {
+        if (threads::get_self_id_data() == nullptr)
+        {
+            return false;
+        }
+        std::size_t const worker = hpx::get_worker_thread_num();
+        if (worker == static_cast<std::size_t>(-1))
+        {
+            return false;
+        }
+        return hpx::threads::test(
+            mask, hpx::resource::get_partitioner().get_pu_num(worker));
     }
 
     ///////////////////////////////////////////////////////////////////////////
@@ -625,6 +642,25 @@ namespace hpx::execution::experimental::detail {
     void suspending_fork_join_shared_data::worker_main(
         std::size_t const slot, std::size_t const position) noexcept
     {
+        // The worker threads are background threads of their pool: while
+        // they wait for the next region the pool counts as idle. Otherwise
+        // a pool with an idle executor is never idle, and the termination
+        // detection of the distributed runtime, which runs before the
+        // pre-shutdown function that stops the worker threads, never ends.
+        // A suspended background thread is not kept alive by the suspension
+        // (whoever creates it has to), so the thread keeps itself alive
+        // until it ends.
+        hpx::threads::keep_alive_thread_id const keep_alive(
+            hpx::threads::get_self_id(), true);
+        hpx::threads::thread_data* const self =
+            hpx::threads::get_self_id_data();
+        hpx::threads::policies::scheduler_base* const scheduler =
+            self->get_scheduler_base();
+        self->set_is_background();
+        scheduler->increment_background_thread_count();
+        auto on_exit = hpx::experimental::scope_exit(
+            [scheduler] { scheduler->decrement_background_thread_count(); });
+
         std::uint64_t seen = 0;
         while (true)
         {

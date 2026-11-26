@@ -341,6 +341,11 @@ namespace hpx::execution::experimental {
         // all PUs of the pool of the calling thread (or the default pool)
         HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT hpx::threads::mask_type
         suspending_fork_join_default_pu_mask();
+
+        // whether the calling thread is an HPX worker thread running on one
+        // of the PUs of the mask
+        HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT bool suspending_fork_join_caller_on(
+            hpx::threads::mask_cref_type mask) noexcept;
     }    // namespace detail
 
     /// \brief An executor with fork-join (blocking) semantics whose waiting
@@ -482,6 +487,19 @@ namespace hpx::execution::experimental {
                     experimental::get_hint(parallel_exec_).sharing_mode()))
             {
                 run_independent_region(body, size);
+                return;
+            }
+
+            // A region of a single index, or on a single core, runs on the
+            // calling thread if that runs on one of the executor's PUs, as a
+            // parallel_executor runs a single chunk: there is nothing to
+            // share out. Otherwise it runs on one worker thread.
+            if ((size <= 1 || region_num_cores() <= 1) &&
+                detail::suspending_fork_join_caller_on(
+                    query(experimental::get_processing_units_mask_t{})))
+            {
+                Body share_body(body);
+                share_body(0, size);
                 return;
             }
 
