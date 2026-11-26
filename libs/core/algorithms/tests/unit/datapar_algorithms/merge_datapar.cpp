@@ -249,6 +249,11 @@ static_assert(vectorized<simd_policy, std::int64_t, hpx::ranges::less>);
 static_assert(vectorized<simd_policy, int, std::ranges::less, std::identity>);
 static_assert(vectorized<
     std::decay_t<decltype(hpx::execution::simd(hpx::execution::task))>, int>);
+#if !defined(HPX_HAVE_DATAPAR_EVE)
+static_assert(vectorized<hpx::execution::fixed_size_simd_policy<8>, int>);
+static_assert(
+    vectorized<hpx::execution::par_fixed_size_simd_policy<16>, std::int64_t>);
+#endif
 #else
 static_assert(!vectorized<simd_policy, int>);
 static_assert(!vectorized<par_simd_policy, int>);
