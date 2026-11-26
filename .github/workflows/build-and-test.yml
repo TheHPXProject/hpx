@@ -26,6 +26,13 @@ jobs:
       container: stellargroup/build_env:19
       base-targets: hpx_core core components
       shards: 25
+      # UCX for the UCX device conduit; the tests run with it, and the TCP
+      # parcelport sends large host chunks through it
+      setup: |
+        apt-get update && apt-get install -y --no-install-recommends libucx-dev
+        echo "HPX_PARCEL_DEVICE_CONDUIT=ucx" >> "$GITHUB_ENV"
+        echo "HPX_PARCEL_CONDUIT_HOST_CHUNKS=1" >> "$GITHUB_ENV"
+        echo "HPX_PARCEL_CONDUIT_HOST_THRESHOLD=8192" >> "$GITHUB_ENV"
       configure: |
         mkdir -p "$GITHUB_WORKSPACE/build"
         cd "$GITHUB_WORKSPACE/build"
@@ -74,7 +81,8 @@ jobs:
           -DHPX_WITH_TESTS_MAX_THREADS_PER_LOCALITY=2 \
           -DHPX_WITH_SUPERVISION=On \
           -DHPX_WITH_DATAPAR=On \
-          -DHPX_WITH_DATAPAR_BACKEND=EMULATE
+          -DHPX_WITH_DATAPAR_BACKEND=EMULATE \
+          -DHPX_WITH_DEVICE_CONDUIT_UCX=On
 
           # Disable logging for now as otherwise we run out of diskspace on the
           # github runner instance
