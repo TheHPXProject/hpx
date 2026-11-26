@@ -226,7 +226,9 @@ void run_benchmark(std::size_t vector_size1, std::size_t vector_size2,
     std::default_random_engine re(seed);
     std::uniform_real_distribution<double> dist(0.0, 1.0);
 
-    hpx::generate(par, std::begin(uniform_distribution),
+    // the generator shares one engine: generate sequentially (a parallel
+    // generate races on it, and the input would depend on the thread count)
+    hpx::generate(seq, std::begin(uniform_distribution),
         std::end(uniform_distribution), [&] { return dist(re); });
 
     using test_container = test_container<IteratorTag, data_type, Allocator>;
@@ -246,7 +248,7 @@ void run_benchmark(std::size_t vector_size1, std::size_t vector_size2,
     // entropy: 0 -> 1, 4 -> 0.201
     for (int i = 0; i < entropy; ++i, ++seed)
     {
-        hpx::generate(par, std::begin(uniform_distribution),
+        hpx::generate(seq, std::begin(uniform_distribution),
             std::end(uniform_distribution), [&] { return dist(re); });
 
         container tmp_vec(src.size(), alloc);
