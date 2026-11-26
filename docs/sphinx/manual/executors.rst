@@ -40,7 +40,7 @@ API.
 Main Executors in |hpx|
 =======================
 
-|hpx| provides multiple executors. Below are three of the most commonly used:
+|hpx| provides multiple executors. Below are some of the most commonly used:
 
 Parallel Executor
 -----------------
@@ -83,6 +83,37 @@ Fork-Join Executor
     std::vector<int> data(100, 1);
 
     hpx::execution::experimental::fork_join_executor exec;
+
+    hpx::for_each(
+        hpx::execution::par.on(exec),
+        data.begin(), data.end(),
+        [](int &x) {
+            x += 1;
+        }
+    );
+
+Suspending Fork-Join Executor
+-----------------------------
+
+* Does the same job as the fork-join executor, but its waiting threads spin
+  only for a short time (the spin duration, 20 microseconds by default) and
+  then suspend until the next parallel region starts or the current one has
+  finished.
+* Other work can run on the cores of an idle executor, and idle cores can go
+  to sleep.
+* Constexpr default constructible; the worker threads are created on first
+  use. Copies made on an HPX thread share the worker threads of the original.
+* The calling thread takes part in the parallel regions if it runs on one of
+  the executor's PUs; otherwise it suspends until the region has finished.
+
+.. code-block:: c++
+
+    #include <hpx/execution.hpp>
+    #include <hpx/algorithm.hpp>
+
+    std::vector<int> data(100, 1);
+
+    hpx::execution::experimental::suspending_fork_join_executor exec;
 
     hpx::for_each(
         hpx::execution::par.on(exec),

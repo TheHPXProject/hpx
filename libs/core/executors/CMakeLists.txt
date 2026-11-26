@@ -42,6 +42,7 @@ set(executors_headers
     hpx/executors/scheduler_executor.hpp
     hpx/executors/sequenced_executor.hpp
     hpx/executors/service_executors.hpp
+    hpx/executors/suspending_fork_join_executor.hpp
     hpx/executors/std_execution_policy.hpp
     hpx/executors/sync.hpp
     hpx/executors/task.hpp
@@ -105,8 +106,12 @@ endif()
 # cmake-format: on
 
 set(executors_sources
-    current_executor.cpp exception_list_callbacks.cpp fork_join_executor.cpp
-    parallel_scheduler.cpp service_executors.cpp
+    current_executor.cpp
+    exception_list_callbacks.cpp
+    fork_join_executor.cpp
+    parallel_scheduler.cpp
+    service_executors.cpp
+    suspending_fork_join_executor.cpp
 )
 
 include(HPX_AddModule)
