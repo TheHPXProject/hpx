@@ -46,6 +46,10 @@
 #include <unistd.h>
 #endif
 
+#if defined(HPX_WINDOWS)
+#include <windows.h>
+#endif
+
 #if defined(_POSIX_VERSION)
 #include <sys/resource.h>
 #include <sys/syscall.h>
@@ -795,6 +799,101 @@ namespace hpx::threads {
                 "hwloc_get_nbobjs_by_type failed");
         }
         return static_cast<std::size_t>(nobjs);
+    }
+
+    namespace {
+
+        // the value of the given info attribute of an hwloc object, empty if
+        // the object doesn't have it
+        std::string object_info(hwloc_obj_t const obj, char const* name)
+        {
+            if (obj == nullptr)
+                return {};
+            char const* value = hwloc_obj_get_info_by_name(obj, name);
+            return value != nullptr ? std::string(value) : std::string();
+        }
+    }    // namespace
+
+    std::string topology::get_cpu_model() const
+    {
+        std::string model;
+        {
+            std::unique_lock<mutex_type> lk(topo_mtx);
+            model = object_info(
+                hwloc_get_obj_by_type(topo, HWLOC_OBJ_SOCKET, 0), "CPUModel");
+            if (model.empty())
+                model = object_info(hwloc_get_root_obj(topo), "CPUModel");
+        }
+#if defined(HPX_WINDOWS)
+        // hwloc's Windows backend doesn't report the model; the registry
+        // does, for every kind of processor
+        if (model.empty())
+        {
+            char name[256] = {'\0'};
+            DWORD size = sizeof(name);
+            if (RegGetValueA(HKEY_LOCAL_MACHINE,
+                    "HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0",
+                    "ProcessorNameString", RRF_RT_REG_SZ, nullptr, name,
+                    &size) == ERROR_SUCCESS)
+            {
+                model = name;
+            }
+        }
+#endif
+        // the registry's name may be padded with blanks
+        auto const first = model.find_first_not_of(' ');
+        if (first == std::string::npos)
+            return {};
+        return model.substr(first, model.find_last_not_of(' ') - first + 1);
+    }
+
+    std::string topology::get_host_name() const
+    {
+        std::string name;
+        {
+            std::unique_lock<mutex_type> lk(topo_mtx);
+            name = object_info(hwloc_get_root_obj(topo), "HostName");
+        }
+        if (!name.empty())
+            return name;
+
+#if defined(HPX_WINDOWS)
+        // gethostname needs an initialized Winsock; the DNS host name of the
+        // computer is the same name without that
+        char buffer[256] = {'\0'};
+        DWORD size = sizeof(buffer);
+        if (GetComputerNameExA(ComputerNameDnsHostname, buffer, &size))
+            name.assign(buffer, size);
+#elif defined(HPX_HAVE_UNISTD_H)
+        char buffer[256] = {'\0'};
+        if (gethostname(buffer, sizeof(buffer) - 1) == 0)
+            name = buffer;
+#endif
+        return name;
+    }
+
+    std::string topology::get_os_name() const
+    {
+        std::unique_lock<mutex_type> lk(topo_mtx);
+        return object_info(hwloc_get_root_obj(topo), "OSName");
+    }
+
+    std::string topology::get_os_release() const
+    {
+        std::unique_lock<mutex_type> lk(topo_mtx);
+        return object_info(hwloc_get_root_obj(topo), "OSRelease");
+    }
+
+    std::string topology::get_os_version() const
+    {
+        std::unique_lock<mutex_type> lk(topo_mtx);
+        return object_info(hwloc_get_root_obj(topo), "OSVersion");
+    }
+
+    std::string topology::get_architecture() const
+    {
+        std::unique_lock<mutex_type> lk(topo_mtx);
+        return object_info(hwloc_get_root_obj(topo), "Architecture");
     }
 
     std::size_t topology::get_number_of_numa_nodes() const

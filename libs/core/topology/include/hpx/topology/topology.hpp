@@ -266,6 +266,30 @@ namespace hpx::threads {
         /// \brief Return the number of available hardware processing units
         std::size_t get_number_of_pus() const noexcept;
 
+        /// \brief Return the model of the processor as the operating system
+        ///        reports it (hwloc's CPUModel of the first package, or of
+        ///        the machine), empty if it is not known
+        std::string get_cpu_model() const;
+
+        /// \brief Return the name of this host, empty if it is not known
+        std::string get_host_name() const;
+
+        /// \brief Return the name of the operating system (for instance
+        ///        "Linux" or "Windows"), empty if it is not known
+        std::string get_os_name() const;
+
+        /// \brief Return the release of the operating system (on Linux the
+        ///        kernel's release), empty if it is not known
+        std::string get_os_release() const;
+
+        /// \brief Return the version of the operating system (on Linux the
+        ///        kernel's build), empty if it is not known
+        std::string get_os_version() const;
+
+        /// \brief Return the architecture of the machine (for instance
+        ///        "x86_64" or "aarch64"), empty if it is not known
+        std::string get_architecture() const;
+
         /// \brief Return number of cores in given numa domain
         std::size_t get_number_of_numa_node_cores(std::size_t numa) const;
 
