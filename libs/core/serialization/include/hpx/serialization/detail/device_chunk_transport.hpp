@@ -53,6 +53,13 @@ namespace hpx::serialization::detail {
         [[nodiscard]] virtual device_chunk_descriptor send(
             void const* p, std::size_t size) = 0;
 
+        // Sending side: the archive has a chunk of host memory the transport
+        // would move if it were ready to for the destination
+        // (archive_flags::host_transport_pending); called once per archive.
+        // The transport may get ready (e.g. check that it reaches the
+        // destination), the chunk goes with the archive meanwhile.
+        virtual void host_chunk_waiting() {}
+
         // Receiving side: receives the data described by 'descriptor' into
         // 'size' bytes of memory at 'p' and calls 'done' once it has arrived
         // (with the error if it failed). It is started as one of the steps of

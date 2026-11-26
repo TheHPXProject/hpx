@@ -69,6 +69,15 @@ error handling ``peer`` costs nothing for host memory. Endpoints are created
 when the first data goes to a locality, so localities connecting later are
 reached the same way, and a locality that leaves has its endpoint closed.
 
+Two localities that both use the UCX conduit may still not reach each other
+through UCX (for instance on different networks, or with transports
+restricted by ``HPX_DEVICE_CONDUIT_UCX_TLS``). Host chunks therefore go to a
+locality through the conduit only once its endpoint has been created and
+flushed successfully, which the conduit starts when a message to the locality
+first has a host chunk to move; until then, and for good if that fails (a
+warning is logged), the parcelport moves them. Device data doesn't fall back this way: a
+parcelport may not be able to move device memory.
+
 The conduit runs the completions of its transfers after UCX's progress has
 returned, never inside UCX's callbacks: UCX calls them with its worker lock
 held, and a completion may suspend its HPX thread.

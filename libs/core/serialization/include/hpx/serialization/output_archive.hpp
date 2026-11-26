@@ -462,9 +462,20 @@ namespace hpx::serialization {
         {
             auto const* transport =
                 try_get_extra_data<detail::device_transport>();
+            bool const host_candidate = memory == chunk_memory::host &&
+                may_arrive_later && count >= detail::host_transport_threshold();
             bool const moved = memory == chunk_memory::device ||
-                (may_arrive_later && enable_host_transport() &&
-                    count >= detail::host_transport_threshold());
+                (host_candidate && enable_host_transport());
+
+            // the transport isn't ready for host chunks to this destination
+            // yet: tell it there is one (once)
+            if (host_candidate && !moved && host_transport_pending() &&
+                !host_chunk_reported_ && !is_preprocessing() &&
+                transport != nullptr && transport->transport)
+            {
+                host_chunk_reported_ = true;
+                transport->transport->host_chunk_waiting();
+            }
             bool const use_transport = moved &&
                 (is_preprocessing() ||
                     (transport != nullptr && transport->transport));
@@ -489,6 +500,9 @@ namespace hpx::serialization {
 
         std::unique_ptr<erased_output_container> buffer_;
         bool filtered_ = false;
+
+        // a host chunk was reported to the transport (host_chunk_waiting)
+        bool host_chunk_reported_ = false;
     };
 }    // namespace hpx::serialization
 

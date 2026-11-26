@@ -19,10 +19,12 @@
 #include <hpx/hpx_init.hpp>
 #include <hpx/include/actions.hpp>
 #include <hpx/include/runtime.hpp>
+#include <hpx/modules/naming_base.hpp>
 #include <hpx/modules/parcelset.hpp>
 #include <hpx/modules/serialization.hpp>
 #include <hpx/modules/testing.hpp>
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <numeric>
@@ -83,6 +85,30 @@ std::pair<std::uint64_t, std::uint64_t> conduit_chunks()
 }
 HPX_PLAIN_ACTION(conduit_chunks)
 
+// host chunks go to 'locality_id' through the conduit once it has checked
+// that it reaches it, which it starts when a message has one (they go
+// through the parcelport until then)
+bool wait_for_host_chunks(std::uint32_t const locality_id)
+{
+    auto* conduit = hpx::parcelset::get_device_conduit();
+    hpx::id_type const id = hpx::naming::get_id_from_locality_id(locality_id);
+    std::size_t const count = threshold / sizeof(int);
+    auto const deadline =
+        std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    while (!conduit->host_chunks_ready(locality_id))
+    {
+        if (std::chrono::steady_clock::now() >= deadline)
+        {
+            return false;
+        }
+        HPX_TEST(echo_action()(id, pattern(count, 3), count, 3) ==
+            pattern(count, 4));
+        hpx::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    return true;
+}
+HPX_PLAIN_ACTION(wait_for_host_chunks)
+
 // many calls with large vectors to 'target' at once
 void echo_many(hpx::id_type const& target, std::size_t const calls)
 {
@@ -116,6 +142,12 @@ int hpx_main()
     std::vector<hpx::id_type> const remotes = hpx::find_remote_localities();
     for (hpx::id_type const& id : remotes)
     {
+        // both ways checked (the first host chunks go through the
+        // parcelport meanwhile)
+        HPX_TEST(
+            wait_for_host_chunks(hpx::naming::get_locality_id_from_id(id)));
+        HPX_TEST(wait_for_host_chunks_action()(id, hpx::get_locality_id()));
+
         // below the threshold: through the parcelport
         auto const before = conduit_chunks();
         auto const remote_before = conduit_chunks_action()(id);

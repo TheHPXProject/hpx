@@ -28,6 +28,7 @@
 #include <hpx/hpx_init.hpp>
 #include <hpx/include/process.hpp>
 #include <hpx/modules/filesystem.hpp>
+#include <hpx/modules/naming_base.hpp>
 #include <hpx/modules/parcelset.hpp>
 #include <hpx/modules/prefix.hpp>
 #include <hpx/modules/runtime_distributed.hpp>
@@ -77,9 +78,13 @@ void wait_for_worker_startup(hpx::id_type const& id)
         "worker did not finish runtime startup");
 }
 
-// launches a worker and returns it with the locality it registered as
-std::pair<process::child, hpx::id_type> launch_worker(
-    fs::path const& exe, std::uint64_t const spawn_id)
+// launches a worker (with 'extra_args' after the common ones, and the
+// environment variables 'env') and returns it with the locality it
+// registered as
+std::pair<process::child, hpx::id_type> launch_worker(fs::path const& exe,
+    std::uint64_t const spawn_id,
+    std::vector<std::string> const& extra_args = {},
+    std::vector<std::string> const& env = {})
 {
     std::unordered_set<hpx::id_type> before;
     for (hpx::id_type const& id : hpx::find_all_localities())
@@ -87,8 +92,10 @@ std::pair<process::child, hpx::id_type> launch_worker(
         before.insert(id);
     }
 
+    std::vector<std::string> args = worker_args;
+    args.insert(args.end(), extra_args.begin(), extra_args.end());
     process::child worker = process::launch_connecting_locality(
-        fs::to_string(exe), worker_args, {}, spawn_id);
+        fs::to_string(exe), args, env, spawn_id);
     worker.wait();
     HPX_TEST(worker);
 
@@ -109,11 +116,34 @@ std::pair<process::child, hpx::id_type> launch_worker(
     return std::make_pair(HPX_MOVE(worker), new_locality);
 }
 
+// host chunks go to 'id' through the conduit once it has checked that it
+// reaches it, which it starts when a message has one (they go through the
+// parcelport until then)
+bool wait_for_host_chunks(hpx::id_type const& id)
+{
+    hpx::parcelset::device_conduit* conduit =
+        hpx::parcelset::get_device_conduit();
+    std::uint32_t const locality_id = hpx::naming::get_locality_id_from_id(id);
+    auto const deadline =
+        std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    while (!conduit->host_chunks_ready(locality_id))
+    {
+        if (std::chrono::steady_clock::now() >= deadline)
+        {
+            return false;
+        }
+        hpx::async(put_host_data_action(), id, pattern(small_size, 'w')).get();
+        hpx::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    return true;
+}
+
 // device data and large host data reach 'id' intact, through the conduit
 void test_device_data(hpx::id_type const& id)
 {
     hpx::parcelset::device_conduit const* conduit =
         hpx::parcelset::get_device_conduit();
+    HPX_TEST(wait_for_host_chunks(id));
     std::uint64_t const before = conduit->statistics().chunks_sent;
 
     constexpr std::size_t count = 4;
@@ -140,6 +170,33 @@ void test_device_data(hpx::id_type const& id)
         hpx::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     HPX_TEST_LTE(before + count, conduit->statistics().chunks_sent);
+}
+
+// large host data reaches 'id' intact through the parcelport: the conduit
+// doesn't reach it (also once it has had the time to check)
+void test_host_data_without_conduit(hpx::id_type const& id)
+{
+    hpx::parcelset::device_conduit const* conduit =
+        hpx::parcelset::get_device_conduit();
+    std::uint64_t const before = conduit->statistics().chunks_sent;
+    for (int round = 0; round != 2; ++round)
+    {
+        std::vector<hpx::future<bool>> results;
+        for (std::size_t i = 0; i != 4; ++i)
+        {
+            char const first = static_cast<char>('a' + i);
+            results.push_back(hpx::async(check_host_data_action(), id,
+                pattern(small_size, first), first));
+        }
+        for (hpx::future<bool>& f : results)
+        {
+            HPX_TEST(f.get());
+        }
+
+        // the conduit's check (if it started one) has finished by now
+        hpx::this_thread::sleep_for(std::chrono::seconds(2));
+    }
+    HPX_TEST_EQ(conduit->statistics().chunks_sent, before);
 }
 
 // device and host data to 'id' that is still being moved when it goes away
@@ -295,6 +352,32 @@ int hpx_main(hpx::program_options::variables_map& vm)
         HPX_TEST_EQ(hpx::force_disconnect(id, ec), 0);
         HPX_TEST(!ec);
         HPX_TEST_EQ(worker.wait_for_exit(hpx::launch::sync), 0);
+    }
+
+    std::cout << "Localities the conduit doesn't move host chunks to.\n";
+    {
+        // one without a conduit (its endpoints say so)
+        auto [plain_worker, plain] =
+            launch_worker(exe, 6, {"--hpx:ini=hpx.parcel.device_conduit=none"});
+        test_host_data_without_conduit(plain);
+
+        // one with the UCX conduit that no other process reaches (UCX may
+        // only use its loopback transport there)
+        auto [isolated_worker, isolated] =
+            launch_worker(exe, 7, {}, {"HPX_DEVICE_CONDUIT_UCX_TLS=self"});
+        test_host_data_without_conduit(isolated);
+
+        for (auto const& id : {plain, isolated})
+        {
+            hpx::error_code ec(hpx::throwmode::lightweight);
+            HPX_TEST_EQ(hpx::force_disconnect(id, ec), 0);
+            HPX_TEST(!ec);
+        }
+        HPX_TEST_EQ(plain_worker.wait_for_exit(hpx::launch::sync), 0);
+        HPX_TEST_EQ(isolated_worker.wait_for_exit(hpx::launch::sync), 0);
+
+        // the others are reached as before
+        test_device_data(control);
     }
 
     {

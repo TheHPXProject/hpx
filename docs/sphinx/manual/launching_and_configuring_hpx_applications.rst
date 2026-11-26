@@ -904,7 +904,9 @@ The ``hpx.parcel`` configuration section
        ``hpx.parcel.<parcelport>.conduit_host_chunks`` (defaulting to this
        value) and published with the parcelport's endpoint: a sender uses the
        conduit for host chunks only to destinations whose endpoint for the same
-       parcelport says they receive them that way. Useful for the TCP parcelport
+       parcelport says they receive them that way, and once the conduit has
+       found that it reaches the destination (until then, and if it doesn't,
+       the parcelport moves them). Useful for the TCP parcelport
        on networks the conduit can use directly (RDMA). The default is ``0``.
    * * ``hpx.parcel.conduit_host_threshold``
      * This property defines the smallest chunk of host memory (in bytes) the

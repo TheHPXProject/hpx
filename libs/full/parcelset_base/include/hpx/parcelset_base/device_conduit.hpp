@@ -62,6 +62,18 @@ namespace hpx::parcelset {
         /// configured to, see locality_capabilities::conduit_host_chunks).
         [[nodiscard]] virtual bool moves_host_memory() const = 0;
 
+        /// Whether the conduit may move host chunks to 'locality_id' now
+        /// (moves_host_memory is true): a conduit may first check that it
+        /// can reach the destination (it starts the check when a message
+        /// to it has a host chunk, see
+        /// serialization::detail::device_chunk_transport::
+        /// host_chunk_waiting), host chunks go through the parcelport until
+        /// then, and for good if it can't. Called for every message to a
+        /// destination that receives host chunks through the conduit, from
+        /// any thread.
+        [[nodiscard]] virtual bool host_chunks_ready(
+            std::uint32_t locality_id) = 0;
+
         /// The transport for one message to 'locality_id' (can_reach is
         /// true). It keeps 'keep_alive' (the objects the message refers to,
         /// e.g. its parcels) until it has sent all data handed to it, which

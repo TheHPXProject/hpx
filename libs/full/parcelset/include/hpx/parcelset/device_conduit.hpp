@@ -64,6 +64,12 @@ namespace hpx::parcelset {
     ///
     ///  - static constexpr bool moves_host_memory_impl()
     ///    whether the conduit also moves host memory (false)
+    ///  - bool host_chunks_ready_impl(std::uint32_t locality_id)
+    ///    whether host chunks may go to 'locality_id' through the conduit
+    ///    now, e.g. once it has checked that it reaches it (true)
+    ///  - void prepare_host_chunks_impl(std::uint32_t locality_id)
+    ///    a message to 'locality_id' has a host chunk the conduit would
+    ///    move once ready (does nothing)
     ///
     ///  - bool background_work_impl()
     ///    makes progress, called with the parcelports' background work
@@ -97,6 +103,12 @@ namespace hpx::parcelset {
         [[nodiscard]] bool moves_host_memory() const override
         {
             return Derived::moves_host_memory_impl();
+        }
+
+        [[nodiscard]] bool host_chunks_ready(
+            std::uint32_t const locality_id) override
+        {
+            return derived().host_chunks_ready_impl(locality_id);
         }
 
         [[nodiscard]] std::shared_ptr<
@@ -178,6 +190,13 @@ namespace hpx::parcelset {
         {
             return false;
         }
+
+        [[nodiscard]] bool host_chunks_ready_impl(std::uint32_t) noexcept
+        {
+            return true;
+        }
+
+        void prepare_host_chunks_impl(std::uint32_t) noexcept {}
 
         bool background_work_impl() noexcept
         {
@@ -292,6 +311,11 @@ namespace hpx::parcelset {
                     throw;
                 }
                 return d;
+            }
+
+            void host_chunk_waiting() override
+            {
+                conduit_.prepare_host_chunks_impl(locality_id_);
             }
 
             void recv(serialization::detail::device_chunk_descriptor const&,
@@ -436,7 +460,10 @@ namespace hpx::parcelset {
         /// destination does comes from its endpoint for 'pp' (see
         /// locality_capabilities), as recorded by
         /// record_destination_capabilities. The preprocessing pass of a
-        /// parcel and its real serialization must use the same flags.
+        /// parcel and its real serialization must use the same flags, except
+        /// enable_host_transport, which may become set in between (when the
+        /// conduit has found that it reaches the destination): that changes
+        /// only the size the preprocessing pass estimates.
         HPX_CXX_EXPORT HPX_EXPORT std::uint32_t device_conduit_flags(
             parcelport const& pp, std::uint32_t locality_id) noexcept;
 

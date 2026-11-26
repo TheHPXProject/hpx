@@ -22,6 +22,7 @@
 #include <exception>
 #include <functional>
 #include <map>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -123,7 +124,25 @@ namespace hpx::parcelset::device_conduits {
         // which would leave the lock taken.
         void defer(hpx::move_only_function<void()> completion);
 
+        // Host chunks go to 'locality_id' through the conduit only once
+        // its endpoint has been flushed successfully (UCX may not reach a
+        // locality that also uses the UCX conduit, e.g. on another fabric):
+        // until then, and for good if it fails, the parcelport moves them.
+        bool host_chunks_ready_impl(std::uint32_t locality_id) noexcept;
+
+        // a message to 'locality_id' has a host chunk: starts the check
+        // (the first time)
+        void prepare_host_chunks_impl(std::uint32_t locality_id) noexcept;
+
+        // the check of 'locality_id' has finished
+        void host_check_done(
+            std::uint32_t locality_id, bool reachable) noexcept;
+
     private:
+        // creates and flushes the endpoint to 'locality_id' (on an HPX
+        // thread)
+        void check_host_reach(std::uint32_t locality_id);
+
         // runs the deferred completions (no lock held)
         bool run_completions();
 
@@ -161,6 +180,17 @@ namespace hpx::parcelset::device_conduits {
         // UCX's callbacks)
         std::mutex completions_mtx_;
         std::vector<hpx::move_only_function<void()>> completions_;
+
+        // the checks of the destinations of host chunks (see
+        // host_chunks_ready_impl)
+        enum class host_reach : std::uint8_t
+        {
+            checking,
+            reachable,
+            unreachable
+        };
+        std::mutex host_checks_mtx_;
+        std::map<std::uint32_t, host_reach> host_checks_;
     };
 }    // namespace hpx::parcelset::device_conduits
 

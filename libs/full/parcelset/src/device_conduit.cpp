@@ -181,7 +181,7 @@ namespace hpx::parcelset {
         std::uint32_t device_conduit_flags(
             parcelport const& pp, std::uint32_t const locality_id) noexcept
         {
-            device_conduit const* c = get_device_conduit();
+            device_conduit* c = get_device_conduit();
             if (c == nullptr || !c->can_reach(locality_id))
             {
                 return 0;
@@ -207,12 +207,20 @@ namespace hpx::parcelset {
                 serialization::archive_flags::enable_device_chunks;
 
             // and large host chunks, if this parcelport lets the conduit
-            // move them and the destination receives them that way
+            // move them, the destination receives them that way, and the
+            // conduit is ready to move them there; if it isn't (it may check
+            // first that it reaches the destination), it is told when a
+            // message has such a chunk, which goes with the message
+            // meanwhile
             if (host_chunks && c->moves_host_memory() &&
                 pp.conduit_host_chunks())
             {
-                flags =
-                    flags | serialization::archive_flags::enable_host_transport;
+                flags = flags |
+                    (c->host_chunks_ready(locality_id) ?
+                            serialization::archive_flags::
+                                enable_host_transport :
+                            serialization::archive_flags::
+                                host_transport_pending);
             }
             return static_cast<std::uint32_t>(flags);
         }
