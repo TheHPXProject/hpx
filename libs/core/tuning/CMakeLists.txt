@@ -9,7 +9,9 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 set(tuning_headers
     hpx/tuning/idle_settings.hpp
     hpx/tuning/machine_description.hpp
-    hpx/tuning/microbenchmarks.hpp hpx/tuning/statistics.hpp
+    hpx/tuning/microbenchmarks.hpp
+    hpx/tuning/statistics.hpp
+    hpx/tuning/tuned_setting.hpp
     hpx/tuning/tuning_table.hpp
 )
 

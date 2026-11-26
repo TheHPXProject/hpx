@@ -13,22 +13,11 @@
 #include <hpx/config.hpp>
 #include <hpx/tuning/microbenchmarks.hpp>
 #include <hpx/tuning/statistics.hpp>
+#include <hpx/tuning/tuned_setting.hpp>
 
-#include <string>
 #include <vector>
 
 namespace hpx::tuning {
-
-    /// One setting chosen by a rule: the configuration key (for instance
-    /// "hpx.min_idle_backoff_time"), its value as the configuration writes
-    /// it, why the rule chose it, and whether it equals HPX's default.
-    HPX_CXX_CORE_EXPORT struct tuned_setting
-    {
-        std::string key;
-        std::string value;
-        std::string reason;
-        bool is_default = false;
-    };
 
     /// The measurements the idle rules use (see microbenchmarks.hpp).
     HPX_CXX_CORE_EXPORT struct idle_measurements
