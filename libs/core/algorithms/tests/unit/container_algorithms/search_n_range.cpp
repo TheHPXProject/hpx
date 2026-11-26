@@ -167,10 +167,10 @@ void ranges_search_n_test_projection()
 
     auto proj = [](user_defined_type const& e) { return e.val; };
 
-    HPX_TEST(hpx::ranges::search_n(c.begin(), c.end(), 2, user_defined_type(1),
+    HPX_TEST(hpx::ranges::search_n(c.begin(), c.end(), 2, std::size_t{1},
                  hpx::ranges::equal_to{}, proj) == expected);
     HPX_TEST(
-        hpx::ranges::search_n(hpx::execution::par, c, 2, user_defined_type(1),
+        hpx::ranges::search_n(hpx::execution::par, c, 2, std::size_t{1},
             hpx::ranges::equal_to{}, proj) == expected);
 }
 
@@ -182,7 +182,8 @@ void ranges_search_n_test_sentinel()
 
     // a range whose sentinel type differs from its iterator type
     auto rng = std::ranges::subrange(
-        std::counted_iterator(c.begin(), c.size()), std::default_sentinel);
+        std::counted_iterator(c.begin(), static_cast<std::ptrdiff_t>(c.size())),
+        std::default_sentinel);
 
     auto it = hpx::ranges::search_n(rng, 2, std::size_t{1});
 

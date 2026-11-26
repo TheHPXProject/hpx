@@ -355,7 +355,7 @@ namespace hpx { namespace ranges {
     /// consecutive elements that are equal to \a value. Uses a provided
     /// predicate to compare the elements (after applying the projection).
     ///
-    /// \note   Complexity: at most N comparisons, where
+    /// \note   Complexity: at most (N*count) comparisons, where
     ///         \a N = distance(first, last).
     ///
     /// \tparam FwdIter     The type of the source iterators used for the
@@ -374,7 +374,7 @@ namespace hpx { namespace ranges {
     ///                     to hpx::ranges::equal_to
     /// \tparam Proj        The type of an optional projection function. This
     ///                     defaults to \a hpx::identity and is applied
-    ///                     to the elements of the range and to \a value.
+    ///                     to the elements of the range only.
     ///
     /// \param first        Refers to the beginning of the sequence of elements
     ///                     the algorithm will be applied to.
@@ -394,11 +394,11 @@ namespace hpx { namespace ranges {
     ///                     dereferenced and then implicitly converted to
     ///                     \a Type1, and \a value can be implicitly
     ///                     converted to \a Type2 (after applying the
-    ///                     projection \a proj to both).
+    ///                     projection \a proj to the range elements).
     /// \param proj         Specifies the function (or function object) which
     ///                     will be invoked for each of the elements of the
-    ///                     range and for \a value as a projection operation
-    ///                     before the actual predicate \a op is invoked.
+    ///                     range as a projection operation before the actual
+    ///                     predicate \a op is invoked.
     ///
     /// The comparison operations in the \a search_n algorithm execute
     /// in sequential order in the calling thread.
@@ -422,7 +422,7 @@ namespace hpx { namespace ranges {
     /// consecutive elements that are equal to \a value. Uses a provided
     /// predicate to compare the elements (after applying the projection).
     ///
-    /// \note   Complexity: at most N comparisons, where
+    /// \note   Complexity: at most (N*count) comparisons, where
     ///         \a N = distance(first, last).
     ///
     /// \tparam ExPolicy    The type of the execution policy to use (deduced).
@@ -445,7 +445,7 @@ namespace hpx { namespace ranges {
     ///                     to hpx::ranges::equal_to
     /// \tparam Proj        The type of an optional projection function. This
     ///                     defaults to \a hpx::identity and is applied
-    ///                     to the elements of the range and to \a value.
+    ///                     to the elements of the range only.
     ///
     /// \param policy       The execution policy to use for the scheduling of
     ///                     the iterations.
@@ -467,11 +467,11 @@ namespace hpx { namespace ranges {
     ///                     dereferenced and then implicitly converted to
     ///                     \a Type1, and \a value can be implicitly
     ///                     converted to \a Type2 (after applying the
-    ///                     projection \a proj to both).
+    ///                     projection \a proj to the range elements).
     /// \param proj         Specifies the function (or function object) which
     ///                     will be invoked for each of the elements of the
-    ///                     range and for \a value as a projection operation
-    ///                     before the actual predicate \a op is invoked.
+    ///                     range as a projection operation before the actual
+    ///                     predicate \a op is invoked.
     ///
     /// The comparison operations in the parallel \a search_n algorithm invoked
     /// with an execution policy object of type \a sequenced_policy
@@ -506,7 +506,7 @@ namespace hpx { namespace ranges {
     /// consecutive elements that are equal to \a value. Uses a provided
     /// predicate to compare the elements (after applying the projection).
     ///
-    /// \note   Complexity: at most N comparisons, where
+    /// \note   Complexity: at most (N*count) comparisons, where
     ///         \a N = distance(first, last) of the range \a rng.
     ///
     /// \tparam Rng         The type of the range used (deduced).
@@ -520,7 +520,7 @@ namespace hpx { namespace ranges {
     ///                     to hpx::ranges::equal_to
     /// \tparam Proj        The type of an optional projection function. This
     ///                     defaults to \a hpx::identity and is applied
-    ///                     to the elements of the range and to \a value.
+    ///                     to the elements of the range only.
     ///
     /// \param rng          Refers to the sequence of elements the algorithm
     ///                     will be applied to.
@@ -538,11 +538,11 @@ namespace hpx { namespace ranges {
     ///                     dereferenced and then implicitly converted to
     ///                     \a Type1, and \a value can be implicitly
     ///                     converted to \a Type2 (after applying the
-    ///                     projection \a proj to both).
+    ///                     projection \a proj to the range elements).
     /// \param proj         Specifies the function (or function object) which
     ///                     will be invoked for each of the elements of the
-    ///                     range and for \a value as a projection operation
-    ///                     before the actual predicate \a op is invoked.
+    ///                     range as a projection operation before the actual
+    ///                     predicate \a op is invoked.
     ///
     /// The comparison operations in the \a search_n algorithm execute
     /// in sequential order in the calling thread.
@@ -565,7 +565,7 @@ namespace hpx { namespace ranges {
     /// consecutive elements that are equal to \a value. Uses a provided
     /// predicate to compare the elements (after applying the projection).
     ///
-    /// \note   Complexity: at most N comparisons, where
+    /// \note   Complexity: at most (N*count) comparisons, where
     ///         \a N = distance(first, last) of the range \a rng.
     ///
     /// \tparam ExPolicy    The type of the execution policy to use (deduced).
@@ -583,7 +583,7 @@ namespace hpx { namespace ranges {
     ///                     to hpx::ranges::equal_to
     /// \tparam Proj        The type of an optional projection function. This
     ///                     defaults to \a hpx::identity and is applied
-    ///                     to the elements of the range and to \a value.
+    ///                     to the elements of the range only.
     ///
     /// \param policy       The execution policy to use for the scheduling of
     ///                     the iterations.
@@ -603,11 +603,11 @@ namespace hpx { namespace ranges {
     ///                     dereferenced and then implicitly converted to
     ///                     \a Type1, and \a value can be implicitly
     ///                     converted to \a Type2 (after applying the
-    ///                     projection \a proj to both).
+    ///                     projection \a proj to the range elements).
     /// \param proj         Specifies the function (or function object) which
     ///                     will be invoked for each of the elements of the
-    ///                     range and for \a value as a projection operation
-    ///                     before the actual predicate \a op is invoked.
+    ///                     range as a projection operation before the actual
+    ///                     predicate \a op is invoked.
     ///
     /// The comparison operations in the parallel \a search_n algorithm invoked
     /// with an execution policy object of type \a sequenced_policy
@@ -798,7 +798,7 @@ namespace hpx::ranges {
                 parallel::traits::is_indirect_callable_v<
                     hpx::execution::sequenced_policy, Pred,
                     parallel::traits::projected<Proj, FwdIter>,
-                    parallel::traits::projected<Proj, T const*>
+                    parallel::traits::projected<hpx::identity, T const*>
                 >
             )
         // clang-format on
@@ -823,7 +823,7 @@ namespace hpx::ranges {
                 parallel::traits::is_indirect_callable_v<
                     ExPolicy, Pred,
                     parallel::traits::projected<Proj, FwdIter>,
-                    parallel::traits::projected<Proj, T const*>
+                    parallel::traits::projected<hpx::identity, T const*>
                 >
             )
         // clang-format on
@@ -847,7 +847,7 @@ namespace hpx::ranges {
                 hpx::parallel::traits::is_indirect_callable_v<
                     hpx::execution::sequenced_policy, Pred,
                     hpx::parallel::traits::projected_range<Proj, Rng>,
-                    parallel::traits::projected<Proj, T const*>
+                    parallel::traits::projected<hpx::identity, T const*>
                 >
             )
         // clang-format on
@@ -875,7 +875,7 @@ namespace hpx::ranges {
                 hpx::parallel::traits::is_indirect_callable_v<
                     ExPolicy, Pred,
                     hpx::parallel::traits::projected_range<Proj, Rng>,
-                    parallel::traits::projected<Proj, T const*>
+                    parallel::traits::projected<hpx::identity, T const*>
                 >
             )
         // clang-format on

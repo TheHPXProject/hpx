@@ -90,12 +90,12 @@ namespace hpx::parallel::detail {
     {
         // Partitioned path: called from search_n::parallel() f1 for each chunk.
         // Checks each starting position in [base_idx, base_idx+part_size) for
-        // count consecutive elements equal to value_proj.
+        // count consecutive elements equal to value.
         template <typename Iter, typename Size, typename V, typename Token,
             typename Pred, typename Proj>
         static inline constexpr void invoke_default(Iter it,
             std::size_t base_idx, std::size_t part_size,
-            std::ptrdiff_t max_start, Size count, V const& value_proj,
+            std::ptrdiff_t max_start, Size count, V const& value,
             Token& tok, Pred&& pred, Proj&& proj)
         {
             using difference_type =
@@ -103,7 +103,7 @@ namespace hpx::parallel::detail {
             using reference = typename std::iterator_traits<Iter>::reference;
             std::size_t idx = 0;
             util::loop_idx_n<ExPolicy>(base_idx, it, part_size, tok,
-                [max_start, count, it, &value_proj, &tok, &idx,
+                [max_start, count, it, &value, &tok, &idx,
                     pred = HPX_FORWARD(Pred, pred),
                     proj = HPX_FORWARD(Proj, proj)](
                     reference, std::size_t abs_idx) mutable -> void {
@@ -115,7 +115,7 @@ namespace hpx::parallel::detail {
                     Iter curr = start;
                     Size matched = 0;
                     while (matched < count &&
-                        HPX_INVOKE(pred, HPX_INVOKE(proj, *curr), value_proj))
+                        HPX_INVOKE(pred, HPX_INVOKE(proj, *curr), value))
                     {
                         ++curr;
                         ++matched;
@@ -277,8 +277,6 @@ namespace hpx::parallel::detail {
                 return hpx::parallel::detail::advance_to_sentinel(first, last);
             }
 
-            auto value_proj = proj(value);
-
             FwdIter it = first;
             FwdIter end = first;
             std::advance(end, n - static_cast<difference_type>(count) + 1);
@@ -288,7 +286,7 @@ namespace hpx::parallel::detail {
                 FwdIter curr = it;
                 Size matched = 0;
 
-                while (matched < count && pred(proj(*curr), value_proj))
+                while (matched < count && pred(proj(*curr), value))
                 {
                     ++curr;
                     ++matched;
@@ -328,8 +326,6 @@ namespace hpx::parallel::detail {
             difference_type max_start =
                 n - static_cast<difference_type>(count) + 1;
 
-            auto value_proj = proj(value);
-
             decltype(auto) policy =
                 hpx::execution::experimental::adapt_placement_mode(
                     HPX_FORWARD(ExPolicy, orgpolicy),
@@ -341,13 +337,13 @@ namespace hpx::parallel::detail {
             hpx::parallel::util::cancellation_token<difference_type> tok(
                 max_start);
 
-            auto f1 = [max_start, count, value_proj,
+            auto f1 = [max_start, count, value,
                           pred = HPX_FORWARD(Pred, pred),
                           proj = HPX_FORWARD(Proj, proj),
                           tok](FwdIter it, std::size_t part_size,
                           std::size_t base_idx) mutable -> void {
                 sequential_search_n_t<policy_type>{}(it, base_idx, part_size,
-                    static_cast<std::ptrdiff_t>(max_start), count, value_proj,
+                    static_cast<std::ptrdiff_t>(max_start), count, value,
                     tok, HPX_FORWARD(Pred, pred), HPX_FORWARD(Proj, proj));
             };
 
