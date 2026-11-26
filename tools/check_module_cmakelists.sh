@@ -35,8 +35,11 @@ function check_module_dependencies() {
             # Isolate the name of the module from the include
             module_deps=$(basename $include | cut -d'.' -f1)
             # Check if the name is not the current module and check if it is
-            # contained in the current module group
-            if [[ ! "$module_deps" == "$tmp_module_name" ]]; then
+            # contained in the current module group; every core module is
+            # linked to config_registry by add_hpx_module (see
+            # cmake/HPX_AddModule.cmake), so it needn't be listed
+            if [[ ! "$module_deps" == "$tmp_module_name" ]] \
+                && [[ ! "$module_deps" == "config_registry" ]]; then
                 for group_module in ${tmp_group_list}; do
                     if [[ "$module_deps" == "$group_module" ]]; then
                         check_failure "hpx_${module_deps}" "$tmp_module" CMakeLists.txt
