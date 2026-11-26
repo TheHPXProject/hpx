@@ -363,9 +363,10 @@ namespace hpx::execution::experimental {
     /// mask always share its worker threads. Copies of a default constructed
     /// executor made before the HPX runtime runs (or on a thread that is not
     /// an HPX thread) share nothing with the original until it is used; each
-    /// of them creates its own worker threads on first use. The worker threads exit when the last copy that shares
-    /// them is destroyed, or when the runtime starts to shut down (in
-    /// hpx::finalize, see hpx::register_pre_shutdown_function), whichever
+    /// of them creates its own worker threads on first use. The worker
+    /// threads exit when the last copy that shares them is destroyed, or when
+    /// the runtime starts to shut down (in hpx::finalize, see
+    /// hpx::register_pre_shutdown_function), whichever
     /// comes first: suspended threads would keep the runtime from stopping.
     /// Using the executor after its worker threads exited throws
     /// invalid_status.
@@ -973,8 +974,8 @@ namespace hpx::execution::experimental {
         }
 
         /// \cond NOINTERNAL
-        // A shared executor runs single tasks on the parallel_executor of this executor, which
-        // has its properties.
+        // A shared executor runs single tasks on the parallel_executor of
+        // this executor, which has its properties.
         template <typename F, typename... Ts>
             requires(Shared)
         decltype(auto) sync_execute(F&& f, Ts&&... ts) const
