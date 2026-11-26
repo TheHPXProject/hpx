@@ -243,16 +243,21 @@ int main(int argc, char* argv[])
     tuning::machine_description const machine =
         tuning::describe_machine(hpx::threads::get_topology());
 
+    // what the settings were measured on; each area adds its own entries
+    tuning::host_fingerprint const fingerprint =
+        tuning::describe_host(hpx::threads::get_topology());
+
     std::vector<std::string> comments = {
         "written by hpx_tune on " + current_date(),
         "HPX " + hpx::full_version_as_string() + ", " + hpx::build_string(),
-        "machine: " + std::to_string(machine.sockets) + " sockets, " +
-            std::to_string(machine.numa_domains) + " NUMA domains, " +
-            std::to_string(machine.cores) + " cores, " +
-            std::to_string(machine.pus) + " processing units",
         "pass to an HPX application with --hpx:config=<this file>",
     };
-    std::vector<tuning::ini_section> sections;
+    std::vector<std::string> const fingerprint_comments =
+        tuning::to_comments(fingerprint);
+    comments.insert(comments.end(), fingerprint_comments.begin(),
+        fingerprint_comments.end());
+    std::vector<tuning::ini_section> sections = {
+        tuning::to_section(fingerprint)};
 
     auto const add = [&](area_result&& result) {
         comments.insert(

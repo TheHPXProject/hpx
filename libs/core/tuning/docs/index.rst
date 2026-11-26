@@ -26,7 +26,7 @@ itself, for instance during startup. All declarations are in the namespace
 ``#include <hpx/modules/tuning.hpp>``; the module is also exposed as a
 C++ module when |hpx| is built with ``HPX_WITH_CXX_MODULES=ON``.
 
-The module has five parts:
+The module has six parts:
 
 1. :ref:`modules_tuning_statistics`: the summary of repeated
    measurements.
@@ -38,6 +38,7 @@ The module has five parts:
    into settings, and the table of settings by scheduler, tuner and pool size.
 5. :ref:`modules_tuning_ini`: the settings of one or more areas as an ini
    file.
+6. :ref:`modules_tuning_fingerprint`: what the settings were measured on.
 
 .. _modules_tuning_statistics:
 
@@ -256,6 +257,55 @@ key that starts with the section's name and a dot loses that part
 (``hpx.parcel.tcp.enable`` is ``enable`` in the section ``hpx.parcel.tcp``),
 any other loses its leading ``hpx.`` (``hpx.min_idle_backoff_time`` is
 ``min_idle_backoff_time`` in an idle tuning section).
+
+.. _modules_tuning_fingerprint:
+
+The host fingerprint
+====================
+
+A file of tuned settings records what it was measured on, so that a profile
+used on another machine can be recognized:
+
+.. code-block:: c++
+
+    struct fingerprint_entry
+    {
+        std::string key;        // a single word, for instance "cpu_model"
+        std::string value;
+        bool compared = true;   // false: for information only
+    };
+
+    struct host_fingerprint
+    {
+        std::vector<fingerprint_entry> entries;
+
+        void add(std::string key, std::string value, bool compared = true);
+        fingerprint_entry const* find(std::string_view key) const noexcept;
+    };
+
+    host_fingerprint describe_host(hpx::threads::topology const& topo);
+    std::vector<std::string> to_comments(host_fingerprint const& f);
+    ini_section to_section(host_fingerprint const& f);
+    std::vector<std::string> mismatches(
+        host_fingerprint const& profile, host_fingerprint const& here);
+
+``describe_host`` gives the core entries: ``host_name`` (not compared, as a
+profile is for the hosts of a partition), ``cpu_model``, ``architecture``,
+``sockets``, ``numa_domains``, ``cores``, ``pus``, ``os_name``,
+``os_release``, ``os_version`` (from the topology, that is from hwloc),
+``hpx_version``, ``hpx_commit``, ``hpx_build_type``, ``compiler`` and
+``stdlib`` (from |hpx|'s version). Other tuning areas append their own
+entries with ``add``, their keys starting with the area's name
+(``parcel_conduits``). Keys are single words with underscores, since a dot
+would read as a further section level in an ini file.
+
+``to_comments`` gives one comment line per entry (``fingerprint: cpu_model =
+...``) and ``to_section`` the section ``[hpx.tuning.fingerprint]`` with one
+key per entry, so that the runtime can read it back. In that section a ``$``
+that is followed by ``{`` or ``[`` is written doubled, so that the ini reader
+takes it literally instead of expanding it. ``mismatches`` lists the compared
+entries in which a profile's fingerprint and this host's differ, or that only
+one of them has.
 
 See the :ref:`API reference <modules_tuning_api>` of this module for
 more details.
