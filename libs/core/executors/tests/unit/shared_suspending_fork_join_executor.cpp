@@ -12,11 +12,15 @@
 #include <hpx/execution.hpp>
 #include <hpx/future.hpp>
 #include <hpx/init.hpp>
+#include <hpx/latch.hpp>
 #include <hpx/modules/executors.hpp>
+#include <hpx/modules/serialization.hpp>
 #include <hpx/modules/testing.hpp>
 #include <hpx/numeric.hpp>
 
 #include <atomic>
+#include <bit>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
@@ -64,6 +68,32 @@ static_assert(
                        std::declval<shared_suspending_fork_join_executor>())(
                        hpx::execution::task))>::executor_type,
         hpx::execution::parallel_executor>);
+
+// the properties give a shared executor
+static_assert(
+    std::is_same_v<decltype(hpx::execution::experimental::with_priority(
+                       global_exec, hpx::threads::thread_priority::default_)),
+        shared_suspending_fork_join_executor>);
+static_assert(
+    std::is_same_v<decltype(hpx::execution::experimental::with_stacksize(
+                       global_exec, hpx::threads::thread_stacksize::medium)),
+        shared_suspending_fork_join_executor>);
+static_assert(std::is_same_v<
+    decltype(hpx::execution::experimental::with_processing_units_count(
+        global_exec, 2)),
+    shared_suspending_fork_join_executor>);
+static_assert(
+    std::is_same_v<decltype(hpx::execution::experimental::with_first_core(
+                       global_exec, 1)),
+        shared_suspending_fork_join_executor>);
+static_assert(
+    std::is_same_v<decltype(hpx::execution::experimental::with_annotation(
+                       global_exec, "test")),
+        shared_suspending_fork_join_executor>);
+static_assert(
+    std::is_same_v<decltype(hpx::execution::experimental::with_hint(
+                       global_exec, hpx::threads::thread_schedule_hint{})),
+        shared_suspending_fork_join_executor>);
 
 // all elements are visited exactly once
 void test_bulk(shared_suspending_fork_join_executor const& exec)
@@ -254,6 +284,225 @@ void test_algorithms()
         expected);
 }
 
+// A region runs on num_cores worker threads only, starting at first_core: the
+// worker threads (other than the calling thread) that take part are in that
+// window.
+template <typename Executor>
+void test_cores(Executor const& exec)
+{
+    std::size_t const num_threads = hpx::get_num_worker_threads();
+    HPX_TEST_LTE(num_threads, std::size_t(64));
+
+    std::vector<std::size_t> indices(1000);
+    std::iota(indices.begin(), indices.end(), std::size_t(0));
+
+    for (std::size_t num_cores = 1; num_cores <= num_threads; ++num_cores)
+    {
+        for (std::size_t first_core = 0; first_core != num_threads;
+            ++first_core)
+        {
+            auto const e = hpx::execution::experimental::with_first_core(
+                hpx::execution::experimental::with_processing_units_count(
+                    exec, num_cores),
+                first_core);
+            static_assert(std::is_same_v<std::decay_t<decltype(e)>, Executor>);
+
+            HPX_TEST_EQ(hpx::execution::experimental::processing_units_count(e),
+                num_cores);
+
+            std::vector<std::atomic<int>> visited(indices.size());
+            std::atomic<std::uint64_t> workers{0};
+            auto const caller = hpx::threads::get_self_id();
+            hpx::parallel::execution::bulk_sync_execute(
+                e,
+                [&](std::size_t const i) {
+                    ++visited[i];
+                    if (hpx::threads::get_self_id() != caller)
+                    {
+                        workers |= std::uint64_t(1)
+                            << hpx::get_worker_thread_num();
+                    }
+                },
+                indices);
+
+            for (auto const& v : visited)
+            {
+                HPX_TEST_EQ(v.load(), 1);
+            }
+
+            std::uint64_t const used = workers.load();
+            HPX_TEST_LTE(
+                static_cast<std::size_t>(std::popcount(used)), num_cores);
+            for (std::size_t w = 0; w != num_threads; ++w)
+            {
+                if (used & (std::uint64_t(1) << w))
+                {
+                    HPX_TEST_LT((w + num_threads - first_core) % num_threads,
+                        num_cores);
+                }
+            }
+        }
+    }
+}
+
+// The properties apply to the parallel_executor as well, which runs single
+// tasks and the task policies.
+void test_properties()
+{
+    namespace ex = hpx::execution::experimental;
+
+    hpx::threads::thread_schedule_hint const hint(static_cast<std::int16_t>(1));
+    auto const exec = ex::with_hint(
+        ex::with_stacksize(
+            ex::with_priority(
+                ex::with_first_core(
+                    ex::with_processing_units_count(global_exec, 2), 1),
+                hpx::threads::thread_priority::high),
+            hpx::threads::thread_stacksize::medium),
+        hint);
+
+    HPX_TEST_EQ(ex::get_priority(exec), hpx::threads::thread_priority::high);
+    HPX_TEST_EQ(
+        ex::get_stacksize(exec), hpx::threads::thread_stacksize::medium);
+    HPX_TEST(ex::get_hint(exec) == hint);
+    HPX_TEST_EQ(ex::processing_units_count(exec), std::size_t(2));
+
+    auto const task_exec =
+        hpx::execution::par.on(exec)(hpx::execution::task).executor();
+    HPX_TEST_EQ(
+        ex::get_priority(task_exec), hpx::threads::thread_priority::high);
+    HPX_TEST_EQ(
+        ex::get_stacksize(task_exec), hpx::threads::thread_stacksize::medium);
+    HPX_TEST(ex::get_hint(task_exec) == hint);
+    HPX_TEST_EQ(ex::processing_units_count(task_exec), std::size_t(2));
+    HPX_TEST_EQ(ex::get_first_core(task_exec), std::size_t(1));
+
+    // the worker threads have their own priority, unless it was set
+    auto const task_exec_default =
+        hpx::execution::par.on(global_exec)(hpx::execution::task).executor();
+    HPX_TEST_EQ(ex::get_priority(task_exec_default),
+        ex::get_priority(hpx::execution::parallel_executor()));
+
+    // single tasks run with these properties
+    HPX_TEST_EQ(
+        hpx::parallel::execution::async_execute(exec,
+            [] {
+                return hpx::threads::get_self_id_data()->get_stack_size_enum();
+            })
+            .get(),
+        hpx::threads::thread_stacksize::medium);
+
+    // the regions too
+    test_bulk(exec);
+}
+
+// Iterations that wait for each other: the hint says that tasks must not be
+// combined, so each iteration gets a task of its own. There are more of them
+// than worker threads, which would deadlock on the worker threads.
+void test_interdependent()
+{
+    namespace ex = hpx::execution::experimental;
+
+    constexpr std::size_t size = 64;
+    hpx::threads::thread_schedule_hint hint = ex::get_hint(global_exec);
+    hint.sharing_mode(hpx::threads::thread_sharing_hint::do_not_combine_tasks);
+    auto const exec = ex::with_hint(global_exec, hint);
+
+    hpx::latch all_arrived(static_cast<std::ptrdiff_t>(size));
+    std::atomic<std::size_t> count{0};
+    hpx::parallel::execution::bulk_sync_execute(
+        exec,
+        [&](std::size_t) {
+            all_arrived.arrive_and_wait();
+            ++count;
+        },
+        hpx::util::counting_shape(size));
+    HPX_TEST_EQ(count.load(), size);
+
+    // the algorithms that need a task for each part use the
+    // parallel_executor
+    static_assert(
+        std::is_same_v<decltype(hpx::execution::to_hierarchical_spawning(
+                           global_exec)),
+            decltype(hpx::execution::to_hierarchical_spawning(
+                hpx::execution::parallel_executor()))>);
+}
+
+// A function object with state that is not thread safe: each share of a
+// region (and each task of the fallback) calls its own copy, as each task of
+// a parallel_executor does.
+struct stateful_function
+{
+    std::atomic<std::size_t>* calls;
+    std::size_t in_call = 0;
+
+    void operator()(std::size_t)
+    {
+        HPX_TEST_EQ(in_call++, std::size_t(0));
+        for (int i = 0; i != 100; ++i)
+        {
+            HPX_SMT_PAUSE;
+        }
+        ++*calls;
+        --in_call;
+    }
+};
+
+template <typename Executor>
+void test_stateful_function(Executor const& exec)
+{
+    std::atomic<std::size_t> calls{0};
+    std::vector<std::size_t> indices(10000);
+    hpx::parallel::execution::bulk_sync_execute(
+        exec, stateful_function{&calls}, indices);
+    HPX_TEST_EQ(calls.load(), indices.size());
+
+    // the fallback, from inside a region
+    std::atomic<std::size_t> nested_calls{0};
+    hpx::parallel::execution::bulk_sync_execute(
+        exec,
+        [&](std::size_t) {
+            hpx::parallel::execution::bulk_sync_execute(
+                global_exec, stateful_function{&nested_calls}, indices);
+        },
+        std::vector<std::size_t>(4));
+    HPX_TEST_EQ(nested_calls.load(), 4 * indices.size());
+}
+
+// the configuration of a shared executor can be sent elsewhere
+void test_serialization()
+{
+    auto const exec = hpx::execution::experimental::with_first_core(
+        hpx::execution::experimental::with_processing_units_count(
+            shared_suspending_fork_join_executor(
+                hpx::threads::thread_priority::default_,
+                hpx::threads::thread_stacksize::medium,
+                shared_suspending_fork_join_executor::loop_schedule::static_,
+                std::chrono::microseconds(30)),
+            2),
+        1);
+
+    std::vector<char> buffer;
+    {
+        hpx::serialization::output_archive oarchive(buffer);
+        oarchive << exec;
+    }
+
+    shared_suspending_fork_join_executor loaded;
+    HPX_TEST(loaded != exec);
+    {
+        hpx::serialization::input_archive iarchive(buffer);
+        iarchive >> loaded;
+    }
+    HPX_TEST(loaded == exec);
+    HPX_TEST_EQ(hpx::execution::experimental::get_priority(loaded),
+        hpx::threads::thread_priority::default_);
+    HPX_TEST_EQ(hpx::execution::experimental::get_stacksize(loaded),
+        hpx::threads::thread_stacksize::medium);
+
+    test_bulk(loaded);
+}
+
 // a thread that is not an HPX thread uses the parallel_executor
 void test_external_thread()
 {
@@ -281,6 +530,14 @@ int hpx_main()
     test_exceptions();
     test_algorithms();
     test_external_thread();
+    test_cores(global_exec);
+    test_properties();
+    test_interdependent();
+    test_stateful_function(global_exec);
+    test_stateful_function(
+        hpx::execution::experimental::suspending_fork_join_executor());
+    test_cores(hpx::execution::experimental::suspending_fork_join_executor());
+    test_serialization();
 
     return hpx::local::finalize();
 }

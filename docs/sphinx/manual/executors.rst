@@ -147,8 +147,25 @@ parallelism). ``shared_suspending_fork_join_executor`` can:
 * Single tasks (``sync_execute``, ``async_execute``, ``then_execute``,
   ``post``) and continuations (``bulk_then_execute``) run as a
   ``parallel_executor`` runs them.
+* ``with_processing_units_count`` and ``with_first_core`` limit the regions
+  to the given number of worker threads, starting at the given one; the
+  other worker threads are not woken. ``with_priority`` and
+  ``with_stacksize`` select the shared worker threads with that priority or
+  stack size.
+* The properties (also ``with_hint`` and ``with_annotation``) apply as well
+  to the ``parallel_executor`` that runs the single tasks, the
+  continuations and the regions that fall back, and that a task policy uses
+  (see below). The worker threads get the priority ``bound`` if the
+  priority is ``default_`` (as it is by default), so that they stay on their
+  cores, while the tasks of the ``parallel_executor`` can be stolen.
+* A hint with ``thread_sharing_hint::do_not_combine_tasks`` says that the
+  iterations depend on each other: each iteration then runs as a task of its
+  own on the ``parallel_executor``. The algorithms that need a task for each
+  of their parts (the uninitialized algorithms, ``spmd_block``) use the
+  ``parallel_executor`` right away.
 * Copies never own worker threads, so the executor can be a ``constexpr``
-  variable.
+  variable. Its configuration can be serialized, for instance as the
+  executor of a policy sent to another locality.
 
 If |hpx| is configured with
 ``HPX_WITH_SUSPENDING_FORK_JOIN_EXECUTOR_AS_DEFAULT=ON`` (default: ``OFF``),

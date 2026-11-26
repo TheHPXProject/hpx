@@ -8,8 +8,17 @@ set(benchmarks fork_join_executors_benchmark)
 
 # as a test, run only a few short loops
 set(fork_join_executors_benchmark_PARAMETERS
-    THREADS_PER_LOCALITY 4 ARGS --regions=20 --batches=1 --sizes 0 1000
-    --gaps-us 10 --other-work-size=1000
+    THREADS_PER_LOCALITY
+    4
+    ARGS
+    --regions=20
+    --batches=1
+    --sizes
+    0
+    1000
+    --gaps-us
+    10
+    --other-work-size=1000
 )
 
 foreach(benchmark ${benchmarks})

@@ -18,7 +18,7 @@
 #include <hpx/executors/parallel_executor.hpp>
 #include <hpx/executors/sequenced_executor.hpp>
 #if defined(HPX_HAVE_SUSPENDING_FORK_JOIN_EXECUTOR_AS_DEFAULT)
-#include <hpx/executors/suspending_fork_join_executor.hpp>
+#include <hpx/executors/shared_suspending_fork_join_executor.hpp>
 #endif
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/execution.hpp>

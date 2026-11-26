@@ -167,7 +167,7 @@ namespace hpx::execution {
         }
 
     public:
-        parallel_policy_executor_base(
+        constexpr parallel_policy_executor_base(
             parallel_policy_executor_base const& rhs) noexcept
           : pool_(rhs.pool_)
           , policy_(rhs.policy_)
@@ -180,7 +180,7 @@ namespace hpx::execution {
         }
         // NOLINTEND(bugprone-crtp-constructor-accessibility)
 
-        parallel_policy_executor_base& operator=(
+        constexpr parallel_policy_executor_base& operator=(
             parallel_policy_executor_base const& rhs) noexcept
         {
             if (this != &rhs)
