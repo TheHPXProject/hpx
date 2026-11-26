@@ -11,7 +11,8 @@
 // std::vector and serialize_buffer), between localities whose endpoints say
 // they receive them that way. Smaller chunks go through the parcelport. The
 // test checks the data of arguments and results, many calls in flight in
-// both directions, and the conduit's statistics on both sides.
+// both directions, and the conduit's statistics on both sides (and its
+// performance counters, where HPX has the parcelport counters).
 
 #include <hpx/config.hpp>
 
@@ -23,6 +24,9 @@
 #include <hpx/modules/parcelset.hpp>
 #include <hpx/modules/serialization.hpp>
 #include <hpx/modules/testing.hpp>
+#if defined(HPX_HAVE_PARCELPORT_COUNTERS)
+#include <hpx/include/performance_counters.hpp>
+#endif
 
 #include <chrono>
 #include <cstddef>
@@ -84,6 +88,32 @@ std::pair<std::uint64_t, std::uint64_t> conduit_chunks()
     return {s.chunks_sent, s.chunks_received};
 }
 HPX_PLAIN_ACTION(conduit_chunks)
+
+#if defined(HPX_HAVE_PARCELPORT_COUNTERS)
+// a performance counter of the conduit on this locality, e.g. 'count' and
+// 'sent' for /device_conduit{locality#N/total}/count/ucx/sent
+std::uint64_t conduit_counter(char const* kind, char const* direction)
+{
+    std::string const name = "/device_conduit{locality#" +
+        std::to_string(hpx::get_locality_id()) + "/total}/" + kind + "/" +
+        hpx::parcelset::get_device_conduit()->name() + "/" + direction;
+    hpx::performance_counters::performance_counter counter(name);
+    return counter.get_value<std::uint64_t>(hpx::launch::sync);
+}
+
+// the counters show the conduit's statistics (no data moves meanwhile)
+void check_counters()
+{
+    auto const s = hpx::parcelset::get_device_conduit()->statistics();
+    HPX_TEST_EQ(conduit_counter("count", "sent"), s.chunks_sent);
+    HPX_TEST_EQ(conduit_counter("count", "received"), s.chunks_received);
+    HPX_TEST_EQ(conduit_counter("data", "sent"), s.bytes_sent);
+    HPX_TEST_EQ(conduit_counter("data", "received"), s.bytes_received);
+    HPX_TEST(s.chunks_sent != 0);
+    HPX_TEST(s.chunks_received != 0);
+}
+HPX_PLAIN_ACTION(check_counters)
+#endif
 
 // host chunks go to 'locality_id' through the conduit once it has checked
 // that it reaches it, which it starts when a message has one (they go
@@ -211,6 +241,13 @@ int hpx_main()
     {
         HPX_TEST(!f.has_exception());
     }
+
+#if defined(HPX_HAVE_PARCELPORT_COUNTERS)
+    for (hpx::id_type const& id : hpx::find_all_localities())
+    {
+        check_counters_action()(id);
+    }
+#endif
 
     return hpx::finalize();
 }
