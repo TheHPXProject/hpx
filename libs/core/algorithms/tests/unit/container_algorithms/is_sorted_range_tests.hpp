@@ -11,6 +11,7 @@
 #include <hpx/execution.hpp>
 #include <hpx/modules/testing.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <functional>
 #include <iterator>
@@ -63,6 +64,32 @@ void test_sorted1(ExPolicy&& policy, IteratorTag)
 
     HPX_TEST(hpx::ranges::is_sorted(
         policy, sorted_c.begin(), sorted_c.end(), std::less<int>{}, proj));
+}
+
+// the end is a sentinel; the range is sorted, or unsorted at one random
+// position
+template <typename Sentinel, typename IteratorTag, typename... ExPolicy>
+void test_sorted_sent(IteratorTag, ExPolicy&&... policy)
+{
+    using base_iterator = std::vector<int>::iterator;
+    using iterator = test::test_iterator<base_iterator, IteratorTag>;
+
+    std::vector<int> c(10007);
+    for (bool sorted : {true, false})
+    {
+        std::iota(std::begin(c), std::end(c), 0);
+        if (!sorted)
+        {
+            std::size_t const pos =
+                static_cast<std::size_t>(gen()) % (c.size() - 1);
+            std::swap(c[pos], c[pos + 1]);
+        }
+
+        bool result = hpx::ranges::is_sorted(policy..., iterator(std::begin(c)),
+            Sentinel(iterator(std::end(c))));
+        HPX_TEST_EQ(result, sorted);
+        HPX_TEST_EQ(result, std::is_sorted(std::begin(c), std::end(c)));
+    }
 }
 
 template <typename ExPolicy, typename IteratorTag>

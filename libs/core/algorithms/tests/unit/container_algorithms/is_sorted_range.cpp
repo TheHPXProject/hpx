@@ -8,6 +8,7 @@
 
 #include <iostream>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "is_sorted_range_tests.hpp"
@@ -25,6 +26,17 @@ void test_sorted1()
     test_sorted1_async(par(task), IteratorTag());
 
     test_sorted1_seq(IteratorTag());
+
+    using iterator =
+        test::test_iterator<std::vector<int>::iterator, IteratorTag>;
+    test_sorted_sent<test::sentinel_from_iterator<iterator>>(IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        using sentinel = test::sized_sentinel_from_iterator<iterator>;
+        test_sorted_sent<sentinel>(IteratorTag(), seq);
+        test_sorted_sent<sentinel>(IteratorTag(), par);
+        test_sorted_sent<sentinel>(IteratorTag(), par_unseq);
+    }
 }
 
 void sorted_test1()

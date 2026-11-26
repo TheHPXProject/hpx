@@ -11,9 +11,11 @@
 #include <hpx/memory.hpp>
 #include <hpx/modules/testing.hpp>
 
+#include <algorithm>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <iostream>
 #include <memory>
@@ -91,6 +93,32 @@ void test_destroy(ExPolicy&& policy, IteratorTag)
     hpx::ranges::destroy(
         std::forward<ExPolicy>(policy), iterator(p), iterator(p + data_size));
 
+    HPX_TEST_EQ(destruct_count.load(), data_size);
+
+    std::free(p);
+}
+
+// the end is a sentinel
+template <typename Sentinel, typename IteratorTag, typename... ExPolicy>
+void test_destroy_sent(IteratorTag, ExPolicy&&... policy)
+{
+    using base_iterator = destructable*;
+    using iterator = test::test_iterator<base_iterator, IteratorTag>;
+
+    auto* p = static_cast<destructable*>(
+        std::malloc(data_size * sizeof(destructable)));
+
+    // value-initialize data in array
+    std::for_each(p, p + data_size, [](destructable& d) {
+        ::new (static_cast<void*>(std::addressof(d))) destructable;
+    });
+
+    destruct_count.store(0);
+
+    auto result = hpx::ranges::destroy(
+        policy..., iterator(p), Sentinel(iterator(p + data_size)));
+
+    HPX_TEST(result == iterator(p + data_size));
     HPX_TEST_EQ(destruct_count.load(), data_size);
 
     std::free(p);
