@@ -27,9 +27,24 @@ jobs:
       base-targets: hpx_core core components
       shards: 25
       # UCX for the UCX device conduit; the tests run with it, and the TCP
-      # parcelport sends large host chunks through it
+      # parcelport sends large host chunks through it. The image (Ubuntu 20.04)
+      # has UCX 1.8 without headers (for Open MPI), older than the conduit needs:
+      # unpack a UCX release into its own prefix and load it from there.
       setup: |
-        apt-get update && apt-get install -y --no-install-recommends libucx-dev
+        ucx_version=1.23.0
+        ucx_package=ucx-${ucx_version}-ubuntu20.04-mofed5-cuda12-x86_64.tar.bz2
+        mkdir -p /tmp/ucx && cd /tmp/ucx
+        curl -fsSL -o ucx.tar.bz2 \
+          "https://github.com/openucx/ucx/releases/download/v${ucx_version}/${ucx_package}"
+        echo "deaee327d804b2c846f503b3457a33c66e105d31a49a199e2d53009a7ebbcc93  ucx.tar.bz2" | \
+          sha256sum --check --status
+        tar -xjf ucx.tar.bz2
+        dpkg -x ucx-${ucx_version}.deb root
+        rm -rf /opt/ucx && mv root/usr /opt/ucx
+        sed -i 's|^prefix *=.*|prefix = /opt/ucx|' /opt/ucx/lib/pkgconfig/*.pc
+        cd / && rm -rf /tmp/ucx
+        echo "UCX_ROOT=/opt/ucx" >> "$GITHUB_ENV"
+        echo "LD_LIBRARY_PATH=/opt/ucx/lib" >> "$GITHUB_ENV"
         echo "HPX_PARCEL_DEVICE_CONDUIT=ucx" >> "$GITHUB_ENV"
         echo "HPX_PARCEL_CONDUIT_HOST_CHUNKS=1" >> "$GITHUB_ENV"
         echo "HPX_PARCEL_CONDUIT_HOST_THRESHOLD=8192" >> "$GITHUB_ENV"
