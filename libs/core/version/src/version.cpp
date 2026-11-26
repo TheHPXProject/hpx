@@ -24,43 +24,6 @@
 #error HPX cannot be compiled with a Boost version earlier than 1.71.0
 #endif
 
-#if (defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_PARCELPORT_MPI)) ||      \
-    defined(HPX_HAVE_MODULE_MPI_BASE)
-#if defined(__clang__)
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wcast-qual"
-#elif defined(__GNUC__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wcast-qual"
-#endif
-
-// Intel MPI does not like to be included after stdio.h. As such, we include mpi.h
-// as soon as possible.
-#include <mpi.h>
-
-#if defined(__clang__)
-#pragma clang diagnostic pop
-#elif defined(__GNUC__)
-#pragma GCC diagnostic pop
-#endif
-
-#endif
-
-#if (defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_PARCELPORT_LCI)) ||      \
-    defined(HPX_HAVE_MODULE_LCI_BASE)
-#include <lci.hpp>
-#endif
-
-#if (defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_PARCELPORT_LCW)) ||      \
-    defined(HPX_HAVE_MODULE_LCW_BASE)
-#include <lcw.hpp>
-#endif
-
-#if (defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_PARCELPORT_GASNET)) ||   \
-    defined(HPX_HAVE_MODULE_GASNET_BASE)
-#include <gasnet.h>
-#endif
-
 #include <hwloc.h>
 
 #include <algorithm>
@@ -106,94 +69,6 @@ namespace hpx {
     {
         return HPX_VERSION_TAG;
     }
-
-#if (defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_PARCELPORT_MPI)) ||      \
-    defined(HPX_HAVE_MODULE_MPI_BASE)
-    std::string mpi_version()
-    {
-        std::ostringstream strm;
-
-        // add type and library version
-#if defined(OPEN_MPI)
-        hpx::util::format_to(strm, "OpenMPI V{}.{}.{}", OMPI_MAJOR_VERSION,
-            OMPI_MINOR_VERSION, OMPI_RELEASE_VERSION);
-#elif defined(MPICH)
-        hpx::util::format_to(strm, "MPICH V{}", MPICH_VERSION);
-#elif defined(MVAPICH2_VERSION)
-        hpx::util::format_to(strm, "MVAPICH2 V{}", MVAPICH2_VERSION);
-#elif defined(MSMPI_VER)
-        hpx::util::format_to(strm, "MSMPI V{}", MSMPI_VER);
-#else
-        strm << "Unknown MPI";
-#endif
-        // add general MPI version
-#if defined(MPI_VERSION) && defined(MPI_SUBVERSION)
-        hpx::util::format_to(strm, ", MPI V{}.{}", MPI_VERSION, MPI_SUBVERSION);
-#else
-        strm << ", unknown MPI version";
-#endif
-        // add whether the MPI library can send GPU device memory, and whether
-        // the parcelports do so (see HPX_WITH_PARCELPORT_CUDA_SUPPORT and
-        // HPX_WITH_PARCELPORT_HIP_SUPPORT)
-#if defined(HPX_VERSION_MPI_CUDA_AWARE)
-#if HPX_VERSION_MPI_CUDA_AWARE != 0
-#if defined(HPX_HAVE_PARCELPORT_CUDA_SUPPORT)
-        strm << ", CUDA-aware";
-#else
-        strm << ", CUDA-aware (not used by the parcelport)";
-#endif
-#else
-        strm << ", not CUDA-aware";
-#endif
-#endif
-#if defined(HPX_VERSION_MPI_HIP_AWARE)
-#if HPX_VERSION_MPI_HIP_AWARE != 0
-#if defined(HPX_HAVE_PARCELPORT_HIP_SUPPORT)
-        strm << ", ROCm-aware";
-#else
-        strm << ", ROCm-aware (not used by the parcelport)";
-#endif
-#else
-        strm << ", not ROCm-aware";
-#endif
-#endif
-        return strm.str();
-    }
-#endif
-
-#if (defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_PARCELPORT_LCI)) ||      \
-    defined(HPX_HAVE_MODULE_LCI_BASE)
-    std::string lci_version()
-    {
-        std::ostringstream strm;
-        strm << "the one and only LCI";
-        return strm.str();
-    }
-#endif
-
-#if (defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_PARCELPORT_LCW)) ||      \
-    defined(HPX_HAVE_MODULE_LCW_BASE)
-    std::string lcw_version()
-    {
-        std::ostringstream strm;
-        strm << LCW_VERSION_MAJOR << "." << LCW_VERSION_MINOR << "."
-             << LCW_VERSION_PATCH;
-        return strm.str();
-    }
-#endif
-
-#if (defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_PARCELPORT_GASNET)) ||   \
-    defined(HPX_HAVE_MODULE_GASNET_BASE)
-    std::string gasnet_version()
-    {
-        std::ostringstream strm;
-        strm << "GASNET_VERSION:" << GASNET_RELEASE_VERSION_MAJOR << ':'
-             << GASNET_RELEASE_VERSION_MINOR << ':'
-             << GASNET_RELEASE_VERSION_PATCH << '-'
-             << "GASNET_CONDUIT:" << GASNET_CONDUIT_NAME_STR;
-        return strm.str();
-    }
-#endif
 
     std::string copyright()
     {
@@ -347,52 +222,42 @@ namespace hpx {
         return BOOST_STDLIB;
     }
 
+    namespace {
+
+        // HPX and the libraries every build uses; the modules register the
+        // libraries they use themselves (MPI, CUDA, UCX, ...)
+        config_registry::add_library_version_helper register_hpx_version{
+            {"HPX", &build_string}};
+        config_registry::add_library_version_helper register_boost_version{
+            {"Boost", &boost_version}};
+        config_registry::add_library_version_helper register_hwloc_version{
+            {"Hwloc", &hwloc_version}};
+    }    // namespace
+
     std::string complete_version()
     {
-        std::string version = hpx::util::format("Versions:\n"
-                                                "  HPX: {}\n"
-                                                "  Boost: {}\n"
-                                                "  Hwloc: {}\n"
-#if (defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_PARCELPORT_LCI)) ||      \
-    defined(HPX_HAVE_MODULE_LCI_BASE)
-                                                "  LCI: {}\n"
-#endif
-#if (defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_PARCELPORT_LCW)) ||      \
-    defined(HPX_HAVE_MODULE_LCW_BASE)
-                                                "  LCW: {}\n"
-#endif
-#if (defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_PARCELPORT_GASNET)) ||   \
-    defined(HPX_HAVE_MODULE_GASNET_BASE)
-                                                "  GASNET: {}\n"
-#endif
-#if (defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_PARCELPORT_MPI)) ||      \
-    defined(HPX_HAVE_MODULE_MPI_BASE)
-                                                "  MPI: {}\n"
-#endif
-                                                "\n"
-                                                "Build:\n"
-                                                "  Type: {}\n"
-                                                "  Date: {}\n"
-                                                "  Platform: {}\n"
-                                                "  Compiler: {}\n"
-                                                "  Standard Library: {}\n",
-            build_string(), boost_version(), hwloc_version(),
-#if (defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_PARCELPORT_LCI)) ||      \
-    defined(HPX_HAVE_MODULE_LCI_BASE)
-            lci_version(),
-#endif
-#if (defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_PARCELPORT_LCW)) ||      \
-    defined(HPX_HAVE_MODULE_LCW_BASE)
-            lcw_version(),
-#endif
-#if (defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_PARCELPORT_GASNET)) ||   \
-    defined(HPX_HAVE_MODULE_GASNET_BASE)
-            gasnet_version(),
-#endif
-#if (defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_PARCELPORT_MPI)) ||      \
-    defined(HPX_HAVE_MODULE_MPI_BASE)
-            mpi_version(),
-#endif
+        // the registered libraries: HPX first, the others by name
+        auto versions = hpx::config_registry::get_library_versions();
+        std::sort(
+            versions.begin(), versions.end(), [](auto const& a, auto const& b) {
+                return (a.name == "HPX") != (b.name == "HPX") ?
+                    a.name == "HPX" :
+                    a.name < b.name;
+            });
+
+        std::string version = "Versions:\n";
+        for (auto const& v : versions)
+        {
+            version += "  " + v.name + ": " + v.version() + "\n";
+        }
+
+        version += hpx::util::format("\n"
+                                     "Build:\n"
+                                     "  Type: {}\n"
+                                     "  Date: {}\n"
+                                     "  Platform: {}\n"
+                                     "  Compiler: {}\n"
+                                     "  Standard Library: {}\n",
             build_type(), build_date_time(), boost_platform(), boost_compiler(),
             boost_stdlib());
 

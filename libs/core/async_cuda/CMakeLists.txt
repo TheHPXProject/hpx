@@ -79,6 +79,7 @@ add_hpx_module(
     hpx_execution
     hpx_execution_base
     hpx_executors
+    hpx_format
     hpx_functional
     hpx_futures
     hpx_memory
