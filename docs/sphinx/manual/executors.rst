@@ -816,6 +816,31 @@ constructor replace these defaults for one loop, the configuration entries
 many pairs of these values and prints the pair that suits a machine best, in
 the form of these configuration entries.
 
+The default minimal run time suits ``parallel_executor``, which starts a task
+and a future for each chunk. An executor that starts chunks with less
+overhead can ask for a minimal run time of its own
+(``hpx::execution::experimental::get_min_chunk_time``), which replaces the
+default for its loops (a value given to the constructor still wins). The
+executors of |hpx| ask for the value configured with
+``hpx.task_size_chunk_size.<executor>.min_chunk_time_us``, or for one number
+of worker threads with
+``hpx.task_size_chunk_size.<executor>.<pool size>.min_chunk_time_us``, where
+``<executor>`` is ``parallel`` for ``parallel_executor`` and ``fork_join`` for
+``fork_join_executor``:
+
+.. code-block:: ini
+
+   [hpx.task_size_chunk_size.fork_join]
+   min_chunk_time_us = 0.5
+
+   [hpx.task_size_chunk_size.fork_join.32]
+   min_chunk_time_us = 0.8
+
+Without such an entry, the executor's loops use the default. These entries
+are not predefined, so on the command line (``--hpx:ini``) they need a ``!``
+after the key, for instance
+``--hpx:ini=hpx.task_size_chunk_size.fork_join.min_chunk_time_us!=0.5``.
+
 If |hpx| is configured with ``HPX_WITH_TASK_SIZE_DEFAULT_PARAMETERS=ON``, the
 default executor parameters (``default_parameters``, used by ``par`` and by
 the executors unless other parameters are given) are derived from

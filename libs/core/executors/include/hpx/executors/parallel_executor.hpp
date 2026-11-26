@@ -29,6 +29,7 @@
 #include <hpx/executors/execution_policy_mappings.hpp>
 
 #include <algorithm>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -550,6 +551,24 @@ namespace hpx::execution {
             return this->get_first_core();
         }
 
+        // the minimal run time of a chunk configured for this executor
+        // (hpx.task_size_chunk_size.parallel), or the default one
+        [[nodiscard]] std::chrono::nanoseconds query(
+            experimental::get_min_chunk_time_t) const noexcept
+        {
+            try
+            {
+                return experimental::detail::get_executor_min_chunk_time(
+                    "parallel", this->get_num_cores());
+            }
+            catch (...)
+            {
+                // the runtime isn't running
+                return experimental::detail::get_task_size_chunk_size_defaults()
+                    .min_chunk_time;
+            }
+        }
+
         [[nodiscard]] auto query(
             experimental::get_processing_units_mask_t) const
         {
@@ -875,6 +894,24 @@ namespace hpx::execution {
             experimental::get_first_core_t) const noexcept
         {
             return this->get_first_core();
+        }
+
+        // the minimal run time of a chunk configured for this executor
+        // (hpx.task_size_chunk_size.parallel), or the default one
+        [[nodiscard]] std::chrono::nanoseconds query(
+            experimental::get_min_chunk_time_t) const noexcept
+        {
+            try
+            {
+                return experimental::detail::get_executor_min_chunk_time(
+                    "parallel", this->get_num_cores());
+            }
+            catch (...)
+            {
+                // the runtime isn't running
+                return experimental::detail::get_task_size_chunk_size_defaults()
+                    .min_chunk_time;
+            }
         }
 
         [[nodiscard]] auto query(
