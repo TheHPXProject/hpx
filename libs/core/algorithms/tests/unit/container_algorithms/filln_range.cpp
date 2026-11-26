@@ -95,7 +95,7 @@ void test_fill_n_list_initialized()
 {
     using namespace hpx::execution;
 
-    auto check = [](std::vector<int> const& c, std::size_t n) {
+    auto expect_filled = [](std::vector<int> const& c, std::size_t n) {
         HPX_TEST_EQ(c.size(), std::size_t(10));
         for (std::size_t i = 0; i < c.size(); ++i)
             HPX_TEST_EQ(c[i], i < n ? 7 : 0);
@@ -105,19 +105,19 @@ void test_fill_n_list_initialized()
         std::vector<int> c(10, 0);
         auto it = hpx::ranges::fill_n(seq, c.begin(), 4, {7});
         HPX_TEST(it == c.begin() + 4);
-        check(c, 4);
+        expect_filled(c, 4);
     }
     {
         std::vector<int> c(10, 0);
         auto it = hpx::ranges::fill_n(par, c.begin(), 10, {7});
         HPX_TEST(it == c.end());
-        check(c, 10);
+        expect_filled(c, 10);
     }
     {
         std::vector<int> c(10, 0);
         auto f = hpx::ranges::fill_n(par(task), c.begin(), 6, {7});
         HPX_TEST(f.get() == c.begin() + 6);
-        check(c, 6);
+        expect_filled(c, 6);
     }
 }
 
