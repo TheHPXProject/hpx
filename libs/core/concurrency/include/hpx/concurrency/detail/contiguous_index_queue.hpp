@@ -86,6 +86,14 @@ namespace hpx::concurrency::detail {
             {
                 return first >= last;
             }
+
+            // The number of items a chunked pop takes from a non-empty range:
+            // the given fraction of the items, at least one.
+            constexpr T chunk_size(T const divisor) const noexcept
+            {
+                T const count = static_cast<T>((last - first) / divisor);
+                return count == 0 ? T(1) : count;
+            }
         };
 
     public:
@@ -211,6 +219,95 @@ namespace hpx::concurrency::detail {
                 expected_range, desired_range));
 
             return hpx::optional<T>(HPX_MOVE(index));
+        }
+
+        /// \brief Attempt to pop a range of items from the left of the queue.
+        ///
+        /// Attempt to pop a range of items from the left (beginning) of the
+        /// queue with a single atomic operation. The range holds n / divisor
+        /// items, but at least one, where n is the number of items in the
+        /// queue when the range is taken. If no items are left hpx::nullopt
+        /// is returned.
+        ///
+        /// \param divisor The fraction of the items in the queue to pop, must
+        ///        be larger than zero.
+        /// \returns The popped range [first, last), or hpx::nullopt.
+        hpx::optional<std::pair<T, T>> pop_left_chunk(T const divisor) noexcept
+        {
+            HPX_ASSERT(divisor > 0);
+
+            range desired_range{0, 0};
+            range expected_range =
+                current_range.data_.load(std::memory_order_relaxed);
+
+            while (true)
+            {
+                if (expected_range.empty())
+                {
+                    return hpx::optional<std::pair<T, T>>(hpx::nullopt);
+                }
+
+                desired_range = range{static_cast<T>(expected_range.first +
+                                          expected_range.chunk_size(divisor)),
+                    expected_range.last};
+
+                if (current_range.data_.compare_exchange_weak(
+                        expected_range, desired_range))
+                {
+                    break;
+                }
+
+                // reduce pipeline pressure before retrying
+                HPX_SMT_PAUSE;
+            }
+
+            // expected_range holds the range before the pop
+            return hpx::optional<std::pair<T, T>>(
+                std::pair<T, T>(expected_range.first, desired_range.first));
+        }
+
+        /// \brief Attempt to pop a range of items from the right of the queue.
+        ///
+        /// Attempt to pop a range of items from the right (end) of the queue
+        /// with a single atomic operation. The range holds n / divisor items,
+        /// but at least one, where n is the number of items in the queue when
+        /// the range is taken. If no items are left hpx::nullopt is returned.
+        ///
+        /// \param divisor The fraction of the items in the queue to pop, must
+        ///        be larger than zero.
+        /// \returns The popped range [first, last), or hpx::nullopt.
+        hpx::optional<std::pair<T, T>> pop_right_chunk(T const divisor) noexcept
+        {
+            HPX_ASSERT(divisor > 0);
+
+            range desired_range{0, 0};
+            range expected_range =
+                current_range.data_.load(std::memory_order_relaxed);
+
+            while (true)
+            {
+                if (expected_range.empty())
+                {
+                    return hpx::optional<std::pair<T, T>>(hpx::nullopt);
+                }
+
+                desired_range = range{expected_range.first,
+                    static_cast<T>(expected_range.last -
+                        expected_range.chunk_size(divisor))};
+
+                if (current_range.data_.compare_exchange_weak(
+                        expected_range, desired_range))
+                {
+                    break;
+                }
+
+                // reduce pipeline pressure before retrying
+                HPX_SMT_PAUSE;
+            }
+
+            // expected_range holds the range before the pop
+            return hpx::optional<std::pair<T, T>>(
+                std::pair<T, T>(desired_range.last, expected_range.last));
         }
 
         /// \brief Attempt to pop an item from the given end of the queue.
