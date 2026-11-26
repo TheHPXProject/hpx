@@ -274,7 +274,8 @@ namespace hpx::actions {
 #if defined(HPX_HAVE_CXX26_REFLECTION_ANNOTATIONS)
         // The function can give the action a size with an annotation, for
         // instance [[=hpx::task_size::small_]]. HPX_ACTION_HAS_TASK_SIZE on
-        // reflect_action<F> itself, the type HPX_PLAIN_ACTION names, wins.
+        // the action, reflect_action<F> or the type HPX_PLAIN_ACTION names,
+        // wins.
         static constexpr threads::task_size function_task_size() noexcept
         {
             return hpx::traits::detail::annotated_function_task_size<F>();
