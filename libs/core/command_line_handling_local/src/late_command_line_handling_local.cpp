@@ -96,9 +96,12 @@ namespace hpx::local::detail {
 
     std::string get_full_commandline(util::runtime_configuration const& ini)
     {
+        // the parts separated by spaces: an option of HPX_COMMANDLINE_OPTIONS
+        // (prepend_options) must not run into the first one of the command
+        // line
         return ini.get_entry("hpx.commandline.command", "") + " " +
-            ini.get_entry("hpx.commandline.prepend_options", "") +
-            ini.get_entry("hpx.commandline.options", "") +
+            ini.get_entry("hpx.commandline.prepend_options", "") + " " +
+            ini.get_entry("hpx.commandline.options", "") + " " +
             ini.get_entry("hpx.commandline.config_options", "");
     }
 
