@@ -37,7 +37,8 @@ namespace hpx::parcelset {
     /// hpx.parcel.device_conduit names the one to use ('none' by default: the
     /// parcelport sends device memory itself if it can, otherwise it is
     /// staged through host memory). Both ends of a message must use the same
-    /// conduit.
+    /// conduit. A locality uses one conduit at a time, chosen at startup, for
+    /// all its parcelports and destinations (see get_device_conduit()).
     ///
     /// This is the interface the parcel layer uses, once per message;
     /// conduits implement it through hpx::parcelset::device_conduit_impl.

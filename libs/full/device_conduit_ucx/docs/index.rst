@@ -20,8 +20,11 @@ CUDA memory with the CUDA context current on the calling thread: the conduit
 makes the primary context of the memory's GPU current on threads that have
 none.
 
-Enable it with ``HPX_WITH_DEVICE_CONDUIT_UCX=ON`` and select it at runtime
-with ``hpx.parcel.device_conduit=ucx``. It looks for UCX next to the MPI
+Enable it with ``HPX_WITH_DEVICE_CONDUIT_UCX=ON``. It is then used by default
+(``hpx.parcel.device_conduit=auto``) unless |hpx| uses MPI in the process, as
+the MPI parcelport does; select it explicitly with
+``hpx.parcel.device_conduit=ucx``, or turn it off with
+``hpx.parcel.device_conduit=none``. It looks for UCX next to the MPI
 library (``MPI_HOME``, if it is set) first, then in ``UCX_ROOT``. One process
 can use only one UCX library: if the MPI library is UCX based and its UCX is
 installed elsewhere (or ``MPI_HOME`` is not set because MPI was found through
@@ -58,7 +61,8 @@ leaves before the others (no localities connecting and disconnecting
 dynamically).
 
 The conduit also moves host memory: with ``hpx.parcel.conduit_host_chunks=1``
-(per parcelport: ``hpx.parcel.<parcelport>.conduit_host_chunks``) it moves the
+(the default; per parcelport: ``hpx.parcel.<parcelport>.conduit_host_chunks``,
+``0`` turns it off) it moves the
 zero-copy chunks of host memory of at least ``hpx.parcel.conduit_host_threshold``
 bytes (default 1 MiB) of arrays such as ``std::vector`` and
 ``serialize_buffer``, to localities whose endpoint for the parcelport says

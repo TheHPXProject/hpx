@@ -1769,14 +1769,15 @@ namespace hpx::parcelset {
         ini_defs.emplace_back(
             "array_optimization = ${HPX_PARCEL_ARRAY_OPTIMIZATION:1}");
         // moves zero-copy chunks of device memory between localities, see
-        // hpx::parcelset::device_conduit
+        // hpx::parcelset::device_conduit ('auto': UCX where compiled in,
+        // unless HPX uses MPI)
         ini_defs.emplace_back(
-            "device_conduit = ${HPX_PARCEL_DEVICE_CONDUIT:none}");
+            "device_conduit = ${HPX_PARCEL_DEVICE_CONDUIT:auto}");
         // also host chunks of at least 'conduit_host_threshold' bytes go
         // through a device conduit that moves host memory (per parcelport,
         // see hpx::parcelset::locality_capabilities)
         ini_defs.emplace_back(
-            "conduit_host_chunks = ${HPX_PARCEL_CONDUIT_HOST_CHUNKS:0}");
+            "conduit_host_chunks = ${HPX_PARCEL_CONDUIT_HOST_CHUNKS:1}");
         ini_defs.emplace_back("conduit_host_threshold = "
                               "${HPX_PARCEL_CONDUIT_HOST_THRESHOLD:1048576}");
         ini_defs.emplace_back(

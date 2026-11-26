@@ -9,6 +9,10 @@
 #if defined(HPX_HAVE_NETWORKING)
 #include <hpx/assert.hpp>
 #include <hpx/modules/errors.hpp>
+#include <hpx/modules/logging.hpp>
+#if defined(HPX_HAVE_MODULE_MPI_BASE)
+#include <hpx/modules/mpi_base.hpp>
+#endif
 #include <hpx/modules/parcelset_base.hpp>
 #include <hpx/modules/plugin_factories.hpp>
 #include <hpx/modules/runtime_configuration.hpp>
@@ -20,6 +24,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -61,10 +66,37 @@ namespace hpx::parcelset {
             return plugins::get_device_conduit_factories();
         }
 
+        // hpx.parcel.device_conduit=auto (the default) selects the UCX
+        // conduit where it is compiled in and HPX doesn't use MPI in this
+        // process (a process can't use two UCX libraries, and the MPI
+        // parcelport moves device memory itself), no conduit otherwise
+        std::string select_device_conduit(std::string const& name)
+        {
+            if (name != "auto")
+            {
+                return name;
+            }
+#if defined(HPX_HAVE_MODULE_MPI_BASE)
+            if (util::mpi_environment::enabled())
+            {
+                return "none";
+            }
+#endif
+            for (auto const* f : get_device_conduit_factories())
+            {
+                if (f->name() == "ucx")
+                {
+                    return "ucx";
+                }
+            }
+            return "none";
+        }
+
         void init_device_conduit(util::runtime_configuration const& cfg)
         {
-            std::string const name =
-                cfg.get_entry("hpx.parcel.device_conduit", "none");
+            std::string const configured =
+                cfg.get_entry("hpx.parcel.device_conduit", "auto");
+            std::string const name = select_device_conduit(configured);
             if (name == "none")
             {
                 return;
@@ -89,7 +121,28 @@ namespace hpx::parcelset {
             }
 
             HPX_ASSERT(!conduit);
-            conduit = factory->create(cfg);
+            if (configured == "auto")
+            {
+                // a conduit chosen by default that can't start (e.g. UCX
+                // finds no usable transport) leaves the parcelports alone
+                try
+                {
+                    conduit = factory->create(cfg);
+                }
+                catch (std::exception const& e)
+                {
+                    LPT_(warning).format("hpx::parcelset::detail::"
+                                         "init_device_conduit: the device "
+                                         "conduit '{}' could not start, "
+                                         "continuing without one: {}",
+                        name, e.what());
+                    return;
+                }
+            }
+            else
+            {
+                conduit = factory->create(cfg);
+            }
             current_conduit.store(conduit.get(), std::memory_order_release);
 
             // the smallest host chunk the conduit moves (where enabled)
