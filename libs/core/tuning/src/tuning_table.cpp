@@ -5,11 +5,10 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 #include <hpx/config.hpp>
+#include <hpx/tuning/ini_file.hpp>
 #include <hpx/tuning/tuning_table.hpp>
 
-#include <sstream>
 #include <string>
-#include <string_view>
 #include <vector>
 
 namespace hpx::tuning {
@@ -21,38 +20,18 @@ namespace hpx::tuning {
             std::to_string(row.pool_size);
     }
 
+    std::vector<ini_section> to_sections(std::vector<tuning_row> const& rows)
+    {
+        std::vector<ini_section> sections;
+        sections.reserve(rows.size());
+        for (tuning_row const& row : rows)
+            sections.push_back(ini_section{section_name(row), row.settings});
+        return sections;
+    }
+
     std::string to_ini(std::vector<tuning_row> const& rows,
         std::vector<std::string> const& comments, int const year)
     {
-        std::ostringstream os;
-        os << "# Copyright (c) " << year << " TheHPXProject\n"
-           << "#\n"
-           << "# SPDX-License-Identifier: BSL-1.0\n"
-           << "# Distributed under the Boost Software License, Version 1.0. "
-              "(See accompanying\n"
-           << "# file LICENSE_1_0.txt or copy at "
-              "http://www.boost.org/LICENSE_1_0.txt)\n";
-        if (!comments.empty())
-            os << "#\n";
-        for (std::string const& c : comments)
-            os << "# " << c << "\n";
-
-        constexpr std::string_view prefix = "hpx.";
-        for (tuning_row const& row : rows)
-        {
-            os << "\n[" << section_name(row) << "]\n";
-            for (tuned_setting const& s : row.settings)
-            {
-                os << "# " << s.reason;
-                if (s.is_default)
-                    os << " (HPX's default)";
-                os << "\n";
-                std::string_view key = s.key;
-                if (key.substr(0, prefix.size()) == prefix)
-                    key.remove_prefix(prefix.size());
-                os << key << " = " << s.value << "\n";
-            }
-        }
-        return os.str();
+        return to_ini(to_sections(rows), comments, year);
     }
 }    // namespace hpx::tuning

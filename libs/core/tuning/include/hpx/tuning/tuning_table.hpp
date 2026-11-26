@@ -11,7 +11,8 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/tuning/idle_settings.hpp>
+#include <hpx/tuning/ini_file.hpp>
+#include <hpx/tuning/tuned_setting.hpp>
 
 #include <cstddef>
 #include <string>
@@ -39,12 +40,15 @@ namespace hpx::tuning {
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT std::string section_name(
         tuning_row const& row);
 
-    /// The table as the text of an ini file: the license header of HPX's
-    /// files with the given year (so that a generated file can be added to
-    /// the repository as it is), the given comment lines (the host, the
-    /// date, the tool's version, ...), then one section per row. Each setting
-    /// is preceded by a comment with its reason and, if it equals HPX's
-    /// default, says so; its key is written without the leading "hpx.".
+    /// The rows as ini sections, one per row, named by section_name, so
+    /// that they can be written into one file with the sections of other
+    /// areas (see ini_file.hpp).
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT std::vector<ini_section> to_sections(
+        std::vector<tuning_row> const& rows);
+
+    /// The table as the text of an ini file: to_ini of ini_file.hpp with
+    /// the sections of to_sections. The keys of the idle settings are
+    /// written without the leading "hpx.".
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT std::string to_ini(
         std::vector<tuning_row> const& rows,
         std::vector<std::string> const& comments, int year);

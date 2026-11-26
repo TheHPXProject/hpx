@@ -10,6 +10,7 @@
 
 #include <hpx/hpx_main.hpp>
 
+#include <cstddef>
 #include <string>
 #include <vector>
 
@@ -60,11 +61,57 @@ void test_to_ini()
     HPX_TEST_EQ(ini.find("# Copyright"), std::string::size_type(0));
     // keys are written without "hpx."
     HPX_TEST_EQ(ini.find("hpx.min_idle_backoff_time"), std::string::npos);
+
+    // the table is written as its sections
+    std::vector<tuning::ini_section> const sections =
+        tuning::to_sections({row});
+    HPX_TEST_EQ(sections.size(), std::size_t(1));
+    HPX_TEST_EQ(sections[0].name, tuning::section_name(row));
+    HPX_TEST_EQ(sections[0].settings.size(), row.settings.size());
+    HPX_TEST_EQ(tuning::to_ini(sections, {"written by a test"}, 2026), ini);
+}
+
+void test_plain_sections()
+{
+    // sections of another area, in one file with an idle tuning section
+    tuning::ini_section parcel{"hpx.parcel.tcp", {}};
+    parcel.settings.push_back(tuning::tuned_setting{
+        "hpx.parcel.tcp.enable", "1", "fastest for large messages", true});
+    parcel.settings.push_back(tuning::tuned_setting{
+        "hpx.parcel.bootstrap", "tcp", "the only parcelport", false});
+
+    tuning::tuning_row row;
+    row.scheduler = "local-priority-fifo";
+    row.pool_size = 4;
+    row.settings.push_back(tuning::tuned_setting{
+        "hpx.min_idle_backoff_time", "55", "shortest sleep 55.2 us", false});
+
+    std::vector<tuning::ini_section> sections = tuning::to_sections({row});
+    sections.push_back(parcel);
+    std::string const ini = tuning::to_ini(sections, {}, 2027);
+
+    auto const has = [&](char const* text) {
+        bool const found = ini.find(text) != std::string::npos;
+        HPX_TEST_MSG(found, text);
+    };
+    has("# Copyright (c) 2027 TheHPXProject\n");
+    has("\n[hpx.idle_tuning.local-priority-fifo.none.4]\n"
+        "# shortest sleep 55.2 us\nmin_idle_backoff_time = 55\n");
+    // a key in its own section is written relative to it
+    has("\n[hpx.parcel.tcp]\n"
+        "# fastest for large messages (HPX's default)\nenable = 1\n");
+    // another key loses only the leading "hpx."
+    has("# the only parcelport\nparcel.bootstrap = tcp\n");
+    // without comment lines the header isn't followed by an empty comment
+    HPX_TEST_EQ(ini.find("#\n\n"), std::string::npos);
+    // the sections in the given order
+    HPX_TEST(ini.find("[hpx.idle_tuning.") < ini.find("[hpx.parcel.tcp]"));
 }
 
 int main()
 {
     test_section_name();
     test_to_ini();
+    test_plain_sections();
     return hpx::util::report_errors();
 }

@@ -1,0 +1,70 @@
+//  Copyright (c) 2026 TheHPXProject
+//
+//  SPDX-License-Identifier: BSL-1.0
+//  Distributed under the Boost Software License, Version 1.0. (See accompanying
+//  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+
+#include <hpx/config.hpp>
+#include <hpx/tuning/ini_file.hpp>
+#include <hpx/tuning/tuned_setting.hpp>
+
+#include <sstream>
+#include <string>
+#include <string_view>
+#include <vector>
+
+namespace hpx::tuning {
+
+    namespace {
+
+        // the key as written in its section (see to_ini)
+        std::string_view key_in_section(
+            std::string_view key, std::string_view const section) noexcept
+        {
+            if (key.size() > section.size() &&
+                key.substr(0, section.size()) == section &&
+                key[section.size()] == '.')
+            {
+                key.remove_prefix(section.size() + 1);
+                return key;
+            }
+
+            constexpr std::string_view prefix = "hpx.";
+            if (key.substr(0, prefix.size()) == prefix)
+                key.remove_prefix(prefix.size());
+            return key;
+        }
+    }    // namespace
+
+    std::string to_ini(std::vector<ini_section> const& sections,
+        std::vector<std::string> const& comments, int const year)
+    {
+        std::ostringstream os;
+        os << "# Copyright (c) " << year << " TheHPXProject\n"
+           << "#\n"
+           << "# SPDX-License-Identifier: BSL-1.0\n"
+           << "# Distributed under the Boost Software License, Version 1.0. "
+              "(See accompanying\n"
+           << "# file LICENSE_1_0.txt or copy at "
+              "http://www.boost.org/LICENSE_1_0.txt)\n";
+        if (!comments.empty())
+            os << "#\n";
+        for (std::string const& c : comments)
+            os << "# " << c << "\n";
+
+        for (ini_section const& section : sections)
+        {
+            os << "\n[" << section.name << "]\n";
+            for (tuned_setting const& s : section.settings)
+            {
+                os << "# " << s.reason;
+                if (s.is_default)
+                    os << " (HPX's default)";
+                os << "\n"
+                   << key_in_section(s.key, section.name) << " = " << s.value
+                   << "\n";
+            }
+        }
+        return os.str();
+    }
+}    // namespace hpx::tuning

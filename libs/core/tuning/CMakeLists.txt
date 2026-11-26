@@ -8,6 +8,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 set(tuning_headers
     hpx/tuning/idle_settings.hpp
+    hpx/tuning/ini_file.hpp
     hpx/tuning/machine_description.hpp
     hpx/tuning/microbenchmarks.hpp
     hpx/tuning/statistics.hpp
@@ -19,9 +20,8 @@ set(tuning_headers
 set(tuning_compat_headers)
 # cmake-format: on
 
-set(tuning_sources
-    idle_settings.cpp machine_description.cpp microbenchmarks.cpp statistics.cpp
-    tuning_table.cpp
+set(tuning_sources idle_settings.cpp ini_file.cpp machine_description.cpp
+                   microbenchmarks.cpp statistics.cpp tuning_table.cpp
 )
 
 include(HPX_AddModule)

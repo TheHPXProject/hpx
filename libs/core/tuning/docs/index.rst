@@ -26,7 +26,7 @@ itself, for instance during startup. All declarations are in the namespace
 ``#include <hpx/modules/tuning.hpp>``; the module is also exposed as a
 C++ module when |hpx| is built with ``HPX_WITH_CXX_MODULES=ON``.
 
-The module has four parts:
+The module has five parts:
 
 1. :ref:`modules_tuning_statistics`: the summary of repeated
    measurements.
@@ -35,8 +35,9 @@ The module has four parts:
 3. :ref:`modules_tuning_measurements`: the measurements that need no
    |hpx| runtime.
 4. :ref:`modules_tuning_rules`: the rules that turn the measurements
-   into settings, and the table of settings by scheduler, tuner and pool size
-   with its form as an ini file.
+   into settings, and the table of settings by scheduler, tuner and pool size.
+5. :ref:`modules_tuning_ini`: the settings of one or more areas as an ini
+   file.
 
 .. _modules_tuning_statistics:
 
@@ -135,7 +136,8 @@ number longer.
 Rules and the table of settings
 ===============================
 
-A rule returns ``tuned_setting``\ s:
+A rule returns ``tuned_setting``\ s (``hpx/tuning/tuned_setting.hpp``, so that
+the rules of other areas don't need the idle rules):
 
 .. code-block:: c++
 
@@ -198,17 +200,15 @@ size of the pool, so they are kept as a table:
     };
 
     std::string section_name(tuning_row const& row);
+    std::vector<ini_section> to_sections(std::vector<tuning_row> const& rows);
     std::string to_ini(std::vector<tuning_row> const& rows,
         std::vector<std::string> const& comments, int year);
 
 ``section_name`` gives the ini section of a row,
 ``hpx.idle_tuning.<scheduler>.<tuner>.<pool size>``, with the tuner ``none`` if
-the row has none. ``to_ini`` writes the table as the text of an ini file: the
-license header of |hpx|'s files with the given year, so that a generated file
-can be added to the repository as it is, then the given comment lines (the
-host, the date, the tool that wrote it), then one section per row. Each
-setting is preceded by a comment with its reason (and whether it equals the
-default), and its key is written without the leading ``hpx.``. For example:
+the row has none. ``to_sections`` turns the rows into ini sections (below), one
+per row, so that they can be written into one file with the sections of other
+areas; ``to_ini`` of a table writes those sections alone. For example:
 
 .. code-block:: ini
 
@@ -227,6 +227,35 @@ default), and its key is written without the leading ``hpx.``. For example:
 A pool whose scheduler, tuner and number of workers match no row keeps the
 default settings. Such a file is used only when it is passed explicitly with
 ``--hpx:config``.
+
+.. _modules_tuning_ini:
+
+Settings as an ini file
+=======================
+
+Any area writes its settings as plain sections, and one file holds the
+sections of all areas:
+
+.. code-block:: c++
+
+    struct ini_section
+    {
+        std::string name;                       // for instance "hpx.parcel"
+        std::vector<tuned_setting> settings;
+    };
+
+    std::string to_ini(std::vector<ini_section> const& sections,
+        std::vector<std::string> const& comments, int year);
+
+``to_ini`` writes the license header of |hpx|'s files with the given year, so
+that a generated file can be added to the repository as it is, then the given
+comment lines (the host, the date, the tool that wrote it), then the sections
+in the given order. Each setting is preceded by a comment with its reason (and
+whether it equals the default). A key is written relative to its section: a
+key that starts with the section's name and a dot loses that part
+(``hpx.parcel.tcp.enable`` is ``enable`` in the section ``hpx.parcel.tcp``),
+any other loses its leading ``hpx.`` (``hpx.min_idle_backoff_time`` is
+``min_idle_backoff_time`` in an idle tuning section).
 
 See the :ref:`API reference <modules_tuning_api>` of this module for
 more details.
