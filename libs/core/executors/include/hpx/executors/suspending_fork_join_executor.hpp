@@ -992,16 +992,57 @@ namespace hpx::execution::experimental {
         }
 
         /// \cond NOINTERNAL
-        // A shared executor runs single tasks on the parallel_executor of
-        // this executor, which has its properties.
+        // Both executors run a single synchronous task on the calling thread,
+        // through the parallel_executor of this executor (which has its
+        // properties). The parallel algorithms use it for a loop that gets
+        // one core and one chunk, instead of running a region.
         template <typename F, typename... Ts>
-            requires(Shared)
         decltype(auto) sync_execute(F&& f, Ts&&... ts) const
         {
             return embedded_parallel_executor().sync_execute(
                 HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
         }
 
+        // suspending_fork_join_executor runs an asynchronous single task as a
+        // parallel region of one index, i.e. on the calling thread, and
+        // returns a ready future, as bulk_async_execute does.
+        template <typename F, typename... Ts>
+            requires(!Shared)
+        decltype(auto) async_execute(F&& f, Ts&&... ts) const
+        {
+            using result_type =
+                hpx::util::detail::invoke_deferred_result_t<F, Ts...>;
+
+            return hpx::detail::try_catch_exception_ptr(
+                [&]() {
+                    if constexpr (std::is_void_v<result_type>)
+                    {
+                        auto body = [&](std::size_t, std::size_t) {
+                            HPX_INVOKE(
+                                HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
+                        };
+                        run_region(body, 1);
+                        return hpx::make_ready_future();
+                    }
+                    else
+                    {
+                        hpx::optional<result_type> result;
+                        auto body = [&](std::size_t, std::size_t) {
+                            result.emplace(HPX_INVOKE(
+                                HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...));
+                        };
+                        run_region(body, 1);
+                        return hpx::make_ready_future(HPX_MOVE(*result));
+                    }
+                },
+                [&](std::exception_ptr&& ep) {
+                    return hpx::make_exceptional_future<result_type>(
+                        HPX_MOVE(ep));
+                });
+        }
+
+        // A shared executor runs the other single tasks on the
+        // parallel_executor of this executor as well.
         template <typename F, typename... Ts>
             requires(Shared)
         decltype(auto) async_execute(F&& f, Ts&&... ts) const
@@ -1239,6 +1280,18 @@ namespace hpx::execution::experimental {
         basic_suspending_fork_join_executor<false>;
 
     /// \cond NOINTERNAL
+    template <bool Shared>
+    struct is_one_way_executor<basic_suspending_fork_join_executor<Shared>>
+      : std::true_type
+    {
+    };
+
+    template <bool Shared>
+    struct is_two_way_executor<basic_suspending_fork_join_executor<Shared>>
+      : std::true_type
+    {
+    };
+
     template <bool Shared>
     struct is_never_blocking_one_way_executor<
         basic_suspending_fork_join_executor<Shared>> : std::true_type

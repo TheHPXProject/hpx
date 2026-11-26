@@ -62,21 +62,6 @@ namespace hpx::execution::experimental {
     /// tasks of the parallel_executor can be stolen.
     HPX_CXX_CORE_EXPORT using shared_suspending_fork_join_executor =
         basic_suspending_fork_join_executor<true>;
-
-    /// \cond NOINTERNAL
-    // The shared executor supports single tasks as well.
-    template <>
-    struct is_one_way_executor<shared_suspending_fork_join_executor>
-      : std::true_type
-    {
-    };
-
-    template <>
-    struct is_two_way_executor<shared_suspending_fork_join_executor>
-      : std::true_type
-    {
-    };
-    /// \endcond
 }    // namespace hpx::execution::experimental
 
 namespace hpx::execution {

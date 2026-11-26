@@ -465,6 +465,75 @@ void static_check_executor()
         "is_bulk_one_way_executor_v<suspending_fork_join_executor>");
     static_assert(is_bulk_two_way_executor_v<suspending_fork_join_executor>,
         "is_bulk_two_way_executor_v<suspending_fork_join_executor>");
+    static_assert(is_one_way_executor_v<suspending_fork_join_executor>,
+        "is_one_way_executor_v<suspending_fork_join_executor>");
+    static_assert(is_two_way_executor_v<suspending_fork_join_executor>,
+        "is_two_way_executor_v<suspending_fork_join_executor>");
+}
+
+// async_execute runs the task as a region of one index and returns a ready
+// future
+void test_async_execute()
+{
+    suspending_fork_join_executor const exec;
+
+    hpx::future<int> f = hpx::parallel::execution::async_execute(
+        exec, [](int i) { return i + 1; }, 41);
+    HPX_TEST(f.is_ready());
+    HPX_TEST_EQ(f.get(), 42);
+
+    std::atomic<int> calls{0};
+    hpx::future<void> g =
+        hpx::parallel::execution::async_execute(exec, [&] { ++calls; });
+    HPX_TEST(g.is_ready());
+    g.get();
+    HPX_TEST_EQ(calls.load(), 1);
+
+    hpx::future<void> h = hpx::parallel::execution::async_execute(
+        exec, [] { throw std::runtime_error("test"); });
+    HPX_TEST(h.is_ready());
+    bool caught_exception = false;
+    try
+    {
+        h.get();
+    }
+    catch (std::runtime_error const&)
+    {
+        caught_exception = true;
+    }
+    HPX_TEST(caught_exception);
+}
+
+// sync_execute runs the task on the calling thread, and a loop that gets one
+// chunk takes that path instead of running a region
+void test_sync_execute()
+{
+    suspending_fork_join_executor const exec;
+
+    auto const caller = std::this_thread::get_id();
+    int const result = hpx::parallel::execution::sync_execute(
+        exec,
+        [&](int i) {
+            HPX_TEST(std::this_thread::get_id() == caller);
+            return i + 1;
+        },
+        41);
+    HPX_TEST_EQ(result, 42);
+
+    std::vector<int> v(10, 1);
+    std::atomic<std::size_t> others{0};
+    hpx::for_each(hpx::execution::par.on(exec).with(
+                      hpx::execution::experimental::static_chunk_size(10),
+                      hpx::execution::experimental::num_cores(1)),
+        v.begin(), v.end(), [&](int& x) {
+            if (std::this_thread::get_id() != caller)
+            {
+                ++others;
+            }
+            ++x;
+        });
+    HPX_TEST_EQ(others.load(), std::size_t(0));
+    HPX_TEST(std::all_of(v.begin(), v.end(), [](int x) { return x == 2; }));
 }
 
 void test_executor(hpx::threads::thread_priority priority,
@@ -823,6 +892,8 @@ int hpx_main()
 
     // P2300 get_scheduler bridge test
     test_get_scheduler();
+    test_sync_execute();
+    test_async_execute();
 
     test_static_large_range();
 

@@ -105,6 +105,11 @@ Suspending Fork-Join Executor
   use. Copies made on an HPX thread share the worker threads of the original.
 * The calling thread takes part in the parallel regions if it runs on one of
   the executor's PUs; otherwise it suspends until the region has finished.
+* A region wakes at most one worker thread per index, so a loop that the
+  executor parameters (for instance ``task_size_chunk_size``) give few cores
+  and chunks wakes only that many. ``sync_execute`` runs a single task on the
+  calling thread; the parallel algorithms use it for a loop that gets one
+  core and one chunk.
 
 .. code-block:: c++
 

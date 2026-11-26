@@ -751,9 +751,13 @@ namespace hpx::execution::experimental::detail {
         };
         reset_in_region const on_exit{in_region_};
 
-        // the slots of the region: all of them if count is 0
-        std::size_t const n =
-            count == 0 ? num_threads_ : (std::min) (count, num_threads_);
+        // the slots of the region: all of them if count is 0, at most one per
+        // index (the executor parameters, e.g. task_size_chunk_size, decide
+        // how many chunks, and with that how many cores, a loop gets)
+        std::size_t const n = (std::max) (std::size_t(1),
+            (std::min) (count == 0 ? num_threads_ :
+                                     (std::min) (count, num_threads_),
+                size));
         region_slots const slots{first % num_threads_, n};
 
         exception_ = std::exception_ptr();
