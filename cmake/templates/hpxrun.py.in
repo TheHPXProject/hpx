@@ -30,6 +30,7 @@ import traceback
 import time
 import threading
 import re
+import shlex
 
 try:
     from paramiko import SSHClient
@@ -174,11 +175,20 @@ def ssh_subproc(cmd):
 
 # Run with no run wrapper
 # This is just starting "localities" processes on the local node
-def run_none(cmd, localities, nodes, verbose):
+def run_none(cmd, localities, nodes, verbose, port=7910):
     if nodes is None:
         if localities > 1:
             for locality in range(localities):
-                exec_cmd = cmd + ['--hpx:node=' + str(locality)]
+                if port == 7910:
+                    exec_cmd = cmd + ['--hpx:node=' + str(locality)]
+                else:
+                    # a port other than the default: each locality its own
+                    # (HPX adds the locality's number only to the default
+                    # port), given as with ssh below
+                    exec_cmd = cmd + ['--hpx:hpx=127.0.0.1:' + str(port + locality),
+                                      '--hpx:agas=127.0.0.1:' + str(port)]
+                    if locality != 0:
+                        exec_cmd += ['--hpx:worker']
                 if verbose:
                     print('Executing command: ' + ' '.join(exec_cmd))
                 subproc(exec_cmd)
@@ -207,7 +217,7 @@ def run_none(cmd, localities, nodes, verbose):
 
 # Run with mpiexec
 # This is executing mpiexec with the "-np" option set to the number of localities
-def run_mpi(cmd, localities, verbose):
+def run_mpi(cmd, localities, verbose, wrapper_args=[]):
     mpiexec = '@MPIEXEC@'
     if mpiexec == '':
         mpiexec = '@MPIEXEC_EXECUTABLE@'
@@ -216,17 +226,17 @@ def run_mpi(cmd, localities, verbose):
         msg += 'Please rerun CMake with HPX_PARCELPORT_MPI=True.'
         print(msg, file=sys.stderr)
         sys.exit(1)
-    exec_cmd = [mpiexec, '@MPIEXEC_NUMPROC_FLAG@', str(localities)] + cmd
+    exec_cmd = [mpiexec] + wrapper_args + ['@MPIEXEC_NUMPROC_FLAG@', str(localities)] + cmd
     if verbose:
         print('Executing command: ' + ' '.join(exec_cmd))
     subproc(exec_cmd)
 
 
-def run_gasnet(cmd, localities, verbose):
+def run_gasnet(cmd, localities, verbose, wrapper_args=[]):
     os.environ['GASNET_PSHM_NODES'] = str(localities)
     os.environ['GASNET_QUIET'] = 'yes'
     os.environ['GASNET_ROUTE_OUTPUT'] = '0'
-    run_mpi(cmd, localities, verbose)
+    run_mpi(cmd, localities, verbose, wrapper_args)
 
 
 def run_gasnet_smp(cmd, localities, verbose):
@@ -240,8 +250,8 @@ def run_gasnet_smp(cmd, localities, verbose):
 
 # Run with srun
 # This is executing srun with the '-n' option set to the number of localities
-def run_srun(cmd, localities, verbose):
-    exec_cmd = ['srun', '-K', '-n', str(localities)] + cmd
+def run_srun(cmd, localities, verbose, wrapper_args=[]):
+    exec_cmd = ['srun', '-K'] + wrapper_args + ['-n', str(localities)] + cmd
     if verbose:
         print('Executing command: ' + ' '.join(exec_cmd))
     subproc(exec_cmd)
@@ -249,32 +259,35 @@ def run_srun(cmd, localities, verbose):
 
 # Run with jsrun
 # This is executing jsrun with the '-n' option set to the number of localities
-def run_jsrun(cmd, localities, verbose):
-    exec_cmd = ['jsrun', '-n', str(localities)] + cmd
+def run_jsrun(cmd, localities, verbose, wrapper_args=[]):
+    exec_cmd = ['jsrun'] + wrapper_args + ['-n', str(localities)] + cmd
     if verbose:
         print('Executing command: ' + ' '.join(exec_cmd))
     subproc(exec_cmd)
 
 
 # Select the appropriate run function based on runwrapper
-def run(cmd, runwrapper, localities, nodes, verbose):
+def run(cmd, runwrapper, localities, nodes, verbose, wrapper_args=[], port=7910):
+    if wrapper_args and runwrapper in ('none', 'gasnet-smp'):
+        print('Warning: --wrapper-args is ignored with the run wrapper '
+              + runwrapper, file=sys.stderr)
     if runwrapper == 'none':
-        run_none(cmd, localities, nodes, verbose)
+        run_none(cmd, localities, nodes, verbose, port)
     if runwrapper == 'mpi':
         assert nodes is None, "nodes option only valid with tcp parcelport."
-        run_mpi(cmd, localities, verbose)
+        run_mpi(cmd, localities, verbose, wrapper_args)
     if runwrapper == 'gasnet':
         assert nodes is None, "nodes option only valid with tcp parcelport."
-        run_gasnet(cmd, localities, verbose)
+        run_gasnet(cmd, localities, verbose, wrapper_args)
     if runwrapper == 'gasnet-smp':
         assert nodes is None, "nodes option only valid with smp parcelport."
         run_gasnet_smp(cmd, localities, verbose)
     if runwrapper == 'srun':
         assert nodes is None, "nodes option only valid with tcp parcelport."
-        run_srun(cmd, localities, verbose)
+        run_srun(cmd, localities, verbose, wrapper_args)
     if runwrapper == 'jsrun':
         assert nodes is None, "nodes option only valid with tcp parcelport."
-        run_jsrun(cmd, localities, verbose)
+        run_jsrun(cmd, localities, verbose, wrapper_args)
 
 
 # Building the command line. This function concatenates the different options
@@ -296,6 +309,14 @@ def build_cmd(options, args):
             else ['--hpx:ini=hpx.parcel.tcp.priority=1000', '--hpx:ini=hpx.parcel.tcp.enable=1'] if pp == 'tcp'
             else [])
         cmd += select_parcelport(options.parcelport)
+
+    # the port, where the localities are on different hosts (with the run
+    # wrapper none, run_none gives each locality a port of its own; HPX's
+    # own default, 7910, needs no setting)
+    if options.localities > 1 and options.defaultport != 7910 \
+            and options.runwrapper != 'none':
+        cmd += ['--hpx:ini=hpx.parcel.port=' + str(options.defaultport),
+                '--hpx:ini=hpx.agas.port=' + str(options.defaultport)]
 
     # set number of threads
     if options.threads == -1:
@@ -428,6 +449,14 @@ Used by the tcp parcelport only.
       , help='Which runwrapper to use (Options are: none, mpi, gasnet, gasnet-smp, srun, jsrun) '
              '(environment variable HPXRUN_RUNWRAPPER)')
 
+    parser.add_option('-w', '--wrapper-args'
+      , action='store', type='string'
+      , dest='wrapper_args', default=default_env('HPXRUN_WRAPPER_ARGS', '')
+      , help='Additional arguments for the run wrapper, inserted after its '
+             'name, for example "-N 2 -c 4" for srun (environment variable '
+             'HPXRUN_WRAPPER_ARGS; ignored with the run wrappers none and '
+             'gasnet-smp)')
+
     parser.add_option('-e', '--expected'
       , action='store', type='int'
       , dest='expected', default=default_env('HPXRUN_EXPECTED', '0')
@@ -465,7 +494,8 @@ Used by the tcp parcelport only.
                 port = "7910"
             nodes += [ ip + ":" + port ]
 
-    run(cmd, options.runwrapper, options.localities, nodes, options.verbose)
+    run(cmd, options.runwrapper, options.localities, nodes, options.verbose,
+        shlex.split(options.wrapper_args), options.defaultport)
 
     if options.expected == 0:
         ret_expected = (lambda ret : True if ret == 0 else False)
