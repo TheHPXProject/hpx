@@ -12,7 +12,8 @@
 // they receive them that way. Smaller chunks go through the parcelport. The
 // test checks the data of arguments and results, many calls in flight in
 // both directions, and the conduit's statistics on both sides (and its
-// performance counters, where HPX has the parcelport counters).
+// performance counters, where HPX has the parcelport counters, also reading
+// them with a reset).
 
 #include <hpx/config.hpp>
 
@@ -92,13 +93,14 @@ HPX_PLAIN_ACTION(conduit_chunks)
 #if defined(HPX_HAVE_PARCELPORT_COUNTERS)
 // a performance counter of the conduit on this locality, e.g. 'count' and
 // 'sent' for /device_conduit{locality#N/total}/count/ucx/sent
-std::uint64_t conduit_counter(char const* kind, char const* direction)
+std::uint64_t conduit_counter(
+    char const* kind, char const* direction, bool const reset = false)
 {
     std::string const name = "/device_conduit{locality#" +
         std::to_string(hpx::get_locality_id()) + "/total}/" + kind + "/" +
         hpx::parcelset::get_device_conduit()->name() + "/" + direction;
     hpx::performance_counters::performance_counter counter(name);
-    return counter.get_value<std::uint64_t>(hpx::launch::sync);
+    return counter.get_value<std::uint64_t>(hpx::launch::sync, reset);
 }
 
 // the counters show the conduit's statistics (no data moves meanwhile)
@@ -113,6 +115,33 @@ void check_counters()
     HPX_TEST(s.chunks_received != 0);
 }
 HPX_PLAIN_ACTION(check_counters)
+
+// the four counters on this locality (chunks sent and received, bytes sent
+// and received), read with or without a reset
+std::vector<std::uint64_t> read_counters(bool const reset)
+{
+    return {conduit_counter("count", "sent", reset),
+        conduit_counter("count", "received", reset),
+        conduit_counter("data", "sent", reset),
+        conduit_counter("data", "received", reset)};
+}
+HPX_PLAIN_ACTION(read_counters)
+
+// waits until the counters on 'id' show 'expected': a sent chunk is counted
+// when its send completes, which may be after the receiver used the data
+std::vector<std::uint64_t> wait_for_counters(
+    hpx::id_type const& id, std::vector<std::uint64_t> const& expected)
+{
+    auto const deadline =
+        std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    std::vector<std::uint64_t> values = read_counters_action()(id, false);
+    while (values != expected && std::chrono::steady_clock::now() < deadline)
+    {
+        hpx::this_thread::sleep_for(std::chrono::milliseconds(1));
+        values = read_counters_action()(id, false);
+    }
+    return values;
+}
 #endif
 
 // host chunks go to 'locality_id' through the conduit once it has checked
@@ -246,6 +275,24 @@ int hpx_main()
     for (hpx::id_type const& id : hpx::find_all_localities())
     {
         check_counters_action()(id);
+    }
+
+    // a read with a reset starts the counters from there: one more call
+    // moves one chunk each way
+    for (hpx::id_type const& id : remotes)
+    {
+        hpx::id_type const here = hpx::find_here();
+        read_counters_action()(here, true);
+        read_counters_action()(id, true);
+
+        std::size_t const count = threshold / sizeof(int);
+        HPX_TEST(echo_action()(id, pattern(count, 5), count, 5) ==
+            pattern(count, 6));
+
+        std::uint64_t const bytes = count * sizeof(int);
+        std::vector<std::uint64_t> const expected = {1, 1, bytes, bytes};
+        HPX_TEST(wait_for_counters(here, expected) == expected);
+        HPX_TEST(wait_for_counters(id, expected) == expected);
     }
 #endif
 

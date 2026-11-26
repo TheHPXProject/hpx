@@ -111,6 +111,12 @@ int hpx_main()
     std::string const configured =
         hpx::get_config_entry("hpx.parcel.device_conduit", "auto");
     auto const* conduit = hpx::parcelset::get_device_conduit();
+    if (!hpx::is_networking_enabled())
+    {
+        // one locality without networking: no conduit
+        HPX_TEST(conduit == nullptr);
+        return hpx::finalize();
+    }
     if (configured == "none")
     {
         HPX_TEST(conduit == nullptr);
