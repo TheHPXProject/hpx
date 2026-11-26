@@ -8,8 +8,8 @@
 # by area (see the tuning module, libs/core/tuning)
 add_hpx_executable(
   hpx_tune INTERNAL_FLAGS
-  SOURCES hpx_tune.cpp idle_area.cpp
-  HEADERS area.hpp idle_area.hpp
+  SOURCES child.cpp hpx_tune.cpp idle_area.cpp
+  HEADERS area.hpp child.hpp idle_area.hpp
   NOLIBS
   FOLDER "Tools/Tuners"
 )

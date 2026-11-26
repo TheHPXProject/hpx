@@ -183,5 +183,9 @@ int main(int argc, char* argv[])
                     static_cast<int>(args.size() - 1), args.data()),
         0);
 
+    // a child of an area that starts none is refused (the dispatch of
+    // child.hpp, before the command line is parsed)
+    HPX_TEST_NEQ(run_tool("--child=no_such_area"), 0);
+
     return hpx::util::report_errors();
 }

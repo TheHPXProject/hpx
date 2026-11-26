@@ -24,6 +24,7 @@
 #include <hpx/version.hpp>
 
 #include "area.hpp"
+#include "child.hpp"
 #include "idle_area.hpp"
 
 #include <chrono>
@@ -62,10 +63,28 @@ namespace {
         std::strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M", &local);
         return buffer;
     }
+
+    // A child of an area (child.hpp) measures for that area: it starts the
+    // HPX runtime itself and writes its results for the parent. Each area
+    // that starts children adds its entry here.
+    int run_as_child_of(
+        std::string const& area, int /* argc */, char* /* argv */[])
+    {
+        std::cerr << "hpx_tune: no area '" << area << "' starts children\n";
+        return 1;
+    }
 }    // namespace
 
 int main(int argc, char* argv[])
 {
+    // a child of an area: before the command line is parsed, as a child's
+    // command line has HPX's options too
+    if (std::string const area = hpx_tune::child_area(argc, argv);
+        !area.empty())
+    {
+        return run_as_child_of(area, argc, argv);
+    }
+
     po::options_description general(
         "usage: hpx_tune [areas] [options]\n\n"
         "Measures this machine and writes HPX settings for it as an ini file\n"
