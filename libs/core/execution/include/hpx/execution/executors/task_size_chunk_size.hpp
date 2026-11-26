@@ -53,7 +53,7 @@ namespace hpx::execution::experimental {
         ///       created before the runtime has started (for instance as part
         ///       of a global execution policy) uses the configured ones. An
         ///       executor can ask for a minimal run time of its own (see
-        ///        hpx::execution::experimental::get_min_chunk_time), which
+        ///       \a hpx::execution::experimental::get_min_chunk_time), which
         ///       replaces the default one for its loops.
         ///
         constexpr task_size_chunk_size() noexcept = default;
