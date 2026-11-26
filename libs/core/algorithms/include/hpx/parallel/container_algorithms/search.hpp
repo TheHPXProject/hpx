@@ -403,8 +403,8 @@ namespace hpx { namespace ranges {
         typename T = std::iter_value_t<FwdIter>,
         typename Pred = hpx::ranges::equal_to, typename Proj = hpx::identity>
     FwdIter search_n(FwdIter first, Sent last,
-        std::iter_difference_t<FwdIter> count,
-        T const& value, Pred&& op = Pred(), Proj&& proj = Proj());
+        std::iter_difference_t<FwdIter> count, T const& value,
+        Pred&& op = Pred(), Proj&& proj = Proj());
 
     /// Searches the range for the first sequence of \a count consecutive
     /// elements that each compare equal to \a value.
@@ -472,11 +472,10 @@ namespace hpx { namespace ranges {
     template <typename ExPolicy, typename FwdIter, typename Sent,
         typename T = std::iter_value_t<FwdIter>,
         typename Pred = hpx::ranges::equal_to, typename Proj = hpx::identity>
-    hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
-        FwdIter>
-    search_n(ExPolicy&& policy, FwdIter first, Sent last,
-        std::iter_difference_t<FwdIter> count,
-        T const& value, Pred&& op = Pred(), Proj&& proj = Proj());
+    hpx::parallel::util::detail::algorithm_result_t<ExPolicy, FwdIter> search_n(
+        ExPolicy&& policy, FwdIter first, Sent last,
+        std::iter_difference_t<FwdIter> count, T const& value,
+        Pred&& op = Pred(), Proj&& proj = Proj());
 
     /// Searches the range for the first sequence of \a count consecutive
     /// elements that each compare equal to \a value.
@@ -525,8 +524,8 @@ namespace hpx { namespace ranges {
         typename T = std::iter_value_t<std::ranges::iterator_t<Rng>>,
         typename Pred = hpx::ranges::equal_to, typename Proj = hpx::identity>
     std::ranges::iterator_t<Rng> search_n(Rng&& rng,
-        std::ranges::range_difference_t<Rng> count,
-        T const& value, Pred&& op = Pred(), Proj&& proj = Proj());
+        std::ranges::range_difference_t<Rng> count, T const& value,
+        Pred&& op = Pred(), Proj&& proj = Proj());
 
     /// Searches the range for the first sequence of \a count consecutive
     /// elements that each compare equal to \a value.

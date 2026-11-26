@@ -120,14 +120,14 @@ void ranges_search_n_test(ExPolicy&& policy)
     auto const expected = c.begin() + static_cast<std::ptrdiff_t>(mid);
 
     // iterator/sentinel and range overloads
-    HPX_TEST(hpx::ranges::search_n(policy, c.begin(), c.end(), 3,
-                 std::size_t{1}) == expected);
+    HPX_TEST(hpx::ranges::search_n(
+                 policy, c.begin(), c.end(), 3, std::size_t{1}) == expected);
     HPX_TEST(hpx::ranges::search_n(policy, c, 3, std::size_t{1}) == expected);
 
     // not found / count too large / zero count
     HPX_TEST(hpx::ranges::search_n(policy, c, 4, std::size_t{1}) == c.end());
-    HPX_TEST(hpx::ranges::search_n(policy, c, 100000, std::size_t{5}) ==
-        c.end());
+    HPX_TEST(
+        hpx::ranges::search_n(policy, c, 100000, std::size_t{5}) == c.end());
     HPX_TEST(hpx::ranges::search_n(policy, c, 0, std::size_t{42}) == c.begin());
     HPX_TEST(hpx::ranges::search_n(policy, c, -1, std::size_t{5}) == c.begin());
 
@@ -163,7 +163,8 @@ void ranges_search_n_projection_test()
     // the projection yields a type other than the element type
     std::vector<item> v{{1, 0}, {2, 0}, {2, 0}, {2, 0}, {3, 0}};
 
-    auto it = hpx::ranges::search_n(v, 2, 2, hpx::ranges::equal_to{}, &item::id);
+    auto it =
+        hpx::ranges::search_n(v, 2, 2, hpx::ranges::equal_to{}, &item::id);
     HPX_TEST(it == v.begin() + 1);
 
     it = hpx::ranges::search_n(hpx::execution::seq, v.begin(), v.end(), 4, 2,
