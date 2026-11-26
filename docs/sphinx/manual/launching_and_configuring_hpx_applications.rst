@@ -688,8 +688,10 @@ default, which stands for the defaults compiled into |hpx|.
      * The value of this property defines the minimal run time of a chunk, in
        microseconds, for the loops of one executor, in place of
        ``hpx.task_size_chunk_size.min_chunk_time_us``. ``<executor>`` is
-       ``parallel`` for ``parallel_executor`` and ``fork_join`` for
-       ``fork_join_executor``. Not set by default.
+       ``parallel`` for ``parallel_executor``, ``fork_join`` for
+       ``fork_join_executor``, ``suspending_fork_join`` for
+       ``suspending_fork_join_executor`` and ``shared_suspending_fork_join``
+       for ``shared_suspending_fork_join_executor``. Not set by default.
    * * ``hpx.task_size_chunk_size.<executor>.<pool size>.min_chunk_time_us``
      * The value of this property defines the minimal run time of a chunk, in
        microseconds, for the loops of one executor that runs on ``<pool size>``

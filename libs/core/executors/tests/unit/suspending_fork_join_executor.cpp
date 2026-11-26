@@ -536,6 +536,39 @@ void test_sync_execute()
     HPX_TEST(std::all_of(v.begin(), v.end(), [](int x) { return x == 2; }));
 }
 
+// The executors ask for the minimal run time of a chunk configured for them
+// (hpx.task_size_chunk_size.<executor>[.<pool size>]), for the number of
+// their PUs, else for the default one.
+void test_min_chunk_time()
+{
+    using namespace std::chrono_literals;
+    namespace ex = hpx::execution::experimental;
+
+    suspending_fork_join_executor const exec;
+    ex::shared_suspending_fork_join_executor const shared;
+    std::size_t const num_pus =
+        hpx::threads::count(ex::get_processing_units_mask(exec));
+    auto const default_time =
+        ex::detail::get_task_size_chunk_size_defaults().min_chunk_time;
+
+    HPX_TEST(ex::get_min_chunk_time(exec) == default_time);
+    HPX_TEST(ex::get_min_chunk_time(shared) == default_time);
+
+    ex::detail::set_executor_min_chunk_times(
+        {{"suspending_fork_join", 0, 400ns},
+            {"suspending_fork_join", num_pus, 300ns},
+            {"shared_suspending_fork_join", 0, 200ns}});
+    HPX_TEST(ex::get_min_chunk_time(exec) == 300ns);
+    HPX_TEST(ex::get_min_chunk_time(shared) == 200ns);
+
+    // task_size_chunk_size makes chunks of at least 300 ns for exec
+    ex::task_size_chunk_size const params;
+    HPX_TEST_EQ(params.get_chunk_size(exec, 100ns, 2, 20), std::size_t(3));
+
+    ex::detail::set_executor_min_chunk_times({});
+    HPX_TEST(ex::get_min_chunk_time(exec) == default_time);
+}
+
 void test_executor(hpx::threads::thread_priority priority,
     hpx::threads::thread_stacksize stacksize,
     suspending_fork_join_executor::loop_schedule schedule,
@@ -894,6 +927,7 @@ int hpx_main()
     test_get_scheduler();
     test_sync_execute();
     test_async_execute();
+    test_min_chunk_time();
 
     test_static_large_range();
 

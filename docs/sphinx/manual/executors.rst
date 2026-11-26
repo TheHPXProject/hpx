@@ -825,8 +825,10 @@ executors of |hpx| ask for the value configured with
 ``hpx.task_size_chunk_size.<executor>.min_chunk_time_us``, or for one number
 of worker threads with
 ``hpx.task_size_chunk_size.<executor>.<pool size>.min_chunk_time_us``, where
-``<executor>`` is ``parallel`` for ``parallel_executor`` and ``fork_join`` for
-``fork_join_executor``:
+``<executor>`` is ``parallel`` for ``parallel_executor``, ``fork_join`` for
+``fork_join_executor``, ``suspending_fork_join`` for
+``suspending_fork_join_executor`` and ``shared_suspending_fork_join`` for
+``shared_suspending_fork_join_executor``:
 
 .. code-block:: ini
 

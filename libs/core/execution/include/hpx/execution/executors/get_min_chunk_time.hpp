@@ -46,8 +46,9 @@ namespace hpx::execution::experimental {
     /// or else with \a hpx.task_size_chunk_size.<executor>.min_chunk_time_us
     /// (in microseconds), where \a <executor> is the name of the executor
     /// (\a parallel for \a parallel_executor, \a fork_join for
-    /// \a fork_join_executor) and \a <pool size> the number of worker threads
-    /// it runs on. If neither is configured, they return the default:
+    /// \a fork_join_executor, \a suspending_fork_join and
+    /// \a shared_suspending_fork_join for the suspending fork-join executors)
+    /// and \a <pool size> the number of worker threads it runs on. If neither is configured, they return the default:
     ///
     /// \code
     ///     [hpx.task_size_chunk_size.fork_join]

@@ -906,6 +906,29 @@ namespace hpx::execution::experimental {
             return 0;
         }
 
+        // The minimal run time of a chunk configured for this executor
+        // (hpx.task_size_chunk_size.suspending_fork_join, or
+        // hpx.task_size_chunk_size.shared_suspending_fork_join for the shared
+        // executor), for the number of its PUs, or the default one.
+        [[nodiscard]] std::chrono::nanoseconds query(
+            experimental::get_min_chunk_time_t) const noexcept
+        {
+            try
+            {
+                return experimental::detail::get_executor_min_chunk_time(
+                    Shared ? "shared_suspending_fork_join" :
+                             "suspending_fork_join",
+                    hpx::threads::count(
+                        query(experimental::get_processing_units_mask_t{})));
+            }
+            catch (...)
+            {
+                // the runtime isn't running
+                return experimental::detail::get_task_size_chunk_size_defaults()
+                    .min_chunk_time;
+            }
+        }
+
         // The regions run on num_cores worker threads (or on all of them if
         // num_cores is 0 or larger than their number), the others are not
         // woken.
