@@ -10,6 +10,7 @@
 #include <hpx/modules/format.hpp>
 #include <hpx/modules/program_options.hpp>
 #include <hpx/modules/runtime_configuration.hpp>
+#include <hpx/version.hpp>
 
 #include <cstddef>
 #include <iostream>
@@ -110,6 +111,17 @@ namespace hpx::local::detail {
             std::size_t const num_threads = hpx::util::from_string<std::size_t>(
                 ini.get_entry("hpx.os_threads", 1));
             handle_print_bind(num_threads);
+        }
+
+        // print version and copyright information, here rather than with
+        // the other options of the first command line pass so that the
+        // libraries of the plugins (device conduits, parcelports) are listed
+        // too: they register their versions when they are loaded
+        if (vm.count("hpx:version"))
+        {
+            std::cout << std::endl << hpx::copyright() << std::endl;
+            std::cout << hpx::complete_version() << std::endl;
+            return true;
         }
 
         if (vm.count("hpx:exit"))
