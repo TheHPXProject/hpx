@@ -5,7 +5,7 @@
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 if(HPX_WITH_TOOLS)
-  set(subdirs hpxdep inspect)
+  set(subdirs hpxdep inspect tuners)
 endif()
 
 if(HPX_WITH_TESTS_BENCHMARKS)
