@@ -1013,19 +1013,28 @@ namespace hpx::execution::experimental {
             using result_type =
                 hpx::util::detail::invoke_deferred_result_t<F, Ts...>;
 
-            return hpx::detail::try_catch_exception_ptr(
-                [&]() {
-                    if constexpr (std::is_void_v<result_type>)
-                    {
+            // The if constexpr is outside of the lambdas: MSVC compiled the
+            // discarded branch of an if constexpr inside the (non-template)
+            // lambda, i.e. hpx::optional<void> for a function returning void.
+            if constexpr (std::is_void_v<result_type>)
+            {
+                return hpx::detail::try_catch_exception_ptr(
+                    [&]() {
                         auto body = [&](std::size_t, std::size_t) {
                             HPX_INVOKE(
                                 HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
                         };
                         run_region(body, 1);
                         return hpx::make_ready_future();
-                    }
-                    else
-                    {
+                    },
+                    [&](std::exception_ptr&& ep) {
+                        return hpx::make_exceptional_future<void>(HPX_MOVE(ep));
+                    });
+            }
+            else
+            {
+                return hpx::detail::try_catch_exception_ptr(
+                    [&]() {
                         hpx::optional<result_type> result;
                         auto body = [&](std::size_t, std::size_t) {
                             result.emplace(HPX_INVOKE(
@@ -1033,12 +1042,12 @@ namespace hpx::execution::experimental {
                         };
                         run_region(body, 1);
                         return hpx::make_ready_future(HPX_MOVE(*result));
-                    }
-                },
-                [&](std::exception_ptr&& ep) {
-                    return hpx::make_exceptional_future<result_type>(
-                        HPX_MOVE(ep));
-                });
+                    },
+                    [&](std::exception_ptr&& ep) {
+                        return hpx::make_exceptional_future<result_type>(
+                            HPX_MOVE(ep));
+                    });
+            }
         }
 
         // A shared executor runs the other single tasks on the
