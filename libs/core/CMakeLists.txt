@@ -90,6 +90,7 @@ set(_hpx_core_modules
     topology
     tracy
     tracing
+    tuning
     type_support
     util
     version

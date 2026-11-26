@@ -92,6 +92,7 @@ Core modules
    /libs/core/topology/docs/index.rst
    /libs/core/tracing/docs/index.rst
    /libs/core/tracy/docs/index.rst
+   /libs/core/tuning/docs/index.rst
    /libs/core/type_support/docs/index.rst
    /libs/core/util/docs/index.rst
    /libs/core/version/docs/index.rst
