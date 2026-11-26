@@ -270,6 +270,14 @@ void test_copy_remove_ranges_sender()
 
 int hpx_main()
 {
+#if defined(_MSC_VER)
+    // Each scan sender instantiation uses substantial compiler memory on MSVC.
+    // Keep a task-policy sender test in the Windows suite; the complete policy
+    // and iterator matrix is exercised by the other toolchains.
+    test_copy_if_sender(hpx::launch::async,
+        hpx::execution::par(hpx::execution::task),
+        std::random_access_iterator_tag{});
+#else
     copy_if_sender_test<std::random_access_iterator_tag>();
 
     // Exercise forward iterators without repeating every scheduler/policy
@@ -281,6 +289,7 @@ int hpx_main()
     test_copy_if_sender_exception<std::runtime_error>(hpx::launch::async,
         hpx::execution::par(hpx::execution::task), std::forward_iterator_tag{});
     test_copy_remove_ranges_sender();
+#endif
     return hpx::local::finalize();
 }
 
