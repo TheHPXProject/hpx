@@ -103,9 +103,10 @@ namespace hpx::parallel::detail {
         using result_type = Result;
         using local_result_type = local_algorithm_result_t<result_type>;
 
-    private:
+    protected:
+        // Preserve execution-policy exception semantics at sender boundaries.
         template <typename Policy>
-        struct future_algorithm_error_handler
+        struct sender_algorithm_error_handler
         {
             auto operator()(std::exception_ptr error) const
             {
@@ -137,6 +138,7 @@ namespace hpx::parallel::detail {
             }
         };
 
+    private:
         template <typename Policy>
         struct future_algorithm_invoker
         {
@@ -276,7 +278,7 @@ namespace hpx::parallel::detail {
                         args_tuple_type>{
                         HPX_MOVE(future_policy), HPX_MOVE(args_tuple)});
                 auto adapted_sender = ex::let_error(HPX_MOVE(sender),
-                    future_algorithm_error_handler<future_policy_type>{});
+                    sender_algorithm_error_handler<future_policy_type>{});
                 return result_handler::get(ex::continues_on(
                     HPX_MOVE(adapted_sender), HPX_MOVE(sched)));
             }
