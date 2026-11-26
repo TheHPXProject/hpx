@@ -31,6 +31,7 @@ set(tests
     sequenced_executor
     service_executors
     shared_parallel_executor
+    shared_suspending_fork_join_executor
     standalone_thread_pool_executor
     suspending_fork_join_executor
     suspending_fork_join_executor_shutdown

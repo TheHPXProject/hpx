@@ -123,6 +123,63 @@ Suspending Fork-Join Executor
         }
     );
 
+A ``suspending_fork_join_executor`` can't be used from several threads at the
+same time or from inside one of its own parallel regions (nested
+parallelism). ``shared_suspending_fork_join_executor`` can:
+
+* All ``shared_suspending_fork_join_executor`` objects with the same
+  configuration (priority, stack size, loop schedule and spin duration) share
+  one set of worker threads per thread pool. It is created when an |hpx|
+  thread of the pool uses such an executor first, and stopped when the
+  runtime starts to shut down.
+* A parallel region runs on these worker threads if they are free. If they are
+  busy, because they run a region for another thread or because the region is
+  started from inside one of their regions, the region runs through a
+  ``parallel_executor`` instead: one task for each worker thread of the pool,
+  each with a contiguous range of the indices. The same happens if the calling
+  thread is not an |hpx| thread, and once the worker threads were stopped.
+* Exceptions are reported by whichever executor ran the region: the first
+  exception from the worker threads, or an ``hpx::exception_list`` from the
+  ``parallel_executor``.
+* As with ``suspending_fork_join_executor``, asynchronous calls
+  (``bulk_async_execute``, ``async_invoke``) run the region before they
+  return a ready future.
+* Single tasks (``sync_execute``, ``async_execute``, ``then_execute``,
+  ``post``) and continuations (``bulk_then_execute``) run as a
+  ``parallel_executor`` runs them.
+* Copies never own worker threads, so the executor can be a ``constexpr``
+  variable.
+
+If |hpx| is configured with
+``HPX_WITH_SUSPENDING_FORK_JOIN_EXECUTOR_AS_DEFAULT=ON`` (default: ``OFF``),
+``shared_suspending_fork_join_executor`` is the executor of the parallel
+execution policies ``par`` and ``par_unseq``, instead of
+``parallel_executor``. The task policies ``par(task)`` and
+``par_unseq(task)`` keep using ``parallel_executor``: they run an algorithm
+asynchronously, which the worker threads of a fork-join executor can't do.
+For the same reason, mapping a policy with a
+``shared_suspending_fork_join_executor`` to a task policy (``to_task``, as in
+``par(task)`` or ``par.on(exec)(task)``) gives it a ``parallel_executor``.
+
+.. code-block:: c++
+
+    #include <hpx/execution.hpp>
+    #include <hpx/algorithm.hpp>
+
+    std::vector<int> data(100, 1);
+
+    // can be used by any number of threads, also from inside the loop body
+    constexpr hpx::execution::experimental::shared_suspending_fork_join_executor
+        exec;
+
+    hpx::for_each(
+        hpx::execution::par.on(exec),
+        data.begin(), data.end(),
+        [](int &x) {
+            x += 1;
+        }
+    );
+
 Sequential Executor
 -------------------
 

@@ -11,6 +11,7 @@
 #include <hpx/config.hpp>
 #include <hpx/executors/executor_scheduler.hpp>
 #include <hpx/executors/fork_join_executor.hpp>
+#include <hpx/executors/parallel_executor.hpp>
 #include <hpx/modules/concurrency.hpp>
 #include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/errors.hpp>
@@ -24,6 +25,7 @@
 #include <hpx/modules/tracing.hpp>
 #include <hpx/modules/type_support.hpp>
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <concepts>
@@ -32,6 +34,7 @@
 #include <exception>
 #include <iterator>
 #include <memory>
+#include <new>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -40,6 +43,121 @@
 #include <hpx/config/warnings_prefix.hpp>
 
 namespace hpx::execution::experimental {
+
+    namespace detail {
+
+        // A std::shared_ptr that is constructed only when a pointer is
+        // assigned to it. A class that holds it can be constexpr constructed
+        // and destructed (std::shared_ptr's destructor is not constexpr), also
+        // as a mutable member.
+        template <typename T>
+        class lazy_shared_ptr
+        {
+        public:
+            constexpr lazy_shared_ptr() noexcept = default;
+
+            constexpr lazy_shared_ptr(lazy_shared_ptr const& rhs) noexcept
+            {
+                if (rhs.engaged_)
+                {
+                    ::new (address()) std::shared_ptr<T>(*rhs.ptr());
+                    engaged_ = true;
+                }
+            }
+
+            constexpr lazy_shared_ptr(lazy_shared_ptr&& rhs) noexcept
+            {
+                if (rhs.engaged_)
+                {
+                    ::new (address()) std::shared_ptr<T>(HPX_MOVE(*rhs.ptr()));
+                    engaged_ = true;
+                }
+            }
+
+            constexpr lazy_shared_ptr& operator=(
+                lazy_shared_ptr const& rhs) noexcept
+            {
+                if (this != &rhs)
+                {
+                    reset();
+                    if (rhs.engaged_)
+                    {
+                        ::new (address()) std::shared_ptr<T>(*rhs.ptr());
+                        engaged_ = true;
+                    }
+                }
+                return *this;
+            }
+
+            constexpr lazy_shared_ptr& operator=(lazy_shared_ptr&& rhs) noexcept
+            {
+                if (this != &rhs)
+                {
+                    reset();
+                    if (rhs.engaged_)
+                    {
+                        ::new (address())
+                            std::shared_ptr<T>(HPX_MOVE(*rhs.ptr()));
+                        engaged_ = true;
+                    }
+                }
+                return *this;
+            }
+
+            // A constant expression never engages it. It may not even read
+            // engaged_ then, if it is a mutable member.
+            constexpr ~lazy_shared_ptr()
+            {
+                if (!std::is_constant_evaluated())
+                {
+                    reset();
+                }
+            }
+
+            void assign(std::shared_ptr<T> p) noexcept
+            {
+                reset();
+                ::new (address()) std::shared_ptr<T>(HPX_MOVE(p));
+                engaged_ = true;
+            }
+
+            constexpr void reset() noexcept
+            {
+                if (engaged_)
+                {
+                    std::destroy_at(ptr());
+                    engaged_ = false;
+                }
+            }
+
+            [[nodiscard]] constexpr T* get() const noexcept
+            {
+                return engaged_ ? ptr()->get() : nullptr;
+            }
+
+            [[nodiscard]] std::shared_ptr<T> shared() const noexcept
+            {
+                return engaged_ ? *ptr() : std::shared_ptr<T>();
+            }
+
+        private:
+            void* address() noexcept
+            {
+                return static_cast<void*>(storage_);
+            }
+
+            std::shared_ptr<T>* ptr() const noexcept
+            {
+                return std::launder(reinterpret_cast<std::shared_ptr<T>*>(
+                    const_cast<unsigned char*>(storage_)));
+            }
+
+            // holds a std::shared_ptr<T> if engaged_
+            alignas(std::shared_ptr<T>) unsigned char storage_[sizeof(
+                std::shared_ptr<T>)] = {};
+            bool engaged_ = false;
+        };
+    }    // namespace detail
 
     /// \brief An executor with fork-join (blocking) semantics whose waiting
     ///        threads suspend instead of spinning.
@@ -73,7 +191,8 @@ namespace hpx::execution::experimental {
     /// worker thread, and the calling thread suspends until the region has
     /// finished. Scheduling work through the executor concurrently from
     /// different threads, or from inside one of its own parallel regions, is
-    /// not supported.
+    /// not supported. shared_suspending_fork_join_executor lifts these
+    /// restrictions.
     HPX_CXX_CORE_EXPORT class suspending_fork_join_executor
     {
     public:
@@ -117,6 +236,13 @@ namespace hpx::execution::experimental {
             // Run one parallel region of size indices: f(body, data, slot)
             // runs the share of the given slot.
             void execute_region(
+                region_function_type* f, void* body, std::size_t size);
+
+            // Run one parallel region as execute_region does, if the worker
+            // threads are free: returns false, and does nothing, if they run
+            // a region already (another one, or the one this is called from)
+            // or if they have exited.
+            bool try_execute_region(
                 region_function_type* f, void* body, std::size_t size);
 
             // Run the share of the given slot of the current region, calling
@@ -192,7 +318,8 @@ namespace hpx::execution::experimental {
             // runtime starts to shut down, if it still exists then.
             static void stop_on_shutdown(std::weak_ptr<shared_data> data);
 
-            // the shared data registered with stop_on_shutdown
+            // the shared data registered with stop_on_shutdown, and the
+            // shared instances (see shared_suspending_fork_join_executor)
             struct shutdown_registry;
 
             // Members that are fixed for the lifetime of the executor.
@@ -212,7 +339,10 @@ namespace hpx::execution::experimental {
             void* region_body_ = nullptr;
             std::size_t region_size_ = 0;
             bool dynamic_ = false;
-            bool in_region_ = false;
+
+            // Set while a region runs, and once the worker threads were
+            // stopped.
+            std::atomic<bool> in_region_ = false;
 
             hpx::spinlock exception_mtx_;
             std::exception_ptr exception_;
@@ -261,6 +391,8 @@ namespace hpx::execution::experimental {
             void finish_share() noexcept;
             void wait_for_workers() noexcept;
             void init_threads(char const* annotation);
+            void run_locked_region(
+                region_function_type* f, void* body, std::size_t size);
         };
 
         template <typename Body>
@@ -280,30 +412,76 @@ namespace hpx::execution::experimental {
         // Create the shared data, if needed.
         shared_data& data() const
         {
-            if (!shared_data_)
+            if (!shared_data_.get())
             {
                 auto data = std::make_shared<shared_data>(priority_, stacksize_,
                     schedule_, spin_duration_, pu_mask_.get(), annotation_);
                 shared_data::stop_on_shutdown(data);
-                shared_data_ = HPX_MOVE(data);
+                shared_data_.assign(HPX_MOVE(data));
             }
-            return *shared_data_;
+            return *shared_data_.get();
         }
 
-        // The shared data a copy of this executor refers to.
-        std::shared_ptr<shared_data> const& data_for_copy() const
+        // The shared data a copy of this executor refers to. A shared
+        // executor never holds any (see shared_instance).
+        std::shared_ptr<shared_data> data_for_copy() const
         {
-            if (!shared_data_ && threads::get_self_id_data() != nullptr)
+            if (!shared_ && !shared_data_.get() &&
+                threads::get_self_id_data() != nullptr)
             {
                 (void) data();
             }
-            return shared_data_;
+            return shared_data_.shared();
         }
+
+        // The shared data of a shared executor: the one instance for the
+        // pool of the calling thread and the configuration of this executor.
+        // Returns nullptr if the calling thread is not an HPX thread, or if
+        // it can't be created.
+        HPX_CORE_EXPORT std::shared_ptr<shared_data> shared_instance()
+            const noexcept;
 
         template <typename Body>
         void run_region(Body& body, std::size_t const size) const
         {
+            if (shared_)
+            {
+                // Use the shared instance if it is free, run the region
+                // through a parallel_executor otherwise.
+                if (auto const data = shared_instance(); data &&
+                    data->try_execute_region(&call_region<Body>, &body, size))
+                {
+                    return;
+                }
+                run_fallback_region(body, size);
+                return;
+            }
             data().execute_region(&call_region<Body>, &body, size);
+        }
+
+        // Run a region through a parallel_executor: one task per worker
+        // thread of the pool, each with a contiguous range of indices.
+        template <typename Body>
+        static void run_fallback_region(Body& body, std::size_t const size)
+        {
+            if (size == 0)
+            {
+                return;
+            }
+
+            std::size_t const num_chunks = (std::min) (size,
+                (std::max) (std::size_t(1),
+                    threads::detail::get_self_or_default_pool()
+                        ->get_os_thread_count()));
+
+            hpx::execution::parallel_executor const exec{};
+            hpx::parallel::execution::bulk_sync_execute(
+                exec,
+                [&](std::size_t const chunk) {
+                    body((chunk * size) / num_chunks,
+                        ((chunk + 1) * size) / num_chunks);
+                },
+                hpx::util::counting_shape(num_chunks));
         }
 
         template <typename... Fs>
@@ -444,17 +622,19 @@ namespace hpx::execution::experimental {
 
         bool operator==(suspending_fork_join_executor const& rhs) const noexcept
         {
-            if (priority_ != rhs.priority_ || stacksize_ != rhs.stacksize_ ||
-                schedule_ != rhs.schedule_ ||
+            if (shared_ != rhs.shared_ || priority_ != rhs.priority_ ||
+                stacksize_ != rhs.stacksize_ || schedule_ != rhs.schedule_ ||
                 spin_duration_ != rhs.spin_duration_)
             {
                 return false;
             }
-            if (pu_mask_ == rhs.pu_mask_)
+            auto const* lhs_mask = pu_mask_.get();
+            auto const* rhs_mask = rhs.pu_mask_.get();
+            if (lhs_mask == rhs_mask)
             {
                 return true;
             }
-            return pu_mask_ && rhs.pu_mask_ && *pu_mask_ == *rhs.pu_mask_;
+            return lhs_mask && rhs_mask && *lhs_mask == *rhs_mask;
         }
 
         bool operator!=(suspending_fork_join_executor const& rhs) const noexcept
@@ -509,43 +689,57 @@ namespace hpx::execution::experimental {
                 threads::thread_stacksize::small_,
             loop_schedule sched = loop_schedule::dynamic,
             std::chrono::nanoseconds spin_duration = default_spin_duration)
-          : pu_mask_(std::make_shared<hpx::threads::mask_type const>(pu_mask))
-          , spin_duration_(spin_duration)
+          : spin_duration_(spin_duration)
           , priority_(priority)
           , stacksize_(stacksize)
           , schedule_(sched)
         {
+            pu_mask_.assign(
+                std::make_shared<hpx::threads::mask_type const>(pu_mask));
         }
 
         /// \brief Copy an executor. Copying on an HPX thread creates the
         ///        worker threads of \a rhs first, if needed, and the copy
         ///        shares them.
-        suspending_fork_join_executor(suspending_fork_join_executor const& rhs)
-          : shared_data_(rhs.data_for_copy())
-          , pu_mask_(rhs.pu_mask_)
+        constexpr suspending_fork_join_executor(
+            suspending_fork_join_executor const& rhs)
+          : pu_mask_(rhs.pu_mask_)
           , annotation_(rhs.annotation_)
           , spin_duration_(rhs.spin_duration_)
           , priority_(rhs.priority_)
           , stacksize_(rhs.stacksize_)
           , schedule_(rhs.schedule_)
+          , shared_(rhs.shared_)
         {
+            if (!std::is_constant_evaluated())
+            {
+                copy_data_from(rhs);
+            }
         }
 
         suspending_fork_join_executor(
             suspending_fork_join_executor&&) noexcept = default;
 
-        suspending_fork_join_executor& operator=(
+        constexpr suspending_fork_join_executor& operator=(
             suspending_fork_join_executor const& rhs)
         {
             if (this != &rhs)
             {
-                shared_data_ = rhs.data_for_copy();
+                if (std::is_constant_evaluated())
+                {
+                    shared_data_.reset();
+                }
+                else
+                {
+                    copy_data_from(rhs);
+                }
                 pu_mask_ = rhs.pu_mask_;
                 annotation_ = rhs.annotation_;
                 spin_duration_ = rhs.spin_duration_;
                 priority_ = rhs.priority_;
                 stacksize_ = rhs.stacksize_;
                 schedule_ = rhs.schedule_;
+                shared_ = rhs.shared_;
             }
             return *this;
         }
@@ -553,7 +747,7 @@ namespace hpx::execution::experimental {
         suspending_fork_join_executor& operator=(
             suspending_fork_join_executor&&) noexcept = default;
 
-        ~suspending_fork_join_executor() = default;
+        constexpr ~suspending_fork_join_executor() = default;
 
         /// \cond NOINTERNAL
         [[nodiscard]] suspending_fork_join_executor query(
@@ -582,11 +776,12 @@ namespace hpx::execution::experimental {
         [[nodiscard]] hpx::threads::mask_type query(
             experimental::get_processing_units_mask_t) const
         {
-            if (shared_data_)
+            if (auto const* data = shared_data_.get())
             {
-                return shared_data_->pu_mask_;
+                return data->pu_mask_;
             }
-            return pu_mask_ ? *pu_mask_ : default_pu_mask();
+            auto const* mask = pu_mask_.get();
+            return mask ? *mask : default_pu_mask();
         }
 
         [[nodiscard]] hpx::threads::mask_type query(
@@ -628,9 +823,9 @@ namespace hpx::execution::experimental {
             }
             else
             {
-                if (shared_data_)
+                if (auto const* data = shared_data_.get())
                 {
-                    return shared_data_->num_threads_;
+                    return data->num_threads_;
                 }
                 return hpx::threads::count(
                     query(experimental::get_processing_units_mask_t{}));
@@ -652,7 +847,40 @@ namespace hpx::execution::experimental {
         }
         /// \endcond
 
+    protected:
+        /// \cond NOINTERNAL
+        enum class shared_t : std::uint8_t
+        {
+            shared
+        };
+
+        // a shared executor, see shared_suspending_fork_join_executor
+        explicit constexpr suspending_fork_join_executor(shared_t,
+            threads::thread_priority priority,
+            threads::thread_stacksize stacksize, loop_schedule sched,
+            std::chrono::nanoseconds spin_duration) noexcept
+          : spin_duration_(spin_duration)
+          , priority_(priority)
+          , stacksize_(stacksize)
+          , schedule_(sched)
+          , shared_(true)
+        {
+        }
+        /// \endcond
+
     private:
+        void copy_data_from(suspending_fork_join_executor const& rhs)
+        {
+            if (auto data = rhs.data_for_copy())
+            {
+                shared_data_.assign(HPX_MOVE(data));
+            }
+            else
+            {
+                shared_data_.reset();
+            }
+        }
+
         // a copy that never creates the worker threads of the original
         enum class no_init_t : std::uint8_t
         {
@@ -669,15 +897,16 @@ namespace hpx::execution::experimental {
           , priority_(rhs.priority_)
           , stacksize_(rhs.stacksize_)
           , schedule_(rhs.schedule_)
+          , shared_(rhs.shared_)
         {
         }
 
         // Created on first use (see data()), so that the executor can be
-        // constexpr default constructed.
-        mutable std::shared_ptr<shared_data> shared_data_;
+        // constexpr default constructed and destructed.
+        mutable detail::lazy_shared_ptr<shared_data> shared_data_;
 
         // The PUs to use, all PUs of the pool if empty.
-        std::shared_ptr<hpx::threads::mask_type const> pu_mask_;
+        detail::lazy_shared_ptr<hpx::threads::mask_type const> pu_mask_;
 
         char const* annotation_ = nullptr;
         std::chrono::nanoseconds spin_duration_ = default_spin_duration;
@@ -685,6 +914,147 @@ namespace hpx::execution::experimental {
         threads::thread_stacksize stacksize_ =
             threads::thread_stacksize::small_;
         loop_schedule schedule_ = loop_schedule::dynamic;
+
+        // a shared executor, see shared_suspending_fork_join_executor
+        bool shared_ = false;
+    };
+
+    /// \brief A suspending_fork_join_executor that can be used from any
+    ///        number of threads at the same time, and from inside its own
+    ///        parallel regions.
+    ///
+    /// All shared_suspending_fork_join_executors with the same configuration
+    /// (priority, stacksize, loop schedule and spin duration) use the same
+    /// worker threads: one set for each thread pool, created when an HPX
+    /// thread of the pool uses such an executor first, and stopped when the
+    /// runtime starts to shut down. A parallel region runs on these worker
+    /// threads if they are free. If they are not, because they run a region
+    /// for another thread already, or because the region is started from
+    /// inside one of their regions (nested parallelism), the region runs
+    /// through a parallel_executor instead: one task for each worker thread
+    /// of the pool, each with a contiguous range of the indices. The same
+    /// happens if the calling thread is not an HPX thread, and after the
+    /// worker threads were stopped. Exceptions are reported as the executor
+    /// that runs the region reports them: the first exception from the
+    /// worker threads, or an hpx::exception_list from the
+    /// parallel_executor.
+    ///
+    /// Copies of the executor never hold worker threads themselves, so it
+    /// can be a constexpr variable. The executor of hpx::execution::par and
+    /// hpx::execution::par_unseq is a shared_suspending_fork_join_executor if
+    /// HPX is configured with
+    /// HPX_WITH_SUSPENDING_FORK_JOIN_EXECUTOR_AS_DEFAULT=ON. Mapping a
+    /// policy with this executor to a task policy (to_task, as in
+    /// par(task)) gives it a parallel_executor instead: a task policy runs
+    /// an algorithm asynchronously, which the worker threads of this
+    /// executor can't do.
+    ///
+    /// As for every suspending_fork_join_executor, the calling thread takes
+    /// part in a region (see suspending_fork_join_executor), and
+    /// bulk_async_execute and async_invoke run the region before they
+    /// return a ready future. Single tasks (sync_execute, async_execute,
+    /// then_execute, post) and continuations (bulk_then_execute) run as a
+    /// parallel_executor runs them.
+    HPX_CXX_CORE_EXPORT class shared_suspending_fork_join_executor
+      : public suspending_fork_join_executor
+    {
+    public:
+        /// \brief Construct a shared_suspending_fork_join_executor with the
+        ///        default configuration.
+        constexpr shared_suspending_fork_join_executor() noexcept
+          : shared_suspending_fork_join_executor(
+                threads::thread_priority::bound)
+        {
+        }
+
+        /// \brief Construct a shared_suspending_fork_join_executor.
+        ///
+        /// \param priority  The priority of the worker threads.
+        /// \param stacksize The stacksize of the worker threads. It can't be
+        ///        thread_stacksize::nostack, as the worker threads suspend.
+        /// \param sched     The loop schedule of the parallel regions.
+        /// \param spin_duration The time a waiting thread spins before it
+        ///        suspends.
+        explicit constexpr shared_suspending_fork_join_executor(
+            threads::thread_priority priority,
+            threads::thread_stacksize stacksize =
+                threads::thread_stacksize::small_,
+            loop_schedule sched = loop_schedule::dynamic,
+            std::chrono::nanoseconds spin_duration =
+                default_spin_duration) noexcept
+          : suspending_fork_join_executor(
+                shared_t::shared, priority, stacksize, sched, spin_duration)
+        {
+        }
+
+        /// \cond NOINTERNAL
+        // Single tasks run as a parallel_executor runs them.
+        template <typename F, typename... Ts>
+        decltype(auto) sync_execute(F&& f, Ts&&... ts) const
+        {
+            return hpx::execution::parallel_executor().sync_execute(
+                HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
+        }
+
+        template <typename F, typename... Ts>
+        decltype(auto) async_execute(F&& f, Ts&&... ts) const
+        {
+            return hpx::execution::parallel_executor().async_execute(
+                HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
+        }
+
+        template <typename F, typename Future, typename... Ts>
+        decltype(auto) then_execute(
+            F&& f, Future&& predecessor, Ts&&... ts) const
+        {
+            return hpx::execution::parallel_executor().then_execute(
+                HPX_FORWARD(F, f), HPX_FORWARD(Future, predecessor),
+                HPX_FORWARD(Ts, ts)...);
+        }
+
+        template <typename F, typename... Ts>
+        void post(F&& f, Ts&&... ts) const
+        {
+            hpx::execution::parallel_executor().post(
+                HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
+        }
+
+        // The executor of the task policy that to_task maps a policy with
+        // this executor to: a parallel_executor. A task policy runs an
+        // algorithm asynchronously, which the worker threads of this
+        // executor can't do.
+        hpx::execution::parallel_executor to_task() const
+        {
+            hpx::execution::parallel_executor exec{};
+#if defined(HPX_HAVE_THREAD_DESCRIPTION)
+            if (char const* annotation = this->query(
+                    hpx::execution::experimental::get_annotation_t{}))
+            {
+                return hpx::execution::experimental::with_annotation(
+                    exec, annotation);
+            }
+#endif
+            return exec;
+        }
+
+        // The executor of the policy that to_non_par maps a policy with this
+        // executor to: the one of a parallel_executor.
+        decltype(auto) to_non_par() const
+        {
+            return hpx::execution::parallel_executor().to_non_par();
+        }
+
+        // A continuation runs its region once the predecessor is ready.
+        template <typename F, typename S, typename Future, typename... Ts>
+            requires(!std::is_integral_v<S>)
+        decltype(auto) bulk_then_execute(
+            F&& f, S const& shape, Future&& predecessor, Ts&&... ts) const
+        {
+            return hpx::execution::parallel_executor().bulk_then_execute(
+                HPX_FORWARD(F, f), shape, HPX_FORWARD(Future, predecessor),
+                HPX_FORWARD(Ts, ts)...);
+        }
+        /// \endcond
     };
 
     /// \cond NOINTERNAL
@@ -702,6 +1072,37 @@ namespace hpx::execution::experimental {
 
     template <>
     struct is_bulk_two_way_executor<suspending_fork_join_executor>
+      : std::true_type
+    {
+    };
+
+    // The shared executor supports single tasks as well.
+    template <>
+    struct is_one_way_executor<shared_suspending_fork_join_executor>
+      : std::true_type
+    {
+    };
+
+    template <>
+    struct is_two_way_executor<shared_suspending_fork_join_executor>
+      : std::true_type
+    {
+    };
+
+    template <>
+    struct is_never_blocking_one_way_executor<
+        shared_suspending_fork_join_executor> : std::true_type
+    {
+    };
+
+    template <>
+    struct is_bulk_one_way_executor<shared_suspending_fork_join_executor>
+      : std::true_type
+    {
+    };
+
+    template <>
+    struct is_bulk_two_way_executor<shared_suspending_fork_join_executor>
       : std::true_type
     {
     };

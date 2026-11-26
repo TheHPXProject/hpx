@@ -17,6 +17,9 @@
 #include <hpx/executors/execution_policy_mappings.hpp>
 #include <hpx/executors/parallel_executor.hpp>
 #include <hpx/executors/sequenced_executor.hpp>
+#if defined(HPX_HAVE_SUSPENDING_FORK_JOIN_EXECUTOR_AS_DEFAULT)
+#include <hpx/executors/suspending_fork_join_executor.hpp>
+#endif
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/execution_base.hpp>
@@ -40,6 +43,15 @@ namespace hpx::execution {
             typename Executor, typename Parameters = void,
             typename Category = void>
         struct execution_policy;
+
+        // The executor of the parallel policy and the parallel unsequenced
+        // policy. The task policies always use parallel_executor.
+#if defined(HPX_HAVE_SUSPENDING_FORK_JOIN_EXECUTOR_AS_DEFAULT)
+        using default_parallel_executor =
+            hpx::execution::experimental::shared_suspending_fork_join_executor;
+#else
+        using default_parallel_executor = parallel_executor;
+#endif
     }    // namespace detail
 
     ///////////////////////////////////////////////////////////////////////////
@@ -737,8 +749,9 @@ namespace hpx::execution {
     /// type to disambiguate parallel algorithm overloading and indicate that a
     /// parallel algorithm's execution may be parallelized.
     HPX_CXX_CORE_EXPORT using parallel_policy =
-        detail::parallel_policy_shim<parallel_executor,
-            hpx::traits::executor_parameters_type_t<parallel_executor>>;
+        detail::parallel_policy_shim<detail::default_parallel_executor,
+            hpx::traits::executor_parameters_type_t<
+                detail::default_parallel_executor>>;
 
     /// Default parallel execution policy object.
     HPX_CXX_CORE_EXPORT inline constexpr parallel_policy par{};
@@ -903,8 +916,10 @@ namespace hpx::execution {
     /// indicate that a parallel algorithm's execution may be parallelized and
     /// vectorized.
     HPX_CXX_CORE_EXPORT using parallel_unsequenced_policy =
-        detail::parallel_unsequenced_policy_shim<parallel_executor,
-            hpx::traits::executor_parameters_type_t<parallel_executor>>;
+        detail::parallel_unsequenced_policy_shim<
+            detail::default_parallel_executor,
+            hpx::traits::executor_parameters_type_t<
+                detail::default_parallel_executor>>;
 
     /// Default vector execution policy object.
     HPX_CXX_CORE_EXPORT inline constexpr parallel_unsequenced_policy

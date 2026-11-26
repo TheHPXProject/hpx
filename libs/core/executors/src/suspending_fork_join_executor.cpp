@@ -259,8 +259,20 @@ namespace hpx::execution::experimental {
 
     void suspending_fork_join_executor::shared_data::stop_workers() noexcept
     {
-        if (stopped_.exchange(true, std::memory_order_acq_rel) ||
-            num_workers_ == 0)
+        if (stopped_.exchange(true, std::memory_order_acq_rel))
+        {
+            return;
+        }
+
+        // Let a running region finish, and keep new ones from starting: the
+        // flag stays set.
+        hpx::util::yield_while(
+            [&] {
+                return in_region_.exchange(true, std::memory_order_acquire);
+            },
+            "suspending_fork_join_executor::stop_workers");
+
+        if (num_workers_ == 0)
         {
             return;
         }
@@ -284,8 +296,20 @@ namespace hpx::execution::experimental {
     // hpx::register_pre_shutdown_function) stops them all.
     struct suspending_fork_join_executor::shared_data::shutdown_registry
     {
+        // a shared instance, see shared_suspending_fork_join_executor
+        struct shared_entry
+        {
+            threads::thread_pool_base* pool;
+            threads::thread_priority priority;
+            threads::thread_stacksize stacksize;
+            loop_schedule schedule;
+            std::chrono::nanoseconds spin_duration;
+            std::shared_ptr<shared_data> data;
+        };
+
         std::mutex mtx;
         std::vector<std::weak_ptr<shared_data>> entries;
+        std::vector<shared_entry> shared;
         bool registered = false;
 
         static shutdown_registry& get()
@@ -294,13 +318,34 @@ namespace hpx::execution::experimental {
             return registry;
         }
 
+        // register data, with mtx locked
+        void add(std::weak_ptr<shared_data> data)
+        {
+            std::erase_if(entries, [](std::weak_ptr<shared_data> const& entry) {
+                return entry.expired();
+            });
+            entries.push_back(HPX_MOVE(data));
+
+            if (!registered)
+            {
+                // throws if it is too late to register a pre-shutdown
+                // function
+                registered = threads::detail::register_pre_shutdown(
+                    &shutdown_registry::stop_all);
+            }
+        }
+
         static void stop_all() noexcept
         {
             std::vector<std::weak_ptr<shared_data>> stopping;
+
+            // released after the worker threads were stopped
+            std::vector<shared_entry> shared_stopping;
             {
                 auto& registry = get();
                 std::lock_guard<std::mutex> l(registry.mtx);
                 stopping.swap(registry.entries);
+                shared_stopping.swap(registry.shared);
 
                 // a later runtime needs its own registration
                 registry.registered = false;
@@ -321,19 +366,46 @@ namespace hpx::execution::experimental {
     {
         auto& registry = shutdown_registry::get();
         std::lock_guard<std::mutex> l(registry.mtx);
+        registry.add(HPX_MOVE(data));
+    }
 
-        std::erase_if(
-            registry.entries, [](std::weak_ptr<shared_data> const& entry) {
-                return entry.expired();
-            });
-        registry.entries.push_back(HPX_MOVE(data));
-
-        if (!registry.registered)
+    std::shared_ptr<suspending_fork_join_executor::shared_data>
+    suspending_fork_join_executor::shared_instance() const noexcept
+    {
+        if (threads::get_self_id_data() == nullptr)
         {
-            // throws if it is too late to register a pre-shutdown function
-            registry.registered = threads::detail::register_pre_shutdown(
-                &shutdown_registry::stop_all);
+            return {};
         }
+
+        return hpx::detail::try_catch_exception_ptr(
+            [&]() -> std::shared_ptr<shared_data> {
+                auto* pool = threads::detail::get_self_or_default_pool();
+
+                auto& registry = shared_data::shutdown_registry::get();
+                std::lock_guard<std::mutex> l(registry.mtx);
+                for (auto const& entry : registry.shared)
+                {
+                    if (entry.pool == pool && entry.priority == priority_ &&
+                        entry.stacksize == stacksize_ &&
+                        entry.schedule == schedule_ &&
+                        entry.spin_duration == spin_duration_)
+                    {
+                        return entry.data;
+                    }
+                }
+
+                // The first use creates the instance. The lock keeps others
+                // from creating one at the same time.
+                auto data = std::make_shared<shared_data>(priority_, stacksize_,
+                    schedule_, spin_duration_, nullptr, annotation_);
+                registry.add(data);
+                registry.shared.push_back({pool, priority_, stacksize_,
+                    schedule_, spin_duration_, data});
+                return data;
+            },
+            [](std::exception_ptr&&) -> std::shared_ptr<shared_data> {
+                return {};
+            });
     }
 
     void suspending_fork_join_executor::shared_data::store_exception(
@@ -499,8 +571,9 @@ namespace hpx::execution::experimental {
                 "have exited, the runtime is shutting down");
         }
 
-        // protect against nested use of this executor instance
-        if (in_region_)
+        // protect against nested (or concurrent) use of this executor
+        // instance
+        if (in_region_.exchange(true, std::memory_order_acquire))
         {
             HPX_THROW_EXCEPTION(hpx::error::bad_request,
                 "suspending_fork_join_executor::execute_region",
@@ -508,16 +581,34 @@ namespace hpx::execution::experimental {
                 "nested ways");
         }
 
+        run_locked_region(f, body, size);
+    }
+
+    bool suspending_fork_join_executor::shared_data::try_execute_region(
+        region_function_type* f, void* body, std::size_t const size)
+    {
+        if (stopped_.load(std::memory_order_relaxed) ||
+            in_region_.exchange(true, std::memory_order_acquire))
+        {
+            return false;
+        }
+
+        run_locked_region(f, body, size);
+        return true;
+    }
+
+    // Run a region, in_region_ was set by the caller.
+    void suspending_fork_join_executor::shared_data::run_locked_region(
+        region_function_type* f, void* body, std::size_t const size)
+    {
         struct reset_in_region
         {
-            bool& in_region;
+            std::atomic<bool>& in_region;
             ~reset_in_region()
             {
-                in_region = false;
+                in_region.store(false, std::memory_order_release);
             }
         };
-
-        in_region_ = true;
         reset_in_region const on_exit{in_region_};
 
         exception_ = std::exception_ptr();
