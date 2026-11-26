@@ -75,7 +75,11 @@ set(HPX_VERSION_FULL
 )
 
 set(HPX_LIBRARY_VERSION "${HPX_VERSION}")
-set(HPX_SOVERSION ${HPX_VERSION_MAJOR})
+# HPX does not keep its ABI stable between any two releases, so the SONAME of
+# its libraries holds the full version: a binary built against one release
+# doesn't start with the libraries of another, instead of silently using a
+# mismatched ABI
+set(HPX_SOVERSION "${HPX_VERSION}")
 set(HPX_PACKAGE_NAME HPX)
 # To keep track of the hpx_root when other subprojects are declared
 set(HPX_SOURCE_DIR "${PROJECT_SOURCE_DIR}")
@@ -1007,6 +1011,19 @@ hpx_option(
 
 if(HPX_WITH_TASK_SIZE_DEFAULT_PARAMETERS)
   hpx_add_config_define(HPX_HAVE_TASK_SIZE_DEFAULT_PARAMETERS)
+endif()
+
+hpx_option(
+  HPX_WITH_SUSPENDING_FORK_JOIN_EXECUTOR_AS_DEFAULT
+  BOOL
+  "Use a shared_suspending_fork_join_executor as the executor of the parallel execution policies par and par_unseq (default: OFF)"
+  OFF
+  CATEGORY "Thread Manager"
+  ADVANCED
+)
+
+if(HPX_WITH_SUSPENDING_FORK_JOIN_EXECUTOR_AS_DEFAULT)
+  hpx_add_config_define(HPX_HAVE_SUSPENDING_FORK_JOIN_EXECUTOR_AS_DEFAULT)
 endif()
 
 hpx_option(

@@ -11,6 +11,7 @@
 #include <hpx/assert.hpp>
 #include <hpx/modules/algorithms.hpp>
 #include <hpx/modules/datastructures.hpp>
+#include <hpx/modules/errors.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/type_support.hpp>
 
@@ -228,86 +229,105 @@ namespace hpx::parallel::detail {
         local_iterator_type2 output = traits2::local(dest);
 
         std::vector<hpx::future<void>> segments;
-        hpx::future<void> captures = hpx::make_ready_future();
+        hpx::shared_future<void> captures = hpx::make_ready_future();
 
-        while (remaining != 0)
-        {
-            local_iterator_type1 input_end =
-                sit == send ? traits1::local(last) : traits1::end(sit);
-            while (input == input_end && sit != send)
-            {
-                ++sit;
-                input = traits1::begin(sit);
-                input_end =
-                    sit == send ? traits1::local(last) : traits1::end(sit);
-            }
+        hpx::detail::try_catch_exception_ptr(
+            [&] {
+                while (remaining != 0)
+                {
+                    local_iterator_type1 input_end =
+                        sit == send ? traits1::local(last) : traits1::end(sit);
+                    while (input == input_end && sit != send)
+                    {
+                        ++sit;
+                        input = traits1::begin(sit);
+                        input_end = sit == send ? traits1::local(last) :
+                                                  traits1::end(sit);
+                    }
 
-            local_iterator_type2 output_end = traits2::end(sdest);
-            while (output == output_end)
-            {
-                ++sdest;
-                output = traits2::begin(sdest);
-                output_end = traits2::end(sdest);
-            }
+                    local_iterator_type2 output_end = traits2::end(sdest);
+                    while (output == output_end)
+                    {
+                        ++sdest;
+                        output = traits2::begin(sdest);
+                        output_end = traits2::end(sdest);
+                    }
 
-            auto count =
-                (std::min) ((std::min) (std::distance(input, input_end),
-                                std::distance(output, output_end)),
-                    remaining);
-            HPX_ASSERT(count > 0);
-            hpx::id_type const source_id = traits1::get_id(sit);
-            hpx::id_type const destination_id = traits2::get_id(sdest);
-            bool const same_locality = get_partition_locality(source_id) ==
-                get_partition_locality(destination_id);
-            if (!same_locality)
-            {
-                using value_type = typename std::iterator_traits<
-                    local_iterator_type1>::value_type;
-                count = (std::min) (count,
-                    static_cast<decltype(count)>(
-                        max_capture_batch_elements<value_type, value_type>()));
-            }
+                    auto count =
+                        (std::min) ((std::min) (std::distance(input, input_end),
+                                        std::distance(output, output_end)),
+                            remaining);
+                    HPX_ASSERT(count > 0);
+                    hpx::id_type const source_id = traits1::get_id(sit);
+                    hpx::id_type const destination_id = traits2::get_id(sdest);
+                    bool const same_locality =
+                        get_partition_locality(source_id) ==
+                        get_partition_locality(destination_id);
+                    if (!same_locality)
+                    {
+                        using value_type = typename std::iterator_traits<
+                            local_iterator_type1>::value_type;
+                        count = (std::min) (count,
+                            static_cast<decltype(count)>(
+                                max_capture_batch_elements<value_type,
+                                    value_type>()));
+                    }
 
-            local_iterator_type1 input_chunk_end = input;
-            std::advance(input_chunk_end, count);
-            if (same_locality)
-            {
-                segments.push_back(dispatch_async(destination_id, algo, policy,
-                    forced_seq(), input, input_chunk_end, output, f, proj)
-                        .then([](auto ready) { ready.get(); }));
-            }
-            else
-            {
-                captures = HPX_MOVE(captures).then([=](hpx::future<void>
-                                                           previous) mutable
-                                                       -> hpx::future<void> {
-                    previous.get();
-                    using value_type = typename std::iterator_traits<
-                        local_iterator_type1>::value_type;
-                    std::vector<indexed_partition_range<local_iterator_type1>>
-                        ranges{{0, {source_id, input, input_chunk_end}}};
-                    return capture_async<value_type, local_iterator_type1>(
-                        source_id, HPX_MOVE(ranges))
-                        .then([=](auto ready) mutable {
-                            auto captured =
-                                get_capture_result<ExPolicy>(HPX_MOVE(ready));
-                            return dispatch_async(destination_id,
-                                captured_unary_transform<local_iterator_type1,
-                                    local_iterator_type2>{},
-                                policy, forced_seq(), HPX_MOVE(captured.values),
-                                output, f, proj)
-                                .then([](auto done) { done.get(); });
+                    local_iterator_type1 input_chunk_end = input;
+                    std::advance(input_chunk_end, count);
+                    if (same_locality)
+                    {
+                        segments.emplace_back();
+                        segments.back() = hpx::future<void>(dispatch_async(
+                            destination_id, algo, policy, forced_seq(), input,
+                            input_chunk_end, output, f, proj));
+                    }
+                    else
+                    {
+                        captures = captures.then([=](hpx::shared_future<void>
+                                                         previous) mutable
+                                                     -> hpx::future<void> {
+                            previous.get();
+                            using value_type = typename std::iterator_traits<
+                                local_iterator_type1>::value_type;
+                            std::vector<
+                                indexed_partition_range<local_iterator_type1>>
+                                ranges{
+                                    {0, {source_id, input, input_chunk_end}}};
+                            return capture_async<value_type,
+                                local_iterator_type1>(
+                                source_id, HPX_MOVE(ranges))
+                                .then([=](auto ready) mutable {
+                                    auto captured =
+                                        get_capture_result<ExPolicy>(
+                                            HPX_MOVE(ready));
+                                    return hpx::future<void>(
+                                        dispatch_async(destination_id,
+                                            captured_unary_transform<
+                                                local_iterator_type1,
+                                                local_iterator_type2>{},
+                                            policy, forced_seq(),
+                                            HPX_MOVE(captured.values), output,
+                                            f, proj));
+                                });
                         });
-                });
-            }
+                    }
 
-            input = input_chunk_end;
-            std::advance(output, count);
-            std::advance(dest, count);
-            remaining -= count;
-        }
+                    input = input_chunk_end;
+                    std::advance(output, count);
+                    std::advance(dest, count);
+                    remaining -= count;
+                }
 
-        segments.push_back(HPX_MOVE(captures));
+                segments.emplace_back();
+                segments.back() = captures.then(
+                    hpx::launch::sync, [](auto done) { done.get(); });
+            },
+            [&](std::exception_ptr ep) {
+                wait_for_started(segments);
+                captures.wait();
+                std::rethrow_exception(HPX_MOVE(ep));
+            });
         return result::get(dataflow(
             [=](std::vector<hpx::future<void>>&& operations) mutable
                 -> util::in_out_result<SegIter, OutIter> {
@@ -647,100 +667,115 @@ namespace hpx::parallel::detail {
         using segment_type = std::vector<hpx::future<void>>;
         segment_type segments;
         segments.reserve(std::distance(sit1, send1));
-        hpx::future<void> captures = hpx::make_ready_future();
+        hpx::shared_future<void> captures = hpx::make_ready_future();
         local_iterator_type1 beg1 = traits1::local(first1);
         local_iterator_type2 beg2 = traits2::local(first2);
         local_iterator_type3 ldest = traits3::local(dest);
 
-        while (remaining != 0)
-        {
-            local_iterator_type1 end1 =
-                sit1 == send1 ? traits1::local(last1) : traits1::end(sit1);
-            local_iterator_type2 end2 =
-                sit2 == send2 ? traits2::local(last2) : traits2::end(sit2);
-            local_iterator_type3 end_dest = traits3::end(sdest);
+        hpx::detail::try_catch_exception_ptr(
+            [&] {
+                while (remaining != 0)
+                {
+                    local_iterator_type1 end1 = sit1 == send1 ?
+                        traits1::local(last1) :
+                        traits1::end(sit1);
+                    local_iterator_type2 end2 = sit2 == send2 ?
+                        traits2::local(last2) :
+                        traits2::end(sit2);
+                    local_iterator_type3 end_dest = traits3::end(sdest);
 
-            while (beg1 == end1 && sit1 != send1)
-            {
-                ++sit1;
-                beg1 = traits1::begin(sit1);
-                end1 =
-                    sit1 == send1 ? traits1::local(last1) : traits1::end(sit1);
-            }
-            while (beg2 == end2 && sit2 != send2)
-            {
-                ++sit2;
-                beg2 = traits2::begin(sit2);
-                end2 =
-                    sit2 == send2 ? traits2::local(last2) : traits2::end(sit2);
-            }
-            while (ldest == end_dest)
-            {
-                ++sdest;
-                ldest = traits3::begin(sdest);
-                end_dest = traits3::end(sdest);
-            }
+                    while (beg1 == end1 && sit1 != send1)
+                    {
+                        ++sit1;
+                        beg1 = traits1::begin(sit1);
+                        end1 = sit1 == send1 ? traits1::local(last1) :
+                                               traits1::end(sit1);
+                    }
+                    while (beg2 == end2 && sit2 != send2)
+                    {
+                        ++sit2;
+                        beg2 = traits2::begin(sit2);
+                        end2 = sit2 == send2 ? traits2::local(last2) :
+                                               traits2::end(sit2);
+                    }
+                    while (ldest == end_dest)
+                    {
+                        ++sdest;
+                        ldest = traits3::begin(sdest);
+                        end_dest = traits3::end(sdest);
+                    }
 
-            difference_type const count1 =
-                static_cast<difference_type>(std::distance(beg1, end1));
-            difference_type const count2 =
-                static_cast<difference_type>(std::distance(beg2, end2));
-            difference_type const count3 =
-                static_cast<difference_type>(std::distance(ldest, end_dest));
-            difference_type count =
-                (std::min) ((std::min) (count1, count2), count3);
-            HPX_ASSERT(count > 0);
+                    difference_type const count1 =
+                        static_cast<difference_type>(std::distance(beg1, end1));
+                    difference_type const count2 =
+                        static_cast<difference_type>(std::distance(beg2, end2));
+                    difference_type const count3 = static_cast<difference_type>(
+                        std::distance(ldest, end_dest));
+                    difference_type count =
+                        (std::min) ((std::min) (count1, count2), count3);
+                    HPX_ASSERT(count > 0);
 
-            hpx::id_type const input1_id = traits1::get_id(sit1);
-            hpx::id_type const input2_id = traits2::get_id(sit2);
-            hpx::id_type const output_id = traits3::get_id(sdest);
-            auto const output_locality = get_partition_locality(output_id);
-            bool const same_locality =
-                get_partition_locality(input1_id) == output_locality &&
-                get_partition_locality(input2_id) == output_locality;
-            if (!same_locality)
-            {
-                count = (std::min) (count,
-                    max_transform_capture_count<difference_type,
-                        local_iterator_type1, local_iterator_type2>());
-            }
+                    hpx::id_type const input1_id = traits1::get_id(sit1);
+                    hpx::id_type const input2_id = traits2::get_id(sit2);
+                    hpx::id_type const output_id = traits3::get_id(sdest);
+                    auto const output_locality =
+                        get_partition_locality(output_id);
+                    bool const same_locality =
+                        get_partition_locality(input1_id) == output_locality &&
+                        get_partition_locality(input2_id) == output_locality;
+                    if (!same_locality)
+                    {
+                        count = (std::min) (count,
+                            max_transform_capture_count<difference_type,
+                                local_iterator_type1, local_iterator_type2>());
+                    }
 
-            local_iterator_type1 chunk_end1 = beg1;
-            local_iterator_type2 chunk_end2 = beg2;
-            std::advance(chunk_end1, count);
-            std::advance(chunk_end2, count);
-            if (same_locality)
-            {
-                segments.push_back(
-                    dispatch_async(output_id, algo, policy, forced_seq(), beg1,
-                        chunk_end1, beg2, chunk_end2, ldest, f, proj1, proj2)
-                        .then([](auto ready) { ready.get(); }));
-            }
+                    local_iterator_type1 chunk_end1 = beg1;
+                    local_iterator_type2 chunk_end2 = beg2;
+                    std::advance(chunk_end1, count);
+                    std::advance(chunk_end2, count);
+                    if (same_locality)
+                    {
+                        segments.emplace_back();
+                        segments.back() =
+                            hpx::future<void>(dispatch_async(output_id, algo,
+                                policy, forced_seq(), beg1, chunk_end1, beg2,
+                                chunk_end2, ldest, f, proj1, proj2));
+                    }
 #if defined(HPX_HAVE_NETWORKING)
-            else
-            {
-                captures = HPX_MOVE(captures).then(
-                    [=](hpx::future<void> previous) mutable
-                        -> hpx::future<void> {
-                        previous.get();
-                        return capture_transform_async(input1_id, input2_id,
-                            output_id, policy, forced_seq(), beg1, chunk_end1,
-                            beg2, chunk_end2, ldest, f, proj1, proj2)
-                            .then([](auto ready) { ready.get(); });
-                    });
-            }
+                    else
+                    {
+                        captures = captures.then(
+                            [=](hpx::shared_future<void> previous) mutable
+                                -> hpx::future<void> {
+                                previous.get();
+                                return hpx::future<void>(
+                                    capture_transform_async(input1_id,
+                                        input2_id, output_id, policy,
+                                        forced_seq(), beg1, chunk_end1, beg2,
+                                        chunk_end2, ldest, f, proj1, proj2));
+                            });
+                    }
 #endif
 
-            std::advance(first1, count);
-            std::advance(first2, count);
-            std::advance(dest, count);
-            std::advance(beg1, count);
-            std::advance(beg2, count);
-            std::advance(ldest, count);
-            remaining -= count;
-        }
+                    std::advance(first1, count);
+                    std::advance(first2, count);
+                    std::advance(dest, count);
+                    std::advance(beg1, count);
+                    std::advance(beg2, count);
+                    std::advance(ldest, count);
+                    remaining -= count;
+                }
 
-        segments.push_back(HPX_MOVE(captures));
+                segments.emplace_back();
+                segments.back() = captures.then(
+                    hpx::launch::sync, [](auto done) { done.get(); });
+            },
+            [&](std::exception_ptr ep) {
+                wait_for_started(segments);
+                captures.wait();
+                std::rethrow_exception(HPX_MOVE(ep));
+            });
         return result::get(dataflow(
             [=](segment_type&& r) mutable
                 -> util::in_in_out_result<InIter1, InIter2, OutIter> {
@@ -768,8 +803,10 @@ namespace hpx::segmented {
     hpx::parallel::util::in_out_result<SegIter, OutIter> hpx_invoke(
         hpx::transform_t, SegIter first, SegIter last, OutIter dest, F&& f)
     {
-        static_assert(
-            std::input_iterator<SegIter>, "Requires at least input iterator.");
+        // the segmented iterator is read more than once (its segment and its
+        // local position), it can't be a single-pass iterator
+        static_assert(std::forward_iterator<SegIter>,
+            "Requires at least forward iterator.");
 
         if (first == last)
         {
@@ -792,11 +829,9 @@ namespace hpx::segmented {
 
     HPX_CXX_EXPORT template <typename ExPolicy, typename SegIter,
         typename OutIter, typename F>
-        requires(hpx::is_execution_policy_v<ExPolicy> &&
-            hpx::traits::is_iterator_v<SegIter> &&
-            hpx::traits::is_segmented_iterator_v<SegIter> &&
-            hpx::traits::is_iterator_v<OutIter> &&
-            hpx::traits::is_segmented_iterator_v<OutIter>)
+        requires(hpx::execution_policy<ExPolicy> &&
+            hpx::segmented_iterator<SegIter> &&
+            hpx::segmented_iterator<OutIter>)
     hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
         hpx::parallel::util::in_out_result<SegIter, OutIter>>
     hpx_invoke(hpx::transform_t, ExPolicy&& policy, SegIter first, SegIter last,
@@ -841,9 +876,11 @@ namespace hpx::segmented {
         hpx::transform_t, InIter1 first1, InIter1 last1, InIter2 first2,
         OutIter dest, F&& f)
     {
+        // the segmented iterators are read more than once (their segments and
+        // local positions), they can't be single-pass iterators
         static_assert(
-            std::input_iterator<InIter1> && std::input_iterator<InIter2>,
-            "Requires at least input iterator.");
+            std::forward_iterator<InIter1> && std::forward_iterator<InIter2>,
+            "Requires at least forward iterator.");
 
         auto last2 = first2;
         hpx::parallel::detail::advance(last2, std::distance(first1, last1));
@@ -874,13 +911,10 @@ namespace hpx::segmented {
 
     HPX_CXX_EXPORT template <typename ExPolicy, typename InIter1,
         typename InIter2, typename OutIter, typename F>
-        requires(hpx::is_execution_policy_v<ExPolicy> &&
-            hpx::traits::is_iterator_v<InIter1> &&
-            hpx::traits::is_segmented_iterator_v<InIter1> &&
-            hpx::traits::is_iterator_v<InIter2> &&
-            hpx::traits::is_segmented_iterator_v<InIter2> &&
-            hpx::traits::is_iterator_v<OutIter> &&
-            hpx::traits::is_segmented_iterator_v<OutIter>)
+        requires(hpx::execution_policy<ExPolicy> &&
+            hpx::segmented_iterator<InIter1> &&
+            hpx::segmented_iterator<InIter2> &&
+            hpx::segmented_iterator<OutIter>)
     hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
         hpx::parallel::util::in_in_out_result<InIter1, InIter2, OutIter>>
     hpx_invoke(hpx::transform_t, ExPolicy&& policy, InIter1 first1,
@@ -934,11 +968,14 @@ namespace hpx::segmented {
         hpx::transform_t, InIter1 first1, InIter1 last1, InIter2 first2,
         InIter2 last2, OutIter dest, F&& f)
     {
+        // the segmented iterators are read more than once (their segments and
+        // local positions), they can't be single-pass iterators
         static_assert(
-            std::input_iterator<InIter1> && std::input_iterator<InIter2>,
-            "Requires at least input iterator.");
+            std::forward_iterator<InIter1> && std::forward_iterator<InIter2>,
+            "Requires at least forward iterator.");
 
-        if (first1 == last1)
+        // an empty range: nothing to do (and no partition to localize)
+        if (first1 == last1 || first2 == last2)
         {
             return hpx::parallel::util::in_in_out_result<InIter1, InIter2,
                 OutIter>{HPX_MOVE(first1), HPX_MOVE(first2), HPX_MOVE(dest)};
@@ -964,13 +1001,10 @@ namespace hpx::segmented {
 
     HPX_CXX_EXPORT template <typename ExPolicy, typename InIter1,
         typename InIter2, typename OutIter, typename F>
-        requires(hpx::is_execution_policy_v<ExPolicy> &&
-            hpx::traits::is_iterator_v<InIter1> &&
-            hpx::traits::is_segmented_iterator_v<InIter1> &&
-            hpx::traits::is_iterator_v<InIter2> &&
-            hpx::traits::is_segmented_iterator_v<InIter2> &&
-            hpx::traits::is_iterator_v<OutIter> &&
-            hpx::traits::is_segmented_iterator_v<OutIter>)
+        requires(hpx::execution_policy<ExPolicy> &&
+            hpx::segmented_iterator<InIter1> &&
+            hpx::segmented_iterator<InIter2> &&
+            hpx::segmented_iterator<OutIter>)
     hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
         hpx::parallel::util::in_in_out_result<InIter1, InIter2, OutIter>>
     hpx_invoke(hpx::transform_t, ExPolicy&& policy, InIter1 first1,
@@ -984,7 +1018,8 @@ namespace hpx::segmented {
         using result = hpx::parallel::util::detail::algorithm_result<ExPolicy,
             hpx::parallel::util::in_in_out_result<InIter1, InIter2, OutIter>>;
 
-        if (first1 == last1)
+        // an empty range: nothing to do (and no partition to localize)
+        if (first1 == last1 || first2 == last2)
         {
             return result::get(hpx::parallel::util::in_in_out_result<InIter1,
                 InIter2, OutIter>{

@@ -118,6 +118,7 @@ set(serialization_headers
     hpx/serialization/detail/preprocess_container.hpp
     hpx/serialization/detail/preprocess_keep_alive.hpp
     hpx/serialization/detail/raw_ptr.hpp
+    hpx/serialization/detail/receive_device.hpp
     hpx/serialization/detail/serialize_collection.hpp
     hpx/serialization/detail/to_size.hpp
     hpx/serialization/detail/vc.hpp
@@ -161,6 +162,7 @@ set(serialization_headers
     hpx/serialization/serialization_fwd.hpp
     hpx/serialization/serialize.hpp
     hpx/serialization/traits/brace_initializable_traits.hpp
+    hpx/serialization/traits/has_device_data.hpp
     hpx/serialization/traits/is_bitwise_serializable.hpp
     hpx/serialization/traits/is_not_bitwise_serializable.hpp
     hpx/serialization/traits/is_serializable.hpp
@@ -168,6 +170,7 @@ set(serialization_headers
     hpx/serialization/traits/needs_automatic_registration.hpp
     hpx/serialization/traits/polymorphic_traits.hpp
     hpx/serialization/traits/serialization_access_data.hpp
+    hpx/serialization/traits/target_device.hpp
 )
 set(serialization_macro_headers hpx/serialization/macros.hpp)
 
@@ -246,6 +249,7 @@ set(serialization_sources
     detail/polymorphic_nonintrusive_factory.cpp
     detail/post_receive_actions.cpp
     detail/preprocess_keep_alive.cpp
+    detail/receive_device.cpp
     exception_ptr.cpp
 )
 
@@ -282,5 +286,6 @@ add_hpx_module(
     hpx/serialization/detail/post_receive_actions.hpp
     hpx/serialization/detail/preprocess_container.hpp
     hpx/serialization/detail/preprocess_keep_alive.hpp
+    hpx/serialization/detail/receive_device.hpp
   CMAKE_SUBDIRS examples tests
 )

@@ -267,11 +267,9 @@ namespace hpx::segmented {
 
     HPX_CXX_EXPORT template <typename ExPolicy, typename FwdIter1,
         typename FwdIter2, typename Op = std::plus<>>
-        requires(hpx::is_execution_policy_v<ExPolicy> &&
-            hpx::traits::is_iterator_v<FwdIter1> &&
-            hpx::traits::is_segmented_iterator_v<FwdIter1> &&
-            hpx::traits::is_iterator_v<FwdIter2> &&
-            hpx::traits::is_segmented_iterator_v<FwdIter2>)
+        requires(hpx::execution_policy<ExPolicy> &&
+            hpx::segmented_iterator<FwdIter1> &&
+            hpx::segmented_iterator<FwdIter2>)
     parallel::util::detail::algorithm_result_t<ExPolicy, FwdIter2> hpx_invoke(
         hpx::inclusive_scan_t, ExPolicy&& policy, FwdIter1 first, FwdIter1 last,
         FwdIter2 dest, Op&& op = Op())
@@ -320,11 +318,9 @@ namespace hpx::segmented {
 
     HPX_CXX_EXPORT template <typename ExPolicy, typename FwdIter1,
         typename FwdIter2, typename Op, typename T>
-        requires(hpx::is_execution_policy_v<ExPolicy> &&
-            hpx::traits::is_iterator_v<FwdIter1> &&
-            hpx::traits::is_segmented_iterator_v<FwdIter1> &&
-            hpx::traits::is_iterator_v<FwdIter2> &&
-            hpx::traits::is_segmented_iterator_v<FwdIter2>)
+        requires(hpx::execution_policy<ExPolicy> &&
+            hpx::segmented_iterator<FwdIter1> &&
+            hpx::segmented_iterator<FwdIter2>)
     parallel::util::detail::algorithm_result_t<ExPolicy, FwdIter2> hpx_invoke(
         hpx::inclusive_scan_t, ExPolicy&& policy, FwdIter1 first, FwdIter1 last,
         FwdIter2 dest, Op&& op, T&& init)

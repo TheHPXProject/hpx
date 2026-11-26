@@ -83,6 +83,20 @@ Breaking changes
   ``hpx/hpx_main.hpp`` has to link ``HPX::wrap_main`` (or
   ``HPX::auto_wrap_main``), which was previously avoidable by setting the
   option to ``OFF``.
+- Every binary built against |hpx| now refers to the symbol
+  ``hpx_check_version_2_1_0`` of the core library, on all platforms. On
+  platforms with SONAMEs (not Windows and Android), the SONAME of the |hpx|
+  libraries now holds the full version as well (for instance
+  ``libhpx.so.2.1.0`` instead of ``libhpx.so.2``); ``libhpx_core`` had no
+  version in its SONAME before. |hpx| keeps no ABI compatibility between
+  releases: a binary built against one release no longer starts with the
+  libraries of another one, instead of running with a mismatched ABI.
+  Binaries built against earlier releases don't carry this check, and the
+  libraries of those releases still find the new core library under its
+  unversioned name: remove an earlier installation before installing this
+  release into the same location, and rebuild the binaries built against it.
+  Defining ``HPX_NO_VERSION_CHECK`` before including any |hpx| header leaves
+  out the reference to the symbol.
 
 Supervision Module
 ==================

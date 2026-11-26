@@ -9,13 +9,51 @@
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
 #include <hpx/hpx_main.hpp>
 #include <hpx/include/parallel_copy.hpp>
+#include <hpx/include/partitioned_vector.hpp>
 #include <hpx/include/partitioned_vector_predef.hpp>
 #include <hpx/include/runtime.hpp>
 #include <hpx/modules/segmented_algorithms.hpp>
 #include <hpx/modules/testing.hpp>
 
 #include <cstddef>
+#include <string>
+#include <utility>
 #include <vector>
+
+struct copy_regression_value
+{
+    std::string value;
+
+    copy_regression_value() = default;
+    explicit copy_regression_value(std::string value)
+      : value(HPX_MOVE(value))
+    {
+    }
+
+    copy_regression_value(copy_regression_value const&) = default;
+    copy_regression_value& operator=(copy_regression_value const&) = default;
+
+    copy_regression_value(copy_regression_value&& other) noexcept
+      : value(HPX_MOVE(other.value))
+    {
+        other.value.clear();
+    }
+
+    copy_regression_value& operator=(copy_regression_value&& other) noexcept
+    {
+        value = HPX_MOVE(other.value);
+        other.value.clear();
+        return *this;
+    }
+
+    template <typename Archive>
+    void serialize(Archive& archive, unsigned)
+    {
+        archive & value;
+    }
+};
+
+HPX_REGISTER_PARTITIONED_VECTOR(copy_regression_value)
 
 ///////////////////////////////////////////////////////////////////////////////
 // The vector types to be used are defined in partitioned_vector module.
@@ -235,11 +273,51 @@ void copy_tests()
         length, localities.size(), hpx::container_layout(localities));
 }
 
+void copy_remote_preserves_source()
+{
+    std::vector<hpx::id_type> localities = hpx::find_all_localities();
+    if (localities.size() < 2)
+    {
+        return;
+    }
+
+    auto source_layout =
+        hpx::explicit_container_layout({2, 2}, {localities[0], localities[1]});
+    auto destination_layout =
+        hpx::explicit_container_layout({2, 2}, {localities[1], localities[0]});
+    std::vector<copy_regression_value> values{copy_regression_value{"first"},
+        copy_regression_value{"second"}, copy_regression_value{"third"},
+        copy_regression_value{"fourth"}};
+    hpx::partitioned_vector<copy_regression_value> source(
+        values.begin(), values.end(), source_layout);
+    hpx::partitioned_vector<copy_regression_value> destination(
+        4, copy_regression_value{"unchanged"}, destination_layout);
+
+    auto result = hpx::ranges::copy(
+        hpx::execution::seq, source.begin(), source.end(), destination.begin());
+
+    HPX_TEST(result.in == source.end());
+    HPX_TEST(result.out == destination.end());
+    HPX_TEST(static_cast<copy_regression_value>(source[0]).value == "first");
+    HPX_TEST(static_cast<copy_regression_value>(source[1]).value == "second");
+    HPX_TEST(static_cast<copy_regression_value>(source[2]).value == "third");
+    HPX_TEST(static_cast<copy_regression_value>(source[3]).value == "fourth");
+    HPX_TEST(
+        static_cast<copy_regression_value>(destination[0]).value == "first");
+    HPX_TEST(
+        static_cast<copy_regression_value>(destination[1]).value == "second");
+    HPX_TEST(
+        static_cast<copy_regression_value>(destination[2]).value == "third");
+    HPX_TEST(
+        static_cast<copy_regression_value>(destination[3]).value == "fourth");
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 int main()
 {
     copy_tests<double>();
     copy_tests<int>();
+    copy_remote_preserves_source();
 
     return hpx::util::report_errors();
 }

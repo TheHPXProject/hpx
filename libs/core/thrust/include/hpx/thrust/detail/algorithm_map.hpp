@@ -648,10 +648,14 @@ namespace hpx::thrust::detail {
     };
 
     // boolean predicate indicating whether a mapping exists
+    //
+    // This checks only whether algorithm_map<Tag> is defined. Checking the
+    // call to invoke() would require deducing its decltype(auto) return
+    // type, which instantiates the Thrust algorithm. For arguments Thrust
+    // can't handle (e.g. segmented iterators) that is a hard error instead
+    // of an unsatisfied constraint, which would prevent more specialized
+    // hpx_invoke overloads from being selected.
     HPX_CXX_CORE_EXPORT template <typename Tag, typename Policy,
         typename... Args>
-    concept is_algorithm_mapped = requires {
-        algorithm_map<Tag>::invoke(
-            std::declval<Policy>(), std::declval<Args>()...);
-    };
+    concept is_algorithm_mapped = requires { sizeof(algorithm_map<Tag>); };
 }    // namespace hpx::thrust::detail
