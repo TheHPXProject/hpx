@@ -1361,6 +1361,15 @@ namespace hpx::execution::experimental {
             return shared_data::get_first_core(shared_data_->pu_mask_);
         }
 
+        // the minimal run time of a chunk configured for this executor
+        // (hpx.task_size_chunk_size.fork_join), or the default one
+        [[nodiscard]] std::chrono::nanoseconds query(
+            experimental::get_min_chunk_time_t) const noexcept
+        {
+            return experimental::detail::get_executor_min_chunk_time(
+                "fork_join", shared_data_->num_threads_);
+        }
+
         template <typename Parameters>
             requires(hpx::executor_parameters<Parameters>)
         [[nodiscard]] std::size_t query(experimental::processing_units_count_t,
