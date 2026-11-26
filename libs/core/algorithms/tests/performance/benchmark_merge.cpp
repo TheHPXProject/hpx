@@ -9,6 +9,7 @@
 #include <hpx/algorithm.hpp>
 #include <hpx/assert.hpp>
 #include <hpx/chrono.hpp>
+#include <hpx/datapar.hpp>
 #include <hpx/execution.hpp>
 #include <hpx/format.hpp>
 #include <hpx/init.hpp>
@@ -278,6 +279,14 @@ void run_benchmark(std::size_t vector_size1, std::size_t vector_size2,
 
     hpx::util::perftests_report("hpx::merge", "par_unseq", test_count,
         [&] { hpx::merge(par_unseq, first1, last1, first2, last2, dest); });
+
+#if defined(HPX_HAVE_DATAPAR)
+    hpx::util::perftests_report("hpx::merge", "simd", test_count,
+        [&] { hpx::merge(simd, first1, last1, first2, last2, dest); });
+
+    hpx::util::perftests_report("hpx::merge", "par_simd", test_count,
+        [&] { hpx::merge(par_simd, first1, last1, first2, last2, dest); });
+#endif
 
     // the same with explicit executors
     namespace ex = hpx::execution::experimental;

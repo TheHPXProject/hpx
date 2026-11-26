@@ -718,6 +718,27 @@ namespace hpx::parallel {
             }
         }
 
+        // The sequential merge of one range (all of it, or one chunk of the
+        // parallel merge) under the given execution policy. Vectorpack
+        // policies customize it (hpx_invoke, datapar/merge.hpp).
+        HPX_CXX_CORE_EXPORT template <typename ExPolicy>
+        struct sequential_merge_t final
+          : hpx::detail::tag_dispatch<sequential_merge_t<ExPolicy>,
+                hpx::detail::no_base>
+        {
+            template <typename Iter1, typename Sent1, typename Iter2,
+                typename Sent2, typename OutIter, typename Comp, typename Proj1,
+                typename Proj2>
+            static constexpr util::in_in_out_result<Iter1, Iter2, OutIter>
+            invoke_default(Iter1 first1, Sent1 last1, Iter2 first2, Sent2 last2,
+                OutIter dest, Comp&& comp, Proj1&& proj1, Proj2&& proj2)
+            {
+                return sequential_merge(first1, last1, first2, last2, dest,
+                    HPX_FORWARD(Comp, comp), HPX_FORWARD(Proj1, proj1),
+                    HPX_FORWARD(Proj2, proj2));
+            }
+        };
+
         class const_index_value_iterator
           : public hpx::util::iterator_facade<const_index_value_iterator,
                 hpx::tuple<std::size_t, std::size_t>,
@@ -948,10 +969,10 @@ namespace hpx::parallel {
 
                     hpx::execution::experimental::mark_partition(
                         params, exec, idx, partition_phase::start, chunk);
-                    sequential_merge(std::next(first1, a0),
-                        std::next(first1, a1), std::next(first2, b0),
-                        std::next(first2, b1), std::next(dest, k0), comp, proj1,
-                        proj2);
+                    sequential_merge_t<std::decay_t<ExPolicy>>{}(
+                        std::next(first1, a0), std::next(first1, a1),
+                        std::next(first2, b0), std::next(first2, b1),
+                        std::next(dest, k0), comp, proj1, proj2);
                     hpx::execution::experimental::mark_partition(
                         params, exec, idx, partition_phase::end);
                 }
@@ -998,9 +1019,9 @@ namespace hpx::parallel {
                 Sent2 last2, Iter3 dest, Comp&& comp, Proj1&& proj1,
                 Proj2&& proj2)
             {
-                return sequential_merge(first1, last1, first2, last2, dest,
-                    HPX_FORWARD(Comp, comp), HPX_FORWARD(Proj1, proj1),
-                    HPX_FORWARD(Proj2, proj2));
+                return sequential_merge_t<std::decay_t<ExPolicy>>{}(first1,
+                    last1, first2, last2, dest, HPX_FORWARD(Comp, comp),
+                    HPX_FORWARD(Proj1, proj1), HPX_FORWARD(Proj2, proj2));
             }
 
             template <typename ExPolicy, typename Iter1, typename Sent1,

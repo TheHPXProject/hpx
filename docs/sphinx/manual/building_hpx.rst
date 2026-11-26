@@ -201,6 +201,19 @@ used CMake options.
    Set a specific C++ standard version e.g. ``HPX_WITH_CXX_STANDARD=23``.
    The default and minimum value is ``20``. Possible values are ``20``, ``23``, or ``26``.
 
+.. option:: HPX_WITH_DATAPAR_BACKEND
+
+   Select the library the data-parallel (vectorized) algorithms use, that is, the algorithms
+   called with the execution policies ``simd``, ``par_simd``, ``fixed_size_simd<N>`` and
+   ``par_fixed_size_simd<N>``. Possible values are ``STD_EXPERIMENTAL_SIMD`` (``<experimental/simd>``
+   from libstdc++), ``EVE``, ``VC``, ``SVE``, ``EMULATE`` and ``NONE`` (the default, no
+   data-parallel support).
+
+   ``EMULATE`` uses |hpx|'s own emulation of ``std::experimental::simd`` and is meant for platforms
+   without a vectorization library, for instance MSVC, mainly to build and test the data-parallel
+   algorithms. It runs each operation on a pack as a loop over the lanes, so the data-parallel
+   algorithms are usually slower with it than with the ``seq`` and ``par`` policies.
+
 .. option:: HPX_WITH_EXAMPLES
 
    Build examples.
