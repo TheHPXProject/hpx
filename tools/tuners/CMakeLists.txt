@@ -18,3 +18,7 @@ target_include_directories(hpx_tune PRIVATE ${PROJECT_BINARY_DIR})
 target_link_libraries(hpx_tune PRIVATE hpx_core)
 
 add_hpx_pseudo_dependencies(tools.tuners hpx_tune)
+
+if(HPX_WITH_TESTS AND HPX_WITH_TESTS_UNIT)
+  add_subdirectory(tests)
+endif()
