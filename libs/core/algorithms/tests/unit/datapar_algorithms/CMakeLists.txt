@@ -35,6 +35,7 @@ if(HPX_WITH_DATAPAR)
       generate_datapar
       generaten_datapar
       lexicographical_compare_datapar
+      merge_datapar
       mismatch_binary_datapar
       mismatch_datapar
       none_of_datapar

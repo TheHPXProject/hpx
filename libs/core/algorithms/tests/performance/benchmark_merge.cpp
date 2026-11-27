@@ -9,6 +9,7 @@
 #include <hpx/algorithm.hpp>
 #include <hpx/assert.hpp>
 #include <hpx/chrono.hpp>
+#include <hpx/datapar.hpp>
 #include <hpx/execution.hpp>
 #include <hpx/format.hpp>
 #include <hpx/init.hpp>
@@ -225,7 +226,9 @@ void run_benchmark(std::size_t vector_size1, std::size_t vector_size2,
     std::default_random_engine re(seed);
     std::uniform_real_distribution<double> dist(0.0, 1.0);
 
-    hpx::generate(par, std::begin(uniform_distribution),
+    // the generator shares one engine: generate sequentially (a parallel
+    // generate races on it, and the input would depend on the thread count)
+    hpx::generate(seq, std::begin(uniform_distribution),
         std::end(uniform_distribution), [&] { return dist(re); });
 
     using test_container = test_container<IteratorTag, data_type, Allocator>;
@@ -245,7 +248,7 @@ void run_benchmark(std::size_t vector_size1, std::size_t vector_size2,
     // entropy: 0 -> 1, 4 -> 0.201
     for (int i = 0; i < entropy; ++i, ++seed)
     {
-        hpx::generate(par, std::begin(uniform_distribution),
+        hpx::generate(seq, std::begin(uniform_distribution),
             std::end(uniform_distribution), [&] { return dist(re); });
 
         container tmp_vec(src.size(), alloc);
@@ -278,6 +281,14 @@ void run_benchmark(std::size_t vector_size1, std::size_t vector_size2,
 
     hpx::util::perftests_report("hpx::merge", "par_unseq", test_count,
         [&] { hpx::merge(par_unseq, first1, last1, first2, last2, dest); });
+
+#if defined(HPX_HAVE_DATAPAR)
+    hpx::util::perftests_report("hpx::merge", "simd", test_count,
+        [&] { hpx::merge(simd, first1, last1, first2, last2, dest); });
+
+    hpx::util::perftests_report("hpx::merge", "par_simd", test_count,
+        [&] { hpx::merge(par_simd, first1, last1, first2, last2, dest); });
+#endif
 
     // the same with explicit executors
     namespace ex = hpx::execution::experimental;

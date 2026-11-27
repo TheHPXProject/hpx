@@ -392,6 +392,22 @@ namespace hpx::parallel {
             }
         }
 
+        // The fast loops of the sequential merge copy elements into local
+        // values before they know which one is written next. That is correct
+        // only if reading an element doesn't modify it: an iterator whose
+        // reference is an rvalue (std::move_iterator) moves the element out on
+        // every read. It is fast only if the copies are cheap. Other element
+        // types are compared through the iterators' references and written
+        // exactly once.
+        HPX_CXX_CORE_EXPORT template <typename Iter1, typename Iter2>
+        constexpr bool merge_copies_values() noexcept
+        {
+            return std::is_lvalue_reference_v<std::iter_reference_t<Iter1>> &&
+                std::is_lvalue_reference_v<std::iter_reference_t<Iter2>> &&
+                std::is_trivially_copyable_v<std::iter_value_t<Iter1>> &&
+                std::is_trivially_copyable_v<std::iter_value_t<Iter2>>;
+        }
+
         // sequential merge helper with projection function.
         HPX_CXX_CORE_EXPORT template <typename Iter1, typename Sent1,
             typename Iter2, typename Sent2, typename OutIter, typename Comp,
@@ -406,7 +422,27 @@ namespace hpx::parallel {
             using value_type2 =
                 typename std::iterator_traits<Iter2>::value_type;
 
-            if (first1 != last1 && first2 != last2)
+            if constexpr (!merge_copies_values<Iter1, Iter2>())
+            {
+                // compare through the references, write each element once
+                while (first1 != last1 && first2 != last2)
+                {
+                    if (static_cast<bool>(
+                            HPX_INVOKE(comp, HPX_INVOKE(proj2, *first2),
+                                HPX_INVOKE(proj1, *first1))))
+                    {
+                        *dest = *first2;
+                        ++first2;
+                    }
+                    else
+                    {
+                        *dest = *first1;
+                        ++first1;
+                    }
+                    ++dest;
+                }
+            }
+            else if (first1 != last1 && first2 != last2)
             {
                 auto val1 = HPX_INVOKE(proj1, *first1);
                 auto val2 = init_value(HPX_INVOKE(proj2, *first2));
@@ -469,8 +505,32 @@ namespace hpx::parallel {
             using value_type2 =
                 typename std::iterator_traits<Iter2>::value_type;
 
-#if !defined(HPX_MSVC)
-            if constexpr (std::is_same_v<value_type1, value_type2>)
+#if defined(HPX_MSVC)
+            constexpr bool branch_free = false;
+#else
+            constexpr bool branch_free =
+                std::is_same_v<value_type1, value_type2>;
+#endif
+
+            if constexpr (!merge_copies_values<Iter1, Iter2>())
+            {
+                // compare through the references, write each element once
+                while (first1 != last1 && first2 != last2)
+                {
+                    if (static_cast<bool>(HPX_INVOKE(comp, *first2, *first1)))
+                    {
+                        *dest = *first2;
+                        ++first2;
+                    }
+                    else
+                    {
+                        *dest = *first1;
+                        ++first1;
+                    }
+                    ++dest;
+                }
+            }
+            else if constexpr (branch_free)
             {
                 while (HPX_LIKELY(first1 != last1 && first2 != last2))
                 {
@@ -484,7 +544,7 @@ namespace hpx::parallel {
 
                     if (static_cast<bool>(HPX_INVOKE(comp, val2, val1)))
                     {
-                        val1 = HPX_MOVE(val2);
+                        val1 = val2;
                         first2 = next2;
                     }
                     else
@@ -497,7 +557,6 @@ namespace hpx::parallel {
                 }
             }
             else
-#endif
             {
                 if (HPX_LIKELY(first1 != last1 && first2 != last2))
                 {
@@ -658,6 +717,27 @@ namespace hpx::parallel {
                 return {copy_result1.in, copy_result2.in, copy_result2.out};
             }
         }
+
+        // The sequential merge of one range (all of it, or one chunk of the
+        // parallel merge) under the given execution policy. Vectorpack
+        // policies customize it (hpx_invoke, datapar/merge.hpp).
+        HPX_CXX_CORE_EXPORT template <typename ExPolicy>
+        struct sequential_merge_t final
+          : hpx::detail::tag_dispatch<sequential_merge_t<ExPolicy>,
+                hpx::detail::no_base>
+        {
+            template <typename Iter1, typename Sent1, typename Iter2,
+                typename Sent2, typename OutIter, typename Comp, typename Proj1,
+                typename Proj2>
+            static constexpr util::in_in_out_result<Iter1, Iter2, OutIter>
+            invoke_default(Iter1 first1, Sent1 last1, Iter2 first2, Sent2 last2,
+                OutIter dest, Comp&& comp, Proj1&& proj1, Proj2&& proj2)
+            {
+                return sequential_merge(first1, last1, first2, last2, dest,
+                    HPX_FORWARD(Comp, comp), HPX_FORWARD(Proj1, proj1),
+                    HPX_FORWARD(Proj2, proj2));
+            }
+        };
 
         class const_index_value_iterator
           : public hpx::util::iterator_facade<const_index_value_iterator,
@@ -889,10 +969,10 @@ namespace hpx::parallel {
 
                     hpx::execution::experimental::mark_partition(
                         params, exec, idx, partition_phase::start, chunk);
-                    sequential_merge(std::next(first1, a0),
-                        std::next(first1, a1), std::next(first2, b0),
-                        std::next(first2, b1), std::next(dest, k0), comp, proj1,
-                        proj2);
+                    sequential_merge_t<std::decay_t<ExPolicy>>{}(
+                        std::next(first1, a0), std::next(first1, a1),
+                        std::next(first2, b0), std::next(first2, b1),
+                        std::next(dest, k0), comp, proj1, proj2);
                     hpx::execution::experimental::mark_partition(
                         params, exec, idx, partition_phase::end);
                 }
@@ -939,9 +1019,9 @@ namespace hpx::parallel {
                 Sent2 last2, Iter3 dest, Comp&& comp, Proj1&& proj1,
                 Proj2&& proj2)
             {
-                return sequential_merge(first1, last1, first2, last2, dest,
-                    HPX_FORWARD(Comp, comp), HPX_FORWARD(Proj1, proj1),
-                    HPX_FORWARD(Proj2, proj2));
+                return sequential_merge_t<std::decay_t<ExPolicy>>{}(first1,
+                    last1, first2, last2, dest, HPX_FORWARD(Comp, comp),
+                    HPX_FORWARD(Proj1, proj1), HPX_FORWARD(Proj2, proj2));
             }
 
             template <typename ExPolicy, typename Iter1, typename Sent1,
@@ -954,6 +1034,29 @@ namespace hpx::parallel {
                 using result_type = util::in_in_out_result<Iter1, Iter2, Iter3>;
                 using algorithm_result =
                     util::detail::algorithm_result<ExPolicy, result_type>;
+
+                // Each chunk of the parallel merge searches both inputs for
+                // its bounds while other chunks write their elements. Reading
+                // through an rvalue reference (std::move_iterator) moves the
+                // elements out, so such inputs are merged sequentially.
+                if constexpr (std::is_rvalue_reference_v<
+                                  std::iter_reference_t<Iter1>> ||
+                    std::is_rvalue_reference_v<std::iter_reference_t<Iter2>>)
+                {
+                    try
+                    {
+                        return algorithm_result::get(sequential_merge(first1,
+                            last1, first2, last2, dest, HPX_FORWARD(Comp, comp),
+                            HPX_FORWARD(Proj1, proj1),
+                            HPX_FORWARD(Proj2, proj2)));
+                    }
+                    catch (...)
+                    {
+                        return algorithm_result::get(
+                            detail::handle_exception<ExPolicy,
+                                result_type>::call(std::current_exception()));
+                    }
+                }
 
                 try
                 {

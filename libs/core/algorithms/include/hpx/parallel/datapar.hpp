@@ -24,6 +24,7 @@
 #include <hpx/parallel/datapar/iterator_helpers.hpp>
 #include <hpx/parallel/datapar/lexicographical_compare.hpp>
 #include <hpx/parallel/datapar/loop.hpp>
+#include <hpx/parallel/datapar/merge.hpp>
 #include <hpx/parallel/datapar/mismatch.hpp>
 #include <hpx/parallel/datapar/reduce.hpp>
 #include <hpx/parallel/datapar/replace.hpp>

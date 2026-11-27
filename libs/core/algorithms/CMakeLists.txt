@@ -250,6 +250,7 @@ if(HPX_WITH_DATAPAR)
       hpx/parallel/datapar/iterator_helpers.hpp
       hpx/parallel/datapar/lexicographical_compare.hpp
       hpx/parallel/datapar/loop.hpp
+      hpx/parallel/datapar/merge.hpp
       hpx/parallel/datapar/mismatch.hpp
       hpx/parallel/datapar/reduce.hpp
       hpx/parallel/datapar/replace.hpp

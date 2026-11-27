@@ -85,6 +85,7 @@ set(tests
     make_heap
     max_element
     merge
+    merge_move_iterator
     min_element
     minmax_element
     mismatch
