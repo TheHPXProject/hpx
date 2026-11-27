@@ -10,7 +10,8 @@
 // size for the sizes asked for (hpx.idle_tuning.<scheduler>.<tuner>.<pool
 // size>). It measures in the
 // tool's own process and never starts the HPX runtime, whose idle workers
-// would disturb its measurements.
+// would disturb its measurements. Its check of a written file (hpx_tune
+// --check) starts children, which run the runtime with the file.
 
 #pragma once
 
@@ -30,4 +31,16 @@ namespace hpx_tune {
     // default scheduler), for the pool sizes given there, or else for pools
     // of any size.
     area_result tune_idle(area_context const& context);
+
+    // Check a written file (hpx_tune --check): for each scheduler and tuner
+    // with a row, a child started with the file runs two pools, one of a
+    // size with a row of its own (if the file has one) and one of a size
+    // without; each pool's idle settings have to be those of the row the
+    // runtime's lookup takes: the row of the pool's size, else the row for
+    // pools of any size, else the plain setting, setting by setting.
+    verify_result verify_idle(verify_context const& context);
+
+    // a child of the idle area (--child=idle): starts the runtime and
+    // writes each pool's idle settings for the parent
+    int idle_child_main(int argc, char* argv[]);
 }    // namespace hpx_tune
