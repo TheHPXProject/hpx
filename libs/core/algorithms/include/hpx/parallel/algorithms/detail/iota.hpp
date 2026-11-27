@@ -9,6 +9,7 @@
 #include <hpx/config.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
+#include <hpx/parallel/util/detail/transfer_task_size.hpp>
 #include <hpx/parallel/util/loop.hpp>
 #include <hpx/parallel/util/partitioner.hpp>
 
@@ -109,9 +110,16 @@ namespace hpx::parallel::detail {
                         [&cur_value](FwdIter it) { *it = cur_value++; });
                 };
 
+                // an iteration assigns an element and increments the value:
+                // about a nanosecond if both are builtin, not known otherwise
+                constexpr auto size = hpx::traits::detail::builtin_operand<T> ?
+                    util::detail::element_operation_size<FwdIter>() :
+                    hpx::threads::task_size::unknown;
+
                 return util::partitioner<Expolicy, FwdIter,
                     FwdIter>::call_with_index(HPX_FORWARD(Expolicy, policy),
-                    first, dist, 1, std::move(f),
+                    first, dist, 1,
+                    hpx::threads::detail::with_task_size(HPX_MOVE(f), size),
                     [last = first + dist](auto&&) { return last; });
             }
             else

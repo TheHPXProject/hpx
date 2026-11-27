@@ -16,7 +16,16 @@ two minor releases. In rare cases do we outright remove old and unused
 functionality without a deprecation period.
 
 We do not provide any ABI compatibility guarantees between any versions, debug
-and release builds, and builds with different C++ standards.
+and release builds, and builds with different C++ standards. Every binary
+built against |hpx| therefore refers to a symbol of the core library that names
+the full version (for instance ``hpx_check_version_2_1_0``), and on platforms
+with SONAMEs (Linux, macOS and other Unix systems, but not Android) the shared
+libraries of |hpx| carry the full version in their SONAME (for instance
+``libhpx.so.2.1.0``): an application built against one release does not start
+with the libraries of another release, it has to be rebuilt. This protects
+only binaries built against |hpx| V2.1.0 or later. Remove an installation of
+an earlier release before installing |hpx| into the same location, and rebuild
+the binaries built against it.
 
 ..
    We follow |semver|_ for our API (starting from |hpx| 2.0.0). This means that

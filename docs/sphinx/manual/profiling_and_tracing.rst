@@ -47,8 +47,8 @@ them when you configure |hpx| with |cmake|_. If more than one of
      * The Tracy profiler (Linux, Windows, macOS)
    * * |ittnotify|_
      * :option:`HPX_WITH_ITTNOTIFY`
-     * Tasks, task lifecycle, work stealing, markers, locks (optional),
-       performance counters
+     * Tasks, task lifecycle, work stealing, markers, parcels, locks
+       (optional), performance counters
      * |vtune|
    * * |apex|_
      * :option:`HPX_WITH_APEX`
@@ -249,8 +249,12 @@ Task fibers
 Each task, except stackless (``nostack``) tasks, also runs on a fiber row,
 named ``<description>_<id>``, where the id is the address of the |hpx| thread.
 You can follow a task on its fiber row when it moves from one worker to
-another. The color of a zone on a fiber row depends on the worker it ran on, so
-a change of color means that the task moved.
+another. On the fiber row, the zone of the task lasts from the first time it
+starts or resumes while the profiler is connected until it completes. While the
+task is suspended, a zone named after the reason, for example
+``future_data_base::wait``, lies inside it, from the suspension until the task
+runs again, possibly on another worker. A short zone at its end marks when the
+task got a worker again.
 
 |hpx| reuses thread objects. A later task with the same description that reuses
 the same thread object appears on the same fiber row, so a fiber row can show
@@ -320,7 +324,9 @@ These messages connect a future to the continuations it starts. The address in
 the message is the address of the shared state of the future, so you can search
 for the same address on the producer side and on the consumer side. If a task
 is running when the message is sent, the message is also added to the text of
-its zone on the fiber row.
+its zone on the fiber row, but not while an ``HPX_TRACING_MARK_EVENT`` zone,
+including one that |hpx| itself opens, is open inside it, as Tracy accepts zone
+text only for the innermost open zone.
 
 .. list-table::
    :header-rows: 1
@@ -594,6 +600,18 @@ Tasks and markers use the ITT domain ``hpx``.
 * **Work stealing**: a ``work_stolen`` marker with the metadata ``thief``,
   ``victim`` and ``task``. Controlled by
   :option:`HPX_WITH_TRACING_WORK_STEALING_EVENTS`.
+* **Parcels**: the parcel layer records the events ``send_parcel``,
+  ``recv_parcel`` and ``parcel_scheduled`` (see *Events* below). With
+  :option:`HPX_WITH_PARCEL_PROFILING`\ ``=ON``, |hpx| also records a marker
+  for each parcel: ``parcel_send`` when its write completed, ``parcel_recv``
+  when it arrived, and ``parcel_scheduled`` when its action was put on the
+  scheduler later than the receive. Each marker has the parcel id as the
+  metadata ``parcel_id_msb`` and ``parcel_id_lsb``. ``parcel_send`` also has
+  ``size`` and ``target_locality``, ``parcel_recv`` has ``source_locality``,
+  and ``parcel_scheduled`` has ``source_locality`` and ``source_thread``. A
+  locality that is not known yet is left out. To follow a parcel, match the id
+  of a ``parcel_send`` marker with a ``parcel_recv`` marker in the trace of the
+  other locality, using both halves of the id.
 * **Markers**: ``os_thread_sleep`` when a worker finds no work, and a marker
   for each call to ``hpx::tracing::frame_mark``.
 * **Events**: ``HPX_TRACING_MARK_EVENT`` records an ITT event that lasts until
@@ -605,8 +623,7 @@ Tasks and markers use the ITT domain ``hpx``.
   reported as ITT counters.
 * **Thread names**: the names of the OS threads that |hpx| starts.
 
-The ITT backend does not record futures and continuations, and it does not
-record parcel events.
+The ITT backend does not record futures and continuations.
 
 .. _profiling_with_apex:
 

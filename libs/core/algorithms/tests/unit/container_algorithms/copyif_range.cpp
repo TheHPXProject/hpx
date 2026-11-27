@@ -9,10 +9,12 @@
 #include <hpx/init.hpp>
 #include <hpx/modules/testing.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <iostream>
 #include <iterator>
 #include <numeric>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -111,6 +113,34 @@ void test_copy_if_async(ExPolicy&& p)
     HPX_TEST_EQ(count, d.size());
 }
 
+template <typename Sentinel, typename... ExPolicy>
+void test_copy_if_sent(ExPolicy&&... policy)
+{
+    using base_iterator = std::vector<int>::iterator;
+    using iterator =
+        test::test_iterator<base_iterator, std::random_access_iterator_tag>;
+
+    std::vector<int> c(10007);
+    auto middle = std::begin(c) + static_cast<std::ptrdiff_t>(c.size() / 2);
+    std::iota(std::begin(c), middle, std::rand());
+    std::fill(middle, std::end(c), -1);
+    std::shuffle(std::begin(c), std::end(c), std::mt19937(std::rand()));
+
+    auto pred = [](int i) { return !(i < 0); };
+
+    std::vector<int> expected(c.size(), 0);
+    auto expected_end =
+        std::copy_if(std::begin(c), std::end(c), std::begin(expected), pred);
+
+    std::vector<int> d(c.size(), 0);
+    auto result = hpx::ranges::copy_if(policy..., iterator(std::begin(c)),
+        Sentinel(iterator(std::end(c))), std::begin(d), pred);
+
+    HPX_TEST(result.in == iterator(std::end(c)));
+    HPX_TEST(result.out - std::begin(d) == expected_end - std::begin(expected));
+    HPX_TEST(d == expected);
+}
+
 void test_copy_if()
 {
     using namespace hpx::execution;
@@ -123,6 +153,13 @@ void test_copy_if()
 
     test_copy_if_async(seq(task));
     test_copy_if_async(par(task));
+
+    using iterator = test::test_iterator<std::vector<int>::iterator,
+        std::random_access_iterator_tag>;
+    test_copy_if_sent<test::sentinel_from_iterator<iterator>>();
+    test_copy_if_sent<test::sized_sentinel_from_iterator<iterator>>(seq);
+    test_copy_if_sent<test::sized_sentinel_from_iterator<iterator>>(par);
+    test_copy_if_sent<test::sized_sentinel_from_iterator<iterator>>(par_unseq);
 }
 
 int hpx_main(hpx::program_options::variables_map& vm)

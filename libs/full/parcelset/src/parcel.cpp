@@ -465,6 +465,24 @@ namespace hpx::parcelset::detail {
         return std::make_pair(lva, comptype);
     }
 
+    namespace {
+
+        void set_receive_device(
+            serialization::input_archive& ar, int const device)
+        {
+            if (device >= 0)
+            {
+                ar.get_extra_data<serialization::detail::receive_device>()
+                    .device = device;
+            }
+            else if (auto* receive_device = ar.try_get_extra_data<
+                         serialization::detail::receive_device>())
+            {
+                receive_device->device = -1;
+            }
+        }
+    }    // namespace
+
     bool parcel::load_schedule(serialization::input_archive& ar,
         std::size_t num_thread, bool& deferred_schedule)
     {
@@ -489,6 +507,12 @@ namespace hpx::parcelset::detail {
 
         // make sure the target has not been migrated away
         auto const r = action_->was_object_migrated(data_.dest_, p.first);
+
+        // device data in the arguments goes to the target's GPU, if it has
+        // one; set for every parcel, an archive may hold several
+        set_receive_device(
+            ar, r.first ? -1 : action_->get_target_device(p.first));
+
         if (r.first)
         {
             // If the object was migrated, just load the action and return.
@@ -498,8 +522,10 @@ namespace hpx::parcelset::detail {
         }
 
         // schedule later if this is de-serialized with zero-copy semantics
+        // or if a device conduit moves some of its data
         if (ar.try_get_extra_data<
-                serialization::detail::allow_zero_copy_receive>() != nullptr)
+                serialization::detail::allow_zero_copy_receive>() != nullptr ||
+            ar.enable_device_transport())
         {
             action_->load(ar);
             take_post_receive_actions(ar);
@@ -556,8 +582,9 @@ namespace hpx::parcelset::detail {
 
     void parcel::take_post_receive_actions(serialization::input_archive& ar)
     {
-        // also without steps of its own: the parcel may use data that the
-        // steps of an earlier parcel in the same archive complete
+        // also without steps of its own: the parcel may use objects that an
+        // earlier parcel in the same archive has loaded and whose data that
+        // parcel's steps complete (see take_parcel_steps)
         auto* actions = ar.try_get_extra_data<
             serialization::detail::post_receive_actions>();
         if (actions != nullptr)
@@ -581,10 +608,11 @@ namespace hpx::parcelset::detail {
             return;
         }
 
-        // f is called once the steps of this parcel and of the parcels
-        // before it have finished, by the thread that finished the last one;
-        // if one of them failed, the arguments are incomplete and the action
-        // isn't scheduled (the waiter is called by 'completion')
+        // f is called once the steps of this parcel (and of the parcels
+        // before it whose objects it uses) have finished, by the thread that
+        // finished the last one; if one of them failed, the arguments are
+        // incomplete and the action isn't scheduled (the waiter is called by
+        // 'completion')
         //
         // All steps finish (the parcels after this one wait for them), also
         // if the waiter can't be set up or a waiter that runs while a step is

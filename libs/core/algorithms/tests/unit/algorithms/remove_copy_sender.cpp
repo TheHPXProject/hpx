@@ -203,6 +203,14 @@ void test_parallel()
 
 int hpx_main()
 {
+#if defined(_MSC_VER)
+    // Limit scan sender instantiations to keep MSVC compiler memory bounded.
+    auto exec = sender_test::ex::explicit_scheduler_executor(
+        sender_test::ex::thread_pool_policy_scheduler(hpx::launch::async));
+    auto policy = hpx::execution::par(hpx::execution::task).on(HPX_MOVE(exec));
+    test_sender<false>(policy);
+    test_sender<true>(policy);
+#else
     sender_test::policies([](auto policy) {
         test_sender<false>(policy);
         test_sender<true>(policy);
@@ -215,6 +223,7 @@ int hpx_main()
     test_error<true, std::bad_alloc>();
     test_parallel<false>();
     test_parallel<true>();
+#endif
     return hpx::local::finalize();
 }
 

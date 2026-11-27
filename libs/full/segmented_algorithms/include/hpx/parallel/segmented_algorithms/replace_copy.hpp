@@ -431,14 +431,12 @@ namespace hpx::segmented {
 
     HPX_CXX_EXPORT template <typename ExPolicy, typename SegIter,
         typename OutIter, typename T>
-        requires(hpx::is_execution_policy_v<ExPolicy> &&
-            hpx::traits::is_iterator_v<SegIter> &&
-            hpx::traits::is_segmented_iterator_v<SegIter> &&
-            hpx::traits::is_iterator_v<OutIter> &&
-            hpx::traits::is_segmented_iterator_v<OutIter>)
+        requires(hpx::execution_policy<ExPolicy> &&
+            hpx::segmented_iterator<SegIter> &&
+            hpx::segmented_iterator<OutIter>)
     hpx::parallel::util::detail::algorithm_result_t<ExPolicy, OutIter>
     hpx_invoke(hpx::replace_copy_t, ExPolicy&& policy, SegIter first,
-        SegIter last, OutIter dest, T const& old_value, T const& new_value)
+        SegIter last, OutIter dest, T old_value, T new_value)
     {
         static_assert(hpx::traits::is_forward_iterator_v<SegIter>,
             "Requires at least forward iterator.");
@@ -503,14 +501,12 @@ namespace hpx::segmented {
 
     HPX_CXX_EXPORT template <typename ExPolicy, typename SegIter,
         typename OutIter, typename Pred, typename T>
-        requires(hpx::is_execution_policy_v<ExPolicy> &&
-            hpx::traits::is_iterator_v<SegIter> &&
-            hpx::traits::is_segmented_iterator_v<SegIter> &&
-            hpx::traits::is_iterator_v<OutIter> &&
-            hpx::traits::is_segmented_iterator_v<OutIter>)
+        requires(hpx::execution_policy<ExPolicy> &&
+            hpx::segmented_iterator<SegIter> &&
+            hpx::segmented_iterator<OutIter>)
     hpx::parallel::util::detail::algorithm_result_t<ExPolicy, OutIter>
     hpx_invoke(hpx::replace_copy_if_t, ExPolicy&& policy, SegIter first,
-        SegIter last, OutIter dest, Pred&& pred, T const& new_value)
+        SegIter last, OutIter dest, Pred&& pred, T new_value)
     {
         static_assert(hpx::traits::is_forward_iterator_v<SegIter>,
             "Requires at least forward iterator.");

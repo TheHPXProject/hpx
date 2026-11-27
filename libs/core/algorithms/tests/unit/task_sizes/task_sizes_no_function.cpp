@@ -11,6 +11,7 @@
 #include <hpx/datapar.hpp>
 #endif
 
+#include <concepts>
 #include <cstddef>
 #include <string>
 #include <vector>
@@ -45,6 +46,9 @@ void test_builtin_elements()
         task_size::medium);
     check_only_size([&] { hpx::fill_n(by_100, v.begin(), 10000, 4).get(); },
         task_size::medium);
+    // iota assigns an element and increments the value
+    check_only_size([&] { hpx::iota(by_100, v.begin(), v.end(), 5).get(); },
+        task_size::medium);
     check_only_size(
         [&] { hpx::swap_ranges(by_100, v.begin(), v.end(), w.begin()).get(); },
         task_size::medium);
@@ -74,6 +78,41 @@ void test_copied_elements()
         task_size::small_);
 }
 
+// A value for iota that is not a builtin type, but adds a distance and
+// converts to int.
+struct counter
+{
+    using difference_type = std::ptrdiff_t;
+
+    int value = 0;
+
+    // a template, so that it matches any distance exactly and isn't
+    // ambiguous with the builtin + through the conversion to int
+    template <std::integral D>
+    friend counter operator+(counter c, D d)
+    {
+        return counter{c.value + static_cast<int>(d)};
+    }
+
+    counter& operator++()
+    {
+        ++value;
+        return *this;
+    }
+
+    counter operator++(int)
+    {
+        counter c = *this;
+        ++value;
+        return c;
+    }
+
+    operator int() const
+    {
+        return value;
+    }
+};
+
 // The size of copying or assigning other elements is not known.
 void test_other_elements()
 {
@@ -87,6 +126,12 @@ void test_other_elements()
         [&] { hpx::move(by_100, v.begin(), v.end(), out.begin()).get(); },
         task_size::unknown);
     check_only_size([&] { hpx::fill(by_100, v.begin(), v.end(), "2").get(); },
+        task_size::unknown);
+
+    // the value of iota is not builtin, though the elements are
+    std::vector<int> w(10000);
+    check_only_size(
+        [&] { hpx::iota(by_100, w.begin(), w.end(), counter{}).get(); },
         task_size::unknown);
 }
 
@@ -102,6 +147,10 @@ void test_unsequenced()
     std::vector<int> v(10000, 1);
     check_only_size(
         [&] { hpx::fill(unseq_by_100, v.begin(), v.end(), 3).get(); },
+        HPX_LANE_SIZE / sizeof(int) > 1 ? task_size::small_ :
+                                          task_size::medium);
+    check_only_size(
+        [&] { hpx::iota(unseq_by_100, v.begin(), v.end(), 5).get(); },
         HPX_LANE_SIZE / sizeof(int) > 1 ? task_size::small_ :
                                           task_size::medium);
 }

@@ -307,7 +307,7 @@ namespace hpx::components {
 }    // namespace hpx::components
 
 #if defined(HPX_HAVE_CXX26_REFLECTION)
-#include <hpx/serialization/detail/refl_qualified_name_of.hpp>
+#include <hpx/modules/serialization.hpp>
 
 namespace hpx::components {
 

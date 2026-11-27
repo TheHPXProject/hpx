@@ -14,6 +14,7 @@
 #include <iterator>
 #include <numeric>
 #include <random>
+#include <sstream>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -121,10 +122,36 @@ void test_contains()
     }
 }
 
+// a single-pass range must not be read before the search starts
+void test_contains_single_pass()
+{
+    {
+        std::istringstream is("1 2 3");
+        HPX_TEST(hpx::ranges::contains(
+            std::istream_iterator<int>(is), std::istream_iterator<int>(), 2));
+    }
+    {
+        std::istringstream is("1 2 3");
+        HPX_TEST(!hpx::ranges::contains(
+            std::istream_iterator<int>(is), std::istream_iterator<int>(), 4));
+    }
+    {
+        std::istringstream is("1 2 3");
+        HPX_TEST(hpx::ranges::contains(
+            std::istream_iterator<int>(is), std::istream_iterator<int>(), 3));
+    }
+    {
+        std::istringstream is("");
+        HPX_TEST(!hpx::ranges::contains(
+            std::istream_iterator<int>(is), std::istream_iterator<int>(), 1));
+    }
+}
+
 void contains_test()
 {
     test_contains<std::random_access_iterator_tag>();
     test_contains<std::forward_iterator_tag>();
+    test_contains_single_pass();
 }
 
 ///////////////////////////////////////////////////////////////////////////////

@@ -13,7 +13,7 @@
 #include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/execution_base.hpp>
 #include <hpx/modules/functional.hpp>
-#include <hpx/synchronization/mutex.hpp>
+#include <hpx/modules/synchronization.hpp>
 
 #include <exception>
 #include <memory>

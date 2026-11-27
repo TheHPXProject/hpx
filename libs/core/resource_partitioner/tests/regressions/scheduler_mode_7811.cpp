@@ -48,25 +48,11 @@ int hpx_main()
         HPX_TEST(!other_sched->has_scheduler_mode(flag2, i));
     }
 
-    // 1. A mask holding only the PU of worker 1 of the default pool
-    auto const default_mask =
-        hpx::resource::get_partitioner().get_pool_pus_mask("default");
-    hpx::threads::mask_type mask_default_w1;
-    hpx::threads::resize(
-        mask_default_w1, hpx::threads::mask_size(default_mask));
-    std::size_t n = 0;
-    for (std::size_t i = 0; i != hpx::threads::mask_size(default_mask); ++i)
-    {
-        if (hpx::threads::test(default_mask, i))
-        {
-            if (n == 1)
-            {
-                hpx::threads::set(mask_default_w1, i);
-                break;
-            }
-            ++n;
-        }
-    }
+    // 1. A mask holding only the PU of worker 1 of the default pool (the PU
+    // the worker is bound to: workers aren't necessarily bound in the order
+    // of their PU numbers)
+    auto const mask_default_w1 =
+        default_pool.get_used_processing_unit(1, false);
 
     hpx::threads::add_scheduler_mode(flag, mask_default_w1);
 
@@ -104,18 +90,7 @@ int hpx_main()
     HPX_TEST(!other_sched->has_scheduler_mode(flag, 1));
 
     // 5. Target worker 0 of other pool
-    auto const other_mask =
-        hpx::resource::get_partitioner().get_pool_pus_mask("other");
-    hpx::threads::mask_type mask_other_w0;
-    hpx::threads::resize(mask_other_w0, hpx::threads::mask_size(other_mask));
-    for (std::size_t i = 0; i != hpx::threads::mask_size(other_mask); ++i)
-    {
-        if (hpx::threads::test(other_mask, i))
-        {
-            hpx::threads::set(mask_other_w0, i);
-            break;
-        }
-    }
+    auto const mask_other_w0 = other_pool.get_used_processing_unit(0, false);
 
     hpx::threads::add_scheduler_mode(flag, mask_other_w0);
     HPX_TEST(!default_sched->has_scheduler_mode(flag, 0));

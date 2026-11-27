@@ -20,21 +20,14 @@
 namespace hpx::parallel::traits {
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename T>
-    struct is_vector_pack<datapar::experimental::native_simd<T>>
-      : std::true_type
+    // Every simd<T, Abi> is a pack: native_simd<T> and fixed_size_simd<T, N>
+    // are aliases of it. Specializing on fixed_size_simd<T, N> itself doesn't
+    // work: libstdc++ declares the N of simd_abi::fixed_size as int, so a
+    // std::size_t N is never deduced, and with SVE it is simd<T, sve_abi>.
+    template <typename T, typename Abi>
+    struct is_vector_pack<datapar::experimental::simd<T, Abi>> : std::true_type
     {
     };
-
-    // With the SVE backend fixed_size_simd<T, N> is simd<T, sve_abi>, so N is
-    // not deducible (and it duplicates the native_simd<T> specialization).
-#if !defined(HPX_HAVE_DATAPAR_SVE)
-    template <typename T, std::size_t N>
-    struct is_vector_pack<datapar::experimental::fixed_size_simd<T, N>>
-      : std::true_type
-    {
-    };
-#endif
 
     template <typename T>
     struct is_vector_pack<T> : std::false_type
@@ -42,19 +35,11 @@ namespace hpx::parallel::traits {
     };
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename T>
-    struct is_scalar_vector_pack<datapar::experimental::native_simd<T>>
+    template <typename T, typename Abi>
+    struct is_scalar_vector_pack<datapar::experimental::simd<T, Abi>>
       : std::false_type
     {
     };
-
-#if !defined(HPX_HAVE_DATAPAR_SVE)
-    template <typename T, std::size_t N>
-    struct is_scalar_vector_pack<datapar::experimental::fixed_size_simd<T, N>>
-      : std::false_type
-    {
-    };
-#endif
 
     template <typename T>
     struct is_scalar_vector_pack<T> : std::true_type

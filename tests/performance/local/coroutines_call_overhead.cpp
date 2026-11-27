@@ -164,7 +164,7 @@ int hpx_main(variables_map& vm)
             header = false;
 
         if (!seed)
-            seed = std::uint64_t(std::time(nullptr));
+            seed = std::uint64_t(std::random_device{}());
 
         std::uint64_t const os_thread_count = hpx::get_os_thread_count();
 

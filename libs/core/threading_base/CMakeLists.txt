@@ -14,6 +14,7 @@ set(threading_base_headers
     hpx/threading_base/detail/reset_backtrace.hpp
     hpx/threading_base/detail/reset_lco_description.hpp
     hpx/threading_base/detail/get_default_pool.hpp
+    hpx/threading_base/detail/register_pre_shutdown.hpp
     hpx/threading_base/detail/get_default_timer_service.hpp
     hpx/threading_base/detail/idle_callback.hpp
     hpx/threading_base/detail/switch_status.hpp
@@ -48,6 +49,7 @@ set(threading_base_headers
     hpx/threading_base/threading_base_fwd.hpp
     hpx/threading_base/tracing_sample_rate.hpp
     hpx/threading_base/tuners/recording_tuner.hpp
+    hpx/threading_base/with_annotations.hpp
 )
 
 if(HPX_WITH_APEX)
@@ -90,6 +92,7 @@ set(threading_base_sources
     get_default_pool.cpp
     get_default_timer_service.cpp
     print.cpp
+    register_pre_shutdown.cpp
     register_thread.cpp
     scheduler_base.cpp
     scheduler_base_tuned.cpp
@@ -130,6 +133,7 @@ add_hpx_module(
     "hpx/threading_base/detail/switch_status.hpp"
     "hpx/threading_base/detail/get_default_pool.hpp"
     "hpx/threading_base/detail/get_default_timer_service.hpp"
+    "hpx/threading_base/detail/register_pre_shutdown.hpp"
     "hpx/threading_base/detail/reset_backtrace.hpp"
     "hpx/threading_base/detail/reset_lco_description.hpp"
     "hpx/threading_base/detail/switch_status.hpp"

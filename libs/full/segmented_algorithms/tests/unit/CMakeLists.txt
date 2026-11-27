@@ -48,6 +48,7 @@ set(tests
     partitioned_vector_transform_reduce_binary1
     partitioned_vector_transform_reduce_binary2
     partitioned_vector_fill
+    partitioned_vector_fill_policy_overload
     partitioned_vector_find
     partitioned_vector_find2
     partitioned_vector_inclusive_scan

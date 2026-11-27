@@ -878,9 +878,8 @@ namespace hpx::segmented {
     /// exception during this phase can leave a partially reordered range.
     HPX_CXX_EXPORT template <typename ExPolicy, typename SegIter,
         typename Comp = hpx::parallel::detail::less>
-        requires(hpx::is_execution_policy_v<ExPolicy> &&
-            hpx::traits::is_iterator_v<SegIter> &&
-            hpx::traits::is_segmented_iterator_v<SegIter>)
+        requires(
+            hpx::execution_policy<ExPolicy> && hpx::segmented_iterator<SegIter>)
     hpx::parallel::util::detail::algorithm_result_t<ExPolicy> hpx_invoke(
         hpx::sort_t, ExPolicy&& policy, SegIter first, SegIter last,
         Comp&& comp = Comp())

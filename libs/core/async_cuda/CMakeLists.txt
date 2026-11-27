@@ -47,6 +47,8 @@ set(async_cuda_sources
     cuda_event.cpp
     cuda_exception.cpp
     get_targets.cpp
+    hip_warmup.cpp
+    result_device.cpp
 )
 
 if(HPX_WITH_HIP AND TARGET roc::hipblas)
@@ -69,11 +71,15 @@ add_hpx_module(
   MODULE_DEPENDENCIES
     hpx_allocator_support
     hpx_assertion
+    hpx_async_base
     hpx_concurrency
     hpx_config
     hpx_debugging
     hpx_errors
+    hpx_execution
     hpx_execution_base
+    hpx_executors
+    hpx_format
     hpx_functional
     hpx_futures
     hpx_memory

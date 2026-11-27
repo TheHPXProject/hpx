@@ -42,6 +42,7 @@ set(execution_headers
     hpx/execution/executors/execution_parameters.hpp
     hpx/execution/executors/execution_parameters_fwd.hpp
     hpx/execution/executors/fused_bulk_execute.hpp
+    hpx/execution/executors/get_min_chunk_time.hpp
     hpx/execution/executors/guided_chunk_size.hpp
     hpx/execution/executors/max_num_chunks.hpp
     hpx/execution/executors/num_cores.hpp

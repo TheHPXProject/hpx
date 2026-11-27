@@ -42,9 +42,15 @@ namespace hpx::serialization {
         archive_is_preprocessing = 0x00100000,
         enable_type_checking = 0x00200000,
         // zero-copy chunks may refer to device memory: the parcelport that
-        // sends (and receives) the archive moves device memory itself
+        // sends the archive sends device memory itself (the receiving
+        // locality decides itself where it receives them, see
+        // detail::allow_device_receive)
         enable_device_chunks = 0x00400000,
-        all_archive_flags = 0x006fe000    // all of the above
+        // the data of zero-copy chunks of device memory is moved by a
+        // detail::device_chunk_transport, the archive carries a marker for
+        // each zero-copy chunk and a descriptor for each of those
+        enable_device_transport = 0x00800000,
+        all_archive_flags = 0x00efe000    // all of the above
     };
 
     HPX_CXX_CORE_EXPORT constexpr archive_flags operator|(
@@ -295,6 +301,14 @@ namespace hpx::serialization {
                 flags_ & archive_flags::enable_device_chunks);
         }
 
+        // A detail::device_chunk_transport moves the data of the zero-copy
+        // chunks of device memory (an input archive has the sender's flags).
+        [[nodiscard]] constexpr bool enable_device_transport() const noexcept
+        {
+            return static_cast<bool>(
+                flags_ & archive_flags::enable_device_transport);
+        }
+
         [[nodiscard]] constexpr std::uint32_t flags() const noexcept
         {
             return flags_;
@@ -333,6 +347,7 @@ namespace hpx::serialization {
         void reset()
         {
             size_ = 0;
+            needs_await_ = false;
             extra_data_.reset();
         }
 
@@ -351,14 +366,52 @@ namespace hpx::serialization {
         }
 
         /// Take over the extra data of another archive. The data items are
-        /// allocated separately, so they keep their addresses.
+        /// allocated separately, so they keep their addresses. The old extra
+        /// data of this archive is destroyed, and references to it become
+        /// invalid.
         void move_extra_data_from(basic_archive& rhs) noexcept
         {
             extra_data_ = HPX_MOVE(rhs.extra_data_);
         }
 
+        /// Save without the preprocessing pass. A save function that needs
+        /// that pass (an id_type that is not unmanaged, a future or
+        /// task_group that is not ready) then saves nothing, with no side
+        /// effect, and needs_await() returns true. The caller must then
+        /// discard the output and run the preprocessing pass on a new
+        /// archive. The archive does not write the mode to its output. The
+        /// mode cannot be turned off, reset() keeps it, and
+        /// move_extra_data_from() does not move it.
+        void enable_optimistic_save() noexcept
+        {
+            optimistic_save_ = true;
+        }
+
+        /// True if a save function asked for the preprocessing pass since
+        /// the archive was created or reset.
+        [[nodiscard]] constexpr bool needs_await() const noexcept
+        {
+            return needs_await_;
+        }
+
+        /// A save function that needs the preprocessing pass calls this
+        /// before any side effect. In optimistic mode, this records the
+        /// request and returns true, and the save function must then save
+        /// nothing.
+        [[nodiscard]] bool defer_to_preprocessing() noexcept
+        {
+            if (!optimistic_save_)
+            {
+                return false;
+            }
+            needs_await_ = true;
+            return true;
+        }
+
     protected:
         std::uint32_t flags_;
+        bool optimistic_save_ = false;
+        bool needs_await_ = false;
         std::size_t size_;
         util::extra_data extra_data_;
     };

@@ -9,15 +9,14 @@
 #include <hpx/config.hpp>
 
 #include <hpx/assert.hpp>
-#include <hpx/functional/invoke.hpp>
 #include <hpx/modules/algorithms.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/futures.hpp>
+#include <hpx/modules/tag_invoke.hpp>
 #include <hpx/modules/tracing.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/segmented_algorithms/detail/capture_dispatch.hpp>
-#include <hpx/parallel/util/detail/handle_local_exceptions.hpp>
 
 #include <algorithm>
 #include <cstddef>
@@ -1669,15 +1668,18 @@ namespace hpx::segmented {
 
     namespace detail {
 
+        // Built from hpx::segmented_iterator (not the equivalent traits), so
+        // that an overload for a specific execution policy requiring
+        // hpx::segmented_iterator and std::random_access_iterator is more
+        // constrained than the overloads below.
         template <typename Iter>
-        concept segmented_merge_iterator = hpx::traits::is_iterator_v<Iter> &&
-            hpx::traits::is_segmented_iterator_v<Iter> &&
-            std::random_access_iterator<Iter>;
+        concept segmented_merge_iterator =
+            hpx::segmented_iterator<Iter> && std::random_access_iterator<Iter>;
     }    // namespace detail
 
     HPX_CXX_EXPORT template <typename ExPolicy, typename Iter1, typename Iter2,
         typename Iter3, typename Comp = hpx::parallel::detail::less>
-        requires(hpx::is_execution_policy_v<ExPolicy> &&
+        requires(hpx::execution_policy<ExPolicy> &&
             detail::segmented_merge_iterator<Iter1> &&
             detail::segmented_merge_iterator<Iter2> &&
             detail::segmented_merge_iterator<Iter3>)

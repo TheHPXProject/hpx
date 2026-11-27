@@ -38,6 +38,7 @@ jobs:
             -DHPX_WITH_VERIFY_LOCKS_BACKTRACE=ON \
             -DHPX_WITH_CHECK_MODULE_DEPENDENCIES=ON \
             -DHPX_WITH_CXX_MODULES=ON \
+            -DHPX_WITH_SUSPENDING_FORK_JOIN_EXECUTOR_AS_DEFAULT=ON \
             -DHPX_WITH_DATAPAR=ON \
             -DHPX_WITH_DATAPAR_BACKEND=EMULATE
       base-targets: hpx_core core components

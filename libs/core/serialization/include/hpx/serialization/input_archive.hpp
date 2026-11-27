@@ -14,7 +14,9 @@
 #include <hpx/modules/errors.hpp>
 #include <hpx/serialization/access.hpp>
 #include <hpx/serialization/basic_archive.hpp>
+#include <hpx/serialization/detail/device_chunk_transport.hpp>
 #include <hpx/serialization/detail/polymorphic_nonintrusive_factory.hpp>
+#include <hpx/serialization/detail/post_receive_actions.hpp>
 #include <hpx/serialization/detail/raw_ptr.hpp>
 #include <hpx/serialization/detail/to_size.hpp>
 #include <hpx/serialization/input_container.hpp>
@@ -22,6 +24,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <memory>
 #include <type_traits>
 #include <vector>
@@ -104,6 +107,7 @@ namespace hpx::serialization {
                 serialization::binary_filter* filter = nullptr;
                 *this >> detail::raw_ptr(filter);
                 buffer_->set_filter(filter);
+                filtered_ = true;
             }
         }
 
@@ -274,6 +278,14 @@ namespace hpx::serialization {
             return current_pos();
         }
 
+        // Whether the data comes through a filter (e.g. decompression): the
+        // filter writes all of it on the host, also the data of zero-copy
+        // chunks.
+        [[nodiscard]] constexpr bool is_filtered() const noexcept
+        {
+            return filtered_;
+        }
+
         // this function is needed to avoid a MSVC linker error
         [[nodiscard]] constexpr std::size_t current_pos() const noexcept
         {
@@ -323,9 +335,13 @@ namespace hpx::serialization {
         /// \param count    The number of bytes.
         /// \param allow_zero_copy_receive Whether the data may arrive at
         ///                 \a address after this function has returned.
+        /// \param memory   Whether \a address refers to device memory: the
+        ///                 networking layer receives into it then (see
+        ///                 serialization_chunk::is_device_memory).
         void load_binary_chunk(detail::fundamental_types expected,
             void* address, std::size_t const count,
-            bool const allow_zero_copy_receive)
+            bool const allow_zero_copy_receive,
+            chunk_memory const memory = chunk_memory::host)
         {
             if (HPX_UNLIKELY(count == 0))
                 return;
@@ -335,20 +351,122 @@ namespace hpx::serialization {
                 expected = detail::fundamental_types::none;
             }
 
+            if (HPX_UNLIKELY(enable_device_transport()) &&
+                load_with_device_transport(
+                    address, count, allow_zero_copy_receive))
+            {
+                return;
+            }
+
             if (HPX_UNLIKELY(disable_data_chunking()))
             {
+                // device memory must not be written on the host
+                HPX_ASSERT(memory == chunk_memory::host);
                 size_ += buffer_->load_binary(expected, address, count);
             }
             else
             {
                 size_ += buffer_->load_binary_chunk(expected, address, count,
-                    allow_zero_copy_receive &&
-                        !disable_receive_data_chunking());
+                    allow_zero_copy_receive && !disable_receive_data_chunking(),
+                    memory);
             }
         }
 
+        /// Whether the data of the next zero-copy chunk arrives through the
+        /// archive's device transport (see
+        /// detail::device_chunk_transport): then it is received into the
+        /// memory handed to load_binary_chunk, device or host memory, after
+        /// the de-serialization (as with zero-copy receive), also if the
+        /// parcelport doesn't receive zero-copy chunks. An object asks this
+        /// before choosing where its data goes, it then calls
+        /// load_binary_chunk with allow_zero_copy_receive.
+        [[nodiscard]] bool next_chunk_from_transport()
+        {
+            if (!enable_device_transport())
+            {
+                return false;
+            }
+            if (next_marker_ < 0)
+            {
+                std::uint8_t marker = 0;
+                load(marker);
+                next_marker_ = marker;
+            }
+            return next_marker_ == 1;
+        }
+
     private:
+        // The counterpart of output_archive::save_with_device_transport:
+        // reads the marker of the chunk and, if the sender's transport moves
+        // its data, receives it through this side's transport as a transfer
+        // step of the parcel (see post_receive_actions::add_transfer).
+        // Returns whether the transport moves the data.
+        // The chunk may be received into device memory or into a host
+        // staging buffer, the transfer runs before the other steps (e.g. the
+        // copy from the staging buffer).
+        bool load_with_device_transport(void* address, std::size_t const count,
+            bool const allow_zero_copy_receive)
+        {
+            std::uint8_t use_transport = 0;
+            if (next_marker_ >= 0)
+            {
+                // read by next_chunk_from_transport
+                use_transport = static_cast<std::uint8_t>(next_marker_);
+                next_marker_ = -1;
+            }
+            else
+            {
+                load(use_transport);
+            }
+            if (use_transport == 0)
+            {
+                return false;
+            }
+
+            detail::device_chunk_descriptor descriptor;
+            load(descriptor.source);
+            load(descriptor.tag);
+
+            auto const* transport =
+                try_get_extra_data<detail::device_transport>();
+            if (transport == nullptr || !transport->transport)
+            {
+                HPX_THROW_EXCEPTION(hpx::error::serialization_error,
+                    "input_archive::load_binary_chunk",
+                    "the sender moves device memory through a device "
+                    "transport, but none is configured here (see "
+                    "hpx.parcel.device_conduit)");
+            }
+
+            // The data arrives after the de-serialization (the parcel's action
+            // runs after the transfer), as with zero-copy receive: the object
+            // loading it must not use it before.
+            if (!allow_zero_copy_receive)
+            {
+                HPX_THROW_EXCEPTION(hpx::error::serialization_error,
+                    "input_archive::load_binary_chunk",
+                    "a chunk sent through a device transport can be "
+                    "received only by an object that doesn't use the data "
+                    "while it is de-serialized");
+            }
+
+            get_extra_data<detail::post_receive_actions>().add_transfer(
+                [transport = transport->transport, descriptor, address, count](
+                    detail::post_receive_actions::done_type done) {
+                    transport->recv(descriptor, address, count,
+                        [done = HPX_MOVE(done)](std::exception_ptr error) {
+                            done(HPX_MOVE(error));
+                        });
+                });
+            return true;
+        }
+
         std::unique_ptr<erased_input_container> buffer_;
+        bool filtered_ = false;
+
+        // the marker of the next chunk if next_chunk_from_transport has read
+        // it, else -1
+        int next_marker_ = -1;
     };
 }    // namespace hpx::serialization
 

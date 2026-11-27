@@ -10,6 +10,9 @@
 #include <atomic>
 #include <chrono>
 #include <cstddef>
+#include <string_view>
+#include <utility>
+#include <vector>
 
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx::execution::experimental::detail {
@@ -31,6 +34,14 @@ namespace hpx::execution::experimental::detail {
             default_min_chunk_time.count());
         std::atomic<std::size_t> chunks_per_core(default_chunks_per_core);
         std::atomic<std::size_t> copy_bytes_per_ns(default_copy_bytes_per_ns);
+
+        // the minimal run times configured for single executors, written at
+        // startup only
+        std::vector<executor_min_chunk_time>& executor_min_chunk_times()
+        {
+            static std::vector<executor_min_chunk_time> times;
+            return times;
+        }
     }    // namespace
 
     task_size_chunk_size_defaults get_task_size_chunk_size_defaults() noexcept
@@ -58,5 +69,35 @@ namespace hpx::execution::experimental::detail {
     {
         set_task_size_chunk_size_defaults({default_min_chunk_time,
             default_chunks_per_core, default_copy_bytes_per_ns});
+        executor_min_chunk_times().clear();
+    }
+
+    std::chrono::nanoseconds get_executor_min_chunk_time(
+        std::string_view const executor, std::size_t const pool_size) noexcept
+    {
+        std::chrono::nanoseconds result(
+            min_chunk_time.load(std::memory_order_relaxed));
+        for (auto const& entry : executor_min_chunk_times())
+        {
+            if (entry.executor != executor)
+            {
+                continue;
+            }
+            if (entry.pool_size == pool_size)
+            {
+                return entry.min_chunk_time;
+            }
+            if (entry.pool_size == 0)
+            {
+                result = entry.min_chunk_time;
+            }
+        }
+        return result;
+    }
+
+    void set_executor_min_chunk_times(
+        std::vector<executor_min_chunk_time> times)
+    {
+        executor_min_chunk_times() = HPX_MOVE(times);
     }
 }    // namespace hpx::execution::experimental::detail

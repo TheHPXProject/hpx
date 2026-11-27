@@ -115,8 +115,8 @@ namespace hpx::tracy {
         HPX_CORE_EXPORT void enter_fiber(char const* fiber_name,
             char const* zone_name, std::size_t color) noexcept
         {
-            // Mark TLS so rename_region / mark_event are no-ops inside
-            // the fiber.
+            // Mark TLS so rename_region is a no-op inside the fiber and
+            // push_zone counts the zones it opens there.
             set_in_fiber(true);
 
             // Switch Tracy's zone stack to this fiber.

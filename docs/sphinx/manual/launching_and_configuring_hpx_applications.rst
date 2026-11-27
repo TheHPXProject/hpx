@@ -105,6 +105,11 @@ default has to be specified. Therefore ``$[section.key]`` refers to the property
 ``section.key``. If the property ``section.key`` is not set or empty, the overall
 expression will evaluate to an empty string.
 
+To write a literal ``${`` or ``$[`` in a property value, double the ``$``:
+``$${FOO}`` reads as ``${FOO}`` and ``$$[section.key]`` as ``$[section.key]``,
+and neither is expanded. Any other ``$``, including a ``$$`` that is not
+followed by ``{`` or ``[``, is taken as it is.
+
 .. note::
 
    Any property ``$[section.key:default]`` is evaluated whenever it is queried
@@ -445,6 +450,34 @@ The ``hpx.tracing`` configuration section
        the next task creation. Only present on Tracy builds
        (``HPX_WITH_TRACY=ON``).
 
+The ``hpx.hip`` configuration section
+.....................................
+
+.. code-block:: ini
+
+   [hpx.hip]
+   warmup = ${HPX_HIP_WARMUP:current}
+
+.. _ini_hpx_hip:
+
+.. list-table::
+
+   * * Property
+     * Description
+   * * ``hpx.hip.warmup``
+     * The devices whose internal HIP runtime kernels are built when the
+       runtime starts, before ``hpx_main`` runs: ``none``, ``current`` (the
+       default: the device current on the runtime's threads, normally device
+       ``0``) or ``all`` (all visible devices). The HIP runtime builds these
+       kernels on the thread that first uses a device (a kernel launch, a
+       copy, a memset), which needs more stack than |hpx| threads have by
+       default (``hpx.stacks.small_size``); without the warm-up, a task that
+       is the first to use a device crashes with a stack overflow. The
+       warm-up runs as a pre-startup function on the thread that later runs
+       ``hpx_main``, which has a large stack (``hpx.stacks.large_size``), and
+       takes about two seconds per device. Only present when |hpx| was built
+       with HIP.
+
 The ``hpx.threadpools`` configuration section
 .............................................
 
@@ -609,6 +642,45 @@ performance counters too, see :ref:`scheduler_tuning_performance_counters`):
    * * ``steal_staged``
      * Steals from the staged queues of other worker threads that got tasks.
 
+The ``hpx.idle_tuning`` configuration section
+..............................................
+
+The entries of this section give the idle settings of a thread pool by its
+scheduler, the scheduler's tuner and the pool's number of worker threads, for
+instance values measured for a machine. A pool takes the entries of
+``hpx.idle_tuning.<scheduler>.<tuner>.<number of workers>``, else those of
+``hpx.idle_tuning.<scheduler>.<tuner>``, else ``hpx.max_idle_backoff_time``
+and ``hpx.min_idle_backoff_time``. The scheduler is named as
+:option:`--hpx:queuing` names it; the tuner is ``hpx.scheduler_tuner`` for the
+``local-priority-tuned-fifo`` scheduler and ``none`` for all others. The
+section is empty by default, so that every pool uses the plain settings. Values
+that are not a number or are negative are ignored. The entries are usually
+given in a configuration file (:option:`--hpx:config`); on the command line
+they are new entries and need the ``!`` that forces one, for instance
+``--hpx:ini=hpx.idle_tuning.local-priority-fifo.none.min_idle_backoff_time!=60``.
+
+.. code-block:: ini
+
+   [hpx.idle_tuning.local-priority-fifo.none]
+   max_idle_backoff_time = 1000
+   min_idle_backoff_time = 50
+
+   [hpx.idle_tuning.local-priority-fifo.none.32]
+   min_idle_backoff_time = 60
+
+.. _ini_hpx_idle_tuning:
+
+.. list-table::
+
+   * * Property
+     * Description
+   * * ``hpx.idle_tuning.<scheduler>.<tuner>[.<number of workers>].max_idle_backoff_time``
+     * The value of this property replaces ``hpx.max_idle_backoff_time`` for the
+       pools it applies to.
+   * * ``hpx.idle_tuning.<scheduler>.<tuner>[.<number of workers>].min_idle_backoff_time``
+     * The value of this property replaces ``hpx.min_idle_backoff_time`` for the
+       pools it applies to.
+
 The ``hpx.thread_queue`` configuration section
 ..............................................
 
@@ -750,6 +822,18 @@ default, which stands for the defaults compiled into |hpx|.
        move trivially copyable elements without calling a function derive the
        task size of a chunk from it. The default is ``16``, about the rate for
        data that is not in the caches.
+   * * ``hpx.task_size_chunk_size.<executor>.min_chunk_time_us``
+     * The value of this property defines the minimal run time of a chunk, in
+       microseconds, for the loops of one executor, in place of
+       ``hpx.task_size_chunk_size.min_chunk_time_us``. ``<executor>`` is
+       ``parallel`` for ``parallel_executor``, ``fork_join`` for
+       ``fork_join_executor``, ``suspending_fork_join`` for
+       ``suspending_fork_join_executor`` and ``shared_suspending_fork_join``
+       for ``shared_suspending_fork_join_executor``. Not set by default.
+   * * ``hpx.task_size_chunk_size.<executor>.<pool size>.min_chunk_time_us``
+     * The value of this property defines the minimal run time of a chunk, in
+       microseconds, for the loops of one executor that runs on ``<pool size>``
+       worker threads, in place of the entry above. Not set by default.
 
 The ``hpx.components`` configuration section
 ............................................
@@ -1005,6 +1089,9 @@ equivalent CMake variable is ``HPX_WITH_PARCELPORT_MPI`` and has to be set to
    max_background_threads =  ${HPX_PARCEL_MPI_MAX_BACKGROUND_THREADS:$[hpx.parcel.max_background_threads]}
    ack_handshake = 0
    max_header_receives = ${HPX_HAVE_PARCELPORT_MPI_MAX_HEADER_RECEIVES:0}
+   device_memory = ${HPX_HAVE_PARCELPORT_MPI_DEVICE_MEMORY:1}
+   send_device_memory = ${HPX_HAVE_PARCELPORT_MPI_SEND_DEVICE_MEMORY:1}
+   receive_device_memory = ${HPX_HAVE_PARCELPORT_MPI_RECEIVE_DEVICE_MEMORY:1}
 
 .. _ini_hpx_parcel_mpi:
 
@@ -1094,6 +1181,23 @@ equivalent CMake variable is ``HPX_WITH_PARCELPORT_MPI`` and has to be set to
        from ``HPX_HAVE_PARCELPORT_MPI_MAX_HEADER_RECEIVES`` (``0`` if not
        defined). A value of ``0`` automatically sizes the pool based on the
        communicator size: ``min(64, max(16, 2 * communicator_size))``.
+   * * ``hpx.parcel.mpi.device_memory``
+     * This property defines whether the MPI parcelport sends and receives
+       device (GPU) memory directly, if the MPI library supports it (CUDA- or
+       ROCm-aware MPI, see ``HPX_WITH_PARCELPORT_CUDA_SUPPORT`` and
+       ``HPX_WITH_PARCELPORT_HIP_SUPPORT``). Otherwise device data is staged
+       through pinned host memory. The default is ``1``.
+   * * ``hpx.parcel.mpi.send_device_memory``
+     * This property defines whether the MPI parcelport sends device memory
+       directly (if ``hpx.parcel.mpi.device_memory`` allows it). Set it to
+       ``0`` on systems where the network card reads device memory much slower
+       than host memory (e.g. if it is not attached to the same PCIe switch as
+       the GPU): the data is then copied to pinned host memory first. The
+       default is ``1``.
+   * * ``hpx.parcel.mpi.receive_device_memory``
+     * This property defines whether the MPI parcelport receives into device
+       memory directly (if ``hpx.parcel.mpi.device_memory`` allows it),
+       whatever memory the sender sent the data from. The default is ``1``.
 
 The ``hpx.agas`` configuration section
 ......................................

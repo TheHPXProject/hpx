@@ -8,6 +8,7 @@
 
 #include <iostream>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "destroy_range_tests.hpp"
@@ -26,6 +27,16 @@ void test_destroy()
 
     test_destroy_async(seq(task), IteratorTag());
     test_destroy_async(par(task), IteratorTag());
+
+    using iterator = test::test_iterator<destructable*, IteratorTag>;
+    test_destroy_sent<test::sentinel_from_iterator<iterator>>(IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        using sentinel = test::sized_sentinel_from_iterator<iterator>;
+        test_destroy_sent<sentinel>(IteratorTag(), seq);
+        test_destroy_sent<sentinel>(IteratorTag(), par);
+        test_destroy_sent<sentinel>(IteratorTag(), par_unseq);
+    }
 }
 
 void destroy_test()
@@ -82,12 +93,11 @@ void destroy_bad_alloc_test()
 
 int hpx_main(hpx::program_options::variables_map& vm)
 {
-    unsigned int seed = (unsigned int) std::time(nullptr);
     if (vm.count("seed"))
         seed = vm["seed"].as<unsigned int>();
 
     std::cout << "using seed: " << seed << std::endl;
-    std::srand(seed);
+    gen.seed(seed);
 
     destroy_test();
     destroy_exception_test();

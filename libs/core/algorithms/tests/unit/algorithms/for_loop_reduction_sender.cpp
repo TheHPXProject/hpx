@@ -12,7 +12,6 @@
 
 #include <algorithm>
 #include <cstddef>
-#include <ctime>
 #include <iostream>
 #include <numeric>
 #include <random>
@@ -235,7 +234,7 @@ void for_loop_reduction_test_idx_sender(std::mt19937& gen)
 ///////////////////////////////////////////////////////////////////////////////
 int hpx_main(hpx::program_options::variables_map& vm)
 {
-    unsigned int seed = (unsigned int) std::time(nullptr);
+    unsigned int seed = std::random_device{}();
     if (vm.count("seed"))
         seed = vm["seed"].as<unsigned int>();
 

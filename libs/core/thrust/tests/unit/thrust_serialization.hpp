@@ -61,8 +61,10 @@ namespace test {
     // what the receiving side did
     struct received
     {
-        // where the networking layer placed the zero-copy chunks
+        // where the networking layer placed the zero-copy chunks, and how
+        // many of them the de-serialization said are device memory
         std::vector<void*> destinations;
+        std::size_t device_destinations = 0;
 
         // the steps the de-serialization deferred until the data had arrived
         std::size_t steps = 0;
@@ -71,5 +73,27 @@ namespace test {
     // De-serializes with load(). With zero-copy receive, load() chooses where
     // the chunk data goes, it's placed there afterwards, and the deferred
     // steps run then; otherwise the data has arrived before load() runs.
-    received receive(message& m, bool zero_copy_receive, load_type const& load);
+    // 'device_receive': the parcelport can receive into device memory.
+    // 'receive_device': the GPU the receiving side asks for (as for a parcel
+    // whose destination has a target), -1 for none.
+    received receive(message& m, bool zero_copy_receive, load_type const& load,
+        bool device_receive = false, int receive_device = -1);
+
+    // what filtered_round_trip saw
+    struct filtered
+    {
+        // whether both archives said they are filtered
+        bool saved_filtered = false;
+        bool loaded_filtered = false;
+
+        // the chunks referring to device memory
+        std::size_t device_chunks = 0;
+    };
+
+    // Serializes with save() into an archive with the given flags and a
+    // filter that passes the data through unchanged (as a compressor does,
+    // it reads and writes all data of the archive on the host), and
+    // de-serializes it with load().
+    filtered filtered_round_trip(
+        std::uint32_t flags, save_type const& save, load_type const& load);
 }    // namespace test

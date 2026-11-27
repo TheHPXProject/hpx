@@ -1551,6 +1551,11 @@ namespace hpx::lcos::detail {
     {
         if (f.valid() && !f.is_ready())
         {
+            if (ar.defer_to_preprocessing())
+            {
+                return;
+            }
+
             if (ar.is_preprocessing())
             {
                 auto shared_state =

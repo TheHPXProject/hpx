@@ -268,10 +268,8 @@ int hpx_main(hpx::program_options::variables_map& vm)
         std::uint64_t plain_time_for_iter =
             averageout_plain_for_iter(vector_size);
 
-        if (vm["executor"].as<std::string>() == "forkjoin")
-        {
-            hpx::execution::experimental::fork_join_executor par;
-
+        // runs the benchmarks that are enabled with the given executor
+        auto run_benchmarks = [&](auto&& par) {
             if (enable_all || vm.count("parallel_foreach"))
             {
                 par_time_foreach =
@@ -299,74 +297,33 @@ int hpx_main(hpx::program_options::variables_map& vm)
             {
                 seq_time_forloop = averageout_sequential_forloop(vector_size);
             }
-        }
-        else if (vm["executor"].as<std::string>() == "parallel")
+        };
+
+        std::string const executor = vm["executor"].as<std::string>();
+        if (executor == "forkjoin")
         {
-            hpx::execution::parallel_executor par;
-
-            if (enable_all || vm.count("parallel_foreach"))
-            {
-                par_time_foreach =
-                    averageout_parallel_foreach(vector_size, par);
-            }
-            if (enable_all || vm.count("task_foreach"))
-            {
-                task_time_foreach = averageout_task_foreach(vector_size, par);
-            }
-            if (enable_all || vm.count("sequential_foreach"))
-            {
-                seq_time_foreach = averageout_sequential_foreach(vector_size);
-            }
-
-            if (enable_all || vm.count("parallel_forloop"))
-            {
-                par_time_forloop =
-                    averageout_parallel_forloop(vector_size, par);
-            }
-            if (enable_all || vm.count("task_forloop"))
-            {
-                task_time_forloop = averageout_task_forloop(vector_size, par);
-            }
-            if (enable_all || vm.count("sequential_forloop"))
-            {
-                seq_time_forloop = averageout_sequential_forloop(vector_size);
-            }
+            run_benchmarks(hpx::execution::experimental::fork_join_executor());
         }
-        else if (vm["executor"].as<std::string>() == "scheduler")
+        else if (executor == "suspending_forkjoin")
         {
-            hpx::execution::experimental::scheduler_executor<
-                hpx::execution::experimental::thread_pool_scheduler>
-                par;
-
-            if (enable_all || vm.count("parallel_foreach"))
-            {
-                par_time_foreach =
-                    averageout_parallel_foreach(vector_size, par);
-            }
-            if (enable_all || vm.count("task_foreach"))
-            {
-                task_time_foreach = averageout_task_foreach(vector_size, par);
-            }
-            if (enable_all || vm.count("sequential_foreach"))
-            {
-                seq_time_foreach = averageout_sequential_foreach(vector_size);
-            }
-
-            if (enable_all || vm.count("parallel_forloop"))
-            {
-                par_time_forloop =
-                    averageout_parallel_forloop(vector_size, par);
-            }
-            if (enable_all || vm.count("task_forloop"))
-            {
-                task_time_forloop = averageout_task_forloop(vector_size, par);
-            }
-            if (enable_all || vm.count("sequential_forloop"))
-            {
-                seq_time_forloop = averageout_sequential_forloop(vector_size);
-            }
+            run_benchmarks(
+                hpx::execution::experimental::suspending_fork_join_executor());
         }
-        else if (vm["executor"].as<std::string>() == "sender")
+        else if (executor == "shared_suspending_forkjoin")
+        {
+            run_benchmarks(hpx::execution::experimental::
+                    shared_suspending_fork_join_executor());
+        }
+        else if (executor == "parallel")
+        {
+            run_benchmarks(hpx::execution::parallel_executor());
+        }
+        else if (executor == "scheduler")
+        {
+            run_benchmarks(hpx::execution::experimental::scheduler_executor<
+                hpx::execution::experimental::thread_pool_scheduler>());
+        }
+        else if (executor == "sender")
         {
             hpx::execution::experimental::explicit_scheduler_executor<
                 hpx::execution::experimental::thread_pool_scheduler>
@@ -397,9 +354,9 @@ int hpx_main(hpx::program_options::variables_map& vm)
         }
         else
         {
-            std::cerr << "unknown executor option (should be "
-                         "forkjoin, scheduler, executor, sender, or parallel "
-                         "(default)\n"
+            std::cerr << "unknown executor option (should be forkjoin, "
+                         "suspending_forkjoin, shared_suspending_forkjoin, "
+                         "scheduler, sender, or parallel (default)\n"
                       << std::flush;
             hpx::local::finalize();
             return -1;
@@ -542,8 +499,9 @@ int main(int argc, char* argv[])
             "number of overlapping task loops")
         ("csv_output", "print results in csv format")
         ("executor", value<std::string>()->default_value("parallel"),
-            "use specified executor (possible values: "
-            "forkjoin, scheduler, sender, or parallel (default)")
+            "use specified executor (possible values: forkjoin, "
+            "suspending_forkjoin, shared_suspending_forkjoin, scheduler, "
+            "sender, or parallel (default)")
         ("disable_stealing", "disable thread stealing")
         ("fast_idle_mode", "enable fast idle mode")
 

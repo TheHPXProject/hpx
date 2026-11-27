@@ -25,6 +25,7 @@
 #endif
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <condition_variable>
 #include <cstddef>
@@ -44,14 +45,30 @@ namespace hpx::threads::policies {
 
     namespace detail {
 
-        enum class polling_status
-        {
+        HPX_CXX_CORE_EXPORT enum class polling_status {
             /// Signals that a polling function currently has no more work to do
             idle = 0,
 
             /// Signals that a polling function still has outstanding work to
             /// poll for
             busy = 1
+        };
+
+        /// A function a scheduler calls in every round of the scheduling
+        /// loop of each of its workers, while it is registered (see
+        /// scheduler_base::add_polling_function), for instance to check for
+        /// completed operations of an external library.
+        HPX_CXX_CORE_EXPORT struct polling_function
+        {
+            /// Called with \a context. Returns busy while there is work to
+            /// poll for: a worker that sees busy doesn't back off.
+            polling_status (*poll)(void* context) = nullptr;
+
+            /// The number of operations still to poll for (or nullptr for
+            /// none): a pool with outstanding polling work is not idle.
+            std::size_t (*work_count)(void* context) = nullptr;
+
+            void* context = nullptr;
         };
     }    // namespace detail
 
@@ -424,31 +441,51 @@ namespace hpx::threads::policies {
         std::ptrdiff_t get_stack_size(
             threads::thread_stacksize stacksize) const noexcept;
 
-        using polling_function_ptr = detail::polling_status (*)();
-        using polling_work_count_function_ptr = std::size_t (*)();
+        /// The number of polling functions that can be registered at the
+        /// same time (see add_polling_function): the registry fills one
+        /// cache line.
+        static constexpr std::size_t max_polling_functions = 7;
 
-        static constexpr detail::polling_status null_polling_function() noexcept
+        /// Register a polling function: from now on every worker calls
+        /// \a f->poll in every round of its scheduling loop. Registering
+        /// the same \a f again does nothing. \a f is not copied: it has to
+        /// stay valid and unchanged while it is registered, and until no
+        /// worker calls it anymore after it was removed (a worker that has
+        /// started a round before the removal may still call it once). The
+        /// function has to be cheap and must not block or suspend, as it
+        /// runs on the worker's OS thread. Throws hpx::exception
+        /// (bad_parameter) if max_polling_functions others are registered.
+        void add_polling_function(detail::polling_function const* f);
+
+        /// Remove the polling function \a f (see add_polling_function), if
+        /// it is registered.
+        void remove_polling_function(detail::polling_function const* f);
+
+        /// Call the registered polling functions (see add_polling_function):
+        /// busy if one of them is. Called in every round of the scheduling
+        /// loop: with no function registered it is one load and a branch.
+        detail::polling_status custom_polling_function() const
         {
-            return detail::polling_status::idle;
+            std::uint32_t const active =
+                polling_.data_.active.load(std::memory_order_relaxed);
+            if (HPX_LIKELY(active == 0))
+            {
+                return detail::polling_status::idle;
+            }
+            return call_polling_functions(active);
         }
 
-        static constexpr std::size_t null_polling_work_count_function() noexcept
+        /// The sum of the work counts of the registered polling functions.
+        std::size_t get_polling_work_count() const
         {
-            return 0;
+            std::uint32_t const active =
+                polling_.data_.active.load(std::memory_order_relaxed);
+            if (HPX_LIKELY(active == 0))
+            {
+                return 0;
+            }
+            return count_polling_work(active);
         }
-
-        void set_mpi_polling_functions(polling_function_ptr mpi_func,
-            polling_work_count_function_ptr mpi_work_count_func);
-        void clear_mpi_polling_function();
-        void set_cuda_polling_functions(polling_function_ptr cuda_func,
-            polling_work_count_function_ptr cuda_work_count_func);
-        void clear_cuda_polling_function();
-        void set_sycl_polling_functions(polling_function_ptr sycl_func,
-            polling_work_count_function_ptr sycl_work_count_func);
-        void clear_sycl_polling_function();
-
-        detail::polling_status custom_polling_function() const;
-        std::size_t get_polling_work_count() const;
 
         // almost all schedulers support direct execution
         virtual bool supports_direct_execution() const noexcept
@@ -619,16 +656,28 @@ namespace hpx::threads::policies {
             outside_creation_unit - 1;
         std::atomic<std::uint64_t> workers_in_loop_{0};
 
-        std::atomic<polling_function_ptr> polling_function_mpi_;
-        std::atomic<polling_function_ptr> polling_function_cuda_;
-        std::atomic<polling_function_ptr> polling_function_sycl_;
-        std::atomic<polling_work_count_function_ptr>
-            polling_work_count_function_mpi_;
-        std::atomic<polling_work_count_function_ptr>
-            polling_work_count_function_cuda_;
-        std::atomic<polling_work_count_function_ptr>
-            polling_work_count_function_sycl_;
+        // The registered polling functions (see add_polling_function): a bit
+        // per occupied slot and the functions. Every worker reads them in
+        // every round of its scheduling loop, so they are on a cache line of
+        // their own, apart from the data around them that changes often.
+        struct polling_registry
+        {
+            std::atomic<std::uint32_t> active{0};
+            std::array<std::atomic<detail::polling_function const*>,
+                max_polling_functions>
+                functions{};
+        };
+        util::aligned_line_data<polling_registry> polling_;
 
+        // serializes the changes of the registry
+        std::mutex polling_mtx_;
+
+    private:
+        detail::polling_status call_polling_functions(
+            std::uint32_t active) const;
+        std::size_t count_polling_work(std::uint32_t active) const;
+
+    protected:
 #if defined(HPX_HAVE_SCHEDULER_LOCAL_STORAGE)
     public:
         // manage scheduler-local data

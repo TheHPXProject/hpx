@@ -10,7 +10,6 @@
 #if defined(HPX_HAVE_ITTNOTIFY) && HPX_HAVE_ITTNOTIFY != 0
 
 #include <hpx/config/thread_name.hpp>
-#include <hpx/itt_notify/detail/use_ittnotify_api.hpp>
 #include <hpx/modules/itt_notify.hpp>
 #include <hpx/tracing/tracing.hpp>
 

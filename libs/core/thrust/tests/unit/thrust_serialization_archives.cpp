@@ -11,17 +11,76 @@
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/lcos_local.hpp>
 #include <hpx/modules/serialization.hpp>
+#include <hpx/modules/testing.hpp>
 
 #include "thrust_serialization.hpp"
 
+#include <algorithm>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <exception>
 #include <memory>
 #include <mutex>
+#include <stdexcept>
 #include <utility>
 #include <vector>
+
+// A filter that passes the data through unchanged (see filtered_round_trip).
+struct identity_filter : hpx::serialization::binary_filter
+{
+    void set_max_length(std::size_t const size) override
+    {
+        buffer_.reserve(size);
+    }
+
+    void save(void const* src, std::size_t const src_count) override
+    {
+        char const* begin = static_cast<char const*>(src);
+        buffer_.insert(buffer_.end(), begin, begin + src_count);
+    }
+
+    bool flush(
+        void* dst, std::size_t const dst_count, std::size_t& written) override
+    {
+        written = (std::min) (dst_count, buffer_.size() - current_);
+        std::memcpy(dst, buffer_.data() + current_, written);
+        current_ += written;
+        return current_ == buffer_.size();
+    }
+
+    std::size_t init_data(void const* buffer, std::size_t const size,
+        std::size_t const buffer_size) override
+    {
+        char const* begin = static_cast<char const*>(buffer);
+        buffer_.assign(begin, begin + size);
+        current_ = 0;
+        return buffer_size;
+    }
+
+    void load(void* dst, std::size_t const dst_count) override
+    {
+        HPX_TEST(current_ + dst_count <= buffer_.size());
+        if (current_ + dst_count > buffer_.size())
+        {
+            throw std::runtime_error("identity_filter: too little data");
+        }
+        std::memcpy(dst, buffer_.data() + current_, dst_count);
+        current_ += dst_count;
+    }
+
+    template <typename Archive>
+    void serialize(Archive&, unsigned)
+    {
+    }
+
+    HPX_SERIALIZATION_POLYMORPHIC(identity_filter, override);
+
+private:
+    std::vector<char> buffer_;
+    std::size_t current_ = 0;
+};
 
 namespace test {
 
@@ -212,8 +271,9 @@ namespace test {
         return result;
     }
 
-    received receive(
-        message& m, bool const zero_copy_receive, load_type const& load)
+    received receive(message& m, bool const zero_copy_receive,
+        load_type const& load, bool const device_receive,
+        int const receive_device)
     {
         // the receive buffers: zero-copy receive lets load() choose the
         // destinations, otherwise the data has arrived already
@@ -246,6 +306,18 @@ namespace test {
             {
                 archive.get_extra_data<
                     hpx::serialization::detail::allow_zero_copy_receive>();
+                if (device_receive)
+                {
+                    archive.get_extra_data<
+                        hpx::serialization::detail::allow_device_receive>();
+                }
+            }
+            if (receive_device >= 0)
+            {
+                archive
+                    .get_extra_data<
+                        hpx::serialization::detail::receive_device>()
+                    .device = receive_device;
             }
 
             load(archive);
@@ -272,6 +344,10 @@ namespace test {
                 continue;
             }
             r.destinations.push_back(c.data());
+            if (c.memory_ == hpx::serialization::chunk_memory::device)
+            {
+                ++r.device_destinations;
+            }
             copy(c.data(), m.chunk_data[i].data(), c.size());
         }
 
@@ -346,5 +422,37 @@ namespace test {
             }
         }
         return r;
+    }
+
+    filtered filtered_round_trip(
+        std::uint32_t const flags, save_type const& save, load_type const& load)
+    {
+        filtered result;
+
+        std::vector<char> buffer;
+        std::vector<serialization_chunk> chunks;
+        identity_filter filter;
+        std::size_t written = 0;
+        {
+            hpx::serialization::output_archive archive(buffer, flags, &chunks,
+                &filter, HPX_ZERO_COPY_SERIALIZATION_THRESHOLD);
+            result.saved_filtered = archive.is_filtered();
+            save(archive);
+            archive.flush();
+            written = archive.bytes_written();
+        }
+
+        for (serialization_chunk const& c : chunks)
+        {
+            if (c.is_device_memory())
+            {
+                ++result.device_chunks;
+            }
+        }
+
+        hpx::serialization::input_archive archive(buffer, written, &chunks);
+        result.loaded_filtered = archive.is_filtered();
+        load(archive);
+        return result;
     }
 }    // namespace test

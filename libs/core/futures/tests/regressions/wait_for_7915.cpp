@@ -13,6 +13,7 @@
 #include <hpx/modules/testing.hpp>
 #include <hpx/modules/threading_base.hpp>
 
+#include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <cstddef>
@@ -27,6 +28,7 @@ struct wait_observer
     std::mutex mutex;
     std::condition_variable cv;
     bool waiting = false;
+    std::size_t entries = 0;    // suspensions and sleeps entered
     hpx::execution_base::agent_ref agent;
 
     void notify_waiting()
@@ -34,6 +36,7 @@ struct wait_observer
         {
             std::lock_guard<std::mutex> lock(mutex);
             waiting = true;
+            ++entries;
         }
         cv.notify_all();
     }
@@ -42,6 +45,14 @@ struct wait_observer
     {
         std::unique_lock<std::mutex> lock(mutex);
         cv.wait(lock, [&] { return waiting; });
+    }
+
+    // bounded, so that a test that expects more entries fails instead of
+    // hanging
+    bool wait_for_entries(std::size_t count, seconds timeout)
+    {
+        std::unique_lock<std::mutex> lock(mutex);
+        return cv.wait_for(lock, timeout, [&] { return entries >= count; });
     }
 
     void publish_agent(hpx::execution_base::agent_ref context)
@@ -287,10 +298,13 @@ int main()
 
         observer.wait_until_waiting();
         p1.set_value(0);
+
+        // the stale wakeup ends the first suspension: the wait has to
+        // suspend again instead of returning before the futures are ready
+        HPX_TEST(observer.wait_for_entries(2, seconds(10)));
         {
-            std::unique_lock<std::mutex> l(m);
-            HPX_TEST(!cv.wait_for(
-                l, milliseconds(20), [&] { return wait_returned; }));
+            std::lock_guard<std::mutex> l(m);
+            HPX_TEST(!wait_returned);
         }
         p2.set_value(42);
         waiter.join();
@@ -374,30 +388,47 @@ int main()
     }
 
     // end-to-end #7915: a std::thread in
-    // hpx::condition_variable_any::wait_for(lock, time, pred) whose
-    // predicate re-acquisition of the user's lock blocks because the
-    // notifier holds that lock (for longer than the agent's 20 ms poll
-    // interval) and calls notify_one() under it: resume_waiter() must
-    // return instead of deadlocking on the blocked predicate. The
-    // agent-level test above covers the mechanism; this covers the path
-    // through condition_variable_data::notify_one -> resume_waiter.
+    // hpx::condition_variable::wait_for(lock, time, pred), whose predicate
+    // re-acquires the user's lock inside the agent's wait, while the
+    // notifier holds that lock and calls notify_one() under it:
+    // resume_waiter() must return instead of deadlocking on the blocked
+    // predicate. The agent-level test above covers the mechanism; this
+    // covers the path through condition_variable_data::notify_one ->
+    // resume_waiter.
     {
-        hpx::condition_variable_any cv;
-        std::mutex m;
-        bool ready = false;
+        // counts the attempts to lock it, so that the notifier sees the
+        // predicate trying to re-acquire it
+        struct counting_mutex
+        {
+            void lock()
+            {
+                ++attempts;
+                mtx.lock();
+            }
+            bool try_lock()
+            {
+                return mtx.try_lock();
+            }
+            void unlock()
+            {
+                mtx.unlock();
+            }
 
-        std::mutex start_mtx;
-        std::condition_variable start_cv;
-        bool waiter_started = false;
+            std::mutex mtx;
+            std::atomic<std::size_t> attempts{0};
+        };
+
+        hpx::condition_variable cv;
+        counting_mutex m;
+        bool ready = false;
+        wait_observer observer;
 
         std::thread waiter([&] {
-            std::unique_lock<std::mutex> l(m);
-            {
-                std::lock_guard<std::mutex> ls(start_mtx);
-                waiter_started = true;
-            }
-            start_cv.notify_one();
+            observing_agent agent(
+                hpx::execution_base::this_thread::agent(), observer);
+            hpx::execution_base::this_thread::reset_agent reset(agent);
 
+            std::unique_lock<counting_mutex> l(m);
             auto const started = steady_clock::now();
             bool const result =
                 cv.wait_for(l, seconds(10), [&] { return ready; });
@@ -406,19 +437,22 @@ int main()
             HPX_TEST(steady_clock::now() - started < seconds(5));
         });
 
+        // the waiter is in the agent's wait (it released m before)
+        observer.wait_until_waiting();
         {
-            std::unique_lock<std::mutex> ls(start_mtx);
-            start_cv.wait(ls, [&] { return waiter_started; });
-        }
-        // the wait entry is published within microseconds of entering
-        // wait_for; give the waiter ample time to reach its chunked
-        // sleep, then hold the wait lock across several poll intervals
-        // so the predicate's re-acquisition of m is blocked when the
-        // notification arrives
-        std::this_thread::sleep_for(milliseconds(100));
-        {
-            std::lock_guard<std::mutex> l(m);
-            std::this_thread::sleep_for(milliseconds(100));
+            std::lock_guard<counting_mutex> l(m);
+
+            // While this thread holds m, every new attempt to lock it is the
+            // predicate's, which the agent evaluates during its wait. Wait
+            // for one (bounded) so that the notification arrives while the
+            // predicate is blocked.
+            std::size_t const attempts = m.attempts.load();
+            for (int k = 0; k != 10000 && m.attempts.load() == attempts; ++k)
+            {
+                std::this_thread::sleep_for(milliseconds(1));
+            }
+            HPX_TEST_NEQ(m.attempts.load(), attempts);
+
             ready = true;
             cv.notify_one();    // under the lock: must not deadlock
         }
@@ -480,10 +514,13 @@ int main()
 
         observer.wait_until_waiting();
         p1.set_value(0);
+
+        // the stale wakeup ends the first suspension: the wait has to
+        // suspend again instead of returning before the futures are ready
+        HPX_TEST(observer.wait_for_entries(2, seconds(10)));
         {
-            std::unique_lock<std::mutex> l(m);
-            HPX_TEST(!cv.wait_for(
-                l, milliseconds(20), [&] { return wait_all_returned; }));
+            std::lock_guard<std::mutex> l(m);
+            HPX_TEST(!wait_all_returned);
         }
         p2.set_value(1);
         p3.set_value(2);

@@ -31,6 +31,8 @@
 #include <new>
 #include <optional>
 #include <type_traits>
+#include <utility>
+#include <vector>
 
 // universal_vector is serialized from its own memory only with allocators of
 // memory the host can access
@@ -76,6 +78,7 @@ namespace {
         bool chunks;
         bool device_chunks;
         bool zero_copy_receive;
+        bool device_receive;    // only with zero_copy_receive
     };
 
     template <typename From, typename To>
@@ -124,25 +127,33 @@ namespace {
         }
 
         To w;
-        test::received const r = test::receive(m, o.zero_copy_receive,
-            [&w](hpx::serialization::input_archive& ar) { ar >> w; });
+        test::received const r = test::receive(
+            m, o.zero_copy_receive,
+            [&w](hpx::serialization::input_archive& ar) { ar >> w; },
+            o.device_receive);
 
         HPX_TEST_EQ(w.size(), size);
         HPX_TEST(::thrust::host_vector<T>(w) == expected);
 
-        // with zero-copy receive the data goes to pinned memory and to device
-        // memory from a device chunk directly, else through a staging buffer
+        // with zero-copy receive the data goes to pinned memory directly, and
+        // to device memory if the parcelport receives into device memory
+        // (whatever memory it was sent from), else through a staging buffer
         // and a step that copies it to the device
         if (o.zero_copy_receive && chunk)
         {
             void const* destination = ::thrust::raw_pointer_cast(w.data());
-            bool const device_chunk = !pinned && o.device_chunks;
-            bool const direct = is_pinned(destination) || device_chunk;
+            bool const direct = is_pinned(destination) || o.device_receive;
 
             HPX_TEST_EQ(r.destinations.size(), std::size_t(1));
             if (!r.destinations.empty())
             {
                 HPX_TEST_EQ(r.destinations[0] == destination, direct);
+
+                // the parcelport must know that it writes to device memory
+                // (the test's copy would work with either)
+                bool const to_device = direct && !is_pinned(destination);
+                HPX_TEST_EQ(
+                    r.device_destinations, std::size_t(to_device ? 1 : 0));
             }
             HPX_TEST_EQ(r.steps, std::size_t(direct ? 0 : 1));
         }
@@ -160,19 +171,25 @@ namespace {
         {
             for (bool preprocess : {false, true})
             {
-                for (bool zero_copy_receive : {false, true})
+                for (auto const [zero_copy_receive, device_receive] :
+                    {std::pair(false, false), std::pair(true, false),
+                        std::pair(true, true)})
                 {
-                    test_device_vector<From, To>(
-                        size, {preprocess, false, false, zero_copy_receive});
-                    test_device_vector<From, To>(
-                        size, {preprocess, true, false, zero_copy_receive});
-                    test_device_vector<From, To>(
-                        size, {preprocess, true, true, zero_copy_receive});
+                    test_device_vector<From, To>(size,
+                        {preprocess, false, false, zero_copy_receive,
+                            device_receive});
+                    test_device_vector<From, To>(size,
+                        {preprocess, true, false, zero_copy_receive,
+                            device_receive});
+                    test_device_vector<From, To>(size,
+                        {preprocess, true, true, zero_copy_receive,
+                            device_receive});
 
                     // the parcelport sends device memory, but the archive
                     // has no chunks: the data must go through the host
-                    test_device_vector<From, To>(
-                        size, {preprocess, false, true, zero_copy_receive});
+                    test_device_vector<From, To>(size,
+                        {preprocess, false, true, zero_copy_receive,
+                            device_receive});
                 }
             }
         }
@@ -380,6 +397,33 @@ namespace {
         }
     }
 
+    // A filter reads and writes all data on the host: a device_vector in a
+    // filtered archive is sent and received through host memory, also if the
+    // archive may refer to device memory and zero-copy chunks are on.
+    void test_filtered_archive()
+    {
+        std::size_t const size = 65536;
+        ::thrust::host_vector<int> const expected = values<int>(size);
+        ::thrust::device_vector<int> const v(expected);
+        ::thrust::device_vector<int> w;
+
+        std::uint32_t const flags = test::archive_flags(true, true) |
+            static_cast<std::uint32_t>(
+                hpx::serialization::archive_flags::enable_compression);
+        test::filtered const r = test::filtered_round_trip(
+            flags, [&v](hpx::serialization::output_archive& ar) { ar << v; },
+            [&w](hpx::serialization::input_archive& ar) { ar >> w; });
+
+        HPX_TEST(r.saved_filtered);
+        HPX_TEST(r.loaded_filtered);
+
+        // no chunk refers to the device memory
+        HPX_TEST_EQ(r.device_chunks, std::size_t(0));
+
+        HPX_TEST_EQ(w.size(), size);
+        HPX_TEST(::thrust::host_vector<int>(w) == expected);
+    }
+
     // the elements of a device_vector are sent as raw bytes: an archive with
     // another byte order is rejected when saving, as when loading (only
     // with HPX_SERIALIZATION_WITH_SUPPORTS_ENDIANESS archives can have one)
@@ -449,6 +493,7 @@ int hpx_main(hpx::program_options::variables_map&)
     test_array_optimization_disabled();
 #endif
     test_other_byte_order();
+    test_filtered_archive();
 
     return hpx::local::finalize();
 }
