@@ -119,6 +119,7 @@ namespace hpx::threads::coroutines::detail ::posix::pth {
 
 #if defined(HPX_HAVE_STACKOVERFLOW_DETECTION)
 
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <signal.h>
@@ -295,20 +296,30 @@ namespace hpx::threads::coroutines {
                 ucontext_t* uc_ctx = static_cast<ucontext_t*>(ctxptr);
                 char* sigsegv_ptr = static_cast<char*>(infoptr->si_addr);
 
-                // https://www.gnu.org/software/libc/manual/html_node/Signal-Stack.html
-                //
-                char* stk_ptr = static_cast<char*>(uc_ctx->uc_stack.ss_sp);
+                // As in context_linux_x86.hpp, compare with the stack pointer
+                // of the faulting code, not uc_stack, which is the signal
+                // stack. Untested: only non-x86 targets use this file, and only
+                // ppc64 and s390x are handled, others report no overflow.
+#if defined(__powerpc64__)
+                auto const sp = uc_ctx->uc_mcontext.gp_regs[1];
+#elif defined(__s390x__)
+                auto const sp = uc_ctx->uc_mcontext.gregs[15];
+#else
+                (void) uc_ctx;
+                std::uintptr_t const sp = 0;
+#endif
+                char* stk_ptr =
+                    reinterpret_cast<char*>(static_cast<std::uintptr_t>(sp));
 
                 std::ptrdiff_t addr_delta = (sigsegv_ptr > stk_ptr) ?
                     (sigsegv_ptr - stk_ptr) :
                     (stk_ptr - sigsegv_ptr);
 
-                // check the stack addresses, if they're < 10 apart, terminate
-                // program should filter segmentation faults caused by coroutine
-                // stack overflows from 'genuine' stack overflows
-                //
-                if (static_cast<size_t>(addr_delta) <
-                    coroutine_stackoverflow_addr_epsilon)
+                // faults that are not close to the stack pointer, like a null
+                // pointer dereference, are not reported as a stack overflow
+                if (stk_ptr != nullptr &&
+                    static_cast<size_t>(addr_delta) <
+                        coroutine_stackoverflow_addr_epsilon)
                 {
                     std::cerr << "Stack overflow in coroutine at address "
                               << std::internal << std::hex
