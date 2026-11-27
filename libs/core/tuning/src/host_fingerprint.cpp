@@ -26,12 +26,10 @@ namespace hpx::tuning {
         // without the white space around it, which the reader drops
         std::string normalized_value(std::string_view const value)
         {
-            std::size_t const first = value.find_first_not_of(" 	
-");
+            std::size_t const first = value.find_first_not_of(" \t\r\n");
             if (first == std::string_view::npos)
                 return {};
-            std::size_t const last = value.find_last_not_of(" 	
-");
+            std::size_t const last = value.find_last_not_of(" \t\r\n");
 
             std::string result;
             result.reserve(last - first + 1);

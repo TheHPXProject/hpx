@@ -295,8 +295,7 @@ int main(int argc, char* argv[])
     // a file written by hand, without a fingerprint, holds as well
     {
         std::ofstream out(hand_written_file);
-        out << "[hpx]
-            max_idle_backoff_time = 1000 ";
+        out << "[hpx]\nmax_idle_backoff_time = 1000\n";
     }
     HPX_TEST_EQ(run_tool("--idle --check \"" + hand_written_file + "\""), 0);
     HPX_TEST_NEQ(run_tool("--check \"" + std::string(HPX_TUNE_TEST_DIRECTORY) +
