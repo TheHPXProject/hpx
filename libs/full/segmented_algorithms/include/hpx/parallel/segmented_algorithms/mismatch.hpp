@@ -362,11 +362,9 @@ namespace hpx::segmented {
 
     HPX_CXX_EXPORT template <typename ExPolicy, typename SegIter1,
         typename SegIter2, typename Pred = hpx::parallel::detail::equal_to>
-        requires(hpx::is_execution_policy_v<ExPolicy> &&
-            hpx::traits::is_iterator_v<SegIter1> &&
-            hpx::traits::is_segmented_iterator_v<SegIter1> &&
-            hpx::traits::is_iterator_v<SegIter2> &&
-            hpx::traits::is_segmented_iterator_v<SegIter2>)
+        requires(hpx::execution_policy<ExPolicy> &&
+            hpx::segmented_iterator<SegIter1> &&
+            hpx::segmented_iterator<SegIter2>)
     hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
         std::pair<SegIter1, SegIter2>>
     hpx_invoke(hpx::mismatch_t, ExPolicy&& policy, SegIter1 first1,
@@ -426,11 +424,9 @@ namespace hpx::segmented {
 
     HPX_CXX_EXPORT template <typename ExPolicy, typename SegIter1,
         typename SegIter2, typename Pred = hpx::parallel::detail::equal_to>
-        requires(hpx::is_execution_policy_v<ExPolicy> &&
-            hpx::traits::is_iterator_v<SegIter1> &&
-            hpx::traits::is_segmented_iterator_v<SegIter1> &&
-            hpx::traits::is_iterator_v<SegIter2> &&
-            hpx::traits::is_segmented_iterator_v<SegIter2>)
+        requires(hpx::execution_policy<ExPolicy> &&
+            hpx::segmented_iterator<SegIter1> &&
+            hpx::segmented_iterator<SegIter2>)
     hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
         std::pair<SegIter1, SegIter2>>
     hpx_invoke(hpx::mismatch_t, ExPolicy&& policy, SegIter1 first1,

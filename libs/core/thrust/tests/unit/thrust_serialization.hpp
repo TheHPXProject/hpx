@@ -74,8 +74,10 @@ namespace test {
     // the chunk data goes, it's placed there afterwards, and the deferred
     // steps run then; otherwise the data has arrived before load() runs.
     // 'device_receive': the parcelport can receive into device memory.
+    // 'receive_device': the GPU the receiving side asks for (as for a parcel
+    // whose destination has a target), -1 for none.
     received receive(message& m, bool zero_copy_receive, load_type const& load,
-        bool device_receive = false);
+        bool device_receive = false, int receive_device = -1);
 
     // what filtered_round_trip saw
     struct filtered

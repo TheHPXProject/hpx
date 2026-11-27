@@ -465,6 +465,15 @@ namespace hpx::thrust {
     inline constexpr bool is_thrust_execution_policy_v =
         is_thrust_execution_policy<T>::value;
 
+    /// \brief Satisfied by the Thrust execution policies.
+    ///
+    /// Refines hpx::execution_policy, so overloads constrained with this
+    /// concept are preferred over otherwise equivalent overloads constrained
+    /// with hpx::execution_policy.
+    HPX_CXX_CORE_EXPORT template <typename T>
+    concept thrust_execution_policy = hpx::execution_policy<T> &&
+        is_thrust_execution_policy_v<std::decay_t<T>>;
+
     namespace detail {
 
         HPX_CXX_CORE_EXPORT template <typename ExecutionPolicy,

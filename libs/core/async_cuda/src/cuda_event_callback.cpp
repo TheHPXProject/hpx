@@ -233,6 +233,24 @@ namespace hpx::cuda::experimental::detail {
         return work_count;
     }
 
+    namespace {
+
+        // the polling function this module registers with a scheduler
+        hpx::threads::policies::detail::polling_status registered_poll(
+            void* /*context*/)
+        {
+            return hpx::cuda::experimental::detail::poll();
+        }
+
+        std::size_t registered_work_count(void* /*context*/)
+        {
+            return get_work_count();
+        }
+
+        constexpr hpx::threads::policies::detail::polling_function
+            polling_function{&registered_poll, &registered_work_count, nullptr};
+    }    // namespace
+
     // -------------------------------------------------------------
     void register_polling(hpx::threads::thread_pool_base& pool)
     {
@@ -247,8 +265,7 @@ namespace hpx::cuda::experimental::detail {
 #endif
         cud_debug.debug(debug::str<>("enable polling"));
         auto* sched = pool.get_scheduler();
-        sched->set_cuda_polling_functions(
-            &hpx::cuda::experimental::detail::poll, &get_work_count);
+        sched->add_polling_function(&polling_function);
     }
 
     // -------------------------------------------------------------
@@ -274,6 +291,6 @@ namespace hpx::cuda::experimental::detail {
 #endif
         cud_debug.debug(debug::str<>("disable polling"));
         auto* sched = pool.get_scheduler();
-        sched->clear_cuda_polling_function();
+        sched->remove_polling_function(&polling_function);
     }
 }    // namespace hpx::cuda::experimental::detail

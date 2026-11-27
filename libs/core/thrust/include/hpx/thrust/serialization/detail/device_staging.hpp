@@ -10,6 +10,7 @@
 #include <hpx/modules/serialization.hpp>
 
 #include <cstddef>
+#include <thread>
 
 // Moving device memory through the archives: pinned host staging buffers and
 // asynchronous copies between them and the device, used by the serialization
@@ -44,8 +45,36 @@ namespace hpx::serialization::detail {
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void* stage_device_receive(
         input_archive& ar, void* device_data, std::size_t bytes);
 
+    // The GPU the device memory at 'p' belongs to, -1 if 'p' isn't device
+    // memory.
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT int device_of(void const* p) noexcept;
+
+    // Makes 'device' the current GPU of the calling OS thread until it goes
+    // out of scope; does nothing for -1 or for the GPU that is current
+    // already. The current GPU belongs to the OS thread, and an HPX thread
+    // that suspends (for instance waiting for an hpx::spinlock) may continue
+    // on another one: nothing in its scope may suspend the calling HPX thread
+    // (debug builds check that it goes out of scope on the same OS thread).
+    HPX_CXX_CORE_EXPORT class HPX_CORE_EXPORT scoped_device
+    {
+    public:
+        explicit scoped_device(int device);
+        ~scoped_device();
+
+        scoped_device(scoped_device const&) = delete;
+        scoped_device(scoped_device&&) = delete;
+        scoped_device& operator=(scoped_device const&) = delete;
+        scoped_device& operator=(scoped_device&&) = delete;
+
+    private:
+        int previous_ = -1;
+#if defined(HPX_DEBUG)
+        std::thread::id thread_;
+#endif
+    };
+
     // Debug builds call this before device data is serialized: warns (once)
-    // if the device still has work queued on the default stream of this
+    // if the current device still has work queued on the default stream of this
     // thread or on the legacy default stream, i.e. the data may not be
     // complete yet. This catches common mistakes only; work on other streams,
     // or on the default stream of another thread, isn't visible here.

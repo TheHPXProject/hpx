@@ -385,9 +385,8 @@ namespace hpx::segmented {
 
     HPX_CXX_EXPORT template <typename ExPolicy, typename SegIter, typename T,
         typename Reduce, typename Convert>
-        requires(hpx::is_execution_policy_v<ExPolicy> &&
-            hpx::traits::is_iterator_v<SegIter> &&
-            hpx::traits::is_segmented_iterator_v<SegIter>)
+        requires(
+            hpx::execution_policy<ExPolicy> && hpx::segmented_iterator<SegIter>)
     parallel::util::detail::algorithm_result_t<ExPolicy, std::decay_t<T>>
     hpx_invoke(hpx::transform_reduce_t, ExPolicy&& policy, SegIter first,
         SegIter last, T&& init, Reduce&& red_op, Convert&& conv_op)
@@ -438,11 +437,9 @@ namespace hpx::segmented {
 
     HPX_CXX_EXPORT template <typename ExPolicy, typename FwdIter1,
         typename FwdIter2, typename T, typename Reduce, typename Convert>
-        requires(hpx::is_execution_policy_v<ExPolicy> &&
-            hpx::traits::is_iterator_v<FwdIter1> &&
-            hpx::traits::is_segmented_iterator_v<FwdIter1> &&
-            hpx::traits::is_iterator_v<FwdIter2> &&
-            hpx::traits::is_segmented_iterator_v<FwdIter2>)
+        requires(hpx::execution_policy<ExPolicy> &&
+            hpx::segmented_iterator<FwdIter1> &&
+            hpx::segmented_iterator<FwdIter2>)
     parallel::util::detail::algorithm_result_t<ExPolicy, T> hpx_invoke(
         hpx::transform_reduce_t, ExPolicy&& policy, FwdIter1 first1,
         FwdIter1 last1, FwdIter2 first2, T init, Reduce&& red_op,

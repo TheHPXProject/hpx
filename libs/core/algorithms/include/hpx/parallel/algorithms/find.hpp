@@ -1455,14 +1455,17 @@ namespace hpx::parallel {
                         return result::get(HPX_MOVE(first));
                 }
 
-                difference_type count =
+                difference_type const count =
                     hpx::parallel::detail::distance(first, last);
 
+                // the token starts at the end of the range (no match), the
+                // partitioner runs over work_count elements
+                difference_type work_count = count;
                 if (s_first == s_last)
                 {
                     if constexpr (has_scheduler_executor)
                     {
-                        count = static_cast<difference_type>(0);
+                        work_count = static_cast<difference_type>(0);
                     }
                     else
                     {
@@ -1523,7 +1526,7 @@ namespace hpx::parallel {
                 using partitioner_type =
                     util::partitioner<policy_type, FwdIter, void>;
                 return partitioner_type::call_with_index(
-                    HPX_FORWARD(decltype(policy), policy), first, count, 1,
+                    HPX_FORWARD(decltype(policy), policy), first, work_count, 1,
                     hpx::threads::detail::with_task_size(HPX_MOVE(f1), size),
                     HPX_MOVE(f2));
             }
