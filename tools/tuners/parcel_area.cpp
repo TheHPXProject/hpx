@@ -67,6 +67,9 @@ namespace hpx_tune_detail {
         {
             entries.emplace_back(e.key, e.value);
         }
+        // the parcel area's part: the node's network (compared with the
+        // tool's own, see add_peer_nodes)
+        entries.emplace_back("parcel_network", tuning::describe_network());
         return entries;
     }
 
@@ -811,11 +814,49 @@ namespace hpx_tune {
             std::vector<std::string> conduits;
         };
 
+        // The comments of the written file in lines of at most 100
+        // characters, broken at spaces, the continuations indented: HPX's
+        // ini reader before 1be1f5ce01 overflows an HPX thread's stack on a
+        // line of a few hundred characters (it reads the file again when
+        // the runtime loads its components), so that every application
+        // started with the file would crash.
+        std::vector<std::string> wrap_comments(
+            std::vector<std::string> const& comments)
+        {
+            constexpr std::size_t width = 100;
+            std::vector<std::string> lines;
+            for (std::string const& comment : comments)
+            {
+                std::string rest = comment;
+                bool first = true;
+                while (true)
+                {
+                    std::string const indent = first ? "" : "    ";
+                    if (indent.size() + rest.size() <= width)
+                    {
+                        lines.push_back(indent + rest);
+                        break;
+                    }
+                    std::size_t cut = rest.rfind(' ', width - indent.size());
+                    if (cut == std::string::npos || cut == 0)
+                        cut = width - indent.size();
+                    lines.push_back(indent + rest.substr(0, cut));
+                    rest = rest.substr(rest[cut] == ' ' ? cut + 1 : cut);
+                    first = false;
+                }
+            }
+            return lines;
+        }
+
         // the parcel layer's part of the fingerprint that describes the
         // build: its parcelports and its conduits
         void add_build_entries(tuning::host_fingerprint& fingerprint,
             std::vector<std::string> const& conduits)
         {
+            // and this node's network (the parcel layer's settings depend
+            // on it more than on anything else)
+            fingerprint.add("parcel_network", tuning::describe_network());
+
             std::string compiled;
             for (char const* pp : {
 #if defined(HPX_HAVE_PARCELPORT_TCP)
@@ -972,6 +1013,9 @@ namespace hpx_tune {
 
         parcel_setup setup = make_setup(context);
         parcel_run_options& o = setup.o;
+        // this node's network before the children, so that the other node's
+        // is recorded only where it differs (add_peer_nodes)
+        fingerprint.add("parcel_network", tuning::describe_network());
         std::vector<std::string> const& placements = setup.placements;
         std::vector<std::string> const& parcelports = setup.parcelports;
         std::vector<std::string> const& conduits = setup.conduits;
@@ -1136,9 +1180,34 @@ namespace hpx_tune {
 
         // the parcel layer's part of the fingerprint
         add_build_entries(fingerprint, conduits);
+        // the measured configurations by placement and parcelport, the
+        // conduits joined in their own order ("same-node:tcp:none+ucx"):
+        // short enough for one line of the file
+        std::vector<std::pair<std::string, std::string>> measured_groups;
+        for (std::string const& placement : placements)
+        {
+            for (std::string const& pp : parcelports)
+            {
+                std::string joined;
+                for (std::string const& c : conduits)
+                {
+                    if (std::find(measured_names.begin(), measured_names.end(),
+                            placement + ":" + pp + ":" + c) !=
+                        measured_names.end())
+                    {
+                        joined += (joined.empty() ? "" : "+") + c;
+                    }
+                }
+                if (!joined.empty())
+                    measured_groups.emplace_back(placement + ":" + pp, joined);
+            }
+        }
         std::string measured_list;
-        for (std::string const& m : measured_names)
-            measured_list += (measured_list.empty() ? "" : ",") + m;
+        for (auto const& [group, conduits_measured] : measured_groups)
+        {
+            measured_list += (measured_list.empty() ? "" : ",") + group + ":" +
+                conduits_measured;
+        }
         fingerprint.add("parcel_measured", measured_list, false);
 
         if (!host_chunk_support)
@@ -1148,6 +1217,7 @@ namespace hpx_tune {
                 "conduit (hpx.parcel.conduit_host_chunks is unknown)");
         }
         result.sections = tuning::to_sections(written);
+        result.comments = wrap_comments(result.comments);
         return result;
     }
 
@@ -1227,6 +1297,7 @@ namespace hpx_tune {
         verify_result result;
         std::vector<std::string> items;
         std::size_t const mib = std::size_t(1) << 20;
+        bool peer_recorded = false;
 
         for (std::string const& placement : setup.placements)
         {
@@ -1240,6 +1311,14 @@ namespace hpx_tune {
                     result.failures.push_back(what + ": the child failed");
                     result.lines.push_back(what + ": the child failed");
                     continue;
+                }
+                // the other node, as tuning records it, for the driver to
+                // compare with the file's
+                if (placement == "two-nodes" && !peer_recorded)
+                {
+                    peer_recorded = true;
+                    tuning::add_peer_nodes(
+                        context.fingerprint, {r.here, r.peer});
                 }
                 std::size_t const failures_before = result.failures.size();
                 auto const fail = [&](std::string const& text) {
@@ -1312,10 +1391,13 @@ namespace hpx_tune {
                     fail("the file turns host chunks through the device "
                          "conduit on, which this HPX can't do");
                 }
-                else if (support && on && !moves)
+                // (by HPX's defaults host chunks are on, with or without a
+                // conduit: a failure only where the file asks for them)
+                else if (support && on && !moves && file_on)
                 {
-                    fail("host chunks through the device conduit are on, but "
-                         "no device conduit moves host memory (conduit: " +
+                    fail("the file turns host chunks through the device "
+                         "conduit on, but no device conduit moves host memory "
+                         "(conduit: " +
                         conduit + ")");
                 }
 
@@ -1491,6 +1573,15 @@ namespace hpx_tune {
             {
                 std::cout << child_prefix << " checked " << p.size << " "
                           << p.conduit_chunks_per_round << " " << p.errors
+                          << "\n";
+            }
+            for (auto const& [key, value] : hpx_tune_detail::host_entries())
+                std::cout << child_prefix << " here " << key << " " << value
+                          << "\n";
+            for (auto const& [key, value] :
+                hpx_tune_host_entries_action()(remotes.front()))
+            {
+                std::cout << child_prefix << " peer " << key << " " << value
                           << "\n";
             }
             std::cout << child_prefix << " end\n" << std::flush;

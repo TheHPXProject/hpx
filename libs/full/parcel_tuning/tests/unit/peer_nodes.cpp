@@ -85,6 +85,34 @@ namespace {
         HPX_TEST_EQ(value(f, "parcel_peer2_cores"), std::string("40"));
     }
 
+    // the parcel area's own entries keep one "parcel_" (the V100 pair: the
+    // tool on diablo at FDR, bahram at QDR)
+    void test_parcel_keys()
+    {
+        auto f = tool_on("diablo", "40");
+        f.add("parcel_network", "mlx4_0 MT4099 56 Gb/sec (4X FDR)");
+        auto bahram = node("bahram", "20");
+        bahram.emplace_back(
+            "parcel_network", "mlx4_0 MT4099 40 Gb/sec (4X QDR)");
+        auto diablo = node("diablo", "40");
+        diablo.emplace_back(
+            "parcel_network", "mlx4_0 MT4099 56 Gb/sec (4X FDR)");
+        HPX_TEST_EQ(
+            tuning::add_peer_nodes(f, {bahram, diablo}), std::size_t(1));
+        HPX_TEST_EQ(value(f, "parcel_peer_network"),
+            std::string("mlx4_0 MT4099 40 Gb/sec (4X QDR)"));
+        HPX_TEST(f.find("parcel_peer_parcel_network") == nullptr);
+    }
+
+    // the network of this node: whatever it is, no line breaks, and the
+    // same text twice
+    void test_describe_network()
+    {
+        std::string const n = tuning::describe_network();
+        HPX_TEST(n.find('\n') == std::string::npos);
+        HPX_TEST_EQ(tuning::describe_network(), n);
+    }
+
     // both localities on the tool's node (the same-node placement): nothing
     void test_same_node()
     {
@@ -103,5 +131,7 @@ int main()
     test_tool_on_locality_1();
     test_tool_elsewhere();
     test_same_node();
+    test_parcel_keys();
+    test_describe_network();
     return hpx::util::report_errors();
 }
