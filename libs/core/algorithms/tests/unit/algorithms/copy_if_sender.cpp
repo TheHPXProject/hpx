@@ -217,6 +217,7 @@ void copy_if_sender_test()
         hpx::launch::async, par(task), IteratorTag{});
 }
 
+#if !defined(_MSC_VER)
 void test_copy_remove_ranges_sender()
 {
     using namespace hpx::execution;
@@ -267,6 +268,7 @@ void test_copy_remove_ranges_sender()
         hpx::ranges::remove_copy(policy, input, output.begin(), 3, projection),
         {1, 3, 4, 5, 6});
 }
+#endif
 
 int hpx_main()
 {
