@@ -9,7 +9,8 @@
 // settings come in areas, chosen on the command line; without an area option
 // every area the build supports is tuned:
 //
-//   --idle  the scheduler's idle settings (idle_area.hpp)
+//   --idle   the scheduler's idle settings (idle_area.hpp)
+//   --chunk  the minimal run time of a chunk of each executor (chunk_area.hpp)
 //
 // This file is the driver: the command line, the order of the areas, the
 // host's fingerprint and the file. Each area lives in files of its own and
@@ -25,6 +26,7 @@
 
 #include "area.hpp"
 #include "child.hpp"
+#include "chunk_area.hpp"
 #include "idle_area.hpp"
 
 #include <chrono>
@@ -67,9 +69,11 @@ namespace {
     // A child of an area (child.hpp) measures for that area: it starts the
     // HPX runtime itself and writes its results for the parent. Each area
     // that starts children adds its entry here.
-    int run_as_child_of(
-        std::string const& area, int /* argc */, char* /* argv */[])
+    int run_as_child_of(std::string const& area, int argc, char* argv[])
     {
+        if (area == "chunk")
+            return hpx_tune::chunk_child_main(argc, argv);
+
         std::cerr << "hpx_tune: no area '" << area << "' starts children\n";
         return 1;
     }
@@ -95,6 +99,7 @@ int main(int argc, char* argv[])
     general.add_options()
         ("help,h", "print this help")
         ("idle", "tune the scheduler's idle settings")
+        ("chunk", "tune the minimal run time of a chunk of each executor")
         ("output,o", po::value<std::string>()->default_value("hpx-tuned.ini"),
             "the ini file to write")
         ("repeats,r", po::value<std::size_t>()->default_value(21),
@@ -103,7 +108,9 @@ int main(int argc, char* argv[])
     // clang-format on
 
     po::options_description desc;
-    desc.add(general).add(hpx_tune::idle_options());
+    desc.add(general)
+        .add(hpx_tune::idle_options())
+        .add(hpx_tune::chunk_options());
 
     po::variables_map vm;
     try
@@ -123,8 +130,9 @@ int main(int argc, char* argv[])
     }
 
     // without an area option, every area this build supports
-    bool const all_areas = vm.count("idle") == 0;
+    bool const all_areas = vm.count("idle") == 0 && vm.count("chunk") == 0;
     bool const idle = all_areas || vm.count("idle") != 0;
+    bool const chunk = all_areas || vm.count("chunk") != 0;
 
     bool const verbose = vm.count("verbose") != 0;
     tuning::microbenchmark_options options;
@@ -166,6 +174,8 @@ int main(int argc, char* argv[])
     {
         if (idle)
             add(hpx_tune::tune_idle(vm, machine, options, verbose));
+        if (chunk)
+            add(hpx_tune::tune_chunk(vm, machine, options.repeats, verbose));
     }
     catch (std::exception const& e)
     {
