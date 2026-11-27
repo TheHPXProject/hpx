@@ -5,6 +5,7 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 #include <hpx/config.hpp>
+#include <hpx/modules/ini.hpp>
 #include <hpx/modules/testing.hpp>
 #include <hpx/modules/topology.hpp>
 #include <hpx/modules/tuning.hpp>
@@ -12,6 +13,8 @@
 #include <hpx/hpx_main.hpp>
 
 #include <cstddef>
+#include <cstdio>
+#include <fstream>
 #include <set>
 #include <string>
 #include <vector>
@@ -97,6 +100,42 @@ void test_comments_and_section()
                       "5$\n") != std::string::npos);
 }
 
+// a value with '#' (where the ini reader's comments start) and white space
+// around it: stored as the reader gives it back from the written section, so
+// that the profile read from the file and this host compare equal
+void test_values_read_back()
+{
+    tuning::host_fingerprint f;
+    f.add("os_version", "  #1 SMP PREEMPT_DYNAMIC Tue Aug 26 2025 ");
+    f.add("cpu_model", "CPU #2");
+    HPX_TEST_EQ(f.entries[0].value,
+        std::string("%231 SMP PREEMPT_DYNAMIC Tue Aug 26 2025"));
+    HPX_TEST_EQ(f.entries[1].value, std::string("CPU %232"));
+
+    std::string const file = "host_fingerprint_read_back.ini";
+    {
+        std::ofstream out(file);
+        out << tuning::to_ini({tuning::to_section(f)}, {}, 2026);
+    }
+    hpx::util::section ini;
+    ini.read(file);
+    std::remove(file.c_str());
+
+    hpx::util::section const* const read =
+        ini.get_section(tuning::fingerprint_section);
+    HPX_TEST(read != nullptr);
+    if (read == nullptr)
+        return;
+
+    tuning::host_fingerprint profile;
+    for (tuning::fingerprint_entry const& e : f.entries)
+    {
+        HPX_TEST_EQ(read->get_entry(e.key, ""), e.value);
+        profile.add(e.key, read->get_entry(e.key, ""));
+    }
+    HPX_TEST(tuning::mismatches(profile, f).empty());
+}
+
 void test_mismatches()
 {
     tuning::host_fingerprint profile;
@@ -125,6 +164,7 @@ int main()
     test_add_and_find();
     test_describe_host();
     test_comments_and_section();
+    test_values_read_back();
     test_mismatches();
     return hpx::util::report_errors();
 }

@@ -10,6 +10,7 @@
 
 #include <hpx/hpx_main.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <string>
 #include <vector>
@@ -76,6 +77,48 @@ void test_to_ini()
     HPX_TEST_EQ(tuning::to_ini(sections, {"written by a test"}, 2026), ini);
 }
 
+// long comments (a reason, a comment line, one word longer than a line) are
+// broken into lines of at most max_comment_line characters, every word kept
+void test_long_comments()
+{
+    std::string reason;
+    for (int i = 0; i != 40; ++i)
+        reason += "word" + std::to_string(i) + " ";
+    std::string const long_word(250, 'x');
+
+    tuning::ini_section section{"hpx.parcel", {}};
+    section.settings.push_back(
+        tuning::tuned_setting{"hpx.parcel.enable", "1", reason, true});
+    std::string const ini =
+        tuning::to_ini({section}, {reason, long_word}, 2026);
+
+    std::size_t begin = 0;
+    std::size_t lines = 0;
+    std::string comments;
+    while (begin < ini.size())
+    {
+        std::size_t const end = ini.find('\n', begin);
+        std::string const line = ini.substr(begin, end - begin);
+        HPX_TEST_LTE(line.size(), tuning::max_comment_line);
+        if (line.size() > 2 && line[0] == '#')
+            comments += line.substr(line.find_first_not_of("# ")) + " ";
+        ++lines;
+        begin = end + 1;
+    }
+    HPX_TEST_LT(std::size_t(12), lines);
+
+    // every word is still there, the long word in pieces
+    for (int i = 0; i != 40; ++i)
+    {
+        HPX_TEST(comments.find("word" + std::to_string(i) + " ") !=
+            std::string::npos);
+    }
+    HPX_TEST(comments.find("(HPX's default)") != std::string::npos);
+    HPX_TEST_EQ(
+        std::count(comments.begin(), comments.end(), 'x'), std::ptrdiff_t(250));
+    HPX_TEST(ini.find("\nenable = 1\n") != std::string::npos);
+}
+
 void test_plain_sections()
 {
     // sections of another area, in one file with an idle tuning section
@@ -117,6 +160,7 @@ int main()
 {
     test_section_name();
     test_to_ini();
+    test_long_comments();
     test_plain_sections();
     return hpx::util::report_errors();
 }

@@ -12,10 +12,14 @@
 #include <hpx/config.hpp>
 #include <hpx/tuning/tuned_setting.hpp>
 
+#include <cstddef>
 #include <string>
 #include <vector>
 
 namespace hpx::tuning {
+
+    /// The longest comment line to_ini writes, in characters.
+    HPX_CXX_CORE_EXPORT inline constexpr std::size_t max_comment_line = 100;
 
     /// One section of an ini file: its name without the brackets (for
     /// instance "hpx.parcel" or "hpx.idle_tuning.local-priority-fifo.none.20")
@@ -36,7 +40,10 @@ namespace hpx::tuning {
     /// it starts with them, otherwise a leading "hpx." is (so that
     /// "hpx.parcel.tcp.enable" is written as "enable" in the section
     /// "hpx.parcel.tcp", and "hpx.min_idle_backoff_time" as
-    /// "min_idle_backoff_time" in an idle tuning section).
+    /// "min_idle_backoff_time" in an idle tuning section). Comment lines are
+    /// at most max_comment_line characters long, broken at blanks (HPX's
+    /// ini reader overflows an HPX thread's stack on lines of a few hundred
+    /// characters); a value is written as it is.
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT std::string to_ini(
         std::vector<ini_section> const& sections,
         std::vector<std::string> const& comments, int year);

@@ -13,8 +13,9 @@
 // or per pool size asked for, with valid backoff times. The first run writes a report too (--report), which
 // has to hold the fingerprint and the idle area's measurements. The test
 // checks the form of the files, not whether the settings are good for the
-// machine. The tool's --check of the first file has to succeed, of a missing
-// file and together with --output to fail.
+// machine. The tool's --check of the first file and of a file without a
+// fingerprint has to succeed, of a missing file and together with --output
+// to fail.
 //
 // HPX_TUNE_EXECUTABLE and HPX_TUNE_TEST_DIRECTORY are set by CMake.
 
@@ -49,6 +50,9 @@ namespace {
     std::string const report_file =
         std::string(HPX_TUNE_TEST_DIRECTORY) + "/hpx_tune_default.json";
     // the report of the check of the first file
+    // a file written by hand, without a fingerprint
+    std::string const hand_written_file =
+        std::string(HPX_TUNE_TEST_DIRECTORY) + "/hpx_tune_hand_written.ini";
     std::string const check_report_file =
         std::string(HPX_TUNE_TEST_DIRECTORY) + "/hpx_tune_check.json";
 
@@ -288,6 +292,13 @@ int main(int argc, char* argv[])
             HPX_TEST_MSG(json.find(member) != std::string::npos, member);
         }
     }
+    // a file written by hand, without a fingerprint, holds as well
+    {
+        std::ofstream out(hand_written_file);
+        out << "[hpx]
+            max_idle_backoff_time = 1000 ";
+    }
+    HPX_TEST_EQ(run_tool("--idle --check \"" + hand_written_file + "\""), 0);
     HPX_TEST_NEQ(run_tool("--check \"" + std::string(HPX_TUNE_TEST_DIRECTORY) +
                      "/no_such_file.ini\""),
         0);

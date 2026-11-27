@@ -44,8 +44,14 @@ namespace hpx::tuning {
         std::vector<fingerprint_entry> entries;
 
         /// Append an entry, or replace the value of the entry with the same
-        /// key, keeping its place.
-        void add(std::string key, std::string value, bool compared = true);
+        /// key, keeping its place. The value is stored as HPX's ini reader
+        /// reads it back from the written section, so that a profile and
+        /// this host compare equal: without leading and trailing white
+        /// space, and with every '#' (where the reader's comments start)
+        /// written as "%23" (an operating system's version can have one:
+        /// "#1 SMP PREEMPT_DYNAMIC ...").
+        void add(
+            std::string key, std::string const& value, bool compared = true);
 
         /// The entry with the given key, nullptr if there is none.
         [[nodiscard]] fingerprint_entry const* find(
