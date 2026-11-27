@@ -172,10 +172,8 @@ int main(int argc, char* argv[])
     // threshold of 256 KiB (with or without host chunks in this HPX)
     std::string const tcp_off =
         std::string(HPX_TUNE_TEST_DIRECTORY) + "/hpx_tune_parcel_tcp_off.ini";
-    // (an empty fingerprint section: the driver of 7181f669ab throws on a
-    // file without one, status/parcel.md)
     write_file(tcp_off,
-        "[hpx.tuning.fingerprint]\n[hpx.parcel]\nconduit_host_threshold = "
+        "[hpx.parcel]\nconduit_host_threshold = "
         "262144\n"
         "[hpx.parcel.tcp]\nconduit_host_chunks = 0\n");
     HPX_TEST_EQ(check_file(tcp_off, check_report), 0);
@@ -184,7 +182,7 @@ int main(int argc, char* argv[])
     std::string const other_parcelport = std::string(HPX_TUNE_TEST_DIRECTORY) +
         "/hpx_tune_parcel_other_parcelport.ini";
     write_file(other_parcelport,
-        "[hpx.tuning.fingerprint]\n[hpx.parcel.lcw]\nconduit_host_chunks = 1\n"
+        "[hpx.parcel.lcw]\nconduit_host_chunks = 1\n"
         "zero_copy_serialization_threshold = 4096\n");
     HPX_TEST_EQ(check_file(other_parcelport, check_report), 0);
 
@@ -193,7 +191,7 @@ int main(int argc, char* argv[])
     std::string const no_conduit = std::string(HPX_TUNE_TEST_DIRECTORY) +
         "/hpx_tune_parcel_no_conduit.ini";
     write_file(no_conduit,
-        "[hpx.tuning.fingerprint]\n[hpx.parcel]\ndevice_conduit = none\n"
+        "[hpx.parcel]\ndevice_conduit = none\n"
         "[hpx.parcel.tcp]\nconduit_host_chunks = 1\n");
     HPX_TEST_NEQ(check_file(no_conduit, check_report), 0);
     HPX_TEST(contains(read_file(check_report), "\"holds\": false"));

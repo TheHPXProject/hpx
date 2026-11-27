@@ -814,40 +814,6 @@ namespace hpx_tune {
             std::vector<std::string> conduits;
         };
 
-        // The comments of the written file in lines of at most 100
-        // characters, broken at spaces, the continuations indented: HPX's
-        // ini reader before 1be1f5ce01 overflows an HPX thread's stack on a
-        // line of a few hundred characters (it reads the file again when
-        // the runtime loads its components), so that every application
-        // started with the file would crash.
-        std::vector<std::string> wrap_comments(
-            std::vector<std::string> const& comments)
-        {
-            constexpr std::size_t width = 100;
-            std::vector<std::string> lines;
-            for (std::string const& comment : comments)
-            {
-                std::string rest = comment;
-                bool first = true;
-                while (true)
-                {
-                    std::string const indent = first ? "" : "    ";
-                    if (indent.size() + rest.size() <= width)
-                    {
-                        lines.push_back(indent + rest);
-                        break;
-                    }
-                    std::size_t cut = rest.rfind(' ', width - indent.size());
-                    if (cut == std::string::npos || cut == 0)
-                        cut = width - indent.size();
-                    lines.push_back(indent + rest.substr(0, cut));
-                    rest = rest.substr(rest[cut] == ' ' ? cut + 1 : cut);
-                    first = false;
-                }
-            }
-            return lines;
-        }
-
         // the parcel layer's part of the fingerprint that describes the
         // build: its parcelports and its conduits
         void add_build_entries(tuning::host_fingerprint& fingerprint,
@@ -1217,7 +1183,6 @@ namespace hpx_tune {
                 "conduit (hpx.parcel.conduit_host_chunks is unknown)");
         }
         result.sections = tuning::to_sections(written);
-        result.comments = wrap_comments(result.comments);
         return result;
     }
 
