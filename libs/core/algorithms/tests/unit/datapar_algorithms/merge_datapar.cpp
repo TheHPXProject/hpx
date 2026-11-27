@@ -89,9 +89,11 @@ void test_merge_inputs(ExPolicy const& policy, std::vector<T> const& v1,
 template <typename ExPolicy, typename T, typename Comp>
 void test_merge_sizes(ExPolicy const& policy, Comp comp)
 {
-    // sizes around the pack widths of all targets (2 to 64 lanes)
+    // sizes around the pack widths of all targets (2 to 64 lanes); the large
+    // inputs (several chunks of the parallel merge) are tested once per type
+    // only, see test_merge_large below
     std::size_t const sizes1[] = {0, 1, 2, 3, 4, 7, 8, 9, 15, 16, 17, 31, 32,
-        33, 63, 64, 65, 67, 100, 1000, 100003};
+        33, 63, 64, 65, 67, 100, 1000};
     std::size_t const sizes2[] = {0, 1, 5, 16, 33, 1000};
 
     for (std::size_t size1 : sizes1)
@@ -115,9 +117,22 @@ void test_merge_sizes(ExPolicy const& policy, Comp comp)
     }
 }
 
+// inputs large enough for several chunks of the parallel merge, in both
+// directions
+template <typename ExPolicy, typename T>
+void test_merge_large(ExPolicy const& policy)
+{
+    test_merge_inputs(policy, make_input<T>(30011, 0, 100, std::less<>()),
+        make_input<T>(10007, 0, 100, std::less<>()), std::less<>());
+    test_merge_inputs(policy, make_input<T>(10007, 0, 4, std::greater<>()),
+        make_input<T>(30011, 0, 4, std::greater<>()), std::greater<>());
+}
+
 template <typename ExPolicy, typename T>
 void test_merge_comparators(ExPolicy const& policy)
 {
+    test_merge_large<ExPolicy, T>(policy);
+
     test_merge_sizes<ExPolicy, T>(policy, std::less<>());
     test_merge_sizes<ExPolicy, T>(policy, std::less<T>());
     test_merge_sizes<ExPolicy, T>(policy, std::greater<>());
