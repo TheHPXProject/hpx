@@ -220,4 +220,4 @@ namespace hpx_tune {
 // the first area: it measures in this process, on which nothing of HPX runs
 HPX_TUNE_REGISTER_AREA(idle,
     hpx_tune::area{"idle", "tune the scheduler's idle settings", 0,
-        &hpx_tune::idle_options, &hpx_tune::tune_idle, nullptr})
+        &hpx_tune::idle_options, &hpx_tune::tune_idle, nullptr, nullptr})

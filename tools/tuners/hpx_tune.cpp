@@ -15,9 +15,12 @@
 // lives in files of its own and registers itself (area.hpp) with its
 // options, the function that measures it, and the function its children run
 // (child.hpp). The measurements and the rules are those of the tuning module
-// (hpx/modules/tuning.hpp).
+// (hpx/modules/tuning.hpp). With --check=<file> it measures nothing: each
+// selected area checks that HPX applications started with the file do
+// what it says (area::verify).
 
 #include <hpx/config.hpp>
+#include <hpx/modules/ini.hpp>
 #include <hpx/modules/program_options.hpp>
 #include <hpx/modules/topology.hpp>
 #include <hpx/modules/tuning.hpp>
@@ -77,6 +80,150 @@ namespace {
         std::cerr << "hpx_tune: no area '" << name << "' starts children\n";
         return 1;
     }
+
+    // The fingerprint of a written file, from its [hpx.tuning.fingerprint]
+    // as HPX's ini reader reads it (the runtime's view of the file); empty
+    // if the file has none. Whether an entry is compared is written as a
+    // comment only, so every entry counts as compared here.
+    tuning::host_fingerprint read_profile(hpx::util::section const& file)
+    {
+        tuning::host_fingerprint profile;
+        hpx::util::section const* const fingerprint =
+            file.get_section(tuning::fingerprint_section);
+        if (fingerprint == nullptr)
+            return profile;
+        for (auto const& entry : fingerprint->get_entries())
+            profile.add(entry.first, fingerprint->get_entry(entry.first));
+        return profile;
+    }
+
+    // The differences between a profile and this host, in the entries this
+    // host has (the core entries and those the areas' checks added): an
+    // area's entries in the profile are that area's check's to compare.
+    std::vector<std::string> profile_mismatches(
+        tuning::host_fingerprint const& profile,
+        tuning::host_fingerprint const& here)
+    {
+        tuning::host_fingerprint known;
+        for (tuning::fingerprint_entry const& e : profile.entries)
+        {
+            if (here.find(e.key) != nullptr)
+                known.add(e.key, e.value);
+        }
+        return tuning::mismatches(known, here);
+    }
+
+    // hpx_tune --check=<file>: run the check of each selected area; nothing
+    // is measured or written but the report. A profile from another host or
+    // HPX is reported, not refused. 0 if every check holds, 1 otherwise.
+    int verify_file(std::string const& file_name,
+        std::vector<area> const& selected,
+        hpx_tune::area_context const& context, po::variables_map const& vm)
+    {
+        hpx::util::section file;
+        try
+        {
+            file.read(file_name);
+        }
+        catch (std::exception const& e)
+        {
+            std::cerr << "hpx_tune: can't read " << file_name << ": "
+                      << e.what() << "\n";
+            return 1;
+        }
+        tuning::host_fingerprint const profile = read_profile(file);
+        if (profile.entries.empty())
+        {
+            std::cout << "fingerprint: " << file_name
+                      << " has none, not compared\n";
+        }
+
+        bool failed = false;
+        std::vector<std::pair<std::string, std::string>> area_reports;
+        hpx_tune::verify_context const verification{
+            context, file_name, profile};
+        for (area const& a : selected)
+        {
+            if (a.verify == nullptr)
+            {
+                std::cout << a.name << ": no check\n";
+                area_reports.emplace_back(a.name,
+                    tuning::json_object({{"checked", "false"},
+                        {"lines", tuning::json_array({})},
+                        {"failures", tuning::json_array({})}}));
+                continue;
+            }
+
+            hpx_tune::verify_result result;
+            try
+            {
+                result = a.verify(verification);
+            }
+            catch (std::exception const& e)
+            {
+                result.failures.push_back(
+                    std::string("the check couldn't run: ") + e.what());
+            }
+            for (std::string const& line : result.lines)
+                std::cout << a.name << ": " << line << "\n";
+            for (std::string const& failure : result.failures)
+                std::cout << a.name << ": FAILED: " << failure << "\n";
+            failed = failed || !result.failures.empty();
+
+            std::vector<std::string> lines, failures;
+            for (std::string const& line : result.lines)
+                lines.push_back(tuning::json_string(line));
+            for (std::string const& failure : result.failures)
+                failures.push_back(tuning::json_string(failure));
+            std::vector<std::pair<std::string, std::string>> members = {
+                {"checked", "true"},
+                {"lines", tuning::json_array(lines)},
+                {"failures", tuning::json_array(failures)},
+            };
+            if (!result.report.empty())
+                members.emplace_back("result", result.report);
+            area_reports.emplace_back(a.name, tuning::json_object(members));
+        }
+
+        // after the checks, which may have added their areas' entries
+        std::vector<std::string> const differences =
+            profile_mismatches(profile, context.fingerprint);
+        for (std::string const& difference : differences)
+            std::cout << "fingerprint: differs: " << difference << "\n";
+
+        std::cout << "check of " << file_name << ": "
+                  << (failed ? "FAILED" : "OK") << "\n";
+
+        // the report: {"hpx_tune": <HPX's version>, "checked": <date>,
+        // "file": <file>, "fingerprint": {...}, "mismatches": [...],
+        // "check": {"idle": {...}, ...}}
+        if (vm.count("report"))
+        {
+            std::string const report = vm["report"].as<std::string>();
+            std::ofstream json(report);
+            if (!json)
+            {
+                std::cerr << "hpx_tune: can't write " << report << "\n";
+                return 1;
+            }
+            std::vector<std::string> mismatch_list;
+            for (std::string const& difference : differences)
+                mismatch_list.push_back(tuning::json_string(difference));
+            json << tuning::json_object({
+                        {"hpx_tune",
+                            tuning::json_string(hpx::full_version_as_string())},
+                        {"checked", tuning::json_string(current_date())},
+                        {"file", tuning::json_string(file_name)},
+                        {"fingerprint", tuning::to_json(context.fingerprint)},
+                        {"mismatches", tuning::json_array(mismatch_list)},
+                        {"check", tuning::json_object(area_reports)},
+                    })
+                 << "\n";
+            std::cout << "wrote " << report << ": " << area_reports.size()
+                      << " areas\n";
+        }
+        return failed ? 1 : 0;
+    }
 }    // namespace
 
 int main(int argc, char* argv[])
@@ -109,7 +256,12 @@ int main(int argc, char* argv[])
             "the ini file to write (.hpx.ini: the default settings of HPX "
             "applications started in its directory)")
         ("report", po::value<std::string>(),
-            "also write every area's measurements to this JSON file")
+            "also write every area's measurements to this JSON file (with "
+            "--check: the results of the checks)")
+        ("check", po::value<std::string>(),
+            "measure nothing: check that HPX applications started with this "
+            "written file do what it says, for every selected area; exit "
+            "code 0 if every check holds (not with --output)")
         ("repeats,r", po::value<std::size_t>()->default_value(21),
             "how many times each measurement is repeated")
         ("verbose,v", "print the measurements");
@@ -192,6 +344,20 @@ int main(int argc, char* argv[])
     // a child that fails) throws; the tool then writes no file.
     hpx_tune::area_context const context{
         vm, machine, options, verbose, argv[0], fingerprint};
+
+    // a written file to check instead of measuring
+    if (vm.count("check"))
+    {
+        if (!vm["output"].defaulted())
+        {
+            std::cerr << "hpx_tune: --check writes no file, --output can't "
+                         "be given with it\n";
+            return 1;
+        }
+        return verify_file(
+            vm["check"].as<std::string>(), selected, context, vm);
+    }
+
     try
     {
         for (area const& a : selected)
