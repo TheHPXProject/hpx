@@ -274,7 +274,8 @@ namespace hpx::actions {
 #if defined(HPX_HAVE_CXX26_REFLECTION_ANNOTATIONS)
         // The function can give the action a size with an annotation, for
         // instance [[=hpx::task_size::small_]]. HPX_ACTION_HAS_TASK_SIZE on
-        // reflect_action<F> itself, the type HPX_PLAIN_ACTION names, wins.
+        // the action, reflect_action<F> or the type HPX_PLAIN_ACTION names,
+        // wins.
         static constexpr threads::task_size function_task_size() noexcept
         {
             return hpx::traits::detail::annotated_function_task_size<F>();
@@ -307,14 +308,16 @@ namespace hpx::actions {
 
         /// Automatic invocation count registration -- eliminates the need
         /// for HPX_REGISTER_ACTION for reflection-based plain actions.
-        static detail::register_action_invocation_count<reflect_action>
+        static detail::register_action_invocation_count<
+            detail::action_type_t<reflect_action, Derived>>
             invocation_count_registrar_;
     };
 
     /// \cond NOINTERNAL
     template <std::meta::info F, typename Derived>
         requires(std::meta::is_namespace_member(F) && std::meta::is_function(F))
-    detail::register_action_invocation_count<reflect_action<F, Derived>>
+    detail::register_action_invocation_count<
+        detail::action_type_t<reflect_action<F, Derived>, Derived>>
         reflect_action<F, Derived>::invocation_count_registrar_;
     /// \endcond
 
@@ -340,13 +343,15 @@ namespace hpx::actions {
             return actions::action_flavor::direct_action;
         }
 
-        static detail::register_action_invocation_count<reflect_direct_action>
+        static detail::register_action_invocation_count<
+            detail::action_type_t<reflect_direct_action, Derived>>
             invocation_count_registrar_;
     };
     /// \cond NOINTERNAL
     template <std::meta::info F, typename Derived>
         requires(std::meta::is_namespace_member(F) && std::meta::is_function(F))
-    detail::register_action_invocation_count<reflect_direct_action<F, Derived>>
+    detail::register_action_invocation_count<
+        detail::action_type_t<reflect_direct_action<F, Derived>, Derived>>
         reflect_direct_action<F, Derived>::invocation_count_registrar_;
     /// \endcond
 
