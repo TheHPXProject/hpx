@@ -579,7 +579,8 @@ namespace hpx::local::detail {
                 "'local-priority-lifo', 'local-priority-tuned-fifo', "
                 "'abp-priority-fifo', 'abp-priority-lifo', 'static', "
                 "'static-priority', 'local-workrequesting-fifo', "
-                "'local-workrequesting-lifo', and 'local-workrequesting-mc' "
+                "'local-workrequesting-lifo', 'local-workrequesting-mc', and "
+                "'local-workrequesting-tuned-fifo' "
                 "(default: 'local-priority-fifo'; all option values can be "
                 "abbreviated)")
             ("hpx:high-priority-threads", value<std::size_t>(),
@@ -593,6 +594,7 @@ namespace hpx::local::detail {
                 "--hpx:queuing=local-workrequesting-fifo, "
                 "--hpx:queuing=local-workrequesting-lifo, "
                 "--hpx:queuing=local-workrequesting-mc, "
+                "--hpx:queuing=local-workrequesting-tuned-fifo, "
                 "--hpx:queuing=abp-priority-fifo, and "
                 "--hpx:queuing=abp-priority-lifo only)")
             ("hpx:numa-sensitive", value<std::size_t>()->implicit_value(1),

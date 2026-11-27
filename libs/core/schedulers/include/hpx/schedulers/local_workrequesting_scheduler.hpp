@@ -349,8 +349,9 @@ namespace hpx::threads::policies {
         typename PendingQueuing = lockfree_fifo,
         typename StagedQueuing = concurrentqueue_fifo,
         typename TerminatedQueuing =
-            default_local_workrequesting_scheduler_terminated_queue>
-    class local_workrequesting_scheduler final : public scheduler_base
+            default_local_workrequesting_scheduler_terminated_queue,
+        typename Rules = fixed_scheduling_rules>
+    class local_workrequesting_scheduler : public scheduler_base
     {
     public:
         using has_periodic_maintenance = std::false_type;
@@ -498,6 +499,7 @@ namespace hpx::threads::policies {
           , numa_sensitive_(init.numa_sensitive_)
           , num_queues_(init.num_queues_)
           , num_high_priority_queues_(init.num_high_priority_queues_)
+          , rules_(init.num_queues_)
         {
             HPX_ASSERT(init.num_queues_ != 0);
             HPX_ASSERT(num_high_priority_queues_ != 0);
@@ -531,6 +533,13 @@ namespace hpx::threads::policies {
         static constexpr std::string_view get_scheduler_name() noexcept
         {
             return "local_workrequesting_scheduler";
+        }
+
+        // the idle callback of the workers, with rules 6 to 8 as Rules has
+        // them (see scheduler_base::idle_callback_with_rules)
+        bool idle_callback(std::size_t const num_thread)
+        {
+            return this->idle_callback_with_rules(num_thread, rules_);
         }
 
 #ifdef HPX_HAVE_THREAD_CREATION_AND_CLEANUP_RATES
@@ -2496,6 +2505,10 @@ namespace hpx::threads::policies {
         numa_sensitive_mode const numa_sensitive_;
         std::size_t const num_queues_;
         std::size_t const num_high_priority_queues_;
+
+        // The rules for idle backoff and worker wakeups (see idle_callback).
+        // fixed_scheduling_rules is empty and takes no space.
+        HPX_NO_UNIQUE_ADDRESS Rules rules_;
     };
 }    // namespace hpx::threads::policies
 

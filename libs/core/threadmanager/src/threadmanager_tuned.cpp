@@ -139,4 +139,71 @@ namespace hpx::threads {
             HPX_MOVE(sched), thread_pool_init);
         pools_.push_back(HPX_MOVE(pool));
     }
+
+    void threadmanager::create_scheduler_local_workrequesting_tuned_fifo(
+        [[maybe_unused]] thread_pool_init_parameters const& thread_pool_init,
+        [[maybe_unused]] policies::thread_queue_init_parameters const&
+            thread_queue_init,
+        [[maybe_unused]] std::size_t const numa_sensitive)
+    {
+#if defined(HPX_HAVE_WORK_REQUESTING_SCHEDULERS)
+        // set parameters for scheduler and pool instantiation and perform
+        // compatibility checks
+        std::size_t const num_high_priority_queues =
+            hpx::util::get_entry_as<std::size_t>(rtcfg_,
+                "hpx.thread_queue.high_priority_queues",
+                thread_pool_init.num_threads_);
+
+        if (num_high_priority_queues == 0)
+        {
+            HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
+                "threadmanager::create_scheduler_local_workrequesting_tuned_"
+                "fifo",
+                "hpx.thread_queue.high_priority_queues must be at least 1");
+        }
+
+        detail::check_num_high_priority_queues(
+            thread_pool_init.num_threads_, num_high_priority_queues);
+
+        // instantiate the scheduler
+        using local_sched_type =
+            hpx::threads::policies::local_workrequesting_tuned_scheduler<>;
+
+        local_sched_type::init_parameter_type init(
+            local_sched_type::base_type::init_parameter_type(
+                thread_pool_init.num_threads_, thread_pool_init.affinity_data_,
+                num_high_priority_queues, thread_queue_init,
+                "core-local_workrequesting_tuned_scheduler-fifo",
+                static_cast<policies::numa_sensitive_mode>(numa_sensitive)),
+            get_scheduling_policy_init_parameters());
+
+        auto sched = std::make_unique<local_sched_type>(init);
+        sched->set_tuner(policies::create_scheduler_tuner(
+            hpx::util::get_entry_as<std::string>(
+                rtcfg_, "hpx.scheduler_tuner", "static")));
+
+        auto const full_mask =
+            hpx::resource::get_partitioner().get_pool_pus_mask(
+                thread_pool_init.name_);
+
+        // set the default scheduler flags
+        sched->set_scheduler_mode(thread_pool_init.mode_, full_mask);
+
+        // conditionally set/unset this flag
+        sched->update_scheduler_mode(
+            policies::scheduler_mode::enable_stealing_numa, numa_sensitive != 2,
+            full_mask);
+
+        // instantiate the pool
+        std::unique_ptr<thread_pool_base> pool = std::make_unique<
+            hpx::threads::detail::scheduled_thread_pool<local_sched_type>>(
+            HPX_MOVE(sched), thread_pool_init);
+        pools_.push_back(HPX_MOVE(pool));
+#else
+        throw hpx::detail::command_line_error(
+            "Command line option --hpx:queuing=local-workrequesting-tuned-fifo "
+            "is not configured in this build. Please make sure "
+            "HPX_WITH_WORK_REQUESTING_SCHEDULERS is set to ON");
+#endif
+    }
 }    // namespace hpx::threads

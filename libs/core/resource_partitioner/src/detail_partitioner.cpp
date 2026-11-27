@@ -57,10 +57,13 @@ namespace hpx::resource {
             return "local_workrequesting_lifo";
         case resource::scheduling_policy::local_workrequesting_mc:
             return "local_workrequesting_mc";
+        case resource::scheduling_policy::local_workrequesting_tuned_fifo:
+            return "local_workrequesting_tuned_fifo";
 #else
         case resource::scheduling_policy::local_workrequesting_fifo:
         case resource::scheduling_policy::local_workrequesting_lifo:
         case resource::scheduling_policy::local_workrequesting_mc:
+        case resource::scheduling_policy::local_workrequesting_tuned_fifo:
             return "unknown";
 #endif
         case resource::scheduling_policy::static_:
@@ -118,6 +121,11 @@ namespace hpx::resource {
         if (0 == std::string("local-workrequesting-mc").find(scheduler_name))
         {
             return scheduling_policy::local_workrequesting_mc;
+        }
+        if (0 ==
+            std::string("local-workrequesting-tuned-fifo").find(scheduler_name))
+        {
+            return scheduling_policy::local_workrequesting_tuned_fifo;
         }
 #endif
         if (0 == std::string("static").find(scheduler_name))

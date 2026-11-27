@@ -125,6 +125,13 @@ int main(int argc, char* argv[])
     test_queuing_string(argc, argv, "local-priority-tuned-fifo",
         hpx::resource::scheduling_policy::local_priority_tuned_fifo);
 
+#if defined(HPX_HAVE_WORK_REQUESTING_SCHEDULERS)
+    // Must resolve to local_workrequesting_tuned_fifo, and must not be
+    // short-circuited by shorter local-workrequesting-* branches.
+    test_queuing_string(argc, argv, "local-workrequesting-tuned-fifo",
+        hpx::resource::scheduling_policy::local_workrequesting_tuned_fifo);
+#endif
+
     // A value that is not a prefix of any known scheduler name.
     test_invalid_queuing_string(argc, argv, "not-a-real-scheduler");
 

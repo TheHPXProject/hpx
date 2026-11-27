@@ -30,6 +30,9 @@
 namespace policies = hpx::threads::policies;
 
 using tuned_scheduler = policies::local_priority_tuned_scheduler<>;
+#if defined(HPX_HAVE_WORK_REQUESTING_SCHEDULERS)
+using wr_tuned_scheduler = policies::local_workrequesting_tuned_scheduler<>;
+#endif
 
 std::atomic<int> attached{0};
 
@@ -47,22 +50,24 @@ struct test_tuner final : policies::scheduler_tuner
     }
 };
 
+template <typename Scheduler = tuned_scheduler>
 policies::scheduler_tuning_parameters& get_parameters()
 {
-    auto* scheduler = dynamic_cast<tuned_scheduler*>(
+    auto* scheduler = dynamic_cast<Scheduler*>(
         hpx::threads::get_self_id_data()->get_scheduler_base());
     HPX_TEST(scheduler != nullptr);
     return scheduler->get_tuning_parameters();
 }
 
-// the tested settings belong to the local-priority-tuned-fifo scheduler, make
-// sure it is used regardless of --hpx:queuing
-void use_tuned_scheduler(hpx::local::init_params& init_args)
+// the tested settings belong to the tuned scheduler under test, make sure it is
+// used regardless of --hpx:queuing
+void use_tuned_scheduler(hpx::local::init_params& init_args,
+    hpx::resource::scheduling_policy const policy =
+        hpx::resource::scheduling_policy::local_priority_tuned_fifo)
 {
-    init_args.rp_callback = [](hpx::resource::partitioner& rp,
+    init_args.rp_callback = [policy](hpx::resource::partitioner& rp,
                                 hpx::program_options::variables_map const&) {
-        rp.create_thread_pool("default",
-            hpx::resource::scheduling_policy::local_priority_tuned_fifo);
+        rp.create_thread_pool("default", policy);
     };
 }
 
@@ -355,6 +360,39 @@ int main(int argc, char* argv[])
         HPX_TEST_EQ(
             hpx::local::init(test_custom_tuner, argc, argv, init_args), 0);
     }
+
+#if defined(HPX_HAVE_WORK_REQUESTING_SCHEDULERS)
+    {
+        auto const run_wr_tuned = []() -> int {
+#if defined(HPX_HAVE_THREAD_MANAGER_IDLE_BACKOFF)
+            auto& parameters = get_parameters<wr_tuned_scheduler>();
+            std::size_t const interval =
+                parameters.find("hpx.idle_backoff_steal_check_interval");
+            HPX_TEST_NEQ(interval, policies::scheduler_tuning_parameters::npos);
+            HPX_TEST_EQ(parameters.get<float>(0, interval), 3.0f);
+
+            // Verify runtime updates and clamping through
+            // get_tuning_parameters()
+            parameters.set(0, interval, -1.0f);
+            HPX_TEST_EQ(parameters.get<float>(0, interval), 0.0f);
+            parameters.set(0, interval, 12.5f);
+            HPX_TEST_EQ(parameters.get<float>(0, interval), 12.5f);
+#endif
+            return hpx::local::finalize();
+        };
+
+        int const prev_attached = attached.load();
+        policies::register_scheduler_tuner(
+            "test_wr", [] { return std::make_unique<test_tuner>(); });
+
+        hpx::local::init_params init_args;
+        init_args.cfg = {"hpx.os_threads=2", "hpx.scheduler_tuner=test_wr"};
+        use_tuned_scheduler(init_args,
+            hpx::resource::scheduling_policy::local_workrequesting_tuned_fifo);
+        HPX_TEST_EQ(hpx::local::init(run_wr_tuned, argc, argv, init_args), 0);
+        HPX_TEST_EQ(attached.load(), prev_attached + 1);
+    }
+#endif
 
     return hpx::util::report_errors();
 }

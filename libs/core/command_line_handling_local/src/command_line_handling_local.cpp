@@ -151,7 +151,8 @@ namespace hpx::local::detail {
             matches("local-priority-tuned-fifo") ||
             matches("local-workrequesting-fifo") ||
             matches("local-workrequesting-lifo") ||
-            matches("local-workrequesting-mc"))
+            matches("local-workrequesting-mc") ||
+            matches("local-workrequesting-tuned-fifo"))
         {
             return true;
         }
@@ -526,6 +527,7 @@ namespace hpx::local::detail {
                     "--hpx:queuing=local-workrequesting-fifo, "
                     "--hpx:queuing=local-workrequesting-lifo, "
                     "--hpx:queuing=local-workrequesting-mc, "
+                    "--hpx:queuing=local-workrequesting-tuned-fifo, "
                     "--hpx:queuing=abp-priority-fifo, and "
                     "--hpx:queuing=abp-priority-lifo only");
             }
