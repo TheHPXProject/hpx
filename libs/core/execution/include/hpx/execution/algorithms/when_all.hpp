@@ -9,9 +9,8 @@
 
 #include <hpx/config.hpp>
 #include <hpx/modules/async_base.hpp>
+#include <hpx/modules/execution_base.hpp>
 #include <hpx/modules/futures.hpp>
-
-#include <hpx/execution_base/stdexec_forward.hpp>
 
 namespace hpx::execution::experimental {
 

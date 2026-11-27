@@ -8,11 +8,11 @@
 #include <hpx/assert.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/format.hpp>
+#include <hpx/modules/topology.hpp>
 #include <hpx/threading_base/set_thread_affinity.hpp>
 #include <hpx/threading_base/set_thread_state.hpp>
 #include <hpx/threading_base/thread_helpers.hpp>
 #include <hpx/threading_base/threading_base_fwd.hpp>
-#include <hpx/topology/cpu_mask.hpp>
 
 #include <cstdint>
 

@@ -9,8 +9,8 @@
 
 #include <hpx/config.hpp>
 #include <hpx/modules/errors.hpp>
+#include <hpx/modules/synchronization.hpp>
 #include <hpx/modules/timing.hpp>
-#include <hpx/synchronization/stop_token.hpp>
 
 namespace hpx::local {
 
