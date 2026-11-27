@@ -877,7 +877,15 @@ namespace hpx::execution::experimental::detail {
 
             std::uint32_t worker_thread = 0;
             bool main_thread_ok = false;
-            std::size_t main_pu_num = rp.get_pu_num(local_worker_thread);
+            std::size_t main_pu_num;
+            if (local_worker_thread != static_cast<std::uint32_t>(-1))
+            {
+                main_pu_num = rp.get_pu_num(local_worker_thread);
+            }
+            else
+            {
+                main_pu_num = hpx::threads::find_first(op_state->pu_mask);
+            }
             if (!hpx::threads::test(op_state->pu_mask, main_pu_num) ||
                 op_state->num_worker_threads == 1)
             {

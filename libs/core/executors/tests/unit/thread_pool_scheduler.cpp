@@ -2310,6 +2310,22 @@ void test_sender_receiver_set_error_on_execute_failure()
     }
 }
 
+void test_bulk_from_os_thread()
+{
+    std::thread os_thread([]() {
+        std::atomic<int> sum{0};
+        auto snd = ex::bulk(ex::thread_pool_scheduler{}, ex::just(42), 10,
+            [&sum](int idx, int val) {
+                sum.fetch_add(idx + val, std::memory_order_relaxed);
+            });
+        auto res = tt::sync_wait(std::move(snd));
+        HPX_TEST(res.has_value());
+        HPX_TEST_EQ(hpx::get<0>(*res), 42);
+        HPX_TEST_EQ(sum.load(), 465);
+    });
+    os_thread.join();
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 int hpx_main()
 {
@@ -2356,6 +2372,7 @@ int hpx_main()
 
     test_scheduler_copy_avoidance();
     test_sender_receiver_set_error_on_execute_failure();
+    test_bulk_from_os_thread();
 
     return hpx::local::finalize();
 }
