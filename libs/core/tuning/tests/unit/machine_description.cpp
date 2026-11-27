@@ -32,5 +32,22 @@ int main()
     HPX_TEST_EQ(m.pool_sizes.back(), m.cores);
     HPX_TEST_LT(std::size_t(0), m.pool_sizes.front());
 
+    // the caches, from L1 up, each at least as large as the one below and
+    // shared by at least as many cores
+    for (std::size_t i = 0; i != m.caches.size(); ++i)
+    {
+        hpx::tuning::cache_level const& c = m.caches[i];
+        HPX_TEST_LT(std::size_t(0), c.size);
+        HPX_TEST_LT(std::size_t(0), c.line_size);
+        HPX_TEST_LT(std::size_t(0), c.cores);
+        HPX_TEST_LTE(c.cores, c.pus);
+        if (i != 0)
+        {
+            HPX_TEST_LT(m.caches[i - 1].level, c.level);
+            HPX_TEST_LTE(m.caches[i - 1].size, c.size);
+            HPX_TEST_LTE(m.caches[i - 1].cores, c.cores);
+        }
+    }
+
     return hpx::util::report_errors();
 }

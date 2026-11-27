@@ -38,6 +38,17 @@ namespace hpx::tuning {
         m.pool_sizes.erase(
             std::remove(m.pool_sizes.begin(), m.pool_sizes.end(), 0),
             m.pool_sizes.end());
+
+        // the caches above the first processing unit, level by level
+        for (int level = 1; level <= 5; ++level)
+        {
+            threads::cache_info const info = topo.get_cache_info(0, level);
+            if (info.size != 0)
+            {
+                m.caches.push_back(
+                    {level, info.size, info.line_size, info.cores, info.pus});
+            }
+        }
         return m;
     }
 }    // namespace hpx::tuning
