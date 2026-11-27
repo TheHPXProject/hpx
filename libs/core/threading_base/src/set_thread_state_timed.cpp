@@ -11,6 +11,7 @@
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/execution_base.hpp>
 #include <hpx/modules/functional.hpp>
+#include <hpx/modules/logging.hpp>
 #include <hpx/modules/tracing.hpp>
 #include <hpx/threading_base/create_thread.hpp>
 #include <hpx/threading_base/detail/get_default_timer_service.hpp>
@@ -28,6 +29,7 @@
 #endif
 #include <asio/basic_waitable_timer.hpp>
 #include <asio/error.hpp>
+#include <asio/post.hpp>
 
 #include <atomic>
 #include <chrono>
@@ -413,5 +415,91 @@ namespace hpx::threads::detail {
         thread_id_ref_type newid = invalid_thread_id;
         create_thread(scheduler, data, newid, ec);    //-V601
         return newid;
+    }
+
+    ///////////////////////////////////////////////////////////////////////////
+    // The timer of a suspension_timeout. It is shared by the handle the
+    // suspended thread keeps and by the timer's handler, so that it lives until
+    // its wait has completed (fired or cancelled). All operations on the timer
+    // after async_wait run on the timer service's thread.
+    struct suspension_timeout::state
+    {
+        state(::asio::io_context& context,
+            std::chrono::steady_clock::time_point const& abs_time)
+          : timer(context, abs_time)
+        {
+        }
+
+        ::asio::basic_waitable_timer<std::chrono::steady_clock> timer;
+    };
+
+    void suspension_timeout::cancel() noexcept
+    {
+        if (!state_)
+            return;
+
+        try
+        {
+            // cancel on the timer service's thread, where the handler runs
+            auto const executor = state_->timer.get_executor();
+            ::asio::post(executor,
+                [state = HPX_MOVE(state_)]() { state->timer.cancel(); });
+        }
+        catch (...)
+        {
+            // the timeout fires at its time, after the suspension has ended,
+            // and leaves the thread alone
+            state_.reset();
+        }
+    }
+
+    suspension_timeout suspension_timeout::set(
+        hpx::chrono::steady_time_point const& abs_time,
+        thread_id_type const& thrd, std::int64_t const suspension_tag,
+        thread_priority const priority, error_code& ec)
+    {
+        suspension_timeout timeout;
+        if (HPX_UNLIKELY(!thrd))
+        {
+            HPX_THROWS_IF(ec, hpx::error::null_thread_id,
+                "threads::detail::suspension_timeout::set",
+                "null thread id encountered");
+            return timeout;
+        }
+
+        timeout.state_ = std::make_shared<state>(
+            get_default_timer_service(), abs_time.value());
+
+        // The handler runs on the timer service's thread. It keeps the thread
+        // alive (a reference to its id) until it has run, and makes it pending
+        // only while it is still in the suspension the timeout was set for: if
+        // the thread has been woken otherwise, it may wait for something else
+        // by now. If the thread hasn't suspended yet, the handler waits until
+        // it has (see set_suspended_thread_state).
+        timeout.state_->timer.async_wait(
+            [state = timeout.state_, target = thread_id_ref_type(thrd),
+                suspension_tag, priority](std::error_code const& error) {
+                if (error == ::asio::error::operation_aborted)
+                    return;
+
+                // nothing may escape into the timer service's thread
+                try
+                {
+                    set_suspended_thread_state(target.noref(), suspension_tag,
+                        thread_schedule_state::pending,
+                        thread_restart_state::timeout, priority);
+                }
+                catch (...)
+                {
+                    LTM_(error).format("suspension_timeout: waking "
+                                       "thread({}) failed",
+                        target.noref());
+                }
+            });
+
+        if (&ec != &throws)
+            ec = make_success_code();
+
+        return timeout;
     }
 }    // namespace hpx::threads::detail

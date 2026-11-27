@@ -13,6 +13,7 @@ set(tests
     set_thread_state_timed_self
     sized_function
     stack_sized_function
+    suspension_timeout
     task_size_annotations
     task_size_hint
     thread_description_address
