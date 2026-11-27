@@ -67,6 +67,7 @@ namespace hpx_tune {
         std::string report(std::vector<std::size_t> const& pool_sizes,
             std::size_t const regions, std::size_t const runs,
             tuning::chunk_rule const rule, double const default_us,
+            std::size_t const chunks_per_core,
             std::vector<tuning::region_time> const& measured,
             std::vector<std::size_t> const& run_of,
             std::vector<tuning::region_time> const& times,
@@ -128,6 +129,7 @@ namespace hpx_tune {
                 {"runs", std::to_string(runs)},
                 {"rule", tuning::json_string(tuning::to_string(rule))},
                 {"default_min_chunk_time_us", tuning::json_number(default_us)},
+                {"chunks_per_core", std::to_string(chunks_per_core)},
                 {"measured_region_times", tuning::json_array(measured_times)},
                 {"region_times", tuning::json_array(region_times)},
                 {"costs", tuning::json_array(fitted)},
@@ -231,13 +233,17 @@ namespace hpx_tune {
 
         std::vector<tuning::chunk_cost> const costs =
             tuning::fit_chunk_costs(times);
-        double const default_us = std::chrono::duration<double, std::micro>(
-            hpx::execution::experimental::detail::
-                get_task_size_chunk_size_defaults()
-                    .min_chunk_time)
-                                      .count();
+        // the minimal run time and the chunks per core of task_size_chunk_size
+        // as HPX ships them (this process doesn't start the runtime, so no
+        // configuration changes them); the values are relative to these
+        auto const defaults = hpx::execution::experimental::detail::
+            get_task_size_chunk_size_defaults();
+        std::size_t const chunks_per_core = defaults.chunks_per_core;
+        double const default_us =
+            std::chrono::duration<double, std::micro>(defaults.min_chunk_time)
+                .count();
         std::vector<tuning::ini_section> sections =
-            tuning::chunk_sections(costs, default_us, *rule);
+            tuning::chunk_sections(costs, default_us, *rule, chunks_per_core);
 
         std::vector<std::string> comments;
         for (tuning::chunk_cost const& c : costs)
@@ -283,7 +289,7 @@ namespace hpx_tune {
         }
 
         std::string json = report(pool_sizes, regions, runs, *rule, default_us,
-            measured, run_of, times, costs, sections);
+            chunks_per_core, measured, run_of, times, costs, sections);
         return area_result{
             HPX_MOVE(sections), HPX_MOVE(comments), HPX_MOVE(json)};
     }

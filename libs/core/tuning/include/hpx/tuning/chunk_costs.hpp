@@ -102,11 +102,20 @@ namespace hpx::tuning {
         std::vector<region_time> const& times);
 
     /// How the minimal run time of a chunk follows from the costs.
+    ///
+    /// The minimal run time matters only for loops too small to give every
+    /// core chunks_per_core chunks of that run time: task_size_chunk_size
+    /// then runs them on fewer cores, each with chunks_per_core chunks. Such
+    /// a loop costs a worker region_us + chunks_per_core * chunk_us besides
+    /// its chunks, chunk_us + region_us / chunks_per_core for each chunk.
+    /// An executor's chunks may be as much shorter than parallel_executor's
+    /// as this cost is smaller, for the same share of the time.
     HPX_CXX_CORE_EXPORT enum class chunk_rule {
-        /// f * (chunk_us + region_us / n), with f such that
+        /// f * (chunk_us + region_us / chunks_per_core), with f such that
         /// parallel_executor gets the default
         fitted,
-        /// default * time_at_pool_size_us / that of parallel_executor
+        /// default * time_at_pool_size_us / that of parallel_executor (the
+        /// region times for one chunk per worker, without the fit)
         ratio
     };
 
@@ -123,8 +132,10 @@ namespace hpx::tuning {
     /// size, and hpx.task_size_chunk_size.<executor> with the value of the
     /// largest pool size, for the pool sizes that weren't measured. A pool
     /// size without parallel_executor's costs is left out. The settings of
-    /// parallel_executor are marked as the default.
+    /// parallel_executor are marked as the default. chunks_per_core is that
+    /// of task_size_chunk_size (hpx.task_size_chunk_size.chunks_per_core);
+    /// 0 is taken as 1.
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT std::vector<ini_section> chunk_sections(
         std::vector<chunk_cost> const& costs, double default_min_chunk_time_us,
-        chunk_rule rule);
+        chunk_rule rule, std::size_t chunks_per_core);
 }    // namespace hpx::tuning

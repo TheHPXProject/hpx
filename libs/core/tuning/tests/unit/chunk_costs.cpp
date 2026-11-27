@@ -102,25 +102,25 @@ namespace {
         std::vector<tuning::chunk_cost> const costs =
             tuning::fit_chunk_costs(made_up_times());
 
-        // fitted: parallel at 16 workers costs 0.5 + 10 / 16 = 1.125 us per
-        // worker, so f = 2.5 / 1.125; fork_join costs 0.1 + 4 / 16 = 0.35
+        // fitted, 8 chunks per core: parallel at 16 workers costs
+        // 0.5 + 10 / 8 = 1.75 us per chunk, so f = 2.5 / 1.75; fork_join
+        // costs 0.1 + 4 / 8 = 0.6
         {
-            auto const sections =
-                tuning::chunk_sections(costs, 2.5, tuning::chunk_rule::fitted);
+            auto const sections = tuning::chunk_sections(
+                costs, 2.5, tuning::chunk_rule::fitted, 8);
             HPX_TEST_EQ(sections.size(), std::size_t(6));
             HPX_TEST(std::abs(value_of(sections,
                                   "hpx.task_size_chunk_size.fork_join.16") -
-                         2.5 * 0.35 / 1.125) < 0.001);
+                         2.5 * 0.6 / 1.75) < 0.001);
             HPX_TEST(std::abs(value_of(sections,
                                   "hpx.task_size_chunk_size.parallel.16") -
                          2.5) < 0.001);
 
             // the section for the pool sizes not measured has the largest
-            // pool size's value: 2.5 * (0.1 + 6 / 32) / (1 + 20 / 32)
-            HPX_TEST(
-                std::abs(
-                    value_of(sections, "hpx.task_size_chunk_size.fork_join") -
-                    2.5 * (0.1 + 6.0 / 32.0) / (1.0 + 20.0 / 32.0)) < 0.001);
+            // pool size's value: 2.5 * (0.1 + 6 / 8) / (1 + 20 / 8)
+            HPX_TEST(std::abs(value_of(sections,
+                                  "hpx.task_size_chunk_size.fork_join") -
+                         2.5 * (0.1 + 6.0 / 8.0) / (1.0 + 20.0 / 8.0)) < 0.001);
 
             // parallel_executor's settings are the default, the others not
             for (tuning::ini_section const& s : sections)
@@ -135,8 +135,18 @@ namespace {
 
         // ratio: 2.5 * 4.1 / 10.5 at 16 workers
         {
-            auto const sections =
-                tuning::chunk_sections(costs, 2.5, tuning::chunk_rule::ratio);
+            auto const sections = tuning::chunk_sections(
+                costs, 2.5, tuning::chunk_rule::ratio, 8);
+            HPX_TEST(std::abs(value_of(sections,
+                                  "hpx.task_size_chunk_size.fork_join.16") -
+                         2.5 * 4.1 / 10.5) < 0.001);
+        }
+
+        // fewer chunks per core weigh the region cost more: one chunk per
+        // core, 2.5 * (0.1 + 4) / (0.5 + 10)
+        {
+            auto const sections = tuning::chunk_sections(
+                costs, 2.5, tuning::chunk_rule::fitted, 1);
             HPX_TEST(std::abs(value_of(sections,
                                   "hpx.task_size_chunk_size.fork_join.16") -
                          2.5 * 4.1 / 10.5) < 0.001);
@@ -151,7 +161,7 @@ namespace {
                     only_fork_join.push_back(c);
             }
             HPX_TEST(tuning::chunk_sections(
-                only_fork_join, 2.5, tuning::chunk_rule::fitted)
+                only_fork_join, 2.5, tuning::chunk_rule::fitted, 8)
                     .empty());
         }
 

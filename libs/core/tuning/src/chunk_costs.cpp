@@ -285,8 +285,12 @@ namespace hpx::tuning {
 
     std::vector<ini_section> chunk_sections(
         std::vector<chunk_cost> const& costs,
-        double const default_min_chunk_time_us, chunk_rule const rule)
+        double const default_min_chunk_time_us, chunk_rule const rule,
+        std::size_t const chunks_per_core)
     {
+        double const k =
+            static_cast<double>((std::max) (chunks_per_core, std::size_t(1)));
+
         // parallel_executor's costs for each pool size
         std::map<std::size_t, chunk_cost const*> reference;
         for (chunk_cost const& c : costs)
@@ -309,21 +313,21 @@ namespace hpx::tuning {
             if (ref == reference.end())
                 continue;
             chunk_cost const& p = *ref->second;
-            double const n = static_cast<double>(c.pool_size);
             std::string const workers =
                 " at " + std::to_string(c.pool_size) + " workers";
 
             value v{c.pool_size, default_min_chunk_time_us, ""};
             if (rule == chunk_rule::fitted)
             {
-                double const p_cost = p.chunk_us + p.region_us / n;
+                double const p_cost = p.chunk_us + p.region_us / k;
                 double const f =
                     p_cost > 0.0 ? default_min_chunk_time_us / p_cost : 0.0;
                 if (c.executor != "parallel")
-                    v.min_chunk_time_us = f * (c.chunk_us + c.region_us / n);
+                    v.min_chunk_time_us = f * (c.chunk_us + c.region_us / k);
                 v.reason = "region " + number(c.region_us) + " us, chunk " +
                     number(c.chunk_us) + " us, f " + number(f) + workers +
-                    " (fitted; residual " + number(c.residual_us) +
+                    " (fitted for " + std::to_string(chunks_per_core) +
+                    " chunks per core; residual " + number(c.residual_us) +
                     " us, spread " + number(100.0 * c.spread) + "%)";
             }
             else
