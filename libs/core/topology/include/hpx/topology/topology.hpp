@@ -335,7 +335,8 @@ namespace hpx::threads {
         /// Return the size of the cache associated with the given mask.
         std::size_t get_cache_size(mask_cref_type mask, int level) const;
 
-        /// Return the cache of the given level (1 to 5) above the given
+        /// Return the cache of the given level (1 to 5; level 1 is the data
+        /// or unified L1, not the instruction cache) above the given
         /// processing unit: its size, the size of its lines, and the number
         /// of cores and processing units that share it, so that a core's
         /// share of a cache is its size divided by its cores. All members

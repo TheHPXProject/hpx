@@ -9,7 +9,9 @@
 #include <hpx/assert.hpp>
 #include <hpx/async_cuda/target.hpp>
 #include <hpx/modules/allocator_support.hpp>
+#include <hpx/modules/config_registry.hpp>
 #include <hpx/modules/errors.hpp>
+#include <hpx/modules/format.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/threading_base.hpp>
 
@@ -21,6 +23,47 @@
 #include <hpx/async_cuda/custom_gpu_api.hpp>
 
 namespace hpx::cuda::experimental {
+
+    namespace {
+
+        // the runtime and the driver of the GPUs this process loaded, and the
+        // runtime HPX was built with, for hpx::complete_version()
+        std::string gpu_runtime_version()
+        {
+            int runtime = 0;
+            int driver = 0;
+            if (cudaRuntimeGetVersion(&runtime) != cudaSuccess)
+                runtime = 0;
+            if (cudaDriverGetVersion(&driver) != cudaSuccess)
+                driver = 0;
+#if defined(HPX_HAVE_HIP)
+            // major * 10000000 + minor * 100000 + patch
+            auto const text = [](int v) {
+                return hpx::util::format(
+                    "V{}.{}.{}", v / 10000000, (v / 100000) % 100, v % 100000);
+            };
+            return hpx::util::format("runtime {}, driver {} (built with "
+                                     "V{}.{}.{})",
+                text(runtime), driver != 0 ? text(driver) : "none",
+                HIP_VERSION_MAJOR, HIP_VERSION_MINOR, HIP_VERSION_PATCH);
+#else
+            // major * 1000 + minor * 10
+            auto const text = [](int v) {
+                return hpx::util::format("V{}.{}", v / 1000, (v % 1000) / 10);
+            };
+            return hpx::util::format("runtime {}, driver {} (built with {})",
+                text(runtime), driver != 0 ? text(driver) : "none",
+                text(CUDART_VERSION));
+#endif
+        }
+
+        config_registry::add_library_version_helper register_gpu_version{
+#if defined(HPX_HAVE_HIP)
+            {"HIP", &gpu_runtime_version}};
+#else
+            {"CUDA", &gpu_runtime_version}};
+#endif
+    }    // namespace
 
     void target::native_handle_type::init_processing_units()
     {

@@ -9,8 +9,8 @@
 
 #include <hpx/config.hpp>
 
-#include <hpx/async_base/query_dispatch.hpp>
 #include <hpx/execution/algorithms/detail/partial_algorithm.hpp>
+#include <hpx/modules/async_base.hpp>
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/errors.hpp>

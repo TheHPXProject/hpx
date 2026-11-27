@@ -9,7 +9,7 @@
 #include <hpx/config.hpp>
 #include <hpx/concurrency/spinlock.hpp>
 #include <hpx/modules/errors.hpp>
-#include <hpx/type_support/assert_owns_lock.hpp>
+#include <hpx/modules/type_support.hpp>
 
 #include <concepts>
 #include <mutex>

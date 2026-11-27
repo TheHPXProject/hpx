@@ -7,7 +7,7 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/hardware/timestamp.hpp>
+#include <hpx/modules/hardware.hpp>
 
 #include <cstdint>
 

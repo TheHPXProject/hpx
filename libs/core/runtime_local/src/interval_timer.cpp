@@ -10,6 +10,7 @@
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/thread_support.hpp>
 #include <hpx/modules/threading_base.hpp>
+#include <hpx/modules/timing.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/runtime_local/interval_timer.hpp>
 #include <hpx/runtime_local/shutdown_function.hpp>
@@ -134,16 +135,10 @@ namespace hpx::util::detail {
         {
             is_started_ = false;
 
-            if (timerid_)
-            {
-                error_code ec(
-                    throwmode::lightweight);    // avoid throwing on error
-                threads::set_thread_state(timerid_.noref(),
-                    threads::thread_schedule_state::pending,
-                    threads::thread_restart_state::abort,
-                    threads::thread_priority::boost, true, ec);
-                timerid_.reset();
-            }
+            // a timeout that fires anyway finds the thread no longer in the
+            // suspension it was set for (it is aborted below)
+            timeout_.cancel();
+
             if (id_)
             {
                 error_code ec(
@@ -158,7 +153,6 @@ namespace hpx::util::detail {
         }
 
         HPX_ASSERT(id_ == nullptr);
-        HPX_ASSERT(timerid_ == nullptr);
         return false;
     }
 
@@ -228,7 +222,7 @@ namespace hpx::util::detail {
             }
 
             id_.reset();
-            timerid_.reset();
+            timeout_ = threads::detail::suspension_timeout();
             is_started_ = false;
 
             bool result;
@@ -294,12 +288,18 @@ namespace hpx::util::detail {
             return;
         }
 
-        // schedule this thread to be run after the given amount of seconds
-        threads::thread_id_ref_type const timerid = threads::set_thread_state(
-            id.noref(), std::chrono::microseconds(microsecs_),
-            threads::thread_schedule_state::pending,
-            threads::thread_restart_state::signaled,
-            threads::thread_priority::boost, true, ec);
+        // schedule this thread to be run after the given amount of
+        // microseconds: it stays in the suspension it was created in until
+        // then, and the timeout of that suspension needs no thread of its own
+        std::int64_t const suspension_tag =
+            threads::get_thread_id_data(id)->get_state().tag();
+        threads::detail::suspension_timeout timeout =
+            threads::detail::suspension_timeout::set(
+                hpx::chrono::steady_duration(
+                    std::chrono::microseconds(microsecs_))
+                    .from_now(),
+                id.noref(), suspension_tag, threads::thread_priority::boost,
+                ec);
 
         if (ec)
         {
@@ -316,7 +316,7 @@ namespace hpx::util::detail {
         }
 
         id_ = id;
-        timerid_ = timerid;
+        timeout_ = HPX_MOVE(timeout);
         is_started_ = true;
     }
 }    // namespace hpx::util::detail

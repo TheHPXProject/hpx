@@ -105,6 +105,11 @@ default has to be specified. Therefore ``$[section.key]`` refers to the property
 ``section.key``. If the property ``section.key`` is not set or empty, the overall
 expression will evaluate to an empty string.
 
+To write a literal ``${`` or ``$[`` in a property value, double the ``$``:
+``$${FOO}`` reads as ``${FOO}`` and ``$$[section.key]`` as ``$[section.key]``,
+and neither is expanded. Any other ``$``, including a ``$$`` that is not
+followed by ``{`` or ``[``, is taken as it is.
+
 .. note::
 
    Any property ``$[section.key:default]`` is evaluated whenever it is queried
@@ -542,6 +547,45 @@ their defaults the scheduler decides like the local priority scheduler (see
    * * ``hpx.scheduler_policy.free_pass_after_wake``
      * If ``1``, a worker thread woken up by new work may steal once without
        the early minima (see :ref:`thread_scheduler_pending_steal`).
+
+The ``hpx.idle_tuning`` configuration section
+..............................................
+
+The entries of this section give the idle settings of a thread pool by its
+scheduler, the scheduler's tuner and the pool's number of worker threads, for
+instance values measured for a machine. A pool takes the entries of
+``hpx.idle_tuning.<scheduler>.<tuner>.<number of workers>``, else those of
+``hpx.idle_tuning.<scheduler>.<tuner>``, else ``hpx.max_idle_backoff_time``
+and ``hpx.min_idle_backoff_time``. The scheduler is named as
+:option:`--hpx:queuing` names it; the tuner is ``hpx.scheduler_tuner`` for the
+``local-priority-tuned-fifo`` scheduler and ``none`` for all others. The
+section is empty by default, so that every pool uses the plain settings. Values
+that are not a number or are negative are ignored. The entries are usually
+given in a configuration file (:option:`--hpx:config`); on the command line
+they are new entries and need the ``!`` that forces one, for instance
+``--hpx:ini=hpx.idle_tuning.local-priority-fifo.none.min_idle_backoff_time!=60``.
+
+.. code-block:: ini
+
+   [hpx.idle_tuning.local-priority-fifo.none]
+   max_idle_backoff_time = 1000
+   min_idle_backoff_time = 50
+
+   [hpx.idle_tuning.local-priority-fifo.none.32]
+   min_idle_backoff_time = 60
+
+.. _ini_hpx_idle_tuning:
+
+.. list-table::
+
+   * * Property
+     * Description
+   * * ``hpx.idle_tuning.<scheduler>.<tuner>[.<number of workers>].max_idle_backoff_time``
+     * The value of this property replaces ``hpx.max_idle_backoff_time`` for the
+       pools it applies to.
+   * * ``hpx.idle_tuning.<scheduler>.<tuner>[.<number of workers>].min_idle_backoff_time``
+     * The value of this property replaces ``hpx.min_idle_backoff_time`` for the
+       pools it applies to.
 
 The ``hpx.thread_queue`` configuration section
 ..............................................

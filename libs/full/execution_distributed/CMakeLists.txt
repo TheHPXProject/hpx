@@ -30,6 +30,6 @@ add_hpx_module(
   HEADERS ${execution_distributed_headers}
   DEPENDENCIES hpx_core
   MODULE_DEPENDENCIES hpx_actions_base hpx_async_distributed hpx_components_base
-                      hpx_naming_base
+                      hpx_naming_base hpx_runtime_distributed
   CMAKE_SUBDIRS examples tests
 )
