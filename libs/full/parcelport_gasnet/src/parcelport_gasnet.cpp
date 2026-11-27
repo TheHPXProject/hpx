@@ -1,13 +1,12 @@
-//  Copyright (c) 2023      Christopher Taylor
-//  Copyright (c) 2007-2026 Hartmut Kaiser
-//  Copyright (c) 2014-2015 Thomas Heller
-//  Copyright (c)      2020 Google
+//  Copyright (c) 2023-2026 Christopher Taylor
+//  Copyright (c) 2019-2021 The STE||AR-Group
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 #include <hpx/config.hpp>
+#include <algorithm>
 
 #if defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_PARCELPORT_GASNET)
 #include <hpx/modules/command_line_handling.hpp>
@@ -15,32 +14,35 @@
 #include <hpx/modules/execution_base.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/gasnet_base.hpp>
+#include <hpx/modules/parcelset_base.hpp>
 #include <hpx/modules/plugin.hpp>
 #include <hpx/modules/resource_partitioner.hpp>
 #include <hpx/modules/runtime_configuration.hpp>
 #include <hpx/modules/runtime_local.hpp>
 #include <hpx/modules/synchronization.hpp>
 #include <hpx/modules/util.hpp>
-
-#include <hpx/modules/parcelset.hpp>
-#include <hpx/modules/parcelset_base.hpp>
-#include <hpx/modules/plugin_factories.hpp>
 #include <hpx/parcelport_gasnet/locality.hpp>
+#include <hpx/parcelport_gasnet/mailbox_array.hpp>
 #include <hpx/parcelport_gasnet/receiver.hpp>
 #include <hpx/parcelport_gasnet/sender.hpp>
+#include <hpx/parcelport_gasnet/sender_connection.hpp>
+#include <hpx/parcelset/parcelport_impl.hpp>
+
+#include <hpx/plugin_factories/parcelport_factory.hpp>
 
 #include <asio/io_context.hpp>
-#include <asio/version.hpp>
-#if ASIO_VERSION >= 103400
 #include <asio/post.hpp>
-#endif
+#include <asio/version.hpp>
 
 #include <atomic>
+#include <chrono>
 #include <cstddef>
-#include <exception>
+#include <cstdint>
+#include <cstdlib>
+#include <iostream>
 #include <memory>
 #include <string>
-#include <system_error>
+#include <thread>
 #include <type_traits>
 
 #include <hpx/config/warnings_prefix.hpp>
@@ -57,8 +59,8 @@ namespace hpx::parcelset {
         using connection_type = policies::gasnet::sender_connection;
         using send_early_parcel = std::true_type;
         using do_background_work = std::true_type;
-        using send_immediate_parcels = std::false_type;
-        using is_connectionless = std::false_type;
+        using send_immediate_parcels = std::true_type;
+        using is_connectionless = std::true_type;
 
         static constexpr char const* type() noexcept
         {
@@ -78,56 +80,139 @@ namespace hpx::parcelset {
 
     namespace policies::gasnet {
 
-        int acquire_tag(sender* s) noexcept
-        {
-            return s->acquire_tag();
-        }
-
-        void add_connection(
-            sender* s, std::shared_ptr<sender_connection> const& ptr)
-        {
-            s->add(ptr);
-        }
-
         class HPX_EXPORT parcelport : public parcelport_impl<parcelport>
         {
             using base_type = parcelport_impl<parcelport>;
 
-            static parcelset::locality here()
+            static parcelset::locality here(std::size_t my_pe)
             {
                 return parcelset::locality(
-                    locality(util::gasnet_environment::enabled() ?
-                            util::gasnet_environment::rank() :
-                            -1));
+                    locality(static_cast<std::int32_t>(my_pe)));
             }
 
-            static std::size_t max_connections(
+            // Page size.  0 (the default) selects it automatically: as large
+            // as 1 MiB (fewer active messages / region events per byte), but
+            // shrunk as the job grows so that the registered rx+tx rings
+            // (npes * slots * mtu * 2) stay within ~256 MiB.  The result
+            // depends only on npes and slots, so it is identical on every PE,
+            // as the wire protocol requires.  A configured value overrides.
+            static std::size_t mtu(util::runtime_configuration const& ini,
+                std::size_t num_pes, std::size_t slots)
+            {
+                std::size_t const mtu =
+                    util::gasnet_environment::mtu(ini, num_pes, slots);
+                if (mtu <= detail::header_size)
+                {
+                    HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
+                        "hpx::parcelset::policies::gasnet::parcelport",
+                        "hpx.parcel.gasnet.mtu must be larger than the page "
+                        "header ({} bytes, is {})",
+                        detail::header_size, mtu);
+                }
+                return mtu;
+            }
+
+            // In-flight chunks per (sender,receiver) pair.  Must be
+            // identical on every PE (the rx ring modulo is part of the wire
+            // protocol), same caveat as mtu.
+            static std::size_t slots(util::runtime_configuration const& ini)
+            {
+                return util::gasnet_environment::slots(ini);
+            }
+
+            // Bound (seconds) for the empty wait in do_stop(). Shutdown
+            // terminates even if a peer stops returning credit for its last
+            // in-flight transfers; when the timeout fires the few stranded
+            // parcels are dropped.  The time is measured as *zero transfer
+            // activity*: an empty that keeps moving pages waits as long as it
+            // needs (no premature message drops), only a genuinely stalled
+            // empty aborts. override with hpx.parcel.gasnet.stop_timeout.
+            static std::size_t stop_timeout(
+                util::runtime_configuration const& ini)
+            {
+                return hpx::util::get_entry_as<std::size_t>(
+                    ini, "hpx.parcel.gasnet.stop_timeout", 30);
+            }
+
+            // checksum guard over received pages. Off is only slightly faster
+            // on checksum-heavy workloads and removes the corruption
+            // tripwire, so leave it on unless profiling says otherwise.
+            // Must be identical on every PE (sender and receiver must agree).
+            static bool checksum(util::runtime_configuration const& ini)
+            {
+                return hpx::util::get_entry_as<bool>(
+                    ini, "hpx.parcel.gasnet.checksum", true);
+            }
+
+            // Max source PEs probed per receive-scan pass.  0 = full scan
+            // every pass.  Each probe is one local load in the GASNet port,
+            // so this chiefly bounds the per-pass loop length at large n (see
+            // mailbox_array::default_probe_window).
+            static std::size_t scan_window(
                 util::runtime_configuration const& ini)
             {
                 return hpx::util::get_entry_as<std::size_t>(ini,
-                    "hpx.parcel.gasnet.max_connections",
-                    HPX_PARCEL_MAX_CONNECTIONS);
+                    "hpx.parcel.gasnet.scan_window",
+                    mailbox_array::default_probe_window);
             }
 
-            static std::size_t background_threads(
-                [[maybe_unused]] util::runtime_configuration const& ini)
+            // Cross-PE wire-protocol uniformity check.  ENABLED by default: a
+            // mismatch in mtu/slots/checksum silently corrupts transfers, so
+            // the affordable startup-time collective runs unless explicitly
+            // turned off via hpx.parcel.gasnet.uniform_check=0.
+            static bool uniform_check(util::runtime_configuration const& ini)
             {
-                /*
-                return hpx::util::get_entry_as<std::size_t>(ini,
-                    "hpx.parcel.gasnet.background_threads",
-                    HPX_HAVE_PARCELPORT_GASNET_BACKGROUND_THREADS);
-                */
-                return 1UL;
+                return hpx::util::get_entry_as<bool>(
+                    ini, "hpx.parcel.gasnet.uniform_check", true);
             }
 
         public:
+            using sender_type = sender;
             parcelport(util::runtime_configuration const& ini,
                 threads::policies::callback_notifier const& notifier)
-              : base_type(ini, here(), notifier)
+              : base_type(ini, here(0), notifier)
+              , ini_(ini)
               , stopped_(false)
+              , num_pes_(static_cast<std::size_t>(
+                    util::gasnet_environment::enabled() ?
+                        util::gasnet_environment::size() :
+                        1))
+              , my_pe_(static_cast<std::size_t>(
+                    util::gasnet_environment::enabled() ?
+                        util::gasnet_environment::rank() :
+                        0))
+              // validated only if this parcelport is used (it is created in
+              // every run of a build that has it)
+              , mtu_(util::gasnet_environment::enabled() ?
+                        mtu(ini, num_pes_, slots(ini)) :
+                        0)
+              , slots_(util::gasnet_environment::enabled() ? slots(ini) : 1)
+              , stop_timeout_(stop_timeout(ini))
+              // a parcelport that is compiled in but not selected for this
+              // run (another one is) has no GASNet segment to carve from
+              , mailboxes_(util::gasnet_environment::enabled() ?
+                        mailbox_array(num_pes_, my_pe_, mtu_, slots_,
+                            checksum(ini), scan_window(ini)) :
+                        mailbox_array())
+              , sender_(&mailboxes_)
               , receiver_(*this)
-              , background_threads_(background_threads(ini))
             {
+                // The flag is process-global; a runtime started again in
+                // the same process must receive messages again.
+                detail::g_discard_received.store(
+                    false, std::memory_order_release);
+                here_ = here(my_pe_);
+                receiver_.set_poll_interval(
+                    static_cast<std::uint32_t>(hpx::util::get_entry_as<int>(
+                        ini, "hpx.parcel.gasnet.progress_interval", 1)));
+                // 1: every worker thread progresses the transport from its
+                // background work (default); N>1: worker threads 0..N-1 only;
+                // 0: only the io drivers.
+                worker_progress_ = hpx::util::get_entry_as<int>(
+                    ini, "hpx.parcel.gasnet.worker_progress", 1);
+                // 0 uses HPX's queued, coalescing send path
+                send_immediate_ = hpx::util::get_entry_as<int>(
+                                      ini, "hpx.parcel.gasnet.sendimm", 1) != 0;
             }
 
             parcelport(parcelport const&) = delete;
@@ -135,63 +220,249 @@ namespace hpx::parcelset {
             parcelport& operator=(parcelport const&) = delete;
             parcelport& operator=(parcelport&&) = delete;
 
-            ~parcelport()
+            ~parcelport() override = default;
+
+            // Every PE must run the same wire-protocol parameters (mtu, slots,
+            // checksum): the rx-ring modulo, the page geometry and the
+            // checksum agreement are all part of the wire format, so a
+            // mismatch corrupts transfers silently.  Each PE publishes a
+            // fingerprint of the trio into its own word of the collective
+            // scratch region carved out of the registered segments, then reads
+            // every PE's fingerprint and aborts loudly on any mismatch.
+            // Called from do_run() while the transport is still
+            // single-threaded and no parcel traffic exists.
+            //
+            // The publish is routed through GASNet as a self-RMA put rather
+            // than a plain local store: GASNet's memory model only guarantees
+            // that an RMA read of a peer's segment observes the peer's writes
+            // which that peer has flushed to the fabric, and an actual RMA
+            // operation is the unambiguous way to make GASNet flush it.  The
+            // subsequent team barrier then synchronizes every PE's publish
+            // (barriers order RMA operations, this one included), so the
+            // remote gets below are guaranteed to observe every completed
+            // publish.
+            void check_protocol_config_uniformity() const
             {
-                util::gasnet_environment::finalize();
+                std::uint32_t const hash =
+                    (static_cast<std::uint32_t>(mtu_) * 31u +
+                        static_cast<std::uint32_t>(slots_)) *
+                        31u +
+                    (mailboxes_.checksum_enabled() ? 1u : 0u);
+
+                auto* const words =
+                    reinterpret_cast<std::uint32_t*>(mailboxes_.scratch_beg());
+
+                // Publish my fingerprint into my own scratch word via GASNet
+                // (self-RMA).  mailbox_array's constructor zeroed the whole
+                // carve, so before this put the word reads as 0 on every peer.
+                void* const my_word =
+                    mailboxes_.remote_ptr(my_pe_, &words[my_pe_]);
+                util::gasnet_environment::put_uint32(
+                    static_cast<int>(my_pe_), my_word, hash);
+
+                // All publishes are now RMA operations; this barrier makes
+                // each one performed at its target before any peer returns.
+                util::gasnet_environment::barrier();
+
+                bool mismatch = false;
+                for (std::size_t pe = 0; pe < num_pes_; ++pe)
+                {
+                    std::uint32_t other_hash = 0;
+                    if (pe == my_pe_)
+                    {
+                        // Own word: the blocking self-put above implies local
+                        // completion, so a plain load sees it.
+                        other_hash = words[pe];
+                    }
+                    else
+                    {
+                        // Remote fetch of peer pe's fingerprint.  A plain
+                        // local load of words[pe] would read OUR OWN element
+                        // (there is no symmetric shared memory, only RMA), so
+                        // the cross-PE comparison has to be an actual get.
+                        void* const remote_word =
+                            mailboxes_.remote_ptr(pe, &words[pe]);
+                        util::gasnet_environment::get(static_cast<int>(pe),
+                            &other_hash, remote_word, sizeof(other_hash));
+                    }
+                    if (other_hash != hash)
+                    {
+                        mismatch = true;
+                    }
+                }
+
+                if (mismatch)
+                {
+                    // All PEs converge on the same mismatch, so every PE
+                    // aborts here: no single-PE hang.
+                    std::cerr << "gasnet: PE " << my_pe_
+                              << ": wire-protocol parameter mismatch across "
+                                 "PEs (mtu="
+                              << mtu_ << " slots=" << slots_ << " checksum="
+                              << (mailboxes_.checksum_enabled() ? 1 : 0)
+                              << " fingerprint=0x" << std::hex << hash
+                              << std::dec
+                              << ").  This PE must be launched "
+                                 "with the same hpx.parcel.gasnet.mtu, "
+                                 "hpx.parcel.gasnet.slots and "
+                                 "hpx.parcel.gasnet.checksum values as "
+                                 "every other PE.\n";
+                    std::abort();
+                }
             }
 
-            // Start the handling of connections.
             bool do_run()
             {
-                receiver_.run();
                 sender_.run();
+                receiver_.run();
 
-                for (std::size_t i = 0; i != io_service_pool_.size(); ++i)
+                // Collective rendezvous: every PE must have attached its
+                // registered segment, built the remote-segment base table
+                // (gasnet_environment::init) and zeroed its mailbox carve
+                // (mailbox_array's constructor) before any parcel traffic is
+                // allowed to start.  C++ construction is not collective in
+                // GASNet, so this barrier replaces the shmem_barrier_all()
+                // the openshmem counterpart placed in its constructor.
+                util::gasnet_environment::barrier();
+
+                // Every PE must run the same wire-protocol parameters; a
+                // mismatch corrupts transfers silently.  Disable only via
+                // hpx.parcel.gasnet.uniform_check=0 (not recommended).
+                if (uniform_check(ini_))
+                {
+                    check_protocol_config_uniformity();
+                }
+
+                // GASNet-EX teams are always thread-multiple: any number of
+                // threads may call gex_RMA_* concurrently on the same team,
+                // so each io_service drives its own non-blocking progress
+                // loop and scans only its arena (a disjoint range of source
+                // PEs).  No clamping to a single driver is needed (unlike the
+                // OpenSHMEM port under SHMEM_THREAD_SERIALIZED).
+                // With worker progress (the default) the HPX
+                // worker threads drive the transport from their background
+                // work; no io driver is started and every worker scans all
+                // sources (one arena).
+                if (worker_progress_ > 0)
+                {
+                    // The worker threads don't run yet during bootstrap, so one
+                    // io driver progresses the transport until the runtime
+                    // calls initialized(), as in the LCI parcelport.
+                    arena_count_ = 1;
+#if ASIO_VERSION >= 103400
+                    ::asio::post(io_service_pool_.get_io_service(0),
+                        hpx::bind(&parcelport::io_startup_work, this));
+#else
+                    io_service_pool_.get_io_service(0).post(
+                        hpx::bind(&parcelport::io_startup_work, this));
+#endif
+                    return true;
+                }
+
+                arena_count_ = io_service_pool_.size();
+
+                for (std::size_t i = 0; i < arena_count_; ++i)
                 {
 #if ASIO_VERSION >= 103400
                     ::asio::post(
                         io_service_pool_.get_io_service(static_cast<int>(i)),
-                        hpx::bind(&parcelport::io_service_work, this));
+                        hpx::bind(&parcelport::io_service_work, this, i));
 #else
                     io_service_pool_.get_io_service(static_cast<int>(i))
-                        .post(hpx::bind(&parcelport::io_service_work, this));
+                        .post(hpx::bind(&parcelport::io_service_work, this, i));
 #endif
                 }
                 return true;
             }
 
-            // Stop the handling of connections.
             void do_stop()
             {
-                while (do_background_work(0, parcelport_background_mode::all))
+                // Wait for the io_service drivers to empty all queued work,
+                // then stop them.  This thread does not drive progress itself
+                // (the wait deliberately uses no HPX thread suspension:
+                // nothing wakes a suspended thread, and the loop must not
+                // depend on the scheduler).  It does take one final collective
+                // barrier below, which is safe while the drivers still run:
+                // GASNet-EX teams are thread-multiple, the drivers issue only
+                // RMA (never a collective), so this thread is the sole
+                // collective caller and concurrent RMA from the drivers is
+                // legal.
+                //
+                // The abort condition is *stall*, not a wall-clock budget: an
+                // empty that keeps transferring pages is allowed to take as
+                // long as it needs (otherwise a legitimately slow-but-moving
+                // empty would drop messages), and only a genuinely stalled
+                // empty, no page movement for stop_timeout_ seconds, aborts
+                // so shutdown still terminates when a peer never returns
+                // credit (or never publishes) again.  Transfer activity is
+                // measured via mailbox_array::transfer_count(), which changes
+                // exactly as often as pages move.
+                detail::g_discard_received.store(
+                    true, std::memory_order_release);
+                auto last_change = std::chrono::steady_clock::now();
+                std::uint64_t last_count = mailboxes_.transfer_count();
+
+                while (sender_.has_pending() || receiver_.has_pending())
                 {
-                    if (threads::get_self_ptr())
-                        hpx::this_thread::suspend(
-                            hpx::threads::thread_schedule_state::pending,
-                            "gasnet::parcelport::do_stop");
+                    std::uint64_t const count = mailboxes_.transfer_count();
+                    if (count != last_count)
+                    {
+                        last_count = count;
+                        last_change = std::chrono::steady_clock::now();
+                    }
+                    else if (std::chrono::steady_clock::now() - last_change >=
+                        std::chrono::seconds(stop_timeout_))
+                    {
+                        std::cerr << "gasnet: PE " << my_pe_
+                                  << ": do_stop: no transport activity for "
+                                  << stop_timeout_
+                                  << " s; dropping pending transfers and "
+                                     "proceeding with shutdown\n";
+                        sender_.dump_state(my_pe_);
+                        receiver_.dump_state(my_pe_);
+                        mailboxes_.dump_state();
+                        break;
+                    }
+                    // without io drivers nothing else may be left to drain
+                    // the queues: drive progress here
+                    if (worker_progress_ > 0)
+                    {
+                        progress(0, parcelport_background_mode::all);
+                    }
+                    else
+                    {
+                        std::this_thread::sleep_for(
+                            std::chrono::milliseconds(1));
+                    }
                 }
 
-                bool expected = false;
-                if (stopped_.compare_exchange_strong(expected, true))
-                {
-                    stopped_ = true;
+                // Final collective barrier before the drivers stop and the
+                // transport finalizes.  Every connection reaps its last access
+                // region before finishing, poll_send() waits for the final
+                // data+credit region (sender_connection.cpp), and the
+                // receiver waits in its 'reaping_credit' state for the final
+                // credit-return region (receiver_connection.hpp), so this PE
+                // has no access region outstanding when the drain loop exits.
+                // The barrier then confirms job-wide that every PE agrees the
+                // empty has drained before any of them proceeds to
+                // finalize()/gasnet_exit(): without it, PE A could tear down
+                // its registered segment while PE B's very last put into that
+                // segment was still in flight (undefined behavior), and the
+                // final parcel could be dropped.  A straggler that arrives
+                // after the last drain poll is dropped, never silently
+                // corrupted, exactly like the stall-timeout abort above.
+                util::gasnet_environment::barrier();
 
-                    int retval;
-                    gasnet_barrier_notify(0, GASNET_BARRIERFLAG_ANONYMOUS);
-                    if ((retval = gasnet_barrier_wait(
-                             0, GASNET_BARRIERFLAG_ANONYMOUS)) != GASNET_OK)
-                    {
-                        // throw exception
-                        HPX_THROW_EXCEPTION(error::invalid_status,
-                            "hpx::util::gasnet_environment::init",
-                            "GASNET failed ",
-                            std::string{gasnet_ErrorName(retval)}, " ",
-                            std::string{gasnet_ErrorDesc(retval)});
-                    }
+                stopped_.store(true, std::memory_order_seq_cst);
+                while (
+                    workers_in_progress_.load(std::memory_order_seq_cst) != 0)
+                {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
                 }
             }
 
-            /// Return the name of this locality
+            // the host name: the localities on one host are assigned
+            // different cores by it
             std::string get_locality_name() const override
             {
                 return util::gasnet_environment::get_processor_name();
@@ -200,15 +471,14 @@ namespace hpx::parcelset {
             std::shared_ptr<sender_connection> create_connection(
                 parcelset::locality const& l, error_code&)
             {
-                int dest_rank = l.get<locality>().rank();
-                return sender_.create_connection(dest_rank, this);
+                int const dest_rank = l.get<locality>().rank();
+                return sender_.create_connection(dest_rank, &mailboxes_);
             }
 
             parcelset::locality agas_locality(
                 util::runtime_configuration const&) const override
             {
-                return parcelset::locality(
-                    locality(util::gasnet_environment::enabled() ? 0 : -1));
+                return parcelset::locality(locality(0));
             }
 
             parcelset::locality create_locality() const override
@@ -216,15 +486,15 @@ namespace hpx::parcelset {
                 return parcelset::locality(locality());
             }
 
-            bool background_work(
-                std::size_t num_thread, parcelport_background_mode mode)
+            // Drive one step of transport progress.  Called from the io_service
+            // drivers and from any HPX thread that runs the background-works
+            // scheduler callback (GASNet-EX is thread-multiple, so concurrent
+            // drivers are always legal).  'arena_idx' selects the receive
+            // arena (a disjoint range of source PEs) so concurrent scanners
+            // do not duplicate each other's probes.  Never blocks.
+            bool progress(
+                std::size_t arena_idx, parcelport_background_mode mode)
             {
-                if (stopped_.load(std::memory_order_acquire) ||
-                    num_thread >= background_threads_)
-                {
-                    return false;
-                }
-
                 bool has_work = false;
                 if (mode & parcelport_background_mode::send)
                 {
@@ -232,103 +502,272 @@ namespace hpx::parcelset {
                 }
                 if (mode & parcelport_background_mode::receive)
                 {
-                    has_work = receiver_.background_work() || has_work;
+                    has_work =
+                        receiver_.background_work(arena_idx, arena_count_) ||
+                        has_work;
                 }
                 return has_work;
             }
 
+            // All GASNet calls happen here (and in the io_service drivers).
+            // HPX worker threads only drive progress when worker_progress is
+            // enabled (off by default, see the constructor).  GASNet-EX teams
+            // are thread-multiple, so there is no serialization gate (unlike
+            // the OpenSHMEM port).  The thread processes the send queue and
+            // the receive arena selected by its OS-thread identifier
+            // (num_thread modulo the io pool size).
+            bool background_work(
+                std::size_t num_thread, parcelport_background_mode mode)
+            {
+                if (stopped_.load(std::memory_order_acquire))
+                {
+                    return false;
+                }
+
+                // Only the dedicated io drivers progress the transport by
+                // default.  Letting every HPX worker thread (48 per node on
+                // buran) enter the transport serialises them on the
+                // conduit's global lock and slows everything down.
+                if (worker_progress_ <= 0 ||
+                    (worker_progress_ > 1 &&
+                        num_thread >=
+                            static_cast<std::size_t>(worker_progress_)))
+                {
+                    return false;
+                }
+
+                // Register as an in-flight caller *before* re-checking
+                // 'stopped_' (seq_cst on both sides pairs with do_stop()):
+                // either we see the stop flag and leave, or do_stop() sees
+                // our count and waits, so no worker is still inside the
+                // transport when it is torn down.
+                in_flight_guard const guard(workers_in_progress_);
+                if (stopped_.load(std::memory_order_seq_cst))
+                {
+                    return false;
+                }
+
+                std::size_t const arena_idx =
+                    arena_count_ == 0 ? 0 : num_thread % arena_count_;
+                return progress(arena_idx, mode);
+            }
+
+            // Bootstrap is over: the worker threads take over the progress
+            // from the startup driver (see io_startup_work).
+            void initialized() override
+            {
+                startup_done_.store(true, std::memory_order_release);
+                base_type::initialized();
+            }
+
+            bool can_send_immediate() const noexcept
+            {
+                return send_immediate_;
+            }
+
+            // Hybrid: a parcel goes out right away only if nothing is being
+            // sent to its destination; otherwise it is queued by the
+            // parcelport_impl, and the parcels queued for a destination are
+            // sent together once it is free (option sendimm=0 always queues).
+            bool can_send_immediate(parcelset::locality const& dest)
+            {
+                return send_immediate_ &&
+                    !sender_.busy(dest.get<locality>().rank());
+            }
+
+            mailbox_array const& get_mailboxes() const noexcept
+            {
+                return mailboxes_;
+            }
+
+            mailbox_array& get_mailboxes() noexcept
+            {
+                return mailboxes_;
+            }
+
+            constexpr std::size_t num_pes() const noexcept
+            {
+                return num_pes_;
+            }
+
+            constexpr std::size_t my_pe() const noexcept
+            {
+                return my_pe_;
+            }
+
+            constexpr std::size_t mtu() const noexcept
+            {
+                return mtu_;
+            }
+
+            bool send_immediate(parcelset::parcelport* pp,
+                parcelset::locality const& dest,
+                sender::parcel_buffer_type buffer,
+                sender::callback_fn_type&& callbackFn)
+            {
+                (void) pp;
+                return sender_.send_immediate(
+                    dest, HPX_MOVE(buffer), HPX_MOVE(callbackFn));
+            }
+
         private:
-            std::atomic<bool> stopped_;
-
-            sender sender_;
-            receiver<parcelport> receiver_;
-
-            void io_service_work()
+            // Progress during bootstrap, until the worker threads take over
+            // (worker_progress > 0). The runtime calls initialized() once
+            // the early parcels are handled, before the workers start.
+            void io_startup_work()
             {
                 std::size_t k = 0;
-                // We only execute work on the IO service while HPX is starting
-                while (hpx::is_starting())
+                while (!startup_done_.load(std::memory_order_acquire) &&
+                    !stopped_.load(std::memory_order_acquire))
                 {
-                    bool has_work = sender_.background_work();
-                    has_work = receiver_.background_work() || has_work;
-                    if (has_work)
+                    if (progress(0, parcelport_background_mode::all))
                     {
                         k = 0;
                     }
                     else
                     {
-                        ++k;
-                        util::detail::yield_k(k,
+                        util::detail::yield_k(++k,
                             "hpx::parcelset::policies::gasnet::parcelport::"
-                            "io_service_work");
+                            "io_startup_work");
                     }
                 }
             }
 
-            std::size_t background_threads_;
-
-            void early_write_handler(std::error_code const& ec, parcel const& p)
+            void io_service_work(std::size_t arena_idx)
             {
-                if (ec)
+                // Deliberate hot spin (no OS yield).  The receiver arena scan
+                // continuously pumps the transport so a published page (data
+                // + credit, both RMA-written into our registered segment) is
+                // picked up promptly.  Yielding starves delivery and the
+                // sender window fills.  Each driver only scans its own arena.
+                while (!stopped_.load(std::memory_order_acquire))
                 {
-                    // all errors during early parcel handling are fatal
-                    std::exception_ptr exception = hpx::detail::get_exception(
-                        hpx::exception(ec), "gasnet::early_write_handler",
-                        __FILE__, __LINE__,
-                        "error while handling early parcel: " + ec.message() +
-                            "(" + std::to_string(ec.value()) + ")" +
-                            parcelset::dump_parcel(p));
-
-                    hpx::report_error(exception);
+                    progress(arena_idx, parcelport_background_mode::all);
                 }
             }
+
+            util::runtime_configuration const& ini_;
+
+            std::atomic<bool> stopped_;
+            std::atomic<std::size_t> workers_in_progress_{0};
+
+            // Counts a worker as being inside the transport for the lifetime
+            // of the guard, whatever way the scope is left.
+            struct in_flight_guard
+            {
+                explicit in_flight_guard(
+                    std::atomic<std::size_t>& counter) noexcept
+                  : counter_(counter)
+                {
+                    counter_.fetch_add(1, std::memory_order_seq_cst);
+                }
+                ~in_flight_guard()
+                {
+                    counter_.fetch_sub(1, std::memory_order_seq_cst);
+                }
+                in_flight_guard(in_flight_guard const&) = delete;
+                in_flight_guard& operator=(in_flight_guard const&) = delete;
+
+            private:
+                std::atomic<std::size_t>& counter_;
+            };
+            int worker_progress_ = 0;
+            bool send_immediate_ = true;
+            std::atomic<bool> startup_done_ = false;
+
+            std::size_t num_pes_;
+            std::size_t my_pe_;
+            std::size_t mtu_;
+            std::size_t slots_;
+            std::size_t stop_timeout_ = 30;
+            std::size_t arena_count_ = 1;
+            mailbox_array mailboxes_;
+
+            sender sender_;
+            receiver<parcelport> receiver_;
         };
     }    // namespace policies::gasnet
 }    // namespace hpx::parcelset
 
-namespace hpx::traits {
+#include <hpx/config/warnings_suffix.hpp>
 
-    // Inject additional configuration data into the factory registry for this
-    // type. This information ends up in the system wide configuration database
-    // under the plugin specific section:
-    //
-    //      [hpx.parcel.gasnet]
-    //      ...
-    //      priority = 1
-    //
-    template <>
-    struct plugin_config_data<hpx::parcelset::policies::gasnet::parcelport>
+template <>
+struct hpx::traits::plugin_config_data<
+    hpx::parcelset::policies::gasnet::parcelport>
+{
+    static constexpr char const* priority() noexcept
     {
-        static constexpr char const* priority() noexcept
-        {
-            return "1";
-        }
+        return "100";
+    }
 
-        static void init(
-            int* argc, char*** argv, util::command_line_handling& cfg)
-        {
-            util::gasnet_environment::init(argc, argv, cfg.rtcfg_);
-            cfg.num_localities_ =
-                static_cast<std::size_t>(util::gasnet_environment::size());
-            cfg.node_ =
-                static_cast<std::size_t>(util::gasnet_environment::rank());
-        }
+    static void init(int* argc, char*** argv, util::command_line_handling& cfg)
+    {
+        util::gasnet_environment::init(argc, argv, cfg.rtcfg_);
 
-        // by default no additional initialization using the resource
-        // partitioner is required
-        static constexpr void init(hpx::resource::partitioner&) noexcept {}
+        // another parcelport (or this one being disabled) leaves the
+        // gasnet runtime uninitialised; do not query it then
+        if (!util::gasnet_environment::enabled())
+            return;
 
-        static void destroy() noexcept
-        {
-            util::gasnet_environment::finalize();
-        }
+        // Zero-copy chunks travel in the same page stream as the serialized
+        // data (see sender_connection::prepare()).
+        cfg.num_localities_ =
+            static_cast<std::size_t>(util::gasnet_environment::size());
+        cfg.node_ = static_cast<std::size_t>(util::gasnet_environment::rank());
+    }
 
-        static constexpr char const* call() noexcept
-        {
-            return "";
-        }
-    };
-}    // namespace hpx::traits
+    static constexpr void init(hpx::resource::partitioner&) noexcept {}
+
+    static void destroy() noexcept
+    {
+        util::gasnet_environment::finalize();
+    }
+
+    static constexpr char const* call() noexcept
+    {
+        // The io pool is sized freely: GASNet-EX teams are always
+        // thread-multiple, so every io driver drives progress on its own
+        // arena (a disjoint range of source PEs) and the base parcelport
+        // default io_pool_size applies (no clamp to one driver is needed).
+        return "mtu = "
+               "${HPX_HAVE_PARCELPORT_GASNET_MTU:0}\n"
+               // In-flight chunks per (sender,receiver) pair; raises
+               // registered tx/rx memory linearly, so keep it small for
+               // very large runs and increase it for high-latency links.
+               "slots = ${HPX_HAVE_PARCELPORT_GASNET_SLOTS:8}\n"
+               // Seconds of zero page activity at shutdown before the empty
+               // wait aborts and remaining in-flight transfers are dropped.
+               // An empty that keeps transferring pages waits as long as it
+               // needs; only a genuine stall terminates early.
+               "stop_timeout = 30\n"
+               // 1: the HPX worker threads progress the transport from their
+               // background work (default), N>1: worker threads 0..N-1 only,
+               // 0: dedicated io drivers instead (io_pool_size of them).
+               "worker_progress = 1\n"
+               // Number of io drivers with worker_progress = 0.
+               "io_pool_size = 2\n"
+               // 1: send a parcel right away if nothing is being sent to its
+               // destination, otherwise queue it and send the queued parcels
+               // together once the destination is free (default); 0: queue
+               // all parcels.
+               "sendimm = 1\n"
+               // AM poll every Nth receive pass (1 = every pass)
+               "progress_interval = 1\n"
+               // CRC32 guard over received pages.  Leave on unless profiling
+               // shows the pass; setting it to 0 removes the corruption
+               // tripwire and must be identical on every PE.
+               "checksum = 1\n"
+               // Cross-PE wire-protocol uniformity check at startup, enforced by
+               // default: identical mtu/slots/checksum on every PE are part
+               // of the wire format, and a mismatch corrupts transfers
+               // silently (aborts on mismatch).  Set to 0 only to skip it.
+               "uniform_check = 1\n"
+               // Max source PEs probed per receive-scan pass (0 = all).
+               // Each probe is a single local load in the GASNet port; the
+               // window bounds the per-pass loop length at large n.
+               "scan_window = 8\n";
+    }
+};
 
 HPX_REGISTER_PARCELPORT(hpx::parcelset::policies::gasnet::parcelport, gasnet)
 

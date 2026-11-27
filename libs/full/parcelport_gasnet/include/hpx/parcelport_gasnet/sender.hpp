@@ -1,5 +1,4 @@
-//  Copyright (c) 2007-2021 Hartmut Kaiser
-//  Copyright (c) 2014-2015 Thomas Heller
+//  Copyright (c) 2026 Christopher Taylor
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -11,22 +10,30 @@
 
 #if defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_PARCELPORT_GASNET)
 #include <hpx/assert.hpp>
+#include <hpx/modules/errors.hpp>
 #include <hpx/modules/functional.hpp>
-#include <hpx/modules/gasnet_base.hpp>
 #include <hpx/modules/synchronization.hpp>
-
+#include <hpx/modules/thread_support.hpp>
 #include <hpx/parcelport_gasnet/sender_connection.hpp>
-#include <hpx/parcelport_gasnet/tag_provider.hpp>
+#include <hpx/parcelset/parcelset_fwd.hpp>
 
 #include <algorithm>
-#include <cstring>
+#include <atomic>
+#include <cstddef>
+#include <cstdio>
+#include <deque>
 #include <iterator>
 #include <list>
+#include <map>
 #include <memory>
 #include <mutex>
+#include <set>
 #include <utility>
+#include <vector>
 
 namespace hpx::parcelset::policies::gasnet {
+
+    struct sender_connection;
 
     struct sender
     {
@@ -34,131 +41,174 @@ namespace hpx::parcelset::policies::gasnet {
         using connection_ptr = std::shared_ptr<connection_type>;
         using connection_list = std::deque<connection_ptr>;
 
-        // different versions of clang-format disagree
-        // clang-format off
-        sender() noexcept
-          : next_free_tag_(-1)
+        explicit sender(void* mailboxes) noexcept
+          : mailboxes_(mailboxes)
         {
         }
-        // clang-format on
 
-        void run() noexcept
+        sender(sender const&) = delete;
+        sender(sender&&) = delete;
+        sender& operator=(sender const&) = delete;
+        sender& operator=(sender&&) = delete;
+
+        constexpr static void run() noexcept {}
+
+        connection_ptr create_connection(int dest, void* pp)
         {
-            hpx::util::gasnet_environment::scoped_lock l;
-            get_next_free_tag();
+            return std::make_shared<connection_type>(
+                this, dest, static_cast<mailbox_array*>(pp));
         }
 
-        connection_ptr create_connection(int dest, parcelset::parcelport* pp)
-        {
-            return std::make_shared<connection_type>(this, dest, pp);
-        }
-
+        // Enqueue a connection to be driven by any progress thread.
+        // Safe to call from any HPX thread.  A connection whose
+        // destination is free takes its reservation right away and becomes
+        // steppable; otherwise it waits in its destination's queue until the
+        // connection holding the reservation hands it over (per-destination
+        // order is kept, and background_work never scans).
         void add(connection_ptr const& ptr)
         {
+            pending_.fetch_add(1, std::memory_order_acq_rel);
             std::unique_lock l(connections_mtx_);
-            connections_.push_back(ptr);
-        }
-
-        int acquire_tag() noexcept
-        {
-            return tag_provider_.acquire();
-        }
-
-        void send_messages(connection_ptr connection)
-        {
-            // Check if sending has been completed....
-            if (connection->send())
+            if (busy_dsts_.insert(ptr->dst()).second)
             {
-                error_code ec(throwmode::lightweight);
-                hpx::move_only_function<void(error_code const&,
-                    parcelset::locality const&, connection_ptr)>
-                    postprocess_handler;
-                std::swap(
-                    postprocess_handler, connection->postprocess_handler_);
-                postprocess_handler(ec, connection->destination(), connection);
+                ptr->reserved_dst_ = true;
+                connections_.push_back(ptr);
             }
             else
             {
-                std::unique_lock l(connections_mtx_);
-                connections_.push_back(HPX_MOVE(connection));
+                waiting_[ptr->dst()].push_back(ptr);
             }
         }
 
+        // True while a transfer to the destination is in flight or waiting.
+        bool busy(int dst)
+        {
+            std::unique_lock l(connections_mtx_);
+            return busy_dsts_.count(dst) != 0;
+        }
+
+        // True if the progress thread still has queued work to empty (used
+        // by do_stop()).  A connection that is in flight is always re-queued
+        // after each poll, so the queue plus the set of destinations with an
+        // in-flight (reserved) connection fully covers "work remaining".
+        // Called only from do_stop() (never from the progress thread), so a
+        // blocking lock is safe and avoids spurious "empty" results under
+        // contention.
+        bool has_pending() noexcept
+        {
+            // Lock-free, see receiver::has_pending().  Counts connections that
+            // were added and have not finished yet (queued or in flight).
+            return pending_.load(std::memory_order_acquire) > 0;
+        }
+
+        // Drive one connection by a single non-blocking step.  Callable from
+        // any progress thread.  Every destination is single-flight: a
+        // connection holds a reservation on its destination until its whole
+        // transfer completes, so parcels to the same destination are
+        // serialized (their chunks must not interleave in the shared
+        // per-(sender,destination) rx ring).  Connections whose destination
+        // is already reserved by another in-flight connection are skipped
+        // and re-queued, a caller whose destination cannot do work right
+        // now moves on to the next connection. Does not block.
         bool background_work() noexcept
         {
             connection_ptr connection;
             {
-                std::unique_lock l(connections_mtx_, std::try_to_lock);
-                if (l && !connections_.empty())
+                std::unique_lock l(connections_mtx_);
+                if (connections_.empty())
                 {
-                    connection = HPX_MOVE(connections_.front());
-                    connections_.pop_front();
+                    return false;
                 }
+                connection = HPX_MOVE(connections_.front());
+                connections_.pop_front();
             }
 
-            bool has_work = false;
-            if (connection)
+            // poll_send() transfers as many chunks as the transport admits in
+            // this call and never blocks.  A finished connection hands its
+            // destination reservation to the next connection waiting for
+            // that destination (or releases it); one that still has chunks
+            // in flight is re-queued with the reservation held.
+            in_flight_.fetch_add(1, std::memory_order_relaxed);
+            bool const finished = connection->poll_send();
+            in_flight_.fetch_sub(1, std::memory_order_relaxed);
+
+            std::unique_lock l(connections_mtx_);
+            if (finished)
             {
-                send_messages(HPX_MOVE(connection));
-                has_work = true;
+                int const dst = connection->dst();
+                connection->reserved_dst_ = false;
+                auto it = waiting_.find(dst);
+                if (it != waiting_.end())
+                {
+                    connection_ptr next = HPX_MOVE(it->second.front());
+                    it->second.pop_front();
+                    if (it->second.empty())
+                        waiting_.erase(it);
+                    next->reserved_dst_ = true;
+                    connections_.push_back(HPX_MOVE(next));
+                }
+                else
+                {
+                    busy_dsts_.erase(dst);
+                }
+                pending_.fetch_sub(1, std::memory_order_acq_rel);
+                return true;
             }
-            next_free_tag();
 
-            return has_work;
+            connections_.push_back(HPX_MOVE(connection));
+            return true;
+        }
+
+        void dump_state(std::size_t my_pe) noexcept
+        {
+            std::unique_lock l(connections_mtx_);
+            std::fprintf(stderr,
+                "gasnet: PE %zu sender: queued=%zu in_flight=%d busy_dsts=",
+                my_pe, connections_.size(), in_flight_.load());
+            for (int d : busy_dsts_)
+                std::fprintf(stderr, "%d ", d);
+            std::fprintf(stderr, "\n");
+            for (auto const& c : connections_)
+                std::fprintf(stderr,
+                    "gasnet: PE %zu sender conn dst=%d reserved=%d\n", my_pe,
+                    c->dst(), static_cast<int>(c->reserved_dst_));
+        }
+
+        using parcel_buffer_type = parcel_buffer<>;
+        using callback_fn_type =
+            hpx::move_only_function<void(error_code const&)>;
+
+        // Enqueue a parcel for sending; the actual transfer is driven by any
+        // progress thread.  Returns immediately (non-blocking), which is
+        // required since this may be called from any HPX thread.
+        bool send_immediate(parcelset::locality const& dest,
+            parcel_buffer_type buffer, callback_fn_type&& callbackFn)
+        {
+            int dest_rank = dest.get<locality>().rank();
+            auto connection = create_connection(dest_rank, mailboxes_);
+            connection->buffer_ = HPX_MOVE(buffer);
+            connection->async_write(HPX_MOVE(callbackFn), nullptr);
+            add(connection);
+            return true;
         }
 
     private:
-        tag_provider tag_provider_;
+        void* mailboxes_;
+        std::mutex connections_mtx_;
 
-        void next_free_tag() noexcept
-        {
-            int next_free = -1;
-            {
-                std::unique_lock l(next_free_tag_mtx_, std::try_to_lock);
-                if (l.owns_lock())
-                {
-                    next_free = next_free_tag_locked();
-                }
-            }
-
-            if (next_free != -1)
-            {
-                HPX_ASSERT(next_free > 1);
-                tag_provider_.release(next_free);
-            }
-        }
-
-        int next_free_tag_locked() noexcept
-        {
-            hpx::util::gasnet_environment::scoped_try_lock l;
-            if (l.locked)
-            {
-                return get_next_free_tag();
-            }
-            return -1;
-        }
-
-        int get_next_free_tag() noexcept
-        {
-            int next_free = next_free_tag_;
-
-            hpx::util::gasnet_environment::scoped_lock l;
-            std::memcpy(&next_free,
-                hpx::util::gasnet_environment::segments
-                    [hpx::util::gasnet_environment::rank()]
-                        .addr,
-                sizeof(int));
-
-            return next_free;
-        }
-
-        hpx::spinlock connections_mtx_;
+        // Connections waiting for their transfer to be driven.
         connection_list connections_;
 
-        hpx::spinlock next_free_tag_mtx_;
-        int next_free_tag_;
+        // Destinations currently reserved by an in-flight connection (part
+        // of the single-flight protocol).  Guarded by connections_mtx_.
+        std::set<int> busy_dsts_;
+        // Connections waiting for their destination's
+        // reservation, per destination, in order.  Guarded by
+        // connections_mtx_.
+        std::map<int, connection_list> waiting_;
+        std::atomic<int> in_flight_{0};
+        std::atomic<int> pending_{0};
     };
-
 }    // namespace hpx::parcelset::policies::gasnet
 
 #endif

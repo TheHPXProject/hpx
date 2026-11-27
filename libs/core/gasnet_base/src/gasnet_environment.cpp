@@ -1,7 +1,4 @@
-//  Copyright (c) 2013-2015 Thomas Heller
-//  Copyright (c)      2020 Google
-//  Copyright (c)      2022 Patrick Diehl
-//  Copyright (c)      2023 Christopher Taylor
+//  Copyright (c) 2023-2026 Christopher Taylor
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -13,262 +10,47 @@
 #include <hpx/modules/gasnet_base.hpp>
 #include <hpx/modules/logging.hpp>
 #include <hpx/modules/runtime_configuration.hpp>
-#include <hpx/modules/string_util.hpp>
-#include <hpx/modules/threading_base.hpp>
 #include <hpx/modules/util.hpp>
 
+#include <asio/ip/host_name.hpp>
+
+#include <algorithm>
 #include <atomic>
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <iostream>
+#include <stdexcept>
 #include <string>
+#include <vector>
 
-//
-// AM functions
-//
-typedef enum
-{
-    SIGNAL = 136,          // ack to a done_t via gasnet_AMReplyShortM()
-    SIGNAL_LONG,           // ack to a done_t via gasnet_AMReplyLongM()
-    DO_REPLY_PUT = 143,    // do a PUT here from another locale
-    DO_COPY_PAYLOAD        // copy AM payload to another address
-} AM_handler_function_idx_t;
-
-typedef struct
-{
-    void* ack;      // acknowledgement object
-    void* tgt;      // target memory address
-    void* src;      // source memory address
-    size_t size;    // number of bytes.
-} xfer_info_t;
-
-// Gasnet AM handler arguments are only 32 bits, so here we have
-// functions to get the 2 arguments for a 64-bit pointer,
-// and a function to reconstitute the pointer from the 2 arguments.
-//
-static inline gasnet_handlerarg_t get_arg_from_ptr0(uintptr_t addr)
-{
-    // This one returns the bottom 32 bits.
-    // clang-format off
-    return ((gasnet_handlerarg_t) ((((uint64_t) (addr)) << 32UL) >> 32UL));
-    // clang-format on
-}
-static inline gasnet_handlerarg_t get_arg_from_ptr1(uintptr_t addr)
-{
-    // this one returns the top 32 bits.
-    // clang-format off
-    return ((gasnet_handlerarg_t) (((uint64_t) (addr)) >> 32UL));
-    // clang-format on
-}
-static inline uintptr_t get_uintptr_from_args(
-    gasnet_handlerarg_t a0, gasnet_handlerarg_t a1)
-{
-    // clang-format off
-    return (uintptr_t) (((uint64_t) (uint32_t) a0) |
-        (((uint64_t) (uint32_t) a1) << 32UL));
-    // clang-format on
-}
-static inline void* get_ptr_from_args(
-    gasnet_handlerarg_t a0, gasnet_handlerarg_t a1)
-{
-    return (void*) get_uintptr_from_args(a0, a1);
-}
-
-// Build acknowledgement address arguments for gasnetAMRequest*() calls.
-//
-#define Arg0(addr) get_arg_from_ptr0((uintptr_t) addr)
-#define Arg1(addr) get_arg_from_ptr1((uintptr_t) addr)
-
-// The following macro is from the GASNet test.h distribution
-//
-#define GASNET_Safe(fncall)                                                    \
-    do                                                                         \
-    {                                                                          \
-        int _retval;                                                           \
-        if ((_retval = fncall) != GASNET_OK)                                   \
-        {                                                                      \
-            fprintf(stderr,                                                    \
-                "ERROR calling: %s\n"                                          \
-                " at: %s:%i\n"                                                 \
-                " error: %s (%s)\n",                                           \
-                #fncall, __FILE__, __LINE__, gasnet_ErrorName(_retval),        \
-                gasnet_ErrorDesc(_retval));                                    \
-            fflush(stderr);                                                    \
-            gasnet_exit(_retval);                                              \
-        }                                                                      \
-    } while (0)
-
-// This is the type of object we use to manage GASNet acknowledgements.
-//
-// Initialize the count to 0, the target to the number of return signal
-// events you expect, and the flag to 0.  Fire the request, then do a
-// BLOCKUNTIL(flag).  When all the return signals have occurred, the AM
-// handler will set the flag to 1 and your BLOCKUNTIL will complete.
-// (Note that the GASNet documentation says that GASNet code assumes
-// the condition for a BLOCKUNTIL can only be changed by the execution
-// of an AM handler.)
-//
-typedef struct
-{
-    std::atomic<std::uint32_t> count;
-    std::uint32_t target;
-    int volatile flag;
-} done_t;
-
-static void AM_signal([[maybe_unused]] gasnet_token_t token,
-    gasnet_handlerarg_t a0, gasnet_handlerarg_t a1)
-{
-    done_t* done = reinterpret_cast<done_t*>(get_ptr_from_args(a0, a1));
-    uint_least32_t prev;
-    prev = done->count.fetch_add(1, std::memory_order_seq_cst);
-    if (prev + 1 == done->target)
-        done->flag = 1;
-}
-
-static void AM_signal_long([[maybe_unused]] gasnet_token_t token,
-    [[maybe_unused]] void* buf, [[maybe_unused]] size_t nbytes,
-    gasnet_handlerarg_t a0, gasnet_handlerarg_t a1)
-{
-    done_t* done = reinterpret_cast<done_t*>(get_ptr_from_args(a0, a1));
-    uint_least32_t prev;
-    prev = done->count.fetch_add(1, std::memory_order_seq_cst);
-    if (prev + 1 == done->target)
-        done->flag = 1;
-}
-
-// Put from arg->src (which is local to the AM handler) back to
-// arg->dst (which is local to the caller of this AM).
-// nbytes is < gasnet_AMMaxLongReply here (see chpl_comm_get).
-//
-static void AM_reply_put(
-    gasnet_token_t token, void* buf, [[maybe_unused]] size_t nbytes)
-{
-    xfer_info_t* x = static_cast<xfer_info_t*>(buf);
-
-    HPX_ASSERT(nbytes == sizeof(xfer_info_t));
-
-    GASNET_Safe(gasnet_AMReplyLong2(token, SIGNAL_LONG, x->src, x->size, x->tgt,
-        Arg0(x->ack), Arg1(x->ack)));
-}
-
-// Copy from the payload in this active message to dst.
-//
-static void AM_copy_payload(gasnet_token_t token, void* buf, size_t nbytes,
-    gasnet_handlerarg_t ack0, gasnet_handlerarg_t ack1,
-    gasnet_handlerarg_t dst0, gasnet_handlerarg_t dst1)
-{
-    void* dst = get_ptr_from_args(dst0, dst1);
-    {
-        // would prefer to protect the memory segments
-        // associated with each node (n-node mutex)
-        // will require future work
-        //
-        std::lock_guard<hpx::mutex> lk(hpx::util::gasnet_environment::dshm_mut);
-        std::memcpy(dst, buf, nbytes);
-    }
-
-    GASNET_Safe(gasnet_AMReplyShort2(token, SIGNAL, ack0, ack1));
-}
-
-[[maybe_unused]] static gasnet_handlerentry_t ftable[] = {
-    {SIGNAL, (void (*)()) &AM_signal},
-    {SIGNAL_LONG, (void (*)()) &AM_signal_long},
-    {DO_REPLY_PUT, (void (*)()) &AM_reply_put},
-    {DO_COPY_PAYLOAD, (void (*)()) &AM_copy_payload}};
-
-//
-// Initialize one of the above.
-//
-static inline void init_done_obj(done_t* done, int target)
-{
-    done->count.store(0, std::memory_order_seq_cst);
-    done->target = target;
-    done->flag = 0;
-}
-
-static inline void am_poll_try()
-{
-    // Serialize polling for IBV, UCX, Aries, and OFI. Concurrent polling causes
-    // contention in these configurations. For other configurations that are
-    // AM-based (udp/amudp, mpi/ammpi) serializing can hurt performance.
-    //
-#if defined(GASNET_CONDUIT_IBV) || defined(GASNET_CONDUIT_UCX) ||              \
-    defined(GASNET_CONDUIT_ARIES) || defined(GASNET_CONDUIT_OFI)
-    std::lock_guard<hpx::spinlock> lk(
-        hpx::util::gasnet_environment::pollingLock);
-    (void) gasnet_AMPoll();
-#else
-    (void) gasnet_AMPoll();
-#endif
-}
-
-static inline void wait_done_obj(done_t* done, bool do_yield)
-{
-    while (!done->flag)
-    {
-        am_poll_try();
-        if (do_yield)
-        {
-            hpx::this_thread::suspend(
-                hpx::threads::thread_schedule_state::pending,
-                "gasnet::wait_done_obj");
-        }
-    }
-}
-
-///////////////////////////////////////////////////////////////////////////////
 namespace hpx::util {
-
-    namespace detail {
-
-        bool detect_gasnet_environment(
-            util::runtime_configuration const& cfg, char const* default_env)
-        {
-            std::string gasnet_environment_strings =
-                cfg.get_entry("hpx.parcel.gasnet.env", default_env);
-
-            hpx::string_util::char_separator<char> sep(";,: ");
-            hpx::string_util::tokenizer tokens(gasnet_environment_strings, sep);
-            for (auto const& tok : tokens)
-            {
-                char* env = std::getenv(tok.c_str());
-                if (env)
-                {
-                    LBT_(debug)
-                        << "Found GASNET environment variable: " << tok << "="
-                        << std::string(env) << ", enabling GASNET support\n";
-                    return true;
-                }
-            }
-
-            LBT_(info)
-                << "No known GASNET environment variable found, disabling "
-                   "GASNET support\n";
-            return false;
-        }
-    }    // namespace detail
 
     bool gasnet_environment::check_gasnet_environment(
         util::runtime_configuration const& cfg)
     {
 #if defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_MODULE_GASNET_BASE)
-        // We disable the GASNET parcelport if any of these hold:
-        //
-        // - The parcelport is explicitly disabled
-        // - The application is not run in an GASNET environment
-        // - The TCP parcelport is enabled and has higher priority
-        //
-        if (get_entry_as(cfg, "hpx.parcel.gasnet.enable", 1) == 0 ||
-            (get_entry_as(cfg, "hpx.parcel.tcp.enable", 1) &&
-                (get_entry_as(cfg, "hpx.parcel.tcp.priority", 1) >
-                    get_entry_as(cfg, "hpx.parcel.gasnet.priority", 0))) ||
-            (get_entry_as(cfg, "hpx.parcel.gasnet.enable", 1) &&
-                (get_entry_as(cfg, "hpx.parcel.mpi.priority", 1) >
-                    get_entry_as(cfg, "hpx.parcel.gasnet.priority", 0))))
+        // The gasnet parcelport is used only if it is enabled
+        // (hpx.parcel.gasnet.enable=1) and no other parcelport bootstraps
+        // the job (hpx.parcel.bootstrap unset or gasnet): otherwise every
+        // process of a run with another parcelport would start a GASNet job
+        // of its own. The parcelport's default configuration enables all
+        // parcelports, so the setting alone doesn't tell.
+        if (!get_entry_as(cfg, "hpx.parcel.gasnet.enable", false))
         {
-            LBT_(info)
-                << "GASNET support disabled via configuration settings\n";
+            LBT_(info) << "GASNET support not enabled via configuration "
+                          "settings\n";
+            return false;
+        }
+        if (std::string const bootstrap =
+                cfg.get_entry("hpx.parcel.bootstrap", "");
+            !bootstrap.empty() && bootstrap != "gasnet")
+        {
+            LBT_(info) << "GASNET support not enabled, the job is "
+                          "bootstrapped by the "
+                       << bootstrap << " parcelport\n";
             return false;
         }
 
@@ -277,425 +59,440 @@ namespace hpx::util {
         return false;
 #endif
     }
-}    // namespace hpx::util
 
-#if (defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_MODULE_GASNET_BASE))
-
-namespace hpx::util {
-
-    hpx::spinlock gasnet_environment::pollingLock{};
-    hpx::mutex gasnet_environment::dshm_mut{};
-    hpx::mutex gasnet_environment::mtx_{};
-    bool gasnet_environment::enabled_ = false;
-    bool gasnet_environment::has_called_init_ = false;
-    int gasnet_environment::provided_threading_flag_ = GASNET_PAR;
-    int gasnet_environment::is_initialized_ = -1;
-    int gasnet_environment::init_val_ = GASNET_ERR_RESOURCE;
-    hpx::mutex* gasnet_environment::segment_mutex = nullptr;
-    gasnet_seginfo_t* gasnet_environment::segments = nullptr;
-
-    ///////////////////////////////////////////////////////////////////////////
-    int gasnet_environment::init(int* argc, char*** argv, int const minimal,
-        [[maybe_unused]] int const required, int& provided)
+    std::size_t gasnet_environment::slots(runtime_configuration const& cfg)
     {
-        if (!has_called_init_)
+        std::size_t const configured = get_entry_as<std::size_t>(
+            cfg, "hpx.parcel.gasnet.slots", default_slots_per_dst);
+        if (configured == 0)
         {
-            gasnet_environment::init_val_ = gasnet_init(argc, argv);
-            has_called_init_ = true;
+            return 1;
         }
-
-        if (gasnet_environment::init_val_ == GASNET_ERR_NOT_INIT)
+        // the ring slot of a page is its 32-bit counter modulo slots, which
+        // stays consistent across the counter's wrap only for a power of two
+        if (!std::has_single_bit(configured))
         {
-            HPX_THROW_EXCEPTION(error::invalid_status,
-                "hpx::util::gasnet_environment::init",
-                "GASNET initialization error");
+            HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
+                "hpx::util::gasnet_environment::slots",
+                "hpx.parcel.gasnet.slots must be a power of two (is {})",
+                configured);
         }
-        else if (gasnet_environment::init_val_ == GASNET_ERR_RESOURCE)
-        {
-            HPX_THROW_EXCEPTION(error::invalid_status,
-                "hpx::util::gasnet_environment::init", "GASNET resource error");
-        }
-        else if (gasnet_environment::init_val_ == GASNET_ERR_BAD_ARG)
-        {
-            HPX_THROW_EXCEPTION(error::invalid_status,
-                "hpx::util::gasnet_environment::init",
-                "GASNET bad argument error");
-        }
-        else if (gasnet_environment::init_val_ == GASNET_ERR_NOT_READY)
-        {
-            HPX_THROW_EXCEPTION(error::invalid_status,
-                "hpx::util::gasnet_environment::init",
-                "GASNET not ready error");
-        }
-
-        if (provided < minimal)
-        {
-            HPX_THROW_EXCEPTION(error::invalid_status,
-                "hpx::util::gasnet_environment::init",
-                "GASNET doesn't provide minimal requested thread level");
-        }
-
-        if (gasnet_attach(nullptr, 0, gasnet_getMaxLocalSegmentSize(), 0) !=
-            GASNET_OK)
-        {
-            HPX_THROW_EXCEPTION(error::invalid_status,
-                "hpx::util::gasnet_environment::init",
-                "GASNET failed to attach to memory");
-        }
-
-        // create a number of segments equal to the number of hardware
-        // threads per machine (locality)
-        //
-        //segments.resize(hpx::threads::hardware_concurrency() * size());
-        //
-        gasnet_environment::segments = new gasnet_seginfo_t[size()];
-        gasnet_environment::segment_mutex = new hpx::mutex[size()];
-
-        GASNET_Safe(gasnet_getSegmentInfo(segments, size()));
-
-        gasnet_barrier_notify(0, GASNET_BARRIERFLAG_ANONYMOUS);
-        gasnet_barrier_wait(0, GASNET_BARRIERFLAG_ANONYMOUS);
-
-        gasnet_set_waitmode(GASNET_WAIT_BLOCK);
-
-        return gasnet_environment::init_val_;
+        return configured;
     }
 
-    ///////////////////////////////////////////////////////////////////////////
-    void gasnet_environment::init(
-        int* argc, char*** argv, util::runtime_configuration& rtcfg)
+    // Page size: hpx.parcel.gasnet.mtu if given, otherwise the largest power
+    // of two (64 KiB to 1 MiB) that keeps the tx and rx rings of all peers
+    // within a 256 MiB budget.  Must be identical on every PE.
+    std::size_t gasnet_environment::mtu(runtime_configuration const& cfg,
+        std::size_t num_pes, std::size_t slots)
     {
+        std::size_t const configured =
+            get_entry_as<std::size_t>(cfg, "hpx.parcel.gasnet.mtu", 0);
+        if (configured != 0)
+        {
+            // pages are scanned in 32-bit words (the parcelport also checks
+            // that a page is larger than its header)
+            if (configured % 4 != 0)
+            {
+                HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
+                    "hpx::util::gasnet_environment::mtu",
+                    "hpx.parcel.gasnet.mtu must be a multiple of 4 (is {})",
+                    configured);
+            }
+            return configured;
+        }
+
+        constexpr std::size_t budget = std::size_t(256) << 20;
+        constexpr std::size_t max_mtu = std::size_t(1) << 20;
+        constexpr std::size_t min_mtu = std::size_t(64) << 10;
+
+        std::size_t const denom =
+            (std::max) (std::size_t(1), num_pes * slots * 2);
+        std::size_t const m = (std::min) (max_mtu, budget / denom);
+        std::size_t p = min_mtu;
+        while (p * 2 <= m)
+        {
+            p *= 2;
+        }
+        return p;
+    }
+
+    gasnet_environment::mutex_type gasnet_environment::mtx_{};
+
+    bool gasnet_environment::enabled_ = false;
+    bool gasnet_environment::has_called_init_ = false;
+
+    gex_Client_t gasnet_environment::client_ = GEX_CLIENT_INVALID;
+    gex_EP_t gasnet_environment::ep_ = GEX_EP_INVALID;
+    gex_TM_t gasnet_environment::tm_ = GEX_TM_INVALID;
+    gex_Segment_t gasnet_environment::segment_ = GEX_SEGMENT_INVALID;
+    void* gasnet_environment::segment_addr_ = nullptr;
+    std::size_t gasnet_environment::segment_size_ = 0;
+    std::vector<void*> gasnet_environment::remote_segment_addrs_;
+    std::size_t gasnet_environment::max_local_segment_size_ = 0;
+
+    void gasnet_environment::init(
+        int* argc, char*** argv, util::runtime_configuration& cfg)
+    {
+        scoped_lock l(mtx_);
         if (enabled_)
             return;    // don't call twice
 
-        int this_rank = -1;
         has_called_init_ = false;
 
-        // We assume to use the GASNET parcelport if it is not explicitly disabled
-        enabled_ = check_gasnet_environment(rtcfg);
+        enabled_ = check_gasnet_environment(cfg);
         if (!enabled_)
         {
-            rtcfg.add_entry("hpx.parcel.gasnet.enable", "0");
+            cfg.add_entry("hpx.parcel.gasnet.enable", "0");
             return;
         }
 
-        rtcfg.add_entry("hpx.parcel.bootstrap", "gasnet");
+        cfg.add_entry("hpx.parcel.bootstrap", "gasnet");
 
-        int required = GASNET_PAR;
-        int retval =
-            init(argc, argv, required, required, provided_threading_flag_);
-        if (GASNET_OK != retval)
+        // Create the GASNet-EX client, primordial endpoint and team.  This
+        // is collective over the whole job and carries an implicit barrier.
+        // The optional GEX_FLAG_USES_GASNET1 legacy support is deliberately
+        // NOT requested: we only need gex_* calls plus the restricted-context
+        // helpers gasnet_exit() and gasnet_getMaxLocalSegmentSize(), which
+        // are available without it.
+        //
+        // AMMPI's default network depth (4 outstanding messages per peer)
+        // starves the page pipeline; 64 is ~1.7x faster on all-to-all
+        // traffic.  An explicit GASNET_NETWORKDEPTH always wins.
+        ::setenv("GASNET_NETWORKDEPTH", "64", 0);
+
+        if (gex_Client_Init(&client_, &ep_, &tm_, "HPX", argc, argv, 0) !=
+            GASNET_OK)
         {
-            // explicitly disable gasnet if not run by gasnetrun
-            rtcfg.add_entry("hpx.parcel.gasnet.enable", "0");
-
+            // explicitly disable gasnet if not run by a GASNet job launcher
+            cfg.add_entry("hpx.parcel.gasnet.enable", "0");
             enabled_ = false;
 
-            char message[1024 + 1];
-            std::snprintf(message, 1024 + 1, "%s\n", gasnet_ErrorDesc(retval));
-            std::string msg("gasnet_environment::init: gasnet_init failed: ");
-            msg = msg + message + ".";
-            throw std::runtime_error(msg.c_str());
+            throw std::runtime_error(
+                "gasnet_environment::init: gex_Client_Init failed (is the "
+                "application launched under a GASNet job launcher such as "
+                "gasnetrun_*?)");
         }
 
-        if (provided_threading_flag_ != GASNET_PAR)
+        // The parcelport issues GASNet-EX calls concurrently from the parcels
+        // io driver strands, which requires a thread-multiple (PAR/PARSYNC)
+        // build of GASNet.  QueryMaxThreads() reports the number of threads
+        // that may call the GASNet API inside this process (1 in a SEQ build),
+        // so refuse to run under a single-threaded build, where concurrent
+        // io-driver RMA would be undefined behavior.
+        std::uint64_t const max_threads = gex_System_QueryMaxThreads();
+        if (max_threads < 2)
         {
-            // explicitly disable gasnet if not run by gasnetrun
-            rtcfg.add_entry("hpx.parcel.gasnet.multithreaded", "0");
+            cfg.add_entry("hpx.parcel.gasnet.enable", "0");
+            enabled_ = false;
+            throw std::runtime_error(
+                "gasnet_environment::init: GASNet build does not support "
+                "thread-multiple mode (gex_System_QueryMaxThreads() == " +
+                std::to_string(max_threads) + "); a PAR gex build is required");
         }
 
-        this_rank = rank();
+        // Size of the single registered segment this locality attaches.  The
+        // parcelport mailbox carves its tx/rx pools and credit matrices out
+        // of the first bytes of this segment.  Attaching the largest segment
+        // the runtime permits would pin almost all physical memory of a big
+        // node, so attach only what the mailbox needs (it reports a clear
+        // error if that exceeds what the runtime permits).
+        max_local_segment_size_ =
+            static_cast<std::size_t>(gasnet_getMaxLocalSegmentSize());
+        if (max_local_segment_size_ == 0)
+        {
+            // Some conduits may conservatively disallow segment attachment.
+            cfg.add_entry("hpx.parcel.gasnet.enable", "0");
+            enabled_ = false;
+            throw std::runtime_error(
+                "gasnet_environment::init: no usable registered segment "
+                "(gasnet_getMaxLocalSegmentSize() == 0); the gasnet "
+                "parcelport requires a registered segment for RMA");
+        }
 
-#if defined(HPX_HAVE_NETWORKING)
+        std::size_t const num_pes = static_cast<std::size_t>(size());
+        std::size_t const slots_per_dst = slots(cfg);
+        // gex_Segment_Attach() wants a whole number of pages
+        std::size_t const needed = symmetric_bytes(
+            num_pes, slots_per_dst, mtu(cfg, num_pes, slots_per_dst));
+        std::size_t const page = static_cast<std::size_t>(GASNET_PAGESIZE);
+        std::size_t const attach_size = (std::min) (max_local_segment_size_,
+            (needed + page - 1) / page * page);
+
+        // Collective attach of our (zero-initialized by the runtime, but we
+        // still zero the mailbox carve later) segment, bound to the
+        // primordial endpoint.  Implicit barrier on return.
+        if (gex_Segment_Attach(&segment_, tm_, attach_size) != GASNET_OK)
+        {
+            cfg.add_entry("hpx.parcel.gasnet.enable", "0");
+            enabled_ = false;
+            throw std::runtime_error(
+                "gasnet_environment::init: gex_Segment_Attach failed");
+        }
+        HPX_ASSERT(segment_ != GEX_SEGMENT_INVALID);
+
+        segment_addr_ = gex_Segment_QueryAddr(segment_);
+        segment_size_ =
+            static_cast<std::size_t>(gex_Segment_QuerySize(segment_));
+        HPX_ASSERT(segment_addr_ != nullptr);
+        HPX_ASSERT(segment_size_ >= attach_size);
+
+        // Discover the base address of every peer's segment in that peer's
+        // own address space.  After the collective attach every primordial
+        // segment is implicitly 'published', so the non-blocking query below
+        // succeeds for every rank.  Each query event is waited before the
+        // next query re-uses its OUT arguments.
+        std::size_t const npes = static_cast<std::size_t>(size());
+        remote_segment_addrs_.clear();
+        remote_segment_addrs_.reserve(npes);
+        for (std::size_t r = 0; r < npes; ++r)
+        {
+            void* owneraddr = nullptr;
+            void* localaddr = nullptr;
+            std::uintptr_t len = 0;
+            gex_Event_t const ev = gex_EP_QueryBoundSegmentNB(tm_,
+                static_cast<gex_Rank_t>(r), &owneraddr, &localaddr, &len, 0);
+            gex_Event_Wait(ev);
+            if (gex_Event_Test(ev) != GASNET_OK || owneraddr == nullptr)
+            {
+                throw std::runtime_error(
+                    std::string("gasnet_environment::init: "
+                                "gex_EP_QueryBoundSegmentNB failed for rank ") +
+                    std::to_string(r) + " (result " +
+                    std::to_string(gex_Event_Test(ev)) + ")");
+            }
+            remote_segment_addrs_.push_back(owneraddr);
+        }
+
+        // Make sure every PE has finished attaching its segment, discovered
+        // the peer addresses and zeroed its carve before any parcel traffic
+        // is allowed to start (the parcelport re-uses this barrier in
+        // do_run()).
+        barrier();
+
+        has_called_init_ = true;
+
+        cfg.set_num_localities(static_cast<std::uint32_t>(npes));
+
+        int const this_rank = rank();
         if (this_rank == 0)
         {
-            rtcfg.mode_ = hpx::runtime_mode::console;
+            cfg.mode_ = hpx::runtime_mode::console;
         }
         else
         {
-            rtcfg.mode_ = hpx::runtime_mode::worker;
+            cfg.mode_ = hpx::runtime_mode::worker;
         }
-#elif defined(HPX_HAVE_DISTRIBUTED_RUNTIME)
-        rtcfg.mode_ = hpx::runtime_mode::console;
+
+        cfg.add_entry("hpx.parcel.gasnet.rank", std::to_string(this_rank));
+        cfg.add_entry("hpx.parcel.gasnet.processorname", get_processor_name());
+    }
+
+    void gasnet_environment::finalize() noexcept
+    {
+        // finalize() also runs from the process exit handlers; a failing
+        // init() may exit() while still holding mtx_ on this thread, and
+        // blocking on it here would hang the rank instead of letting the job
+        // abort.  If init is still in progress there is nothing to finalize.
+        scoped_lock l(mtx_, std::try_to_lock);
+        if (!l.owns_lock())
+        {
+            return;
+        }
+
+        if (enabled_ && has_called_init_)
+        {
+            has_called_init_ = false;
+
+            // GASNet-EX in specification v0.19 has no gex_Client_Close();
+            // gasnet_exit() is the standard (restricted-context) termination
+            // call: it tears down the job, joining any progress threads.
+            // Only one client per process, and this module owns it.
+#if defined(GASNET_CONDUIT_IBV)
+            // ibv-conduit registers its own at-exit handler, which (when it
+            // runs first, as it does after our atexit registration) takes
+            // the one-shot exit path and returns; a second gasnet_exit()
+            // from here would then spin forever waiting for the first
+            // caller to finish.  The handler performs the coordinated
+            // job shutdown, so there is nothing left to do.
 #else
-        rtcfg.mode_ = hpx::runtime_mode::local;
+            gasnet_exit(0);
 #endif
-
-        rtcfg.add_entry("hpx.parcel.gasnet.rank", std::to_string(this_rank));
-        rtcfg.add_entry(
-            "hpx.parcel.gasnet.processorname", get_processor_name());
-    }
-
-    std::string gasnet_environment::get_processor_name()
-    {
-        char name[1024 + 1] = {'\0'};
-        std::string const rnkstr = std::to_string(rank());
-        int const len = rnkstr.size();
-        if (1025 < len)
-        {
-            HPX_THROW_EXCEPTION(error::invalid_status,
-                "hpx::util::gasnet_environment::get_processor_name",
-                "GASNET processor name is larger than 1025");
-        }
-        std::copy(std::begin(rnkstr), std::end(rnkstr), name);
-        return name;
-    }
-
-    bool gasnet_environment::gettable(
-        int const node, void* start, size_t const len)
-    {
-        uintptr_t const segstart =
-            (uintptr_t) gasnet_environment::segments[node].addr;
-        uintptr_t const segend =
-            segstart + gasnet_environment::segments[node].size;
-        uintptr_t const reqstart = (uintptr_t) start;
-        uintptr_t const reqend = reqstart + len;
-
-        return (segstart <= reqstart && reqstart <= segend &&
-            segstart <= reqend && reqend <= segend);
-    }
-
-    void gasnet_environment::put(std::uint8_t* addr, int const node,
-        std::uint8_t* raddr, std::size_t const size)
-    {
-        bool const in_remote_seg = gettable(node, raddr, size);
-        if (in_remote_seg)
-        {
-            std::lock_guard<hpx::mutex> const lk(segment_mutex[node]);
-            gasnet_put(node, static_cast<void*>(raddr),
-                static_cast<void*>(addr), size);
-        }
-        else
-        {
-            // tell the remote node to copy the data being sent
-            //
-            size_t max_chunk = gasnet_AMMaxMedium();
-            size_t start = 0;
-
-            // AMRequestMedium will send put; the active message handler
-            // will memcpy on the remote host
-            //
-            for (start = 0; start < size; start += max_chunk)
-            {
-                size_t this_size;
-                done_t done;
-
-                this_size = size - start;
-                if (this_size > max_chunk)
-                {
-                    this_size = max_chunk;
-                }
-
-                void* addr_chunk = addr + start;
-                void* raddr_chunk = raddr + start;
-
-                init_done_obj(&done, 1);
-
-                // Send an AM over to ask for a them to copy the data
-                // passed in the active message (addr_chunk) to raddr_chunk.
-                GASNET_Safe(gasnet_AMRequestMedium4(node, DO_COPY_PAYLOAD,
-                    addr_chunk, this_size, Arg0(&done), Arg1(&done),
-                    Arg0(raddr_chunk), Arg1(raddr_chunk)));
-
-                // Wait for the PUT to complete.
-                wait_done_obj(&done, false);
-            }
+            remote_segment_addrs_.clear();
         }
     }
 
-    void gasnet_environment::get(std::uint8_t* addr, int const node,
-        std::uint8_t* raddr, std::size_t const size)
-    {
-        if (rank() == node)
-        {
-            std::memmove(addr, raddr, size);
-        }
-        else
-        {
-            // Handle remote address not in remote segment.
-            // The GASNet Spec says:
-            //   The source memory address for all gets and the target memory address
-            //   for all puts must fall within the memory area registered for remote
-            //   access by the remote node (see gasnet_attach()), or the results are
-            //   undefined
-            //
-            // In other words, it is OK if the local side of a GET or PUT
-            // is not in the registered memory region.
-            //
-            bool remote_in_segment = gettable(node, raddr, size);
-
-            if (remote_in_segment)
-            {
-                // If raddr is in the remote segment, do a normal gasnet_get.
-                // GASNet will handle the local portion not being in the segment.
-                //
-                gasnet_get(addr, node, raddr, size);    // dest, node, src, size
-            }
-            else
-            {
-                // If raddr is not in the remote segment, we need to send an
-                // active message; the other node will PUT back to us.
-                // The local side has to be in the registered memory segment.
-                //
-                bool local_in_segment = false;
-                void* local_buf = nullptr;
-                std::size_t max_chunk = gasnet_AMMaxLongReply();
-                std::size_t start = 0;
-
-                local_in_segment = gettable(rank(), addr, size);
-
-                // If the local address isn't in a registered segment,
-                // do the GET into a temporary buffer instead, and then
-                // copy the result back.
-                //
-                if (!local_in_segment)
-                {
-                    size_t buf_sz = size;
-                    if (buf_sz > max_chunk)
-                    {
-                        buf_sz = max_chunk;
-                    }
-
-                    local_buf = calloc(1, buf_sz);
-                    HPX_ASSERT(gettable(node, local_buf, buf_sz));
-                }
-
-                // do a PUT on the remote locale back to here.
-                // But do it in chunks of size gasnet_AMMaxLongReply()
-                // since we use gasnet_AMReplyLong to do the PUT.
-                for (start = 0; start < size; start += max_chunk)
-                {
-                    size_t this_size;
-                    void* addr_chunk;
-                    xfer_info_t info;
-                    done_t done;
-
-                    this_size = size - start;
-                    if (this_size > max_chunk)
-                    {
-                        this_size = max_chunk;
-                    }
-
-                    addr_chunk = addr + start;
-
-                    init_done_obj(&done, 1);
-
-                    info.ack = &done;
-                    info.tgt = local_buf ? local_buf : addr_chunk;
-                    info.src = raddr + start;
-                    info.size = this_size;
-
-                    // Send an AM over to ask for a PUT back to us
-                    GASNET_Safe(gasnet_AMRequestMedium0(
-                        node, DO_REPLY_PUT, &info, sizeof(info)));
-
-                    // Wait for the PUT to complete.
-                    wait_done_obj(&done, false);
-
-                    // Now copy from local_buf back to addr if necessary.
-                    if (local_buf)
-                    {
-                        std::memcpy(addr_chunk, local_buf, this_size);
-                    }
-                }
-
-                // If we were using a temporary local buffer free it
-                if (local_buf)
-                {
-                    free(local_buf);
-                }
-            }
-        }
-    }
-
-    void gasnet_environment::finalize()
-    {
-        if (enabled() && has_called_init())
-        {
-            gasnet_exit(1);
-            if (gasnet_environment::segments != nullptr)
-            {
-                delete gasnet_environment::segments;
-            }
-            if (gasnet_environment::segment_mutex != nullptr)
-            {
-                delete gasnet_environment::segment_mutex;
-            }
-        }
-    }
-
-    bool gasnet_environment::enabled()
+    bool gasnet_environment::enabled() noexcept
     {
         return enabled_;
     }
 
-    bool gasnet_environment::multi_threaded()
-    {
-        return provided_threading_flag_ != GASNET_PAR;
-    }
-
-    bool gasnet_environment::has_called_init()
+    bool gasnet_environment::has_called_init() noexcept
     {
         return has_called_init_;
     }
 
-    int gasnet_environment::size()
+    int gasnet_environment::rank() noexcept
     {
-        int res(-1);
-        if (enabled())
-            res = static_cast<int>(gasnet_nodes());
-        return res;
-    }
-
-    int gasnet_environment::rank()
-    {
-        int res(-1);
-        if (enabled())
-            res = static_cast<int>(gasnet_mynode());
-        return res;
-    }
-
-    gasnet_environment::scoped_lock::scoped_lock()
-    {
-        if (!multi_threaded())
-            mtx_.lock();
-    }
-
-    gasnet_environment::scoped_lock::~scoped_lock()
-    {
-        if (!multi_threaded())
-            mtx_.unlock();
-    }
-
-    void gasnet_environment::scoped_lock::unlock()
-    {
-        if (!multi_threaded())
-            mtx_.unlock();
-    }
-
-    gasnet_environment::scoped_try_lock::scoped_try_lock()
-      : locked(true)
-    {
-        if (!multi_threaded())
+        if (client_ == GEX_CLIENT_INVALID)
         {
-            locked = mtx_.try_lock();
+            return -1;
         }
+        return static_cast<int>(gex_System_QueryJobRank());
     }
 
-    gasnet_environment::scoped_try_lock::~scoped_try_lock()
+    int gasnet_environment::size() noexcept
     {
-        if (!multi_threaded() && locked)
-            mtx_.unlock();
-    }
-
-    void gasnet_environment::scoped_try_lock::unlock()
-    {
-        if (!multi_threaded() && locked)
+        if (client_ == GEX_CLIENT_INVALID)
         {
-            locked = false;
-            mtx_.unlock();
+            return -1;
         }
+        return static_cast<int>(gex_System_QueryJobSize());
     }
+
+    // The name of the host: localities on the same host share its cores
+    // (see runtime_distributed::assign_cores), so it must not be unique per
+    // rank.
+    std::string gasnet_environment::get_processor_name()
+    {
+        return asio::ip::host_name();
+    }
+
+    gex_Client_t gasnet_environment::client() noexcept
+    {
+        return client_;
+    }
+
+    gex_EP_t gasnet_environment::ep() noexcept
+    {
+        return ep_;
+    }
+
+    gex_TM_t gasnet_environment::tm() noexcept
+    {
+        return tm_;
+    }
+
+    gex_Segment_t gasnet_environment::segment() noexcept
+    {
+        return segment_;
+    }
+
+    void* gasnet_environment::segment_addr() noexcept
+    {
+        return segment_addr_;
+    }
+
+    std::size_t gasnet_environment::segment_size() noexcept
+    {
+        return segment_size_;
+    }
+
+    std::size_t gasnet_environment::max_local_segment_size() noexcept
+    {
+        return max_local_segment_size_;
+    }
+
+    void* gasnet_environment::remote_segment_addr(int rank) noexcept
+    {
+        if (rank < 0 || rank >= static_cast<int>(remote_segment_addrs_.size()))
+        {
+            return nullptr;
+        }
+        return remote_segment_addrs_[static_cast<std::size_t>(rank)];
+    }
+
+    void gasnet_environment::barrier() noexcept
+    {
+        gex_Event_t const ev = gex_Coll_BarrierNB(tm_, 0);
+        gex_Event_Wait(ev);
+        HPX_ASSERT(gex_Event_Test(ev) == GASNET_OK);
+    }
+
+    void gasnet_environment::put(
+        int rank, void* raddr, void const* laddr, std::size_t nbytes)
+    {
+        HPX_ASSERT(tm_ != GEX_TM_INVALID);
+        gex_RMA_PutBlocking(tm_, static_cast<gex_Rank_t>(rank), raddr,
+            const_cast<void*>(laddr), nbytes, 0);
+    }
+
+    void gasnet_environment::get(
+        int rank, void* laddr, void const* raddr, std::size_t nbytes)
+    {
+        HPX_ASSERT(tm_ != GEX_TM_INVALID);
+        gex_RMA_GetBlocking(tm_, laddr, static_cast<gex_Rank_t>(rank),
+            const_cast<void*>(raddr), nbytes, 0);
+    }
+
+    gex_Event_t gasnet_environment::put_batch_nb(int rank, std::size_t n,
+        void* const* raddr, void const* const* laddr, std::size_t const* nbytes)
+    {
+        HPX_ASSERT(tm_ != GEX_TM_INVALID);
+
+        gex_NBI_BeginAccessRegion(0);
+        for (std::size_t i = 0; i < n; ++i)
+        {
+            gex_RMA_PutNBI(tm_, static_cast<gex_Rank_t>(rank), raddr[i],
+                const_cast<void*>(laddr[i]), nbytes[i], GEX_EVENT_DEFER, 0);
+        }
+        return gex_NBI_EndAccessRegion(0);
+    }
+
+    gex_Event_t gasnet_environment::put_batch_and_credit_nb(int rank,
+        std::size_t n, void* const* raddr, void const* const* laddr,
+        std::size_t const* nbytes, void* credit_raddr, void const* credit_laddr)
+    {
+        HPX_ASSERT(tm_ != GEX_TM_INVALID);
+
+        gex_NBI_BeginAccessRegion(0);
+        for (std::size_t i = 0; i < n; ++i)
+        {
+            gex_RMA_PutNBI(tm_, static_cast<gex_Rank_t>(rank), raddr[i],
+                const_cast<void*>(laddr[i]), nbytes[i], GEX_EVENT_DEFER, 0);
+        }
+        // the credit word goes last; on the smp conduit the puts are local
+        // memcpy's, so a release fence keeps the credit behind the data on
+        // weakly ordered hosts
+        std::atomic_thread_fence(std::memory_order_release);
+        gex_RMA_PutNBI(tm_, static_cast<gex_Rank_t>(rank), credit_raddr,
+            const_cast<void*>(credit_laddr), sizeof(std::uint32_t),
+            GEX_EVENT_DEFER, 0);
+
+        return gex_NBI_EndAccessRegion(0);
+    }
+
+    gex_Event_t gasnet_environment::put_uint32_nb(
+        int rank, void* raddr, void const* laddr)
+    {
+        HPX_ASSERT(tm_ != GEX_TM_INVALID);
+
+        gex_NBI_BeginAccessRegion(0);
+        gex_RMA_PutNBI(tm_, static_cast<gex_Rank_t>(rank), raddr,
+            const_cast<void*>(laddr), sizeof(std::uint32_t), GEX_EVENT_DEFER,
+            0);
+        return gex_NBI_EndAccessRegion(0);
+    }
+
+    void gasnet_environment::put_uint32(
+        int rank, void* raddr, std::uint32_t value)
+    {
+        HPX_ASSERT(tm_ != GEX_TM_INVALID);
+
+        std::uint32_t const tmp = value;
+        gex_RMA_PutBlocking(tm_, static_cast<gex_Rank_t>(rank), raddr,
+            const_cast<std::uint32_t*>(&tmp), sizeof(tmp), 0);
+    }
+
+    bool gasnet_environment::poll_event(gex_Event_t ev) noexcept
+    {
+        HPX_ASSERT(ev != nullptr);
+        return gex_Event_Test(ev) == GASNET_OK;
+    }
+
+    void gasnet_environment::poll() noexcept
+    {
+        gasnet_AMPoll();
+    }
+
 }    // namespace hpx::util
-
-#endif
