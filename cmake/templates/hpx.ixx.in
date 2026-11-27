@@ -14,11 +14,20 @@ module;
 #define HPX_COMPILE_@uppercase_lib@_WITH_MODULES
 #include <hpx/config.hpp>
 
-// Include all standard library headers in global module fragment to prevent ODR
-// violations.
+// Include third-party and macro-providing headers in global module fragment
+#include <hpx/config/third_party_headers.hpp>
+
+// Include standard library headers in global module fragment to prevent ODR
+// violations only when not using 'import std;'.
+#if !defined(HPX_HAVE_CXX_MODULE_STD)
 #include <hpx/config/std_headers.hpp>
+#endif
 
 export module HPX.@cap_libname@;
+
+#if defined(HPX_HAVE_CXX_MODULE_STD)
+import std;
+#endif
 
 // Make sure the exported symbols are name-mangled using standard C++ rules.
 // This is necessary as otherwise the symbols exported from the shared libraries
