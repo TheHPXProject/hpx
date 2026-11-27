@@ -30,6 +30,8 @@ int hpx_main()
         "   # an indented comment",
         "short = 1",
         "hash = a#b",
+        "#",
+        "trailing = 1#",
     };
 
     hpx::util::section ini;
@@ -40,6 +42,7 @@ int hpx_main()
     HPX_TEST_EQ(ini.get_entry("long.commented", ""), std::string("before"));
     HPX_TEST_EQ(ini.get_entry("long.short", ""), std::string("1"));
     HPX_TEST_EQ(ini.get_entry("long.hash", ""), std::string("a"));
+    HPX_TEST_EQ(ini.get_entry("long.trailing", ""), std::string("1"));
 
     return hpx::local::finalize();
 }
