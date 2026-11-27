@@ -243,8 +243,8 @@ namespace {
             "");
         if (value.empty())
         {
-            value =
-                hpx::get_config_entry(prefix + "fork_join.min_chunk_time_us", "");
+            value = hpx::get_config_entry(
+                prefix + "fork_join.min_chunk_time_us", "");
         }
         HPX_TEST_MSG(!value.empty(), "fork_join min_chunk_time_us");
         if (!value.empty())
@@ -336,9 +336,8 @@ namespace {
 
     bool same(decision const& lhs, decision const& rhs)
     {
-        return lhs.bytes == rhs.bytes &&
-            lhs.iteration_ps == rhs.iteration_ps && lhs.cores == rhs.cores &&
-            lhs.chunk_size == rhs.chunk_size;
+        return lhs.bytes == rhs.bytes && lhs.iteration_ps == rhs.iteration_ps &&
+            lhs.cores == rhs.cores && lhs.chunk_size == rhs.chunk_size;
     }
 
     // An element count whose footprint per core is in the middle of the
@@ -507,9 +506,9 @@ namespace {
     int check_with_defaults()
     {
         values const v;
-        HPX_TEST_EQ(static_cast<std::int64_t>(
-                        ex::get_min_chunk_time(ex::fork_join_executor())
-                            .count()) *
+        HPX_TEST_EQ(
+            static_cast<std::int64_t>(
+                ex::get_min_chunk_time(ex::fork_join_executor()).count()) *
                 1000,
             v.min_chunk_time_ps);
         check_loops(v);
