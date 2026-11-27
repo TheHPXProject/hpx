@@ -212,7 +212,8 @@ namespace {
         // share at 4096 bytes per ns (2 ps per element) only one. The loop
         // must not run on one core with the fast time: its time is that of
         // the whole footprint on the cores it runs on (all available).
-        exd::set_memory_rates({{std::size_t(1) << 20, 4096}, {any_footprint, 8}});
+        exd::set_memory_rates(
+            {{std::size_t(1) << 20, 4096}, {any_footprint, 8}});
         {
             constexpr std::size_t large = 100000;
             std::vector<double> src(large, 1.0), dst(large, 0.0);
