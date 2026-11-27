@@ -278,16 +278,17 @@ int main(int argc, char* argv[])
     // child.hpp, before the command line is parsed)
     HPX_TEST_NEQ(run_tool("--child=no_such_area"), 0);
 
-    // --check: the first file holds (the idle area has no check yet), its
-    // report has the check's form; a file that doesn't exist and --check with
-    // --output fail
+    // --check: the first file holds (the idle area's check, its cases are
+    // tests.unit.tools.tuners.hpx_tune_idle_end_to_end), its report has the
+    // check's form; a file that doesn't exist and --check with --output fail
     HPX_TEST_EQ(run_tool("--idle --check \"" + default_file + "\" --report \"" +
                     check_report_file + "\""),
         0);
     {
         std::string const json = read_file(check_report_file);
         for (char const* member : {"\"file\": ", "\"mismatches\": [",
-                 "\"check\": {\"idle\": {\"checked\": false, "})
+                 "\"check\": {\"idle\": {\"checked\": true, ",
+                 "\"failures\": []"})
         {
             HPX_TEST_MSG(json.find(member) != std::string::npos, member);
         }
