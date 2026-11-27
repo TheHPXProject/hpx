@@ -7,6 +7,7 @@
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 set(tuning_headers
+    hpx/tuning/chunk_costs.hpp
     hpx/tuning/host_fingerprint.hpp
     hpx/tuning/idle_settings.hpp
     hpx/tuning/ini_file.hpp
@@ -23,6 +24,7 @@ set(tuning_compat_headers)
 # cmake-format: on
 
 set(tuning_sources
+    chunk_costs.cpp
     host_fingerprint.cpp
     idle_settings.cpp
     ini_file.cpp
@@ -41,7 +43,14 @@ add_hpx_module(
   SOURCES ${tuning_sources}
   HEADERS ${tuning_headers}
   COMPAT_HEADERS ${tuning_compat_headers}
-  MODULE_DEPENDENCIES hpx_config hpx_format hpx_threading_base hpx_topology
-                      hpx_version
+  MODULE_DEPENDENCIES
+    hpx_algorithms
+    hpx_config
+    hpx_execution
+    hpx_executors
+    hpx_format
+    hpx_threading_base
+    hpx_topology
+    hpx_version
   CMAKE_SUBDIRS examples tests
 )

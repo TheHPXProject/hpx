@@ -42,6 +42,7 @@ namespace hpx {
         {
             ar >> policy_;
             ar >> priority_;
+            ar >> stacksize_;
             ar >> hint_.hint;
             std::uint8_t mode = 0;
             ar >> mode;
@@ -65,6 +66,7 @@ namespace hpx {
         {
             ar << policy_;
             ar << priority_;
+            ar << stacksize_;
             ar << hint_.hint << static_cast<std::uint8_t>(hint_.mode())
                << static_cast<std::uint8_t>(hint_.placement_mode())
                << static_cast<std::uint8_t>(hint_.sharing_mode())
