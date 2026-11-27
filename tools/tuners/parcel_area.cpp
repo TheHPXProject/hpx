@@ -153,9 +153,6 @@ namespace hpx_tune {
             ("seed", po::value<unsigned>(),
                 "the seed of the random order of the children (default: "
                 "random, written into the file's comments)")
-            ("parcel-report", po::value<std::string>(),
-                "write all measurements of the parcel area (every pass, the "
-                "combined curves, the rules' results) to this file as JSON")
             ("progress",
                 "print a line for every size a child has measured, while it "
                 "runs (--verbose prints them too)")
@@ -337,26 +334,39 @@ namespace hpx_tune {
         // inside a Slurm job step: "env -u SLURM_... " for every variable of the
         // step but SLURM_JOB_ID, so that an srun started by the child's launcher
         // sees the job's allocation, not the step's; empty otherwise
-        std::string job_environment()
+        // inside a job step srun sees only the step's nodes: the arguments of
+        // env that remove the step's variables (all SLURM_ ones but the job's
+        // number), empty outside a step
+        std::vector<std::string> job_environment()
         {
-#if defined(_WIN32)
-            return "";
-#else
+            std::vector<std::string> env;
+#if !defined(_WIN32)
             if (std::getenv("SLURM_STEP_ID") == nullptr ||
                 std::getenv("SLURM_JOB_ID") == nullptr)
             {
-                return "";
+                return env;
             }
-            std::string prefix = "env";
+            env.emplace_back("env");
             for (char** e = environ; *e != nullptr; ++e)
             {
                 std::string const entry(*e);
                 std::string const name = entry.substr(0, entry.find('='));
                 if (name.rfind("SLURM_", 0) == 0 && name != "SLURM_JOB_ID")
-                    prefix += " -u " + name;
+                {
+                    env.emplace_back("-u");
+                    env.push_back(name);
+                }
             }
-            return prefix + " ";
 #endif
+            return env;
+        }
+
+        std::string as_text(std::vector<std::string> const& argv)
+        {
+            std::string text;
+            for (std::string const& arg : argv)
+                text += (text.empty() ? "" : " ") + in_quotes(arg);
+            return text;
         }
 
         // starts one child and returns its measurements
@@ -364,21 +374,24 @@ namespace hpx_tune {
             std::string const& parcelport, std::string const& conduit,
             std::string const& placement)
         {
-            std::string args = " --child=parcel:" + parcelport + ":" + conduit +
-                " --sizes=" + o.sizes + " --rounds=" + std::to_string(o.rounds);
-            for (std::string const& s : child_settings(parcelport, conduit))
-                args += " --hpx:ini=" + s;
-
             std::string const threads = std::to_string(o.threads);
+            std::vector<std::string> args = {
+                "--sizes=" + o.sizes, "--rounds=" + std::to_string(o.rounds)};
+            for (std::string const& s : child_settings(parcelport, conduit))
+                args.push_back("--hpx:ini=" + s);
+            std::string const area = "parcel:" + parcelport + ":" + conduit;
+
+            // a launcher template is a command line (run by the shell), the
+            // default is hpxrun.py's arguments (no shell)
             std::string command;
+            std::vector<std::string> argv;
             if (!o.launcher.empty())
             {
-                std::string const child =
-                    in_quotes(o.self) + args + " --hpx:threads=" + threads;
+                args.push_back("--hpx:threads=" + threads);
                 command = replace_all(o.launcher, "{nodes}",
                     placement == "two-nodes" ? "2" : "1");
                 command = replace_all(command, "{threads}", threads);
-                command = replace_all(command, "{}", child);
+                command = replace_all(command, "{}", child_command(area, args));
             }
             else
             {
@@ -405,38 +418,49 @@ namespace hpx_tune {
                 {
                     wrapper_args += " --mpi=pmix";
                 }
-                // inside a job step srun sees only the step's nodes: start the
-                // child as a step of the job, with the step's variables removed
-                std::string const environment =
-                    wrapper == "srun" ? job_environment() : std::string();
-                if (!environment.empty())
+                // inside a job step: start the child as a step of the job,
+                // with the step's variables removed
+                if (wrapper == "srun")
                 {
-                    wrapper_args +=
-                        std::string(" --jobid=") + std::getenv("SLURM_JOB_ID");
+                    argv = job_environment();
+                    if (!argv.empty())
+                    {
+                        wrapper_args += std::string(" --jobid=") +
+                            std::getenv("SLURM_JOB_ID");
+                    }
                 }
-
+#if !defined(_WIN32)
+                if (o.timeout != 0)
+                {
+                    argv.insert(argv.end(),
+                        {"timeout", "-k", "10", std::to_string(o.timeout)});
+                }
+#endif
                 // a port of its own for every child: a port just closed may not
                 // be free yet
-                command = in_quotes(o.python) + " " + in_quotes(o.hpxrun) +
-                    " " + in_quotes(o.self) + " -l 2 -t " + threads + " -p " +
-                    parcelport + " -r " + wrapper + " -d " +
-                    std::to_string(o.port);
+                argv.insert(argv.end(),
+                    {o.python, o.hpxrun, o.self, "-l", "2", "-t", threads, "-p",
+                        parcelport, "-r", wrapper, "-d",
+                        std::to_string(o.port)});
                 o.port += 2;
                 if (!wrapper_args.empty() && wrapper == "srun")
                 {
-                    command += " -w " +
-                        in_quotes(
-                            replace_all(wrapper_args, "{threads}", threads));
+                    argv.emplace_back("-w");
+                    argv.push_back(
+                        replace_all(wrapper_args, "{threads}", threads));
                 }
-                command = environment + command + " --" + args;
+                argv.emplace_back("--");
+                argv.push_back("--child=" + area);
+                argv.insert(argv.end(), args.begin(), args.end());
                 // processes started by hpxrun.py itself must not take their
                 // locality numbers from a batch environment (inside a Slurm step
                 // both would be locality 0, on the same port)
                 if (wrapper == "none")
-                    command += " --hpx:ignore-batch-env";
+                    argv.emplace_back("--hpx:ignore-batch-env");
+                command = as_text(argv);
             }
 #if !defined(_WIN32)
-            if (o.timeout != 0)
+            if (!o.launcher.empty() && o.timeout != 0)
             {
                 command = "timeout -k 10 " + std::to_string(o.timeout) + " " +
                     command;
@@ -465,8 +489,9 @@ namespace hpx_tune {
             };
             try
             {
-                return parse_child(
-                    run_command(command, "parcel", on_line).lines);
+                return parse_child(argv.empty() ?
+                        run_command(command, "parcel", on_line).lines :
+                        run_program(argv, "parcel", on_line).lines);
             }
             catch (std::exception const& e)
             {
@@ -567,70 +592,33 @@ namespace hpx_tune {
 
     namespace {
 
-        std::string json_string(std::string const& text)
-        {
-            std::string out = "\"";
-            for (char const c : text)
-            {
-                switch (c)
-                {
-                case '"':
-                    out += "\\\"";
-                    break;
-                case '\\':
-                    out += "\\\\";
-                    break;
-                case '\n':
-                    out += "\\n";
-                    break;
-                default:
-                    if (static_cast<unsigned char>(c) < 0x20)
-                        out += ' ';
-                    else
-                        out += c;
-                }
-            }
-            return out + "\"";
-        }
-
-        std::string json_summary(tuning::summary const& s)
-        {
-            std::ostringstream os;
-            os << std::setprecision(9) << "{\"count\": " << s.count
-               << ", \"min\": " << s.min << ", \"q1\": " << s.q1
-               << ", \"median\": " << s.median << ", \"q3\": " << s.q3
-               << ", \"p90\": " << s.p90 << ", \"max\": " << s.max << "}";
-            return os.str();
-        }
-
         std::string json_curve(std::vector<tuning::transfer_point> const& c)
         {
-            std::ostringstream os;
-            os << std::setprecision(9) << "[";
-            for (std::size_t i = 0; i != c.size(); ++i)
+            std::vector<std::string> points;
+            points.reserve(c.size());
+            for (tuning::transfer_point const& p : c)
             {
-                os << (i == 0 ? "" : ", ") << "{\"size\": " << c[i].size
-                   << ", \"get_us\": " << json_summary(c[i].get_us)
-                   << ", \"set_us\": " << json_summary(c[i].set_us)
-                   << ", \"conduit_chunks_per_round\": "
-                   << c[i].conduit_chunks_per_round
-                   << ", \"errors\": " << c[i].errors << "}";
+                points.push_back(tuning::json_object({
+                    {"size", std::to_string(p.size)},
+                    {"get_us", tuning::to_json(p.get_us)},
+                    {"set_us", tuning::to_json(p.set_us)},
+                    {"conduit_chunks_per_round",
+                        tuning::json_number(p.conduit_chunks_per_round)},
+                    {"errors", std::to_string(p.errors)},
+                }));
             }
-            os << "]";
-            return os.str();
+            return tuning::json_array(points);
         }
 
-        // report.json of the parcel area: every pass, the combined curves and
-        // the rules' results, by placement
+        // the parcel area's object in the report (--report): every pass,
+        // the combined curves and the rules' results, by placement
         class report_writer
         {
         public:
             void begin_placement(std::string const& placement)
             {
-                placements_ += (placements_.empty() ? "" : ",\n") +
-                    std::string("    {\"placement\": ") +
-                    json_string(placement) + ", \"configurations\": [";
-                first_configuration_ = true;
+                placement_ = placement;
+                configurations_.clear();
             }
 
             void configuration(std::string const& parcelport,
@@ -638,59 +626,50 @@ namespace hpx_tune {
                 std::vector<std::vector<tuning::transfer_point>> const& passes,
                 tuning::combined_curve const& combined)
             {
-                std::string unstable;
+                std::vector<std::string> unstable;
                 for (std::size_t const size : combined.unstable)
-                {
-                    unstable +=
-                        (unstable.empty() ? "" : ", ") + std::to_string(size);
-                }
-                std::string passes_text;
+                    unstable.push_back(std::to_string(size));
+                std::vector<std::string> passes_json;
                 for (auto const& pass : passes)
-                {
-                    passes_text +=
-                        (passes_text.empty() ? "" : ", ") + json_curve(pass);
-                }
-                placements_ += std::string(first_configuration_ ? "" : ",") +
-                    "\n      {\"parcelport\": " + json_string(parcelport) +
-                    ", \"conduit\": " + json_string(conduit) +
-                    ",\n       \"passes\": [" + passes_text +
-                    "],\n       \"combined\": " + json_curve(combined.points) +
-                    ", \"unstable\": [" + unstable + "]}";
-                first_configuration_ = false;
+                    passes_json.push_back(json_curve(pass));
+                configurations_.push_back(tuning::json_object({
+                    {"parcelport", tuning::json_string(parcelport)},
+                    {"conduit", tuning::json_string(conduit)},
+                    {"passes", tuning::json_array(passes_json)},
+                    {"combined", json_curve(combined.points)},
+                    {"unstable", tuning::json_array(unstable)},
+                }));
             }
 
             void end_placement(tuning::parcel_rules_result const& rules)
             {
-                std::string settings;
+                std::vector<std::string> settings;
                 for (tuning::tuned_setting const& s : rules.settings)
-                {
-                    settings += std::string(settings.empty() ? "" : ", ") +
-                        "{\"key\": " + json_string(s.key) +
-                        ", \"value\": " + json_string(s.value) +
-                        ", \"reason\": " + json_string(s.reason) +
-                        ", \"is_default\": " +
-                        (s.is_default ? "true" : "false") + "}";
-                }
-                std::string report;
+                    settings.push_back(tuning::to_json(s));
+                std::vector<std::string> report;
                 for (std::string const& line : rules.report)
-                {
-                    report += (report.empty() ? "" : ", ") + json_string(line);
-                }
-                placements_ += "],\n     \"settings\": [" + settings +
-                    "],\n     \"report\": [" + report + "]}";
+                    report.push_back(tuning::json_string(line));
+                placements_.push_back(tuning::json_object({
+                    {"placement", tuning::json_string(placement_)},
+                    {"configurations", tuning::json_array(configurations_)},
+                    {"settings", tuning::json_array(settings)},
+                    {"report", tuning::json_array(report)},
+                }));
             }
 
             std::string text(std::size_t passes, unsigned seed) const
             {
-                return "{\"area\": \"parcel\", \"passes\": " +
-                    std::to_string(passes) +
-                    ", \"seed\": " + std::to_string(seed) +
-                    ",\n  \"placements\": [\n" + placements_ + "\n  ]}\n";
+                return tuning::json_object({
+                    {"passes", std::to_string(passes)},
+                    {"seed", std::to_string(seed)},
+                    {"placements", tuning::json_array(placements_)},
+                });
             }
 
         private:
-            std::string placements_;
-            bool first_configuration_ = true;
+            std::string placement_;
+            std::vector<std::string> configurations_;
+            std::vector<std::string> placements_;
         };
     }    // namespace
 
@@ -934,20 +913,7 @@ namespace hpx_tune {
                 written = rules.settings;
         }
 
-        if (vm.count("parcel-report"))
-        {
-            std::string const file = vm["parcel-report"].as<std::string>();
-            std::ofstream out(file);
-            if (out)
-            {
-                out << report.text(passes, seed);
-                std::cout << "parcel: wrote " << file << "\n";
-            }
-            else
-            {
-                std::cerr << "hpx_tune: can't write " << file << "\n";
-            }
-        }
+        result.report = report.text(passes, seed);
 
         // the parcel layer's part of the fingerprint
         std::string compiled;

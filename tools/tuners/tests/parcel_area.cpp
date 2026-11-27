@@ -10,7 +10,7 @@
 // check the file it wrote: with HPX's ini reader (the host's fingerprint with
 // the parcel area's entries, a report of the rules for TCP) and by starting
 // the HPX runtime with it (--hpx:config), so that it is known to be accepted;
-// and the parcel area's JSON report (two passes, both configurations). The
+// and the JSON report (--report: two passes, both configurations). The
 // test
 // checks the form of the file, not whether the settings are good for the
 // machine; whether the rules write settings at all depends on HPX (host
@@ -82,7 +82,7 @@ int main(int argc, char* argv[])
     HPX_TEST_EQ(run_tool("--parcel --placement same-node "
                          "--parcel-configurations tcp --sizes 8K:64K "
                          "--rounds 3 --passes 2 --child-threads 2 --output \"" +
-                    parcel_file + "\" --parcel-report \"" + report_file + "\""),
+                    parcel_file + "\" --report \"" + report_file + "\""),
         0);
 
     std::string const text = read_file(parcel_file);
@@ -111,7 +111,8 @@ int main(int argc, char* argv[])
     // the JSON report: two passes, the placement, the configuration without
     // the conduit
     std::string const report = read_file(report_file);
-    HPX_TEST(contains(report, "\"area\": \"parcel\""));
+    HPX_TEST(contains(report, "\"areas\": {\"parcel\": {"));
+    HPX_TEST(contains(report, "\"fingerprint\": {"));
     HPX_TEST(contains(report, "\"passes\": 2"));
     HPX_TEST(contains(report, "\"placement\": \"same-node\""));
     HPX_TEST(contains(report, "\"conduit\": \"none\""));
