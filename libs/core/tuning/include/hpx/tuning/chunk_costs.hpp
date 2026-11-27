@@ -32,11 +32,14 @@ namespace hpx::tuning {
     chunk_executors();
 
     /// The time of a parallel region of one executor on a pool of workers,
-    /// for one number of indices: one bulk_sync_execute with a trivial body,
-    /// regions back to back, in microseconds per region. cores is the
-    /// number of workers the region runs on: the pool size, or fewer for
-    /// the regions of a loop that task_size_chunk_size runs on fewer cores
-    /// (with_processing_units_count; an executor without it runs such a
+    /// for one number of indices: one parallel loop (for_loop) with a
+    /// trivial body and a chunk per index, loops back to back, in
+    /// microseconds per loop. The loop is what task_size_chunk_size chunks,
+    /// so its time includes what the algorithm adds to the executor's
+    /// region. cores is the number of workers the loop runs on: the pool
+    /// size, or fewer for a loop that task_size_chunk_size runs on fewer
+    /// cores (the algorithm narrows the executor with
+    /// with_processing_units_count; an executor without it runs such a
     /// loop's indices on all its workers).
     HPX_CXX_CORE_EXPORT struct region_time
     {

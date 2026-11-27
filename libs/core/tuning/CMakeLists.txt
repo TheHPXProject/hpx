@@ -44,6 +44,7 @@ add_hpx_module(
   HEADERS ${tuning_headers}
   COMPAT_HEADERS ${tuning_compat_headers}
   MODULE_DEPENDENCIES
+    hpx_algorithms
     hpx_config
     hpx_execution
     hpx_executors

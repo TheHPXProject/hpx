@@ -5,8 +5,10 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 #include <hpx/config.hpp>
+#include <hpx/modules/algorithms.hpp>
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/executors.hpp>
+#include <hpx/modules/thread_support.hpp>
 #include <hpx/tuning/chunk_costs.hpp>
 #include <hpx/tuning/ini_file.hpp>
 #include <hpx/tuning/statistics.hpp>
@@ -37,7 +39,9 @@ namespace hpx::tuning {
 
         // The regions of one executor on the given number of workers
         // (cores) for each number of indices: a few to warm up, then repeats
-        // samples of options.regions regions each.
+        // samples of options.regions regions each. A region is a parallel
+        // loop, as task_size_chunk_size chunks loops: its time is what such
+        // a loop costs, the algorithm's part included.
         template <typename Executor>
         void measure_executor(Executor const& exec, std::string const& name,
             std::size_t const pool_size, std::size_t const cores,
@@ -51,15 +55,31 @@ namespace hpx::tuning {
             std::vector<std::size_t> data(largest, 0);
             auto body = [&data](std::size_t const i) { data[i] += i; };
 
+            // The regions measure the executor on the given number of
+            // workers, so nothing may choose the cores or the chunks from the
+            // body's run time. The loop's parameters fix both, a chunk per
+            // index on cores workers, and replace the executor's default
+            // ones, which are task_size_chunk_size where HPX was configured
+            // with HPX_WITH_TASK_SIZE_DEFAULT_PARAMETERS; the body has no task
+            // size either.
+            static_assert(hpx::traits::get_task_size<decltype(body)>::value ==
+                    hpx::threads::task_size::unknown,
+                "the measured body must not have a task size");
+            auto const policy = hpx::execution::par.on(exec).with(
+                hpx::execution::experimental::static_chunk_size(1),
+                hpx::execution::experimental::num_cores(cores));
+            auto const region = [&](std::size_t const indices) {
+                hpx::experimental::for_loop(
+                    policy, std::size_t(0), indices, body);
+            };
+
             for (std::size_t const multiple : options.multiples)
             {
                 std::size_t const indices = multiple * cores;
-                hpx::util::counting_shape const shape(std::size_t(0), indices);
 
                 for (std::size_t i = 0; i != 10; ++i)
                 {
-                    hpx::parallel::execution::bulk_sync_execute(
-                        exec, body, shape);
+                    region(indices);
                 }
 
                 std::vector<double> samples;
@@ -69,8 +89,7 @@ namespace hpx::tuning {
                     auto const start = std::chrono::steady_clock::now();
                     for (std::size_t i = 0; i != options.regions; ++i)
                     {
-                        hpx::parallel::execution::bulk_sync_execute(
-                            exec, body, shape);
+                        region(indices);
                     }
                     std::chrono::duration<double, std::micro> const elapsed =
                         std::chrono::steady_clock::now() - start;
@@ -107,29 +126,16 @@ namespace hpx::tuning {
         std::vector<region_time> times;
 
         // the regions on the whole pool, then on the narrow numbers of
-        // workers: as task_size_chunk_size runs a loop on fewer cores
-        // (with_processing_units_count), or on all workers for an executor
-        // that can't run on fewer, with the indices of such a loop
+        // workers, as task_size_chunk_size runs a loop on fewer cores: the
+        // loop narrows the executor (with_processing_units_count), or runs
+        // on all workers of an executor that can't run on fewer
         auto const measure = [&](auto const& exec, std::string const& name) {
             measure_executor(exec, name, pool_size, pool_size, options, times);
             for (std::size_t const cores : options.narrow_cores)
             {
                 if (cores == 0 || cores >= pool_size)
                     continue;
-                if constexpr (requires {
-                                  ex::with_processing_units_count(
-                                      exec, std::size_t(1));
-                              })
-                {
-                    measure_executor(
-                        ex::with_processing_units_count(exec, cores), name,
-                        pool_size, cores, options, times);
-                }
-                else
-                {
-                    measure_executor(
-                        exec, name, pool_size, cores, options, times);
-                }
+                measure_executor(exec, name, pool_size, cores, options, times);
             }
         };
 
