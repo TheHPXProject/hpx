@@ -860,20 +860,13 @@ namespace hpx_tune {
                 measured_names.push_back(key(j));
             }
 
-            // the other node, where it differs from locality 0's
+            // the nodes of the two-node placement that aren't the tool's
+            // own (the fingerprint's plain entries), where they differ from
+            // it; the tool need not run on the node of locality 0
             if (j.placement == "two-nodes" && !peer_recorded)
             {
                 peer_recorded = true;
-                for (auto const& [name, value] : r.peer)
-                {
-                    auto const same = std::find_if(r.here.begin(), r.here.end(),
-                        [&](auto const& h) { return h.first == name; });
-                    if (same == r.here.end() || same->second != value)
-                    {
-                        fingerprint.add(
-                            "parcel_peer_" + name, value, name != "host_name");
-                    }
-                }
+                tuning::add_peer_nodes(fingerprint, {r.here, r.peer});
             }
             if (verbose)
             {

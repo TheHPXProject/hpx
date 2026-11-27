@@ -5,7 +5,7 @@
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 # the rules, from the measurements of the parcelport study
-set(tests parcel_settings)
+set(tests parcel_settings peer_nodes)
 
 # the transfers between two localities
 set(transfers_PARAMETERS LOCALITIES 2 THREADS_PER_LOCALITY 2)

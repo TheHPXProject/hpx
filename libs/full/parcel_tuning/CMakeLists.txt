@@ -11,15 +11,16 @@ endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
-set(parcel_tuning_headers hpx/parcel_tuning/parcel_settings.hpp
-                          hpx/parcel_tuning/transfers.hpp
+set(parcel_tuning_headers
+    hpx/parcel_tuning/parcel_settings.hpp hpx/parcel_tuning/peer_nodes.hpp
+    hpx/parcel_tuning/transfers.hpp
 )
 
 # cmake-format: off
 set(parcel_tuning_compat_headers)
 # cmake-format: on
 
-set(parcel_tuning_sources parcel_settings.cpp transfers.cpp)
+set(parcel_tuning_sources parcel_settings.cpp peer_nodes.cpp transfers.cpp)
 
 include(HPX_AddModule)
 add_hpx_module(
