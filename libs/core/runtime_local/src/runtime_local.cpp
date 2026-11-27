@@ -1934,6 +1934,45 @@ namespace hpx {
 
     int runtime::finalize(double /*shutdown_timeout*/)
     {
+        // Run the pre-shutdown functions and then the shutdown functions (see
+        // hpx::register_pre_shutdown_function and
+        // hpx::register_shutdown_function) on this HPX thread, before the
+        // runtime waits for its threads to finish: they may end threads that
+        // would otherwise keep it waiting (suspended threads count as busy).
+        auto call_functions = [this](std::list<shutdown_function_type>& fs) {
+            // functions may register more functions while they run
+            while (true)
+            {
+                std::list<shutdown_function_type> functions;
+                {
+                    std::lock_guard<std::mutex> l(mtx_);
+                    functions.swap(fs);
+                }
+                if (functions.empty())
+                {
+                    break;
+                }
+
+                for (shutdown_function_type& f : functions)
+                {
+                    try
+                    {
+                        f();
+                    }
+                    catch (...)
+                    {
+                        report_error(std::current_exception());
+                    }
+                }
+            }
+        };
+
+        set_state(hpx::state::pre_shutdown);
+        call_functions(pre_shutdown_functions_);
+
+        set_state(hpx::state::shutdown);
+        call_functions(shutdown_functions_);
+
         notify_finalize();
         return 0;
     }
