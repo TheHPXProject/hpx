@@ -118,6 +118,20 @@ namespace hpx_tune {
                 {"settings", tuning::json_array(chosen)},
             });
         }
+
+        // The pool sizes timed without --chunk-pool-size: the machine's
+        // whole domains (machine_description) and half a NUMA domain, as
+        // pools smaller than a domain have regions of their own costs. The
+        // smallest whole domain is a NUMA domain (or the machine, if it has
+        // only one).
+        std::vector<std::size_t> default_pool_sizes(
+            tuning::machine_description const& machine)
+        {
+            std::vector<std::size_t> sizes = machine.pool_sizes;
+            if (!sizes.empty() && sizes.front() / 2 != 0)
+                sizes.insert(sizes.begin(), sizes.front() / 2);
+            return sizes;
+        }
     }    // namespace
 
     po::options_description chunk_options()
@@ -127,8 +141,8 @@ namespace hpx_tune {
         desc.add_options()
             ("chunk-pool-size", po::value<std::vector<std::size_t>>(),
                 "a pool size in workers (one per core) to time the regions "
-                "for; may be given more than once (default: the whole NUMA "
-                "domains, sockets and the machine)")
+                "for; may be given more than once (default: half a NUMA "
+                "domain, the whole NUMA domains, sockets and the machine)")
             ("chunk-rule", po::value<std::string>()->default_value("fitted"),
                 "how the minimal run time of a chunk follows from the region "
                 "times: 'fitted' (from the fitted region and chunk costs) or "
@@ -144,7 +158,7 @@ namespace hpx_tune {
         tuning::machine_description const& machine, std::size_t const repeats,
         bool const verbose)
     {
-        std::vector<std::size_t> pool_sizes = machine.pool_sizes;
+        std::vector<std::size_t> pool_sizes = default_pool_sizes(machine);
         if (vm.count("chunk-pool-size"))
         {
             pool_sizes = vm["chunk-pool-size"].as<std::vector<std::size_t>>();

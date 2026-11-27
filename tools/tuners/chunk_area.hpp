@@ -28,8 +28,9 @@ namespace hpx_tune {
     hpx::program_options::options_description chunk_options();
 
     // Time the executors' regions for the pool sizes given on the command
-    // line (or the machine's whole domains, one worker per core) and derive
-    // the minimal run time of a chunk of each executor by the rule given.
+    // line (or half a NUMA domain and the machine's whole domains, one
+    // worker per core) and derive the minimal run time of a chunk of each
+    // executor by the rule given.
     area_result tune_chunk(hpx::program_options::variables_map const& vm,
         hpx::tuning::machine_description const& machine, std::size_t repeats,
         bool verbose);
