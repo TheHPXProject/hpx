@@ -61,6 +61,63 @@ namespace hpx_tune {
             // clang-format on
             return desc;
         }
+
+        // the chunk area's part of the report: what it measured for, every
+        // region time, the fitted costs and the settings with their reasons
+        std::string report(std::vector<std::size_t> const& pool_sizes,
+            std::size_t const regions, tuning::chunk_rule const rule,
+            double const default_us,
+            std::vector<tuning::region_time> const& times,
+            std::vector<tuning::chunk_cost> const& costs,
+            std::vector<tuning::ini_section> const& sections)
+        {
+            std::vector<std::string> sizes;
+            for (std::size_t const size : pool_sizes)
+                sizes.push_back(std::to_string(size));
+
+            std::vector<std::string> region_times;
+            for (tuning::region_time const& t : times)
+            {
+                region_times.push_back(tuning::json_object({
+                    {"executor", tuning::json_string(t.executor)},
+                    {"pool_size", std::to_string(t.pool_size)},
+                    {"indices", std::to_string(t.indices)},
+                    {"time_us", tuning::to_json(t.time_us)},
+                }));
+            }
+
+            std::vector<std::string> fitted;
+            for (tuning::chunk_cost const& c : costs)
+            {
+                fitted.push_back(tuning::json_object({
+                    {"executor", tuning::json_string(c.executor)},
+                    {"pool_size", std::to_string(c.pool_size)},
+                    {"region_us", tuning::json_number(c.region_us)},
+                    {"chunk_us", tuning::json_number(c.chunk_us)},
+                    {"residual_us", tuning::json_number(c.residual_us)},
+                    {"time_at_pool_size_us",
+                        tuning::json_number(c.time_at_pool_size_us)},
+                    {"spread", tuning::json_number(c.spread)},
+                }));
+            }
+
+            std::vector<std::string> chosen;
+            for (tuning::ini_section const& s : sections)
+            {
+                for (tuning::tuned_setting const& setting : s.settings)
+                    chosen.push_back(tuning::to_json(setting));
+            }
+
+            return tuning::json_object({
+                {"pool_sizes", tuning::json_array(sizes)},
+                {"regions", std::to_string(regions)},
+                {"rule", tuning::json_string(tuning::to_string(rule))},
+                {"default_min_chunk_time_us", tuning::json_number(default_us)},
+                {"region_times", tuning::json_array(region_times)},
+                {"costs", tuning::json_array(fitted)},
+                {"settings", tuning::json_array(chosen)},
+            });
+        }
     }    // namespace
 
     po::options_description chunk_options()
@@ -168,7 +225,10 @@ namespace hpx_tune {
             }
         }
 
-        return area_result{HPX_MOVE(sections), HPX_MOVE(comments), {}};
+        std::string json = report(
+            pool_sizes, regions, *rule, default_us, times, costs, sections);
+        return area_result{
+            HPX_MOVE(sections), HPX_MOVE(comments), HPX_MOVE(json)};
     }
 
     int chunk_child_main(int argc, char* argv[])
