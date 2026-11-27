@@ -709,6 +709,24 @@ static void test_strategic_tuple_like_traverse()
         HPX_TEST(res == (std::array<float, 3>{{1.f, 1.f, 1.f}}));
     }
 
+    // Every element in a fixed size homogeneous container is visited from
+    // left to right, also when the container is nested
+    {
+        int counter = 0;
+        auto visitor = [&](int el) {
+            HPX_TEST_EQ(counter, el);
+            ++counter;
+        };
+
+        std::array<int, 2> values{{0, 1}};
+        traverse_pack(visitor, values);
+        traverse_pack(visitor, std::array<int, 2>{{2, 3}});
+        traverse_pack(
+            visitor, std::vector<std::array<int, 2>>{{{4, 5}}, {{6, 7}}});
+        traverse_pack(visitor, hpx::make_tuple(std::array<int, 2>{{8, 9}}, 10));
+        HPX_TEST_EQ(counter, 11);
+    }
+
     // Make it possible to pass tuples containing move only objects
     // in as reference, while returning those as reference.
     {

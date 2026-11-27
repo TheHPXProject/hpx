@@ -663,8 +663,8 @@ namespace hpx::util::detail {
             M mapper_;
 
             template <typename... Args>
-            auto operator()(Args&&... args) -> hpx::util::invoke_result_t<
-                hpx::util::invoke_result_t<M, OldArg>>
+            auto operator()(Args&&... args)
+                -> std::void_t<hpx::util::invoke_result_t<M, OldArg>>
             {
                 (mapper_(HPX_FORWARD(Args, args)), ...);
             }
