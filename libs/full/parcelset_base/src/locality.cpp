@@ -60,8 +60,10 @@ namespace hpx::parcelset {
 #endif
         }
 
-        // the kernel's boot id tells containers or virtual machines with
-        // the same host name apart (and processes on one node share it)
+        // the kernel's boot id tells virtual machines with the same host
+        // name apart; all processes on one kernel share it, also those in
+        // different containers (which then count as one node if they have
+        // the same host name, as they can share memory)
         std::string boot_id()
         {
 #if defined(HPX_WINDOWS)
