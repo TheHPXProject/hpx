@@ -242,6 +242,25 @@ namespace hpx_tune {
 
     namespace {
 
+        // When the written values take effect: task_size_chunk_size reads
+        // them, which the parallel algorithms use by default only if HPX was
+        // built with HPX_WITH_TASK_SIZE_DEFAULT_PARAMETERS=ON, and it times a
+        // loop only if the loop body has a task size.
+        std::string applies_note()
+        {
+#if defined(HPX_HAVE_TASK_SIZE_DEFAULT_PARAMETERS)
+            return "the values take effect for loops chunked by "
+                   "task_size_chunk_size, the default of this HPX "
+                   "(HPX_WITH_TASK_SIZE_DEFAULT_PARAMETERS=ON), whose body "
+                   "has a task size";
+#else
+            return "the values take effect only for loops with "
+                   "task_size_chunk_size attached to their policy, whose "
+                   "body has a task size: this HPX was built with "
+                   "HPX_WITH_TASK_SIZE_DEFAULT_PARAMETERS=OFF";
+#endif
+        }
+
         std::string workers(
             std::size_t const cores, std::size_t const pool_size)
         {
@@ -347,6 +366,7 @@ namespace hpx_tune {
             tuning::chunk_sections(costs, default_us, *rule, chunks_per_core);
 
         std::vector<std::string> comments;
+        comments.push_back("chunk: " + applies_note());
         for (tuning::chunk_cost const& c : costs)
         {
             comments.push_back("chunk: " + c.executor + " on " +
@@ -389,6 +409,7 @@ namespace hpx_tune {
                           << ")\n";
             }
         }
+        std::cout << "chunk: " << applies_note() << "\n";
 
         std::string json = report(pool_sizes, regions, runs, *rule, default_us,
             chunks_per_core, measured, run_of, times, costs, sections);
