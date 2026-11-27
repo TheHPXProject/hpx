@@ -45,7 +45,7 @@ set(workrequesting_numa_hint_PARAMETERS THREADS_PER_LOCALITY 4)
 
 set(min_tasks_to_steal_staged_PARAMETERS THREADS_PER_LOCALITY 4)
 set(queue_length_all_threads_PARAMETERS THREADS_PER_LOCALITY 1)
-set(idle_tuning_table_PARAMETERS THREADS_PER_LOCALITY 3)
+set(idle_tuning_table_PARAMETERS THREADS_PER_LOCALITY 2)
 
 # with a single worker the task's last reference is dropped by the external
 # thread, see the test
