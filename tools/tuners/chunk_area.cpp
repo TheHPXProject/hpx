@@ -65,8 +65,10 @@ namespace hpx_tune {
         // the chunk area's part of the report: what it measured for, every
         // region time, the fitted costs and the settings with their reasons
         std::string report(std::vector<std::size_t> const& pool_sizes,
-            std::size_t const regions, tuning::chunk_rule const rule,
-            double const default_us,
+            std::size_t const regions, std::size_t const runs,
+            tuning::chunk_rule const rule, double const default_us,
+            std::vector<tuning::region_time> const& measured,
+            std::vector<std::size_t> const& run_of,
             std::vector<tuning::region_time> const& times,
             std::vector<tuning::chunk_cost> const& costs,
             std::vector<tuning::ini_section> const& sections)
@@ -75,16 +77,28 @@ namespace hpx_tune {
             for (std::size_t const size : pool_sizes)
                 sizes.push_back(std::to_string(size));
 
+            auto const region_time = [](tuning::region_time const& t,
+                                         std::string const* run) {
+                std::vector<std::pair<std::string, std::string>> members;
+                if (run != nullptr)
+                    members.emplace_back("run", *run);
+                members.emplace_back(
+                    "executor", tuning::json_string(t.executor));
+                members.emplace_back("pool_size", std::to_string(t.pool_size));
+                members.emplace_back("indices", std::to_string(t.indices));
+                members.emplace_back("time_us", tuning::to_json(t.time_us));
+                return tuning::json_object(members);
+            };
+
+            std::vector<std::string> measured_times;
+            for (std::size_t i = 0; i != measured.size(); ++i)
+            {
+                std::string const run = std::to_string(run_of[i]);
+                measured_times.push_back(region_time(measured[i], &run));
+            }
             std::vector<std::string> region_times;
             for (tuning::region_time const& t : times)
-            {
-                region_times.push_back(tuning::json_object({
-                    {"executor", tuning::json_string(t.executor)},
-                    {"pool_size", std::to_string(t.pool_size)},
-                    {"indices", std::to_string(t.indices)},
-                    {"time_us", tuning::to_json(t.time_us)},
-                }));
-            }
+                region_times.push_back(region_time(t, nullptr));
 
             std::vector<std::string> fitted;
             for (tuning::chunk_cost const& c : costs)
@@ -111,8 +125,10 @@ namespace hpx_tune {
             return tuning::json_object({
                 {"pool_sizes", tuning::json_array(sizes)},
                 {"regions", std::to_string(regions)},
+                {"runs", std::to_string(runs)},
                 {"rule", tuning::json_string(tuning::to_string(rule))},
                 {"default_min_chunk_time_us", tuning::json_number(default_us)},
+                {"measured_region_times", tuning::json_array(measured_times)},
                 {"region_times", tuning::json_array(region_times)},
                 {"costs", tuning::json_array(fitted)},
                 {"settings", tuning::json_array(chosen)},
@@ -149,7 +165,10 @@ namespace hpx_tune {
                 "'ratio' (from the region times for as many indices as "
                 "workers)")
             ("chunk-regions", po::value<std::size_t>()->default_value(2000),
-                "the regions timed together for one sample");
+                "the regions timed together for one sample")
+            ("chunk-runs", po::value<std::size_t>()->default_value(3),
+                "how many children time the regions of each pool size, one "
+                "after the other; the median of their times is used");
         // clang-format on
         return desc;
     }
@@ -178,21 +197,37 @@ namespace hpx_tune {
             1 :
             (std::max) (std::size_t(1), machine.pus / machine.cores);
         std::size_t const regions = vm["chunk-regions"].as<std::size_t>();
+        std::size_t const runs = vm["chunk-runs"].as<std::size_t>();
+        if (runs == 0)
+            throw std::invalid_argument("--chunk-runs: must be at least 1");
 
-        std::vector<tuning::region_time> times;
+        // The runs differ more than the samples of one run do (a child's
+        // workers, the other processes on the machine), so each pool size
+        // is timed by several children, one after the other, and the
+        // median of their times is used.
+        std::vector<tuning::region_time> measured;
+        std::vector<std::size_t> run_of;
         for (std::size_t const size : pool_sizes)
         {
-            std::vector<std::string> const lines = run_child("chunk",
-                {"--hpx:threads=" + std::to_string(size),
-                    "--hpx:pu-step=" + std::to_string(pu_step),
-                    "--chunk-regions=" + std::to_string(regions),
-                    "--repeats=" + std::to_string(repeats)});
-            for (std::string const& line : lines)
+            for (std::size_t run = 0; run != runs; ++run)
             {
-                if (auto const time = tuning::from_line(line))
-                    times.push_back(*time);
+                std::vector<std::string> const lines = run_child("chunk",
+                    {"--hpx:threads=" + std::to_string(size),
+                        "--hpx:pu-step=" + std::to_string(pu_step),
+                        "--chunk-regions=" + std::to_string(regions),
+                        "--repeats=" + std::to_string(repeats)});
+                for (std::string const& line : lines)
+                {
+                    if (auto const time = tuning::from_line(line))
+                    {
+                        measured.push_back(*time);
+                        run_of.push_back(run);
+                    }
+                }
             }
         }
+        std::vector<tuning::region_time> const times =
+            tuning::median_of_runs(measured);
 
         std::vector<tuning::chunk_cost> const costs =
             tuning::fit_chunk_costs(times);
@@ -215,6 +250,14 @@ namespace hpx_tune {
 
         if (verbose)
         {
+            for (std::size_t i = 0; i != measured.size(); ++i)
+            {
+                tuning::region_time const& t = measured[i];
+                std::cout << "chunk: run " << run_of[i] << ", " << t.executor
+                          << ", " << t.pool_size << " workers, " << t.indices
+                          << " indices: " << number(t.time_us.median)
+                          << " us\n";
+            }
             for (tuning::region_time const& t : times)
             {
                 std::cout << "chunk: " << t.executor << ", " << t.pool_size
@@ -226,8 +269,8 @@ namespace hpx_tune {
         }
 
         std::cout << "chunk: " << sections.size() << " sections ("
-                  << pool_sizes.size() << " pool sizes, rule "
-                  << tuning::to_string(*rule) << ")\n";
+                  << pool_sizes.size() << " pool sizes, " << runs
+                  << " runs each, rule " << tuning::to_string(*rule) << ")\n";
         for (tuning::ini_section const& s : sections)
         {
             for (tuning::tuned_setting const& setting : s.settings)
@@ -239,8 +282,8 @@ namespace hpx_tune {
             }
         }
 
-        std::string json = report(
-            pool_sizes, regions, *rule, default_us, times, costs, sections);
+        std::string json = report(pool_sizes, regions, runs, *rule, default_us,
+            measured, run_of, times, costs, sections);
         return area_result{
             HPX_MOVE(sections), HPX_MOVE(comments), HPX_MOVE(json)};
     }

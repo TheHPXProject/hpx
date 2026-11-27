@@ -21,6 +21,7 @@
 #include <optional>
 #include <sstream>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -153,6 +154,35 @@ namespace hpx::tuning {
         if (is >> rest)
             return std::nullopt;
         return time;
+    }
+
+    std::vector<region_time> median_of_runs(
+        std::vector<region_time> const& times)
+    {
+        using key_type = std::tuple<std::string, std::size_t, std::size_t>;
+        std::vector<key_type> order;
+        std::map<key_type, std::vector<region_time const*>> runs;
+        for (region_time const& t : times)
+        {
+            key_type key(t.executor, t.pool_size, t.indices);
+            auto& run = runs[key];
+            if (run.empty())
+                order.push_back(key);
+            run.push_back(&t);
+        }
+
+        std::vector<region_time> combined;
+        combined.reserve(order.size());
+        for (key_type const& key : order)
+        {
+            auto& run = runs[key];
+            std::sort(run.begin(), run.end(),
+                [](region_time const* a, region_time const* b) {
+                    return a->time_us.median < b->time_us.median;
+                });
+            combined.push_back(*run[(run.size() - 1) / 2]);
+        }
+        return combined;
     }
 
     std::vector<chunk_cost> fit_chunk_costs(

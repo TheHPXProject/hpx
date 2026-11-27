@@ -69,6 +69,16 @@ namespace hpx::tuning {
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT std::optional<region_time> from_line(
         std::string const& line);
 
+    /// The region times of several runs (children of the tool, each with a
+    /// runtime of its own) as one per executor, pool size and number of
+    /// indices: the run's time whose median is the median of the runs'
+    /// medians (the lower one of the two in the middle for an even number
+    /// of runs). The runs differ more than the samples of one run do, so
+    /// that one slow or fast run doesn't move the result. The times come
+    /// in the order of their first appearance.
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT std::vector<region_time> median_of_runs(
+        std::vector<region_time> const& times);
+
     /// The costs of a region of one executor on a pool of workers: a region
     /// of c chunks on n workers takes about region_us + (c / n) * chunk_us
     /// beyond its work, fitted by least squares to the medians of its region

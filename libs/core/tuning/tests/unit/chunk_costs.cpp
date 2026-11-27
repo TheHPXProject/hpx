@@ -182,6 +182,45 @@ namespace {
         HPX_TEST(!tuning::from_line(tuning::to_line(time) + " more"));
     }
 
+    // the median of several runs: per executor, pool size and number of
+    // indices, the run in the middle by its median
+    void test_median_of_runs()
+    {
+        std::vector<tuning::region_time> times;
+        for (double const median : {5.0, 9.0, 6.0})
+        {
+            times.push_back(
+                tuning::region_time{"fork_join", 16, 16, at(median)});
+            times.push_back(
+                tuning::region_time{"fork_join", 16, 64, at(2.0 * median)});
+        }
+        // a second executor with an even number of runs: the lower middle
+        times.push_back(tuning::region_time{"parallel", 16, 16, at(12.0)});
+        times.push_back(tuning::region_time{"parallel", 16, 16, at(10.0)});
+
+        std::vector<tuning::region_time> const combined =
+            tuning::median_of_runs(times);
+        HPX_TEST_EQ(combined.size(), std::size_t(3));
+
+        HPX_TEST_EQ(combined[0].executor, std::string("fork_join"));
+        HPX_TEST_EQ(combined[0].indices, std::size_t(16));
+        HPX_TEST(close_to(combined[0].time_us.median, 6.0));
+        // the whole summary of that run, not a mix of the runs
+        HPX_TEST(close_to(combined[0].time_us.q3, 6.0 * 1.05));
+
+        HPX_TEST_EQ(combined[1].indices, std::size_t(64));
+        HPX_TEST(close_to(combined[1].time_us.median, 12.0));
+
+        HPX_TEST_EQ(combined[2].executor, std::string("parallel"));
+        HPX_TEST(close_to(combined[2].time_us.median, 10.0));
+
+        // one run: unchanged
+        std::vector<tuning::region_time> const one(
+            times.begin(), times.begin() + 2);
+        HPX_TEST_EQ(tuning::median_of_runs(one).size(), std::size_t(2));
+        HPX_TEST(tuning::median_of_runs({}).empty());
+    }
+
     // a short measurement: every executor, both numbers of indices
     void test_measure()
     {
@@ -217,6 +256,7 @@ int main(int argc, char* argv[])
     test_fit();
     test_rules();
     test_lines();
+    test_median_of_runs();
 
     HPX_TEST_EQ(hpx::local::init(hpx_main, argc, argv), 0);
     return hpx::util::report_errors();

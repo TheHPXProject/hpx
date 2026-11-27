@@ -8,8 +8,9 @@
 // task_size_chunk_size uses for the loops of each executor, one section per
 // executor and pool size (hpx.task_size_chunk_size.<executor>.<pool size>)
 // and one per executor for the pool sizes not measured. The regions are
-// timed in children of the tool (child.hpp), one per pool size, as they need
-// the HPX runtime; the area runs after the idle area.
+// timed in children of the tool (child.hpp), as they need the HPX runtime:
+// several per pool size (--chunk-runs), whose median is used. The area runs
+// after the idle area.
 
 #pragma once
 
@@ -24,7 +25,7 @@
 namespace hpx_tune {
 
     // the chunk area's command line options (--chunk-pool-size,
-    // --chunk-rule, --chunk-regions)
+    // --chunk-rule, --chunk-regions, --chunk-runs)
     hpx::program_options::options_description chunk_options();
 
     // Time the executors' regions for the pool sizes given on the command
