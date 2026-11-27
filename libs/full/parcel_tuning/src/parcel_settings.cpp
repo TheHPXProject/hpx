@@ -190,6 +190,28 @@ namespace hpx::tuning {
             transfer_point const& largest_conduit = common.back().first;
             transfer_point const& largest_plain = common.back().second;
 
+            // the range the rule decides on: from the crossover (or the
+            // largest size compared) up; a size left out of it because the
+            // passes disagreed leaves the decision open
+            std::size_t const decided_from =
+                from != 0 ? from : largest_conduit.size;
+            std::string unstable_text;
+            for (std::size_t const size : m.unstable)
+            {
+                if (size >= decided_from)
+                {
+                    unstable_text +=
+                        (unstable_text.empty() ? "" : ", ") + size_text(size);
+                }
+            }
+            if (!unstable_text.empty())
+            {
+                result.report.push_back(name + "the passes disagree at " +
+                    unstable_text + ", in the range the rule decides on, " +
+                    key + " not written");
+                continue;
+            }
+
             if (from != 0)
             {
                 if (!conduit_moved_from(
@@ -210,8 +232,13 @@ namespace hpx::tuning {
                 result.settings.push_back(tuned_setting{key, "1",
                     "the conduit is faster from " + size_text(from) +
                         " on (get and set, " +
-                        compare_text(at_from->first, at_from->second) + ", " +
-                        compare_text(largest_conduit, largest_plain) + ")",
+                        compare_text(at_from->first, at_from->second) +
+                        (at_from->first.size != largest_conduit.size ?
+                                ", " +
+                                    compare_text(
+                                        largest_conduit, largest_plain) :
+                                std::string()) +
+                        ")",
                     true});
                 continue;
             }

@@ -192,6 +192,33 @@ namespace {
         HPX_TEST(reports(r, "rule 2 (mpi): data arrived wrong"));
     }
 
+    void test_unstable()
+    {
+        // TCP faster from 1 MiB, but the passes disagreed at 16 MiB: no
+        // decision for TCP; MPI's decision (at 64 MiB) isn't touched by an
+        // unstable size below it
+        tuning::parcelport_measurements t = tcp();
+        t.unstable = {16 * mib};
+        tuning::parcelport_measurements m = mpi();
+        m.unstable = {4 * mib};
+
+        tuning::parcel_rules_result const r =
+            tuning::derive_parcel_settings({t, m});
+        HPX_TEST(find(r, "hpx.parcel.tcp.conduit_host_chunks") == nullptr);
+        HPX_TEST(reports(r, "rule 2 (tcp): the passes disagree at 16 MiB"));
+        HPX_TEST(find(r, "hpx.parcel.mpi.conduit_host_chunks") != nullptr);
+        HPX_TEST(find(r, "hpx.parcel.conduit_host_threshold") == nullptr);
+
+        // the largest size unstable: no decision either way
+        tuning::parcelport_measurements t2 = tcp();
+        t2.conduit.pop_back();
+        t2.plain.pop_back();
+        t2.unstable = {64 * mib};
+        tuning::parcel_rules_result const r2 =
+            tuning::derive_parcel_settings({t2});
+        HPX_TEST(find(r2, "hpx.parcel.tcp.conduit_host_chunks") == nullptr);
+    }
+
     void test_threshold_at_least_zero_copy()
     {
         // faster from the smallest size measured, below the zero-copy
@@ -233,15 +260,79 @@ namespace {
             HPX_TEST_EQ(sections[2].name, std::string("hpx.parcel.mpi"));
         }
     }
+
+    void test_combine_passes()
+    {
+        tuning::parcelport_measurements const t = tcp();
+
+        // one pass: as it is
+        tuning::combined_curve const one = tuning::combine_passes({t.plain});
+        HPX_TEST_EQ(one.points.size(), t.plain.size());
+        HPX_TEST(one.unstable.empty());
+
+        // three passes that agree within 10%: the median of each value
+        std::vector<tuning::transfer_point> second = t.plain;
+        std::vector<tuning::transfer_point> third = t.plain;
+        for (auto& p : second)
+        {
+            p.get_us = exactly(p.get_us.median * 1.04);
+            p.set_us = exactly(p.set_us.median * 1.04);
+        }
+        for (auto& p : third)
+        {
+            p.get_us = exactly(p.get_us.median * 0.98);
+            p.set_us = exactly(p.set_us.median * 0.98);
+        }
+        tuning::combined_curve const three =
+            tuning::combine_passes({t.plain, second, third});
+        HPX_TEST_EQ(three.points.size(), t.plain.size());
+        HPX_TEST(three.unstable.empty());
+        if (!three.points.empty())
+        {
+            HPX_TEST_EQ(
+                three.points[0].get_us.median, t.plain[0].get_us.median);
+            HPX_TEST_EQ(three.points[0].get_us.count, std::size_t(150));
+        }
+
+        // a pass that disagrees at one size by more than 10%: that size is
+        // left out and listed
+        second[1].get_us = exactly(second[1].get_us.median * 1.5);
+        tuning::combined_curve const disagree =
+            tuning::combine_passes({t.plain, second, third});
+        HPX_TEST_EQ(disagree.points.size(), t.plain.size() - 1);
+        HPX_TEST_EQ(disagree.unstable.size(), std::size_t(1));
+        if (!disagree.unstable.empty())
+        {
+            HPX_TEST_EQ(disagree.unstable[0], 4 * mib);
+        }
+
+        // a size missing from one pass is left out, not unstable
+        std::vector<tuning::transfer_point> const shorter(
+            t.plain.begin(), t.plain.end() - 1);
+        tuning::combined_curve const missing =
+            tuning::combine_passes({t.plain, shorter});
+        HPX_TEST_EQ(missing.points.size(), t.plain.size() - 1);
+        HPX_TEST(missing.unstable.empty());
+
+        // wrong data in any pass stays visible
+        std::vector<tuning::transfer_point> wrong = t.plain;
+        wrong[0].errors = 2;
+        tuning::combined_curve const with_errors =
+            tuning::combine_passes({t.plain, wrong});
+        HPX_TEST(!with_errors.points.empty() &&
+            with_errors.points[0].errors == std::size_t(2));
+    }
 }    // namespace
 
 int main()
 {
     test_faster_from();
+    test_combine_passes();
     test_v100();
     test_conduit_unused();
     test_missing_and_wrong();
     test_threshold_at_least_zero_copy();
+    test_unstable();
     test_sections();
     return hpx::util::report_errors();
 }

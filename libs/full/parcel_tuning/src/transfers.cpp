@@ -169,6 +169,102 @@ namespace hpx::tuning {
         }
     }    // namespace
 
+    namespace {
+
+        double median_of(std::vector<double> values)
+        {
+            std::sort(values.begin(), values.end());
+            std::size_t const n = values.size();
+            return n % 2 != 0 ? values[n / 2] :
+                                (values[n / 2 - 1] + values[n / 2]) / 2.0;
+        }
+
+        // the median over the passes of each value of a summary
+        summary combine_summaries(std::vector<summary> const& s)
+        {
+            auto const median_field = [&](double summary::* field) {
+                std::vector<double> values;
+                values.reserve(s.size());
+                for (summary const& x : s)
+                    values.push_back(x.*field);
+                return median_of(HPX_MOVE(values));
+            };
+            summary r;
+            for (summary const& x : s)
+                r.count += x.count;
+            r.min = median_field(&summary::min);
+            r.q1 = median_field(&summary::q1);
+            r.median = median_field(&summary::median);
+            r.q3 = median_field(&summary::q3);
+            r.p90 = median_field(&summary::p90);
+            r.max = median_field(&summary::max);
+            return r;
+        }
+    }    // namespace
+
+    combined_curve combine_passes(
+        std::vector<std::vector<transfer_point>> const& passes,
+        double const max_spread)
+    {
+        combined_curve result;
+        if (passes.empty())
+            return result;
+        if (passes.size() == 1)
+        {
+            result.points = passes.front();
+            return result;
+        }
+
+        // the sizes of the first pass, in its order, that every pass measured
+        for (transfer_point const& first : passes.front())
+        {
+            std::vector<transfer_point const*> at_size;
+            for (std::vector<transfer_point> const& pass : passes)
+            {
+                auto const it = std::find_if(
+                    pass.begin(), pass.end(), [&](transfer_point const& p) {
+                        return p.size == first.size;
+                    });
+                if (it == pass.end())
+                    break;
+                at_size.push_back(&*it);
+            }
+            if (at_size.size() != passes.size())
+                continue;
+
+            double lowest = 0.0;
+            double highest = 0.0;
+            std::vector<summary> gets;
+            std::vector<summary> sets;
+            std::vector<double> chunks;
+            std::size_t errors = 0;
+            for (transfer_point const* p : at_size)
+            {
+                double const cost = p->get_us.median + p->set_us.median;
+                lowest = gets.empty() ? cost : (std::min) (lowest, cost);
+                highest = gets.empty() ? cost : (std::max) (highest, cost);
+                gets.push_back(p->get_us);
+                sets.push_back(p->set_us);
+                chunks.push_back(p->conduit_chunks_per_round);
+                errors += p->errors;
+            }
+            if (lowest <= 0.0 || highest > lowest * (1.0 + max_spread))
+            {
+                result.unstable.push_back(first.size);
+                continue;
+            }
+
+            transfer_point combined;
+            combined.size = first.size;
+            combined.get_us = combine_summaries(gets);
+            combined.set_us = combine_summaries(sets);
+            combined.conduit_chunks_per_round = median_of(HPX_MOVE(chunks));
+            combined.errors = errors;
+            result.points.push_back(combined);
+        }
+        return result;
+    }
+
     std::vector<transfer_point> measure_transfers(
         hpx::id_type const& remote, transfer_options const& options)
     {

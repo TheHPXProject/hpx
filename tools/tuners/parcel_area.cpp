@@ -36,6 +36,8 @@
 #include <functional>
 #include <iomanip>
 #include <iostream>
+#include <map>
+#include <random>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -143,6 +145,17 @@ namespace hpx_tune {
                 "suffixes K and M), the powers of 2 between them")
             ("rounds", po::value<std::size_t>()->default_value(50),
                 "measured rounds per size and direction")
+            ("passes", po::value<std::size_t>()->default_value(2),
+                "how many times every configuration is measured, in a new "
+                "random order each time; the rules use the median of the "
+                "passes and leave out sizes at which they differ by more "
+                "than 10%")
+            ("seed", po::value<unsigned>(),
+                "the seed of the random order of the children (default: "
+                "random, written into the file's comments)")
+            ("parcel-report", po::value<std::string>(),
+                "write all measurements of the parcel area (every pass, the "
+                "combined curves, the rules' results) to this file as JSON")
             ("progress",
                 "print a line for every size a child has measured, while it "
                 "runs (--verbose prints them too)")
@@ -552,6 +565,135 @@ namespace hpx_tune {
 
     }    // namespace
 
+    namespace {
+
+        std::string json_string(std::string const& text)
+        {
+            std::string out = "\"";
+            for (char const c : text)
+            {
+                switch (c)
+                {
+                case '"':
+                    out += "\\\"";
+                    break;
+                case '\\':
+                    out += "\\\\";
+                    break;
+                case '\n':
+                    out += "\\n";
+                    break;
+                default:
+                    if (static_cast<unsigned char>(c) < 0x20)
+                        out += ' ';
+                    else
+                        out += c;
+                }
+            }
+            return out + "\"";
+        }
+
+        std::string json_summary(tuning::summary const& s)
+        {
+            std::ostringstream os;
+            os << std::setprecision(9) << "{\"count\": " << s.count
+               << ", \"min\": " << s.min << ", \"q1\": " << s.q1
+               << ", \"median\": " << s.median << ", \"q3\": " << s.q3
+               << ", \"p90\": " << s.p90 << ", \"max\": " << s.max << "}";
+            return os.str();
+        }
+
+        std::string json_curve(std::vector<tuning::transfer_point> const& c)
+        {
+            std::ostringstream os;
+            os << std::setprecision(9) << "[";
+            for (std::size_t i = 0; i != c.size(); ++i)
+            {
+                os << (i == 0 ? "" : ", ") << "{\"size\": " << c[i].size
+                   << ", \"get_us\": " << json_summary(c[i].get_us)
+                   << ", \"set_us\": " << json_summary(c[i].set_us)
+                   << ", \"conduit_chunks_per_round\": "
+                   << c[i].conduit_chunks_per_round
+                   << ", \"errors\": " << c[i].errors << "}";
+            }
+            os << "]";
+            return os.str();
+        }
+
+        // report.json of the parcel area: every pass, the combined curves and
+        // the rules' results, by placement
+        class report_writer
+        {
+        public:
+            void begin_placement(std::string const& placement)
+            {
+                placements_ += (placements_.empty() ? "" : ",\n") +
+                    std::string("    {\"placement\": ") +
+                    json_string(placement) + ", \"configurations\": [";
+                first_configuration_ = true;
+            }
+
+            void configuration(std::string const& parcelport,
+                std::string const& conduit,
+                std::vector<std::vector<tuning::transfer_point>> const& passes,
+                tuning::combined_curve const& combined)
+            {
+                std::string unstable;
+                for (std::size_t const size : combined.unstable)
+                {
+                    unstable +=
+                        (unstable.empty() ? "" : ", ") + std::to_string(size);
+                }
+                std::string passes_text;
+                for (auto const& pass : passes)
+                {
+                    passes_text +=
+                        (passes_text.empty() ? "" : ", ") + json_curve(pass);
+                }
+                placements_ += std::string(first_configuration_ ? "" : ",") +
+                    "\n      {\"parcelport\": " + json_string(parcelport) +
+                    ", \"conduit\": " + json_string(conduit) +
+                    ",\n       \"passes\": [" + passes_text +
+                    "],\n       \"combined\": " + json_curve(combined.points) +
+                    ", \"unstable\": [" + unstable + "]}";
+                first_configuration_ = false;
+            }
+
+            void end_placement(tuning::parcel_rules_result const& rules)
+            {
+                std::string settings;
+                for (tuning::tuned_setting const& s : rules.settings)
+                {
+                    settings += std::string(settings.empty() ? "" : ", ") +
+                        "{\"key\": " + json_string(s.key) +
+                        ", \"value\": " + json_string(s.value) +
+                        ", \"reason\": " + json_string(s.reason) +
+                        ", \"is_default\": " +
+                        (s.is_default ? "true" : "false") + "}";
+                }
+                std::string report;
+                for (std::string const& line : rules.report)
+                {
+                    report += (report.empty() ? "" : ", ") + json_string(line);
+                }
+                placements_ += "],\n     \"settings\": [" + settings +
+                    "],\n     \"report\": [" + report + "]}";
+            }
+
+            std::string text(std::size_t passes, unsigned seed) const
+            {
+                return "{\"area\": \"parcel\", \"passes\": " +
+                    std::to_string(passes) +
+                    ", \"seed\": " + std::to_string(seed) +
+                    ",\n  \"placements\": [\n" + placements_ + "\n  ]}\n";
+            }
+
+        private:
+            std::string placements_;
+            bool first_configuration_ = true;
+        };
+    }    // namespace
+
     // The parcel area: phases 3 and 4 of the design, the first version.
     area_result tune_parcel(area_context const& context)
     {
@@ -629,71 +771,143 @@ namespace hpx_tune {
         conduits.push_back("ucx");
 #endif
 
-        o.children = placements.size() * parcelports.size() * conduits.size();
+        std::size_t const passes =
+            (std::max) (vm["passes"].as<std::size_t>(), std::size_t(1));
+        unsigned const seed = vm.count("seed") ? vm["seed"].as<unsigned>() :
+                                                 std::random_device{}();
+
+        // every configuration once per pass, each pass in a new random order
+        // (changes of the machine during the run then spread over all
+        // configurations rather than biasing one)
+        struct job
+        {
+            std::string placement;
+            std::string parcelport;
+            std::string conduit;
+        };
+        std::vector<job> configurations;
+        for (std::string const& placement : placements)
+            for (std::string const& pp : parcelports)
+                for (std::string const& conduit : conduits)
+                    configurations.push_back(job{placement, pp, conduit});
+
+        std::vector<job> order;
+        std::mt19937 random(seed);
+        for (std::size_t pass = 0; pass != passes; ++pass)
+        {
+            std::vector<job> this_pass = configurations;
+            std::shuffle(this_pass.begin(), this_pass.end(), random);
+            order.insert(order.end(), this_pass.begin(), this_pass.end());
+        }
+        o.children = order.size();
 
         area_result result;
-        std::vector<tuning::tuned_setting> written;
+        result.comments.push_back("parcel: " + std::to_string(passes) +
+            " passes, the children in random order (--seed " +
+            std::to_string(seed) + ")");
         bool host_chunk_support = false;
         bool peer_recorded = false;
         std::vector<std::string> measured_names;
+
+        // the passes of each configuration, by placement, parcelport, conduit
+        std::map<std::string, std::vector<std::vector<tuning::transfer_point>>>
+            measured_passes;
+        auto const key = [](job const& j) {
+            return j.placement + ":" + j.parcelport + ":" + j.conduit;
+        };
+
+        for (job const& j : order)
+        {
+            ++o.child;
+            std::cout << "parcel: [" << o.child << "/" << o.children
+                      << "] measuring " << j.placement << ", " << j.parcelport
+                      << ", conduit " << j.conduit << "\n"
+                      << std::flush;
+            child_result const r =
+                run_child(o, j.parcelport, j.conduit, j.placement);
+            std::string const what = "parcel: " + j.placement + ", " +
+                j.parcelport + ", conduit " + j.conduit;
+            if (!r.complete || r.points.empty())
+            {
+                result.comments.push_back(
+                    what + ": the child failed or gave no measurements");
+                std::cout << what << ": failed\n";
+                continue;
+            }
+            host_chunk_support = host_chunk_support || r.host_chunk_support;
+            if (std::find(measured_names.begin(), measured_names.end(),
+                    key(j)) == measured_names.end())
+            {
+                measured_names.push_back(key(j));
+            }
+
+            // the other node, where it differs from locality 0's
+            if (j.placement == "two-nodes" && !peer_recorded)
+            {
+                peer_recorded = true;
+                for (auto const& [name, value] : r.peer)
+                {
+                    auto const same = std::find_if(r.here.begin(), r.here.end(),
+                        [&](auto const& h) { return h.first == name; });
+                    if (same == r.here.end() || same->second != value)
+                    {
+                        fingerprint.add(
+                            "parcel_peer_" + name, value, name != "host_name");
+                    }
+                }
+            }
+            if (verbose)
+            {
+                for (tuning::transfer_point const& p : r.points)
+                {
+                    std::cout << what << ", " << p.size << " bytes: get "
+                              << describe(p.get_us, "us") << ", set "
+                              << describe(p.set_us, "us") << ", "
+                              << number(p.conduit_chunks_per_round)
+                              << " conduit chunks per round\n";
+                }
+            }
+            measured_passes[key(j)].push_back(r.points);
+        }
+
+        // per placement: the passes combined, then the rules
+        std::vector<tuning::tuned_setting> written;
+        report_writer report;
         for (std::string const& placement : placements)
         {
             std::vector<tuning::parcelport_measurements> measured;
+            report.begin_placement(placement);
             for (std::string const& pp : parcelports)
             {
                 tuning::parcelport_measurements m;
                 m.parcelport = pp;
                 for (std::string const& conduit : conduits)
                 {
-                    ++o.child;
-                    std::cout << "parcel: [" << o.child << "/" << o.children
-                              << "] measuring " << placement << ", " << pp
-                              << ", conduit " << conduit << "\n"
-                              << std::flush;
-                    child_result const r = run_child(o, pp, conduit, placement);
-                    std::string const what = "parcel: " + placement + ", " +
-                        pp + ", conduit " + conduit;
-                    if (!r.complete || r.points.empty())
-                    {
-                        result.comments.push_back(what +
-                            ": the child failed or gave no measurements");
-                        std::cout << what << ": failed\n";
+                    auto const it =
+                        measured_passes.find(key(job{placement, pp, conduit}));
+                    if (it == measured_passes.end())
                         continue;
-                    }
-                    host_chunk_support =
-                        host_chunk_support || r.host_chunk_support;
-                    measured_names.push_back(
-                        placement + ":" + pp + ":" + conduit);
-
-                    // the other node, where it differs from locality 0's
-                    if (placement == "two-nodes" && !peer_recorded)
+                    tuning::combined_curve const combined =
+                        tuning::combine_passes(it->second);
+                    if (!combined.unstable.empty())
                     {
-                        peer_recorded = true;
-                        for (auto const& [key, value] : r.peer)
+                        std::string sizes;
+                        for (std::size_t const size : combined.unstable)
                         {
-                            auto const same = std::find_if(r.here.begin(),
-                                r.here.end(),
-                                [&](auto const& h) { return h.first == key; });
-                            if (same == r.here.end() || same->second != value)
-                            {
-                                fingerprint.add("parcel_peer_" + key, value,
-                                    key != "host_name");
-                            }
+                            sizes += (sizes.empty() ? "" : ", ") +
+                                std::to_string(size);
                         }
+                        std::string const line = "parcel: " + placement + ", " +
+                            pp + ", conduit " + conduit +
+                            ": the passes differ by more than 10% at " + sizes +
+                            " bytes, left out";
+                        result.comments.push_back(line);
+                        std::cout << line << "\n";
                     }
-                    for (tuning::transfer_point const& p : r.points)
-                    {
-                        if (verbose)
-                        {
-                            std::cout << what << ", " << p.size
-                                      << " bytes: get "
-                                      << describe(p.get_us, "us") << ", set "
-                                      << describe(p.set_us, "us") << ", "
-                                      << number(p.conduit_chunks_per_round)
-                                      << " conduit chunks per round\n";
-                        }
-                    }
-                    (conduit == "none" ? m.plain : m.conduit) = r.points;
+                    report.configuration(pp, conduit, it->second, combined);
+                    (conduit == "none" ? m.plain : m.conduit) = combined.points;
+                    m.unstable.insert(m.unstable.end(),
+                        combined.unstable.begin(), combined.unstable.end());
                 }
                 measured.push_back(HPX_MOVE(m));
             }
@@ -711,12 +925,28 @@ namespace hpx_tune {
                           << s.value << " (" << s.reason
                           << (s.is_default ? ", HPX's default" : "") << ")\n";
             }
+            report.end_placement(rules);
 
             // one value per setting for all destinations until the parcel
             // layer has settings per destination class: the two-node
             // placement's where it was measured
             if (written.empty() || placement == "two-nodes")
                 written = rules.settings;
+        }
+
+        if (vm.count("parcel-report"))
+        {
+            std::string const file = vm["parcel-report"].as<std::string>();
+            std::ofstream out(file);
+            if (out)
+            {
+                out << report.text(passes, seed);
+                std::cout << "parcel: wrote " << file << "\n";
+            }
+            else
+            {
+                std::cerr << "hpx_tune: can't write " << file << "\n";
+            }
         }
 
         // the parcel layer's part of the fingerprint

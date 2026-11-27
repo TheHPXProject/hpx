@@ -64,6 +64,27 @@ namespace hpx::tuning {
         std::size_t errors = 0;
     };
 
+    /// The measurements of several passes of one configuration, combined.
+    HPX_CXX_EXPORT struct combined_curve
+    {
+        /// for each size measured in every pass, the median over the passes
+        /// of each value (the counts and the rounds with wrong data added
+        /// up)
+        std::vector<transfer_point> points;
+        /// the sizes left out because the passes disagreed (see
+        /// combine_passes)
+        std::vector<std::size_t> unstable;
+    };
+
+    /// Combine the measurements of several passes of one configuration. A
+    /// size at which the passes' medians (get and set together) differ by
+    /// more than max_spread (relative to the smallest of them) is left out and
+    /// listed as unstable: a rule must not decide on it. A single pass is
+    /// returned as it is.
+    HPX_CXX_EXPORT HPX_EXPORT combined_curve combine_passes(
+        std::vector<std::vector<transfer_point>> const& passes,
+        double max_spread = 0.10);
+
     /// Measure the round trips of vectors of the given sizes between this
     /// locality and the given one, both directions, each round checked.
     /// Before the first size it sends vectors until the device conduit

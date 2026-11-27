@@ -34,6 +34,9 @@ namespace hpx::tuning {
         /// device conduit; empty if not measured (no conduit that moves host
         /// memory in this build, or the measurement failed)
         std::vector<transfer_point> conduit;
+        /// sizes left out of either curve because the passes disagreed
+        /// (combine_passes): a rule doesn't decide on a range that has one
+        std::vector<std::size_t> unstable;
     };
 
     /// HPX's defaults and the margins the rules use.
@@ -81,8 +84,10 @@ namespace hpx::tuning {
     ///   zero-copy threshold (one value for the process);
     /// - rule 1, reported only: which configuration is fastest by size.
     ///
-    /// A rule whose measurements are missing or didn't go through the
-    /// conduit writes nothing and says so in the report.
+    /// A rule whose measurements are missing, didn't go through the conduit,
+    /// or are unstable in the range it decides on (a size at or above the
+    /// crossover, or above the largest size it compares, left out because
+    /// the passes disagreed) writes nothing and says so in the report.
     HPX_CXX_EXPORT HPX_EXPORT parcel_rules_result derive_parcel_settings(
         std::vector<parcelport_measurements> const& measured,
         parcel_rule_options const& options = {});
