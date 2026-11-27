@@ -9,20 +9,27 @@
 // has to hold a section per executor, one for the pool size measured and one
 // for the pool sizes that weren't, and the HPX runtime started with it
 // (--hpx:config) has to give each executor that minimal chunk time
-// (get_min_chunk_time). The report has to hold the chunk area's
-// measurements. A rule the tool doesn't know makes it fail without writing
-// a file. The test checks the form of the files and that HPX takes their
-// values, not whether the values are good for the machine.
+// (get_min_chunk_time). Loops chunked by task_size_chunk_size, attached to
+// the policy so that it doesn't depend on HPX_WITH_TASK_SIZE_DEFAULT_PARAMETERS,
+// with a body that has a task size, have to get their cores and chunks from
+// these values: without both, the values have no effect. The report has to
+// hold the chunk area's measurements. A rule the tool doesn't know makes it
+// fail without writing a file. The test checks the form of the files and
+// that HPX takes their values, not whether the values are good for the
+// machine.
 //
 // HPX_TUNE_EXECUTABLE and HPX_TUNE_TEST_DIRECTORY are set by CMake.
 
+#include <hpx/algorithm.hpp>
 #include <hpx/execution.hpp>
 #include <hpx/init.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/ini.hpp>
 #include <hpx/modules/runtime_local.hpp>
 #include <hpx/modules/testing.hpp>
+#include <hpx/modules/threading_base.hpp>
 
+#include <atomic>
 #include <chrono>
 #include <cstddef>
 #include <cstdio>
@@ -128,23 +135,76 @@ namespace {
             std::chrono::duration<double, std::micro>(std::stod(value)));
     }
 
-    // the runtime started with the file: each executor asks for its value
+    // task_size_chunk_size on a loop of the executor, with a body of nano
+    // task size (1 ns per iteration): the cores and the chunks follow from
+    // the executor's value, and a loop with it attached runs every iteration
+    template <typename Executor>
+    void check_task_size_control(
+        Executor const& exec, std::string const& executor)
+    {
+        std::chrono::nanoseconds const value = expected(executor);
+        HPX_TEST_MSG(ex::get_min_chunk_time(exec) == value, executor.c_str());
+
+        ex::task_size_chunk_size const tscs;
+        auto const body = hpx::nano_task([](std::size_t) {});
+        auto const iteration = tscs.measure_iteration(exec, body, 1);
+        HPX_TEST_MSG(
+            iteration.value() == std::chrono::nanoseconds(1), executor.c_str());
+
+        // the iterations of one core: chunks_per_core chunks of the value
+        std::size_t const chunks_per_core =
+            ex::detail::get_task_size_chunk_size_defaults().chunks_per_core;
+        auto const per_core =
+            static_cast<std::size_t>(value.count()) * chunks_per_core;
+        std::size_t const available = ex::processing_units_count(exec);
+
+        // one core short of two cores' work stays on one, two cores' work
+        // takes two
+        HPX_TEST_EQ_MSG(
+            tscs.processing_units_count(exec, iteration, 2 * per_core - 1),
+            std::size_t(1), executor.c_str());
+        if (available >= 2)
+        {
+            HPX_TEST_EQ_MSG(
+                tscs.processing_units_count(exec, iteration, 2 * per_core),
+                std::size_t(2), executor.c_str());
+        }
+
+        // on two cores, a loop of one core's work has chunks of the value
+        HPX_TEST_EQ_MSG(tscs.get_chunk_size(exec, iteration, 2, per_core),
+            static_cast<std::size_t>(value.count()), executor.c_str());
+
+        // a loop with task_size_chunk_size attached, for some cores
+        std::size_t const count = 3 * per_core + 7;
+        std::vector<std::atomic<int>> calls(count);
+        hpx::experimental::for_loop(hpx::execution::par.on(exec).with(tscs),
+            std::size_t(0), count, hpx::nano_task([&](std::size_t const i) {
+                calls[i].fetch_add(1, std::memory_order_relaxed);
+            }));
+        std::size_t wrong = 0;
+        for (auto const& c : calls)
+        {
+            wrong += c.load() != 1 ? 1 : 0;
+        }
+        HPX_TEST_EQ_MSG(wrong, std::size_t(0), executor.c_str());
+    }
+
+    // the runtime started with the file: each executor asks for its value,
+    // and the task size control uses it
     int check_with_runtime()
     {
-        HPX_TEST(ex::get_min_chunk_time(hpx::execution::parallel_executor()) ==
-            expected("parallel"));
+        check_task_size_control(
+            hpx::execution::parallel_executor(), "parallel");
         {
             ex::fork_join_executor const exec;
-            HPX_TEST(ex::get_min_chunk_time(exec) == expected("fork_join"));
+            check_task_size_control(exec, "fork_join");
         }
         {
             ex::suspending_fork_join_executor const exec;
-            HPX_TEST(ex::get_min_chunk_time(exec) ==
-                expected("suspending_fork_join"));
+            check_task_size_control(exec, "suspending_fork_join");
         }
-        HPX_TEST(ex::get_min_chunk_time(
-                     ex::shared_suspending_fork_join_executor()) ==
-            expected("shared_suspending_fork_join"));
+        check_task_size_control(ex::shared_suspending_fork_join_executor(),
+            "shared_suspending_fork_join");
         return hpx::local::finalize();
     }
 }    // namespace
