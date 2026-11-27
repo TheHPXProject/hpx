@@ -8,37 +8,13 @@
 #include <hpx/config.hpp>
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
 #include <hpx/hpx_main.hpp>
-#include <hpx/include/actions.hpp>
-#include <hpx/include/runtime.hpp>
-#include <hpx/modules/testing.hpp>
-#include <hpx/modules/threading_base.hpp>
-
-#include <cstring>
-#include <vector>
-
-///////////////////////////////////////////////////////////////////////////////
-void test_small_stacksize()
-{
-    HPX_TEST(hpx::threads::get_self_ptr());
-    // verify that sufficient stack has been allocated
-    HPX_TEST_EQ(hpx::threads::get_ctx_ptr()->get_stacksize(),
-        hpx::get_runtime().get_config().get_stack_size(
-            hpx::threads::thread_stacksize::small_));
-
-    // allocate HPX_SMALL_STACK_SIZE - HPX_THREADS_STACK_OVERHEAD memory on the stack
-    char array[HPX_SMALL_STACK_SIZE * HPX_THREADS_STACK_OVERHEAD];
-
-    // do something to that array
-    std::memset(array, '\0', sizeof(array));
-}
-HPX_DECLARE_ACTION(test_small_stacksize, test_small_stacksize_action)
-HPX_ACTION_USES_SMALL_STACK(test_small_stacksize_action)
-HPX_PLAIN_ACTION(test_small_stacksize, test_small_stacksize_action)
 
 int main()
 {
-    int* i = nullptr;
-    int x = (*i);
-    return hpx::util::report_errors();
+    // A null pointer dereference in an HPX thread is not a stack overflow and
+    // must not be reported as one. The pointer is volatile so that the
+    // compiler has to emit the load instead of replacing it with a trap.
+    int* volatile i = nullptr;
+    return *i;
 }
 #endif

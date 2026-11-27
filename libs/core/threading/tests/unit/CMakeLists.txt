@@ -27,11 +27,6 @@ set(threading_tests
     thread_yield
 )
 
-if(HPX_WITH_THREAD_STACKOVERFLOW_DETECTION)
-  set(threading_tests ${threading_tests} thread_stacksize_overflow)
-  set(threading_tests ${threading_tests} thread_stacksize_overflow_v2)
-endif()
-
 if(HPX_WITH_THREAD_LOCAL_STORAGE)
   set(threading_tests ${threading_tests} tss)
 endif()
@@ -74,17 +69,3 @@ set_tests_properties(
   tests.unit.modules.threading.stop_token_race2
   PROPERTIES PASS_REGULAR_EXPRESSION "std::terminate called\n"
 )
-
-if(HPX_WITH_THREAD_STACKOVERFLOW_DETECTION)
-  set_tests_properties(
-    tests.unit.threads.thread_stacksize_overflow
-    PROPERTIES PASS_REGULAR_EXPRESSION
-               "Stack overflow in coroutine at address 0x[0-9a-fA-F]*"
-  )
-
-  set_tests_properties(
-    tests.unit.threads.thread_stacksize_overflow_v2
-    PROPERTIES PASS_REGULAR_EXPRESSION
-               "Stack overflow in coroutine at address 0x[0-9a-fA-F]*"
-  )
-endif()
