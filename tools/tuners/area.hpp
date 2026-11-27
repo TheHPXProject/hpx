@@ -8,12 +8,14 @@
 // lives in files of its own (idle_area.hpp and .cpp, ...) and registers
 // itself with HPX_TUNE_REGISTER_AREA in its .cpp: its name (the option
 // --<name> that selects it), its options, the function that measures and
-// returns an area_result, and, if it starts children (child.hpp), the
-// function a child runs. The driver knows no area by name: it offers the
-// registered areas, runs the selected ones in their order, and writes the
-// results of all of them into one file, and their reports into one JSON file
-// if asked to (--report). Adding an area touches only the area's own files
-// (and the list of sources in CMakeLists.txt).
+// returns an area_result, if it starts children (child.hpp), the function a
+// child runs, and the function that checks a written file (--check). The
+// driver knows no area by name: it offers the registered areas, runs the
+// selected ones in their order, and writes the results of all of them into
+// one file, and their reports into one JSON file if asked to (--report);
+// with --check=<file> it runs their checks of that file instead. Adding an
+// area touches only the area's own files (and the list of sources in
+// CMakeLists.txt).
 
 #pragma once
 
@@ -54,6 +56,32 @@ namespace hpx_tune {
         hpx::tuning::host_fingerprint& fingerprint;
     };
 
+    // what the driver gives an area's check (hpx_tune --check=<file>)
+    struct verify_context
+    {
+        // as for tuning: the options, the machine, --verbose, this
+        // executable, and this host's fingerprint, to which a check may add
+        // the area's entries so that the driver compares them with the
+        // profile's
+        area_context const& context;
+        // the file to check, as given with --check
+        std::string const& file;
+        // the file's fingerprint ([hpx.tuning.fingerprint]), empty if it has
+        // none
+        hpx::tuning::host_fingerprint const& profile;
+    };
+
+    // what an area's check found: one line per item checked (printed with
+    // the area's name in front), the items that don't hold (empty: the file
+    // does what it says for this area), and the area's part of the report
+    // as one JSON object, empty if it has none
+    struct verify_result
+    {
+        std::vector<std::string> lines;
+        std::vector<std::string> failures;
+        std::string report;
+    };
+
     // one area of the tool
     struct area
     {
@@ -75,6 +103,12 @@ namespace hpx_tune {
         // what a child of the area runs (child.hpp), with the child's
         // command line; nullptr if the area starts no children
         int (*child_main)(int argc, char* argv[]) = nullptr;
+        // check that an HPX application started with a written file does
+        // what the file says for the area's settings (hpx_tune
+        // --check=<file>), in children, as for tuning; measures and writes
+        // nothing; throws if it can't check. nullptr if the area has no
+        // check yet (reported, not a failure)
+        verify_result (*verify)(verify_context const&) = nullptr;
     };
 
     // the registered areas, in their order
@@ -89,7 +123,9 @@ namespace hpx_tune {
 
 // Register an area of the tool, in the area's .cpp, outside of any
 // namespace: HPX_TUNE_REGISTER_AREA(idle, hpx_tune::area{"idle", "tune the
-// scheduler's idle settings", 0, &idle_options, &tune_idle, nullptr});
+// scheduler's idle settings", 0, &idle_options, &tune_idle, nullptr,
+// nullptr}); every member is given, as some compilers warn about missing
+// initializers of an aggregate.
 #define HPX_TUNE_REGISTER_AREA(id, ...)                                        \
     namespace {                                                                \
         hpx_tune::area_registrar const hpx_tune_area_registrar_##id(           \

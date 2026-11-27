@@ -19,6 +19,10 @@ target_link_libraries(hpx_tune PRIVATE hpx_core)
 
 add_hpx_pseudo_dependencies(tools.tuners hpx_tune)
 
-if(HPX_WITH_TESTS AND HPX_WITH_TESTS_UNIT)
+# the smoke tests start the tool and HPX applications: only on request
+if(HPX_WITH_TESTS
+   AND HPX_WITH_TESTS_UNIT
+   AND HPX_WITH_TUNING_TESTS
+)
   add_subdirectory(tests)
 endif()

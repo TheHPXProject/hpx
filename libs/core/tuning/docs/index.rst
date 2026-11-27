@@ -173,7 +173,10 @@ The idle rules take the measurements above and the defaults they start from:
 
 ``hpx.max_idle_backoff_time``
     The longest backoff step: the default, or the shortest sleep if that is
-    longer, since a step can't be shorter than a sleep lasts.
+    longer, since a step can't be shorter than a sleep lasts. A shortest
+    sleep longer than the default is a coarse timer's tick as one run sees
+    it, so it is rounded up to whole milliseconds (16000 for Windows' 15.6 ms
+    tick), and two runs on the same machine write the same value.
 
 ``hpx.min_idle_backoff_time``
     The spin: the shortest sleep, at least the cost of a wake up, at most
@@ -319,6 +322,15 @@ that is followed by ``{`` or ``[`` is written doubled, so that the ini reader
 takes it literally instead of expanding it. ``mismatches`` lists the compared
 entries in which a profile's fingerprint and this host's differ, or that only
 one of them has.
+
+Tests
+=====
+
+The tests of this module and of ``hpx_tune`` (unit, regression, performance,
+the tool's smoke tests and its end-to-end tests) are built only with
+``HPX_WITH_TUNING_TESTS=ON`` (default ``OFF``), in addition to the usual
+``HPX_WITH_TESTS`` options: some start the tool and |hpx| applications and
+take longer than a unit test. The header tests don't depend on the option.
 
 See the :ref:`API reference <modules_tuning_api>` of this module for
 more details.

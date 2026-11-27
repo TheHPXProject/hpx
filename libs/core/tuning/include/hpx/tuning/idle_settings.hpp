@@ -50,7 +50,9 @@ namespace hpx::tuning {
     /// The idle settings for the given measurements:
     ///
     /// - hpx.max_idle_backoff_time: the default, or the shortest sleep if
-    ///   that is longer (a step can't be shorter than a sleep lasts);
+    ///   that is longer (a step can't be shorter than a sleep lasts),
+    ///   rounded up to whole milliseconds then (a coarse timer, whose tick
+    ///   each run sees a little differently);
     /// - hpx.min_idle_backoff_time (the spin): the shortest sleep, at least
     ///   the cost of a wake up, at most hpx.max_idle_backoff_time. A backoff
     ///   step shorter than the shortest sleep, slept, lasts as long as that

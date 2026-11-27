@@ -507,6 +507,14 @@ hpx_option(
   HPX_WITH_TOOLS BOOL "Build HPX tools (default: OFF)" OFF ADVANCED
   CATEGORY "Build Targets"
 )
+hpx_option(
+  HPX_WITH_TUNING_TESTS
+  BOOL
+  "Build the tests of the tuning modules and of hpx_tune: unit, regression, performance, smoke and end-to-end tests; the header tests don't depend on it (default: OFF)"
+  OFF
+  ADVANCED
+  CATEGORY "Build Targets"
+)
 
 hpx_option(
   HPX_WITH_COMPILE_ONLY_TESTS BOOL

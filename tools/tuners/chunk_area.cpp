@@ -340,4 +340,4 @@ HPX_TUNE_REGISTER_AREA(chunk,
     hpx_tune::area{"chunk",
         "tune the minimal run time of a chunk of each executor", 10,
         &hpx_tune::chunk_options, &hpx_tune::tune_chunk,
-        &hpx_tune::chunk_child_main})
+        &hpx_tune::chunk_child_main, nullptr})

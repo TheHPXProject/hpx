@@ -13,7 +13,8 @@
 // or per pool size asked for, with valid backoff times. The first run writes a report too (--report), which
 // has to hold the fingerprint and the idle area's measurements. The test
 // checks the form of the files, not whether the settings are good for the
-// machine.
+// machine. The tool's --check of the first file has to succeed, of a missing
+// file and together with --output to fail.
 //
 // HPX_TUNE_EXECUTABLE and HPX_TUNE_TEST_DIRECTORY are set by CMake.
 
@@ -47,6 +48,9 @@ namespace {
     // the report of the first run
     std::string const report_file =
         std::string(HPX_TUNE_TEST_DIRECTORY) + "/hpx_tune_default.json";
+    // the report of the check of the first file
+    std::string const check_report_file =
+        std::string(HPX_TUNE_TEST_DIRECTORY) + "/hpx_tune_check.json";
 
     // run hpx_tune with the given arguments, return its exit code
     int run_tool(std::string const& arguments)
@@ -174,7 +178,7 @@ namespace {
                      "\", \"compared\": true}") != std::string::npos);
         for (char const* member : {"\"areas\": {\"idle\": {",
                  "\"configurations\": [{\"scheduler\": "
-                 "\"local-priority-fifo\", \"tuner\": \"\"}]",
+                 "\"local-priority-fifo\", \"tuner\": \"none\"}]",
                  "\"clock_read_ns\": {\"count\": 3, ",
                  "\"spin_rate_rounds_per_us\": {", "\"timed_waits\": [{",
                  "\"wake_up\": {\"asleep_us\": {",
@@ -269,6 +273,27 @@ int main(int argc, char* argv[])
     // a child of an area that starts none is refused (the dispatch of
     // child.hpp, before the command line is parsed)
     HPX_TEST_NEQ(run_tool("--child=no_such_area"), 0);
+
+    // --check: the first file holds (the idle area has no check yet), its
+    // report has the check's form; a file that doesn't exist and --check with
+    // --output fail
+    HPX_TEST_EQ(run_tool("--idle --check \"" + default_file + "\" --report \"" +
+                    check_report_file + "\""),
+        0);
+    {
+        std::string const json = read_file(check_report_file);
+        for (char const* member : {"\"file\": ", "\"mismatches\": [",
+                 "\"check\": {\"idle\": {\"checked\": false, "})
+        {
+            HPX_TEST_MSG(json.find(member) != std::string::npos, member);
+        }
+    }
+    HPX_TEST_NEQ(run_tool("--check \"" + std::string(HPX_TUNE_TEST_DIRECTORY) +
+                     "/no_such_file.ini\""),
+        0);
+    HPX_TEST_NEQ(run_tool("--check \"" + default_file + "\" --output \"" +
+                     explicit_file + "\""),
+        0);
 
     test_run_program();
 

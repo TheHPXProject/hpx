@@ -70,9 +70,12 @@ namespace hpx_tune {
             std::vector<std::string> tuned_for;
             for (configuration const& c : configurations)
             {
+                // the tuner as the section names it ("none" for none)
                 tuned_for.push_back(tuning::json_object({
                     {"scheduler", tuning::json_string(c.scheduler)},
-                    {"tuner", tuning::json_string(c.tuner)},
+                    {"tuner",
+                        tuning::json_string(
+                            c.tuner.empty() ? "none" : c.tuner)},
                 }));
             }
             // the pool sizes asked for, empty for pools of any size
@@ -217,4 +220,4 @@ namespace hpx_tune {
 // the first area: it measures in this process, on which nothing of HPX runs
 HPX_TUNE_REGISTER_AREA(idle,
     hpx_tune::area{"idle", "tune the scheduler's idle settings", 0,
-        &hpx_tune::idle_options, &hpx_tune::tune_idle, nullptr})
+        &hpx_tune::idle_options, &hpx_tune::tune_idle, nullptr, nullptr})

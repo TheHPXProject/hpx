@@ -6,14 +6,16 @@
 
 include(HPX_Message)
 
+# the unit, regression and performance tests only on request
+# (HPX_WITH_TUNING_TESTS), the header tests always
 if(HPX_WITH_TESTS)
-  if(HPX_WITH_TESTS_UNIT)
+  if(HPX_WITH_TESTS_UNIT AND HPX_WITH_TUNING_TESTS)
     add_hpx_pseudo_target(tests.unit.modules.tuning)
     add_hpx_pseudo_dependencies(tests.unit.modules tests.unit.modules.tuning)
     add_subdirectory(unit)
   endif()
 
-  if(HPX_WITH_TESTS_REGRESSIONS)
+  if(HPX_WITH_TESTS_REGRESSIONS AND HPX_WITH_TUNING_TESTS)
     add_hpx_pseudo_target(tests.regressions.modules.tuning)
     add_hpx_pseudo_dependencies(
       tests.regressions.modules tests.regressions.modules.tuning
@@ -21,7 +23,7 @@ if(HPX_WITH_TESTS)
     add_subdirectory(regressions)
   endif()
 
-  if(HPX_WITH_TESTS_BENCHMARKS)
+  if(HPX_WITH_TESTS_BENCHMARKS AND HPX_WITH_TUNING_TESTS)
     add_hpx_pseudo_target(tests.performance.modules.tuning)
     add_hpx_pseudo_dependencies(
       tests.performance.modules tests.performance.modules.tuning
