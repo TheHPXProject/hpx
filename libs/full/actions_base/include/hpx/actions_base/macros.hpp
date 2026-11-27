@@ -330,8 +330,15 @@
 ///       \a HPX_REGISTER_ACTION_ID should be used for a particular action,
 ///       never both.
 ///
-#if defined(HPX_COMPUTE_DEVICE_CODE) || defined(HPX_HAVE_CXX26_REFLECTION)
+#if defined(HPX_COMPUTE_DEVICE_CODE)
 #define HPX_REGISTER_ACTION_ID(action, actionname, actionid) /**/
+#elif defined(HPX_HAVE_CXX26_REFLECTION)
+// The action keeps the name of its type, but still needs its preassigned id:
+// localities agree on the ids of the other actions through register_worker
+// and notify_worker, so those two can't be sent without one.
+#define HPX_REGISTER_ACTION_ID(action, actionname, actionid)                   \
+    HPX_REGISTER_ACTION_FACTORY_ID_OF_TYPE(action, actionid)                   \
+    /**/
 #else
 #define HPX_REGISTER_ACTION_ID(action, actionname, actionid)                   \
     HPX_REGISTER_ACTION_2(action, actionname)                                  \
@@ -742,9 +749,24 @@
     }                                                                          \
     /**/
 
+// Registers the id under the name the action registry knows the action by,
+// get_action_name<Action>(), for actions that have no explicit name, as in
+// reflection builds.
+#define HPX_REGISTER_ACTION_FACTORY_ID_OF_TYPE(Action, Id)                     \
+    namespace hpx::actions::detail {                                           \
+        template <>                                                            \
+        HPX_ALWAYS_EXPORT std::string get_action_name_id<Id>()                 \
+        {                                                                      \
+            return get_action_name<Action>();                                  \
+        }                                                                      \
+        template add_constant_entry<Id> add_constant_entry<Id>::instance;      \
+    }                                                                          \
+    /**/
+
 #else
 
 #define HPX_REGISTER_ACTION_FACTORY_ID(Name, Id)
+#define HPX_REGISTER_ACTION_FACTORY_ID_OF_TYPE(Action, Id)
 
 #endif
 
