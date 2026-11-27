@@ -321,10 +321,14 @@ namespace hpx::threads::coroutines {
                     static_cast<size_t>(addr_delta) <
                         coroutine_stackoverflow_addr_epsilon)
                 {
+                    // streamed as a char* the address would be printed as a
+                    // C string, reading the memory that just faulted
                     std::cerr << "Stack overflow in coroutine at address "
                               << std::internal << std::hex
                               << std::setw(sizeof(sigsegv_ptr) * 2 + 2)
-                              << std::setfill('0') << sigsegv_ptr << ".\n\n";
+                              << std::setfill('0')
+                              << static_cast<void const*>(sigsegv_ptr)
+                              << ".\n\n";
 
                     std::cerr
                         << "Configure the hpx runtime to allocate a larger "
