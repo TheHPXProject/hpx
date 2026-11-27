@@ -24,3 +24,23 @@ target_compile_definitions(
 )
 
 add_hpx_unit_test("tools.tuners" hpx_tune)
+
+# The idle area end to end (tuner chapter 13, level 1): hpx_tune --check of
+# files the tool wrote and of files written by hand, the pools' idle settings
+# read back by its children: tests.unit.tools.tuners.hpx_tune_idle_end_to_end
+
+add_hpx_executable(
+  hpx_tune_idle_end_to_end_test INTERNAL_FLAGS
+  SOURCES idle_end_to_end.cpp
+  EXCLUDE_FROM_ALL
+  FOLDER "Tests/Unit/Tools/Tuners"
+)
+
+add_dependencies(hpx_tune_idle_end_to_end_test hpx_tune)
+target_compile_definitions(
+  hpx_tune_idle_end_to_end_test
+  PRIVATE "HPX_TUNE_EXECUTABLE=\"$<TARGET_FILE:hpx_tune>\""
+          "HPX_TUNE_TEST_DIRECTORY=\"${CMAKE_CURRENT_BINARY_DIR}\""
+)
+
+add_hpx_unit_test("tools.tuners" hpx_tune_idle_end_to_end)
