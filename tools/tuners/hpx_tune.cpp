@@ -160,8 +160,18 @@ int main(int argc, char* argv[])
     // measures a machine on which nothing of HPX runs. The idle area
     // therefore runs first; an area that starts processes or a runtime has
     // to come after it.
-    if (idle)
-        add(hpx_tune::tune_idle(vm, machine, options, verbose));
+    // an area that can't measure (a child that fails, an invalid option)
+    // throws; the tool then writes no file
+    try
+    {
+        if (idle)
+            add(hpx_tune::tune_idle(vm, machine, options, verbose));
+    }
+    catch (std::exception const& e)
+    {
+        std::cerr << "hpx_tune: " << e.what() << "\n";
+        return 1;
+    }
 
     std::vector<std::string> const fingerprint_comments =
         tuning::to_comments(fingerprint);
