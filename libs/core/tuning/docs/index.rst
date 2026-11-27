@@ -202,9 +202,12 @@ size of the pool, so they are kept as a table:
     {
         std::string scheduler;    // as --hpx:queuing names it
         std::string tuner;        // as hpx.scheduler_tuner names it, or "none"
-        std::size_t pool_size;    // the number of workers of the pool
+        std::size_t pool_size;    // the number of workers of the pool, or
+                                  // any_pool_size
         std::vector<tuned_setting> settings;
     };
+
+    inline constexpr std::size_t any_pool_size = 0;
 
     std::string section_name(tuning_row const& row);
     std::vector<ini_section> to_sections(std::vector<tuning_row> const& rows);
@@ -212,8 +215,10 @@ size of the pool, so they are kept as a table:
         std::vector<std::string> const& comments, int year);
 
 ``section_name`` gives the ini section of a row,
-``hpx.idle_tuning.<scheduler>.<tuner>.<pool size>``, with the tuner ``none`` if
-the row has none. ``to_sections`` turns the rows into ini sections (below), one
+``hpx.idle_tuning.<scheduler>.<tuner>.<pool size>``, or
+``hpx.idle_tuning.<scheduler>.<tuner>`` for a row of ``any_pool_size``, which
+holds for pools of every size, with the tuner ``none`` if the row has none.
+``to_sections`` turns the rows into ini sections (below), one
 per row, so that they can be written into one file with the sections of other
 areas; ``to_ini`` of a table writes those sections alone. For example:
 
@@ -231,9 +236,11 @@ areas; ``to_ini`` of a table writes those sections alone. For example:
     # shortest sleep 55.2 us, wake cost 18.1 us
     min_idle_backoff_time = 55
 
-A pool whose scheduler, tuner and number of workers match no row keeps the
-default settings. Such a file is used only when it is passed explicitly with
-``--hpx:config``.
+A pool takes the row of its scheduler, tuner and number of workers, else the
+row of its scheduler and tuner for any pool size, else keeps the default
+settings. As long as the measured settings don't depend on the pool size,
+``hpx_tune`` writes only the rows for any pool size. Such a file is used only
+when it is passed explicitly with ``--hpx:config``.
 
 .. _modules_tuning_ini:
 

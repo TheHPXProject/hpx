@@ -16,8 +16,10 @@ namespace hpx::tuning {
     std::string section_name(tuning_row const& row)
     {
         std::string const tuner = row.tuner.empty() ? "none" : row.tuner;
-        return "hpx.idle_tuning." + row.scheduler + "." + tuner + "." +
-            std::to_string(row.pool_size);
+        std::string name = "hpx.idle_tuning." + row.scheduler + "." + tuner;
+        if (row.pool_size != any_pool_size)
+            name += "." + std::to_string(row.pool_size);
+        return name;
     }
 
     std::vector<ini_section> to_sections(std::vector<tuning_row> const& rows)

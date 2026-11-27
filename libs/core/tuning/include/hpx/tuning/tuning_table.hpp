@@ -20,9 +20,10 @@
 
 namespace hpx::tuning {
 
-    /// The settings for the pools of one size that use one scheduler and
-    /// one tuner. A pool whose scheduler, tuner and number of workers match
-    /// no row keeps the default settings.
+    /// The settings for the pools that use one scheduler and one tuner, of
+    /// one size or of any size. A pool takes the row of its scheduler, tuner
+    /// and number of workers, else the row of its scheduler and tuner for
+    /// any size, else keeps the default settings.
     HPX_CXX_CORE_EXPORT struct tuning_row
     {
         /// the scheduler as --hpx:queuing names it (local-priority-fifo, ...)
@@ -30,13 +31,18 @@ namespace hpx::tuning {
         /// the tuner as hpx.scheduler_tuner names it, empty or "none"
         /// without one
         std::string tuner;
-        /// the number of workers of the pool
+        /// the number of workers of the pool, any_pool_size for a row that
+        /// holds for pools of every size
         std::size_t pool_size = 0;
         std::vector<tuned_setting> settings;
     };
 
+    /// The pool size of a row that holds for pools of every size.
+    HPX_CXX_CORE_EXPORT inline constexpr std::size_t any_pool_size = 0;
+
     /// The ini section of a row: hpx.idle_tuning.<scheduler>.<tuner>.<size>,
-    /// the tuner "none" if the row has none.
+    /// or hpx.idle_tuning.<scheduler>.<tuner> for any_pool_size, with the
+    /// tuner "none" if the row has none.
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT std::string section_name(
         tuning_row const& row);
 

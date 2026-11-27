@@ -9,8 +9,8 @@
 // with it (--hpx:config) and reading the runtime's configuration, so that the
 // file is known to be accepted, the second with HPX's ini reader alone (the
 // runtime is started once per process). A file has to hold the host's
-// fingerprint and one idle section per configuration and pool size, with
-// valid backoff times. The first run writes a report too (--report), which
+// fingerprint and one idle section per configuration, for pools of any size
+// or per pool size asked for, with valid backoff times. The first run writes a report too (--report), which
 // has to hold the fingerprint and the idle area's measurements. The test
 // checks the form of the files, not whether the settings are good for the
 // machine.
@@ -122,19 +122,21 @@ namespace {
             hpx::full_version_as_string());
     }
 
-    // the defaults: one section of the default scheduler per whole-domain
-    // pool size
+    // the defaults: one section of the default scheduler for pools of any
+    // size, and none per size
     void check_default_file()
     {
         check_fingerprint();
 
+        check_idle_section("hpx.idle_tuning.local-priority-fifo.none");
+
         hpx::tuning::machine_description const machine =
             hpx::tuning::describe_machine(hpx::threads::get_topology());
-        HPX_TEST(!machine.pool_sizes.empty());
         for (std::size_t const size : machine.pool_sizes)
         {
-            check_idle_section("hpx.idle_tuning.local-priority-fifo.none." +
-                std::to_string(size));
+            HPX_TEST_EQ(entry("hpx.idle_tuning.local-priority-fifo.none." +
+                            std::to_string(size) + ".min_idle_backoff_time"),
+                std::string());
         }
     }
 
@@ -145,6 +147,10 @@ namespace {
 
         check_idle_section("hpx.idle_tuning.local-priority-lifo.static.2");
         HPX_TEST_EQ(entry("hpx.idle_tuning.local-priority-fifo.none.2."
+                          "min_idle_backoff_time"),
+            std::string());
+        // a pool size asked for: no section for pools of any size
+        HPX_TEST_EQ(entry("hpx.idle_tuning.local-priority-lifo.static."
                           "min_idle_backoff_time"),
             std::string());
     }
