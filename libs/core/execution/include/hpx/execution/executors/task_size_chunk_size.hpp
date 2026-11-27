@@ -103,10 +103,29 @@ namespace hpx::execution::experimental {
                 // the whole loop on one core decides whether it runs on more
                 // than one, each core's share of it how fast it runs there
                 hpx::chrono::picoseconds time = time_for(count * bytes);
-                std::size_t const cores =
-                    processing_units_count(exec, time, count);
+                std::size_t cores = processing_units_count(exec, time, count);
                 if (cores > 1)
                 {
+                    time = time_for(count * bytes / cores);
+                }
+
+                // The algorithm gives the loop the cores this time gives
+                // (processing_units_count). A faster time gives fewer cores,
+                // each with a larger share, which may not fit the level the
+                // time was taken for: take the time of the larger share until
+                // the cores don't drop any more. The loop then runs on at
+                // least the cores its time was taken for, so the time is
+                // never too short. The cores drop on every round, so this
+                // ends.
+                while (cores > 1)
+                {
+                    std::size_t const next =
+                        processing_units_count(exec, time, count);
+                    if (next >= cores)
+                    {
+                        break;
+                    }
+                    cores = next;
                     time = time_for(count * bytes / cores);
                 }
                 return time;
