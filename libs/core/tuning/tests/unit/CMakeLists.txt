@@ -8,6 +8,7 @@ set(tests
     chunk_costs
     host_fingerprint
     idle_settings
+    json
     machine_description
     microbenchmarks
     statistics

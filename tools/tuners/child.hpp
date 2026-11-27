@@ -58,14 +58,30 @@ namespace hpx_tune {
         std::string const& area,
         std::function<void(std::string const&)> const& on_line = {});
 
-    // The command line that starts this executable as a child of the given
-    // area, with the given arguments: "<this executable>" --child=<area>
-    // <arguments>, each argument in quotes.
+    // Start a program without a shell, from its arguments (argv[0] is the
+    // program, found on the PATH if it has no directory), and collect the
+    // lines of its standard output that start with the area's prefix as
+    // run_command does. No argument is ever read by a shell, so none needs
+    // quotes (posix_spawnp on POSIX, CreateProcess on Windows, where the
+    // arguments are quoted as the C runtime reads them back). The child's
+    // standard error is the parent's. Throws std::runtime_error if the
+    // program can't be started.
+    child_output run_program(std::vector<std::string> const& argv,
+        std::string const& area,
+        std::function<void(std::string const&)> const& on_line = {});
+
+    // The arguments that start this executable as a child of the given
+    // area: <this executable> --child=<area> <args...>
+    std::vector<std::string> child_arguments(
+        std::string const& area, std::vector<std::string> const& args);
+
+    // The same as a command line, each argument in quotes (for a launcher
+    // template that run_command runs).
     std::string child_command(
         std::string const& area, std::vector<std::string> const& args);
 
-    // Start this executable directly as a child of the given area (one
-    // locality) and return its lines for the parent. Throws
+    // Start this executable as a child of the given area (one locality),
+    // with run_program, and return its lines for the parent. Throws
     // std::runtime_error if it can't be started or exits with an error.
     std::vector<std::string> run_child(std::string const& area,
         std::vector<std::string> const& args,

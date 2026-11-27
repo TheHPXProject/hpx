@@ -11,6 +11,7 @@ set(tuning_headers
     hpx/tuning/host_fingerprint.hpp
     hpx/tuning/idle_settings.hpp
     hpx/tuning/ini_file.hpp
+    hpx/tuning/json.hpp
     hpx/tuning/machine_description.hpp
     hpx/tuning/microbenchmarks.hpp
     hpx/tuning/statistics.hpp
@@ -27,6 +28,7 @@ set(tuning_sources
     host_fingerprint.cpp
     idle_settings.cpp
     ini_file.cpp
+    json.cpp
     machine_description.cpp
     microbenchmarks.cpp
     statistics.cpp

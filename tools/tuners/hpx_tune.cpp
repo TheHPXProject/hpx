@@ -36,6 +36,7 @@
 #include <fstream>
 #include <iostream>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace po = hpx::program_options;
@@ -102,6 +103,8 @@ int main(int argc, char* argv[])
         ("chunk", "tune the minimal run time of a chunk of each executor")
         ("output,o", po::value<std::string>()->default_value("hpx-tuned.ini"),
             "the ini file to write")
+        ("report", po::value<std::string>(),
+            "also write every area's measurements to this JSON file")
         ("repeats,r", po::value<std::size_t>()->default_value(21),
             "how many times each measurement is repeated")
         ("verbose,v", "print the measurements");
@@ -155,12 +158,16 @@ int main(int argc, char* argv[])
     // add their entries, comes first once they are done
     std::vector<std::string> area_comments;
     std::vector<tuning::ini_section> area_sections;
+    // the areas' parts of the report, by area
+    std::vector<std::pair<std::string, std::string>> area_reports;
 
-    auto const add = [&](area_result&& result) {
+    auto const add = [&](std::string const& area, area_result&& result) {
         area_comments.insert(area_comments.end(), result.comments.begin(),
             result.comments.end());
         area_sections.insert(area_sections.end(), result.sections.begin(),
             result.sections.end());
+        if (!result.report.empty())
+            area_reports.emplace_back(area, HPX_MOVE(result.report));
     };
 
     // The order of the areas matters: this process never starts the HPX
@@ -173,9 +180,12 @@ int main(int argc, char* argv[])
     try
     {
         if (idle)
-            add(hpx_tune::tune_idle(vm, machine, options, verbose));
+            add("idle", hpx_tune::tune_idle(vm, machine, options, verbose));
         if (chunk)
-            add(hpx_tune::tune_chunk(vm, machine, options.repeats, verbose));
+        {
+            add("chunk",
+                hpx_tune::tune_chunk(vm, machine, options.repeats, verbose));
+        }
     }
     catch (std::exception const& e)
     {
@@ -204,5 +214,28 @@ int main(int argc, char* argv[])
     out << ini;
 
     std::cout << "wrote " << output << ": " << sections.size() << " sections\n";
+
+    // the report: {"hpx_tune": <HPX's version>, "written": <date>,
+    // "fingerprint": {...}, "areas": {"idle": {...}, ...}}
+    if (vm.count("report"))
+    {
+        std::string const report = vm["report"].as<std::string>();
+        std::ofstream json(report);
+        if (!json)
+        {
+            std::cerr << "hpx_tune: can't write " << report << "\n";
+            return 1;
+        }
+        json << tuning::json_object({
+                    {"hpx_tune",
+                        tuning::json_string(hpx::full_version_as_string())},
+                    {"written", tuning::json_string(current_date())},
+                    {"fingerprint", tuning::to_json(fingerprint)},
+                    {"areas", tuning::json_object(area_reports)},
+                })
+             << "\n";
+        std::cout << "wrote " << report << ": " << area_reports.size()
+                  << " areas\n";
+    }
     return 0;
 }

@@ -12,7 +12,7 @@ add_hpx_pseudo_dependencies(tests.unit tests.unit.tools.tuners)
 
 add_hpx_executable(
   hpx_tune_test INTERNAL_FLAGS
-  SOURCES hpx_tune.cpp
+  SOURCES hpx_tune.cpp ../child.cpp
   EXCLUDE_FROM_ALL
   FOLDER "Tests/Unit/Tools/Tuners"
 )
@@ -23,6 +23,7 @@ target_compile_definitions(
   hpx_tune_test
   PRIVATE "HPX_TUNE_EXECUTABLE=\"$<TARGET_FILE:hpx_tune>\""
           "HPX_TUNE_TEST_DIRECTORY=\"${CMAKE_CURRENT_BINARY_DIR}\""
+          "HPX_TUNE_CMAKE_COMMAND=\"${CMAKE_COMMAND}\""
 )
 
 add_hpx_unit_test("tools.tuners" hpx_tune)

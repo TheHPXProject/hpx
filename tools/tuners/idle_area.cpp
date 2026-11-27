@@ -58,6 +58,53 @@ namespace hpx_tune {
             return number(s.median) + " " + unit + " (quartiles " +
                 number(s.q1) + " to " + number(s.q3) + ")";
         }
+
+        // the idle area's part of the report: what it tuned for, every
+        // measurement and the settings with their reasons
+        std::string report(std::vector<configuration> const& configurations,
+            std::vector<std::size_t> const& pool_sizes,
+            tuning::summary const& clock, tuning::summary const& spin,
+            tuning::idle_measurements const& measured,
+            std::vector<tuning::tuned_setting> const& settings)
+        {
+            std::vector<std::string> tuned_for;
+            for (configuration const& c : configurations)
+            {
+                tuned_for.push_back(tuning::json_object({
+                    {"scheduler", tuning::json_string(c.scheduler)},
+                    {"tuner", tuning::json_string(c.tuner)},
+                }));
+            }
+            std::vector<std::string> sizes;
+            for (std::size_t const size : pool_sizes)
+                sizes.push_back(std::to_string(size));
+            std::vector<std::string> timed_waits;
+            for (tuning::timed_wait const& w : measured.timed_waits)
+            {
+                timed_waits.push_back(tuning::json_object({
+                    {"requested_us", tuning::json_number(w.requested_us)},
+                    {"actual_us", tuning::to_json(w.actual_us)},
+                }));
+            }
+            std::vector<std::string> chosen;
+            for (tuning::tuned_setting const& s : settings)
+                chosen.push_back(tuning::to_json(s));
+
+            return tuning::json_object({
+                {"configurations", tuning::json_array(tuned_for)},
+                {"pool_sizes", tuning::json_array(sizes)},
+                {"clock_read_ns", tuning::to_json(clock)},
+                {"spin_rate_rounds_per_us", tuning::to_json(spin)},
+                {"timed_waits", tuning::json_array(timed_waits)},
+                {"wake_up",
+                    tuning::json_object({
+                        {"asleep_us", tuning::to_json(measured.wake.asleep_us)},
+                        {"spinning_us",
+                            tuning::to_json(measured.wake.spinning_us)},
+                    })},
+                {"settings", tuning::json_array(chosen)},
+            });
+        }
     }    // namespace
 
     po::options_description idle_options()
@@ -148,6 +195,8 @@ namespace hpx_tune {
 
         return area_result{tuning::to_sections(rows),
             {"idle: clock read " + describe(clock, "ns"),
-                "idle: spin rate " + describe(spin, "rounds/us")}};
+                "idle: spin rate " + describe(spin, "rounds/us")},
+            report(
+                configurations, pool_sizes, clock, spin, measured, settings)};
     }
 }    // namespace hpx_tune

@@ -7,7 +7,8 @@
 // What the areas of hpx_tune share with the driver (hpx_tune.cpp). Each area
 // lives in files of its own (idle_area.hpp and .cpp, ...) and gives the
 // driver its options and a function that measures and returns an
-// area_result; the driver writes the results of all areas into one file.
+// area_result; the driver writes the results of all areas into one file,
+// and their reports into one JSON file if asked to (--report).
 
 #pragma once
 
@@ -20,10 +21,13 @@
 namespace hpx_tune {
 
     // what an area adds to the ini file: its sections and its comment lines
-    // (the measurements the reader of the file should see)
+    // (the measurements the reader of the file should see), and to the
+    // report (--report): its measurements as one JSON object (built with
+    // hpx/tuning/json.hpp), empty if it has none
     struct area_result
     {
         std::vector<hpx::tuning::ini_section> sections;
         std::vector<std::string> comments;
+        std::string report;
     };
 }    // namespace hpx_tune

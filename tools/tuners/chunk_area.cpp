@@ -168,7 +168,7 @@ namespace hpx_tune {
             }
         }
 
-        return area_result{HPX_MOVE(sections), HPX_MOVE(comments)};
+        return area_result{HPX_MOVE(sections), HPX_MOVE(comments), {}};
     }
 
     int chunk_child_main(int argc, char* argv[])

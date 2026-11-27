@@ -62,7 +62,20 @@ namespace hpx::tuning {
         // most the longest step
         double spin = options.default_spin_us;
         std::string reason = "no timed waits measured";
-        if (have_sleep)
+        if (have_sleep && sleep > options.default_max_backoff_us)
+        {
+            // A coarse timer (Windows: a timed wait lasts the 15.6 ms tick):
+            // the shortest sleep says how long an idle worker stays asleep,
+            // not how soon new work reaches it, as a notification wakes it
+            // after about the wake cost. Spinning that long would keep every
+            // idle worker busy for little latency, so the spin stays HPX's
+            // default.
+            reason = hpx::util::format(
+                "shortest sleep {:.1f} us is longer than the default longest "
+                "step ({:.0f} us), a coarse timer; wake cost {:.1f} us",
+                sleep, options.default_max_backoff_us, wake);
+        }
+        else if (have_sleep)
         {
             spin = (std::min) ((std::max) (sleep, wake), max_backoff);
             spin = (std::max) (std::round(spin), 1.0);
