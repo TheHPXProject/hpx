@@ -323,5 +323,14 @@ takes it literally instead of expanding it. ``mismatches`` lists the compared
 entries in which a profile's fingerprint and this host's differ, or that only
 one of them has.
 
+Tests
+=====
+
+The tests of this module and of ``hpx_tune`` (unit, regression, performance,
+the tool's smoke tests and its end-to-end tests) are built only with
+``HPX_WITH_TUNING_TESTS=ON`` (default ``OFF``), in addition to the usual
+``HPX_WITH_TESTS`` options: some start the tool and |hpx| applications and
+take longer than a unit test. The header tests don't depend on the option.
+
 See the :ref:`API reference <modules_tuning_api>` of this module for
 more details.
