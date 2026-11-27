@@ -14,9 +14,10 @@
 // with a body that has a task size, have to get their cores and chunks from
 // these values: without both, the values have no effect. The report has to
 // hold the chunk area's measurements. A rule the tool doesn't know makes it
-// fail without writing a file. The test checks the form of the files and
-// that HPX takes their values, not whether the values are good for the
-// machine.
+// fail without writing a file. hpx_tune --check has to hold for the file
+// the tool wrote and fail for one whose value the runtime doesn't take.
+// The test checks the form of the files and that HPX takes their values,
+// not whether the values are good for the machine.
 //
 // HPX_TUNE_EXECUTABLE and HPX_TUNE_TEST_DIRECTORY are set by CMake.
 
@@ -48,6 +49,10 @@ namespace {
         std::string(HPX_TUNE_TEST_DIRECTORY) + "/hpx_tune_chunk.ini";
     std::string const report_file =
         std::string(HPX_TUNE_TEST_DIRECTORY) + "/hpx_tune_chunk.json";
+    std::string const check_report_file =
+        std::string(HPX_TUNE_TEST_DIRECTORY) + "/hpx_tune_chunk_check.json";
+    std::string const wrong_file =
+        std::string(HPX_TUNE_TEST_DIRECTORY) + "/hpx_tune_chunk_wrong.ini";
     std::string const refused_file =
         std::string(HPX_TUNE_TEST_DIRECTORY) + "/hpx_tune_chunk_refused.ini";
 
@@ -230,6 +235,30 @@ int main(int argc, char* argv[])
     HPX_TEST_EQ(hpx::local::init(check_with_runtime,
                     static_cast<int>(args.size() - 1), args.data()),
         0);
+
+    // the file checked (hpx_tune --check): its children, started with it,
+    // read back the values it gives, so the check holds
+    HPX_TEST_EQ(run_tool("--chunk --check \"" + chunk_file + "\" --report \"" +
+                    check_report_file + "\""),
+        0);
+    {
+        std::string const json = read_file(check_report_file);
+        for (char const* member :
+            {"\"check\": {\"chunk\": {\"checked\": true", "\"failures\": []",
+                "\"executor\": \"fork_join\"", "\"holds\": true"})
+        {
+            HPX_TEST_MSG(json.find(member) != std::string::npos, member);
+        }
+    }
+
+    // a file whose value the runtime doesn't take (above a second, out of
+    // range): the executor keeps the default, the check fails
+    {
+        std::ofstream out(wrong_file);
+        out << "[hpx.task_size_chunk_size.fork_join." << pool_size << "]\n"
+            << "min_chunk_time_us = 2000000\n";
+    }
+    HPX_TEST_NEQ(run_tool("--chunk --check \"" + wrong_file + "\""), 0);
 
     // a rule the tool doesn't know: it fails and writes no file
     std::remove(refused_file.c_str());

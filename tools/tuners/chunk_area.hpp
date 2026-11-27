@@ -36,6 +36,15 @@ namespace hpx_tune {
 
     // A child of the chunk area (hpx_tune --child=chunk ...): starts the HPX
     // runtime with the HPX options of its command line, times the regions
-    // on all its workers and writes them for its parent.
+    // on all its workers and writes them for its parent; with
+    // --chunk-verify it reads back each executor's minimal chunk time
+    // instead (see verify_chunk).
     int chunk_child_main(int argc, char* argv[]);
+
+    // hpx_tune --check=<file>: for each pool size the file has sections for
+    // (or the default pool sizes), a child started with the file reads back
+    // each executor's minimal chunk time (get_min_chunk_time) and whether
+    // task_size_chunk_size chunks a loop by it; the check holds if every
+    // executor has the value the file gives it.
+    verify_result verify_chunk(verify_context const& context);
 }    // namespace hpx_tune
