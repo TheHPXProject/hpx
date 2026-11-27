@@ -69,7 +69,7 @@ void test_linux_like()
 
 // Windows: every timed wait lasts a millisecond or more, longer than the
 // default longest step (a coarse timer); the longest step grows to the
-// shortest sleep, the spin stays the default, as a notification wakes a
+// shortest sleep rounded up to whole milliseconds, the spin stays the default, as a notification wakes a
 // sleeping worker long before its timed wait would end
 void test_windows_like()
 {
@@ -80,7 +80,9 @@ void test_windows_like()
 
     auto const s = tuning::derive_idle_settings(m);
     HPX_TEST_EQ(
-        find(s, "hpx.max_idle_backoff_time").value, std::string("1101"));
+        find(s, "hpx.max_idle_backoff_time").value, std::string("2000"));
+    HPX_TEST(find(s, "hpx.max_idle_backoff_time").reason.find("rounded") !=
+        std::string::npos);
     HPX_TEST_EQ(find(s, "hpx.min_idle_backoff_time").value, std::string("50"));
     HPX_TEST(find(s, "hpx.min_idle_backoff_time").is_default);
     HPX_TEST(find(s, "hpx.min_idle_backoff_time").reason.find("coarse") !=
@@ -98,7 +100,7 @@ void test_windows_timer_tick()
 
     auto const s = tuning::derive_idle_settings(m);
     HPX_TEST_EQ(
-        find(s, "hpx.max_idle_backoff_time").value, std::string("15822"));
+        find(s, "hpx.max_idle_backoff_time").value, std::string("16000"));
     HPX_TEST_EQ(find(s, "hpx.min_idle_backoff_time").value, std::string("50"));
     // the reason records the wake cost
     HPX_TEST(find(s, "hpx.min_idle_backoff_time").reason.find("108.4") !=

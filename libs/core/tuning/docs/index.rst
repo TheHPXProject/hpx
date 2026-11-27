@@ -173,7 +173,10 @@ The idle rules take the measurements above and the defaults they start from:
 
 ``hpx.max_idle_backoff_time``
     The longest backoff step: the default, or the shortest sleep if that is
-    longer, since a step can't be shorter than a sleep lasts.
+    longer, since a step can't be shorter than a sleep lasts. A shortest
+    sleep longer than the default is a coarse timer's tick as one run sees
+    it, so it is rounded up to whole milliseconds (16000 for Windows' 15.6 ms
+    tick), and two runs on the same machine write the same value.
 
 ``hpx.min_idle_backoff_time``
     The spin: the shortest sleep, at least the cost of a wake up, at most
