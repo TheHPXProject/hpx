@@ -73,6 +73,7 @@ struct project
 {
     std::string const& operator()(std::string const& value) const noexcept
     {
+        // NOLINTNEXTLINE(bugprone-return-const-ref-from-parameter)
         return value;
     }
 };
