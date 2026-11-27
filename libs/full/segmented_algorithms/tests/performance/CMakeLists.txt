@@ -4,7 +4,7 @@
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-set(benchmarks minmax_element_performance)
+set(benchmarks minmax_element_performance partitioned_vector_sort_performance)
 
 foreach(benchmark ${benchmarks})
   set(sources ${benchmark}.cpp)
@@ -21,7 +21,40 @@ foreach(benchmark ${benchmarks})
     FOLDER "Benchmarks/Modules/Full/SegmentedAlgorithms"
   )
 
-  add_hpx_performance_test(
-    "modules.segmented_algorithms" ${benchmark} ${${benchmark}_PARAMETERS}
-  )
+  if(benchmark STREQUAL "partitioned_vector_sort_performance")
+    add_hpx_performance_test(
+      "modules.segmented_algorithms"
+      partitioned_vector_sort_performance_2_localities
+      EXECUTABLE
+      partitioned_vector_sort_performance
+      PSEUDO_DEPS_NAME
+      partitioned_vector_sort_performance
+      LOCALITIES
+      2
+      THREADS_PER_LOCALITY
+      2
+      ARGS
+      --vector_size=65536
+      --test_count=1
+      --partitions_per_locality=8
+    )
+    add_hpx_performance_test(
+      "modules.segmented_algorithms"
+      partitioned_vector_sort_performance_4_localities
+      EXECUTABLE
+      partitioned_vector_sort_performance
+      PSEUDO_DEPS_NAME
+      partitioned_vector_sort_performance
+      LOCALITIES
+      4
+      THREADS_PER_LOCALITY
+      2
+      ARGS
+      --vector_size=65536
+      --test_count=1
+      --partitions_per_locality=8
+    )
+  else()
+    add_hpx_performance_test("modules.segmented_algorithms" ${benchmark})
+  endif()
 endforeach()
