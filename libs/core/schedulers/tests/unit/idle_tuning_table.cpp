@@ -75,23 +75,22 @@ namespace {
     // threads go to a pool of their own
     hpx::local::init_params configuration(std::size_t const pool_size)
     {
+        std::string const table = "hpx.idle_tuning.";
+        std::string const row = table + "local-priority-tuned-fifo.static";
+
         hpx::local::init_params init_args;
         init_args.cfg = {
             "hpx.scheduler_tuner=static",
             "hpx.min_idle_backoff_time=50",
             "hpx.max_idle_backoff_time=900",
             // for pools of any size
-            "hpx.idle_tuning.local-priority-tuned-fifo.static."
-            "min_idle_backoff_time!=20",
+            row + ".min_idle_backoff_time!=20",
             // for pools of two workers, the spin is ignored
-            "hpx.idle_tuning.local-priority-tuned-fifo.static.2."
-            "max_idle_backoff_time!=700",
-            "hpx.idle_tuning.local-priority-tuned-fifo.static.2."
-            "min_idle_backoff_time!=-5",
+            row + ".2.max_idle_backoff_time!=700",
+            row + ".2.min_idle_backoff_time!=-5",
             // another scheduler's and another tuner's rows don't apply
-            "hpx.idle_tuning.local-priority-fifo.none.min_idle_backoff_time!=7",
-            "hpx.idle_tuning.local-priority-tuned-fifo.none."
-            "min_idle_backoff_time!=8",
+            table + "local-priority-fifo.none.min_idle_backoff_time!=7",
+            table + "local-priority-tuned-fifo.none.min_idle_backoff_time!=8",
         };
         init_args
             .rp_callback = [pool_size](hpx::resource::partitioner& rp,
