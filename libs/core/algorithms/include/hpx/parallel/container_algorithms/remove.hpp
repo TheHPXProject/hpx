@@ -707,6 +707,49 @@ namespace hpx::ranges {
                 [value](auto const& a) -> bool { return value == a; },
                 HPX_MOVE(proj));
         }
+
+        using base_type = hpx::detail::tag_dispatch<remove_t,
+            hpx::detail::tag_parallel_algorithm<remove_t>>;
+        using base_type::operator();
+
+        /// \brief Supports list-initialized values in policy iterator calls.
+        template <typename ExPolicy, typename FwdIter, typename Sent,
+            typename Proj = hpx::identity,
+            typename T = std::remove_cvref_t<
+                std::invoke_result_t<Proj&, std::iter_value_t<FwdIter>&>>>
+            requires(hpx::is_execution_policy_v<ExPolicy> &&
+                std::forward_iterator<FwdIter> &&
+                std::sentinel_for<Sent, FwdIter> &&
+                requires(ExPolicy&& policy, FwdIter first, Sent last, T&& value,
+                    Proj proj) {
+                    invoke_default(HPX_FORWARD(ExPolicy, policy), first, last,
+                        HPX_FORWARD(T, value), HPX_MOVE(proj));
+                })
+        decltype(auto) operator()(ExPolicy&& policy, FwdIter first, Sent last,
+            T&& value, Proj proj = Proj()) const
+        {
+            return base_type::operator()(HPX_FORWARD(ExPolicy, policy), first,
+                last, HPX_FORWARD(T, value), HPX_MOVE(proj));
+        }
+
+        /// \brief Supports list-initialized values in policy range calls.
+        template <typename ExPolicy, typename Rng,
+            typename Proj = hpx::identity,
+            typename T = std::remove_cvref_t<std::invoke_result_t<Proj&,
+                std::iter_value_t<std::ranges::iterator_t<Rng>>&>>>
+            requires(hpx::is_execution_policy_v<ExPolicy> &&
+                std::ranges::forward_range<Rng> &&
+                requires(ExPolicy&& policy, Rng&& rng, T&& value, Proj proj) {
+                    invoke_default(HPX_FORWARD(ExPolicy, policy),
+                        HPX_FORWARD(Rng, rng), HPX_FORWARD(T, value),
+                        HPX_MOVE(proj));
+                })
+        decltype(auto) operator()(
+            ExPolicy&& policy, Rng&& rng, T&& value, Proj proj = Proj()) const
+        {
+            return base_type::operator()(HPX_FORWARD(ExPolicy, policy),
+                HPX_FORWARD(Rng, rng), HPX_FORWARD(T, value), HPX_MOVE(proj));
+        }
     } remove{};
 }    // namespace hpx::ranges
 

@@ -336,6 +336,40 @@ std::vector<projected_item> make_projected_items()
 
 void test_remove_projection()
 {
+    // with a policy the value may be list-initialized; its type is then the
+    // one the projection yields
+    {
+        std::vector<int> c{1, 2, 3, 2, 5};
+        auto result = hpx::ranges::remove(hpx::execution::seq, c, {2});
+        HPX_TEST(result.begin() == c.begin() + 3);
+    }
+    {
+        std::vector<int> c{1, 2, 3, 2, 5};
+        auto result =
+            hpx::ranges::remove(hpx::execution::par, c.begin(), c.end(), {2});
+        HPX_TEST(result.begin() == c.begin() + 3);
+    }
+    {
+        std::vector<projected_item> c = make_projected_items();
+        auto result = hpx::ranges::remove(
+            hpx::execution::par, c, {2}, &projected_item::id);
+        HPX_TEST(result.begin() == c.begin() + 3);
+        HPX_TEST_EQ(c[2].id, 5);
+    }
+    {
+        std::vector<projected_item> c = make_projected_items();
+        auto result = hpx::ranges::remove(
+            hpx::execution::par, c.begin(), c.end(), {2}, &projected_item::id);
+        HPX_TEST(result.begin() == c.begin() + 3);
+        HPX_TEST_EQ(c[2].id, 5);
+    }
+    {
+        std::vector<int> c{1, 2, 3, 2, 5};
+        auto f = hpx::ranges::remove(
+            hpx::execution::par(hpx::execution::task), c, {2});
+        HPX_TEST(f.get().begin() == c.begin() + 3);
+    }
+
     {
         std::vector<projected_item> c = make_projected_items();
         auto result =
