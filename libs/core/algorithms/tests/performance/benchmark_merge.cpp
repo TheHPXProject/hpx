@@ -9,6 +9,7 @@
 #include <hpx/algorithm.hpp>
 #include <hpx/assert.hpp>
 #include <hpx/chrono.hpp>
+#include <hpx/execution.hpp>
 #include <hpx/format.hpp>
 #include <hpx/init.hpp>
 #include <hpx/modules/schedulers.hpp>
@@ -277,6 +278,26 @@ void run_benchmark(std::size_t vector_size1, std::size_t vector_size2,
 
     hpx::util::perftests_report("hpx::merge", "par_unseq", test_count,
         [&] { hpx::merge(par_unseq, first1, last1, first2, last2, dest); });
+
+    // the same with explicit executors
+    namespace ex = hpx::execution::experimental;
+    auto report = [&](char const* name, auto const& exec) {
+        hpx::util::perftests_report("hpx::merge", name, test_count, [&] {
+            hpx::merge(par.on(exec), first1, last1, first2, last2, dest);
+        });
+    };
+
+    report("parallel_executor", hpx::execution::parallel_executor());
+    {
+        ex::fork_join_executor const exec;
+        report("fork_join_executor", exec);
+    }
+    {
+        ex::suspending_fork_join_executor const exec;
+        report("suspending_fork_join_executor", exec);
+    }
+    report("shared_suspending_fork_join_executor",
+        ex::shared_suspending_fork_join_executor());
 
     hpx::util::perftests_print_times();
 }

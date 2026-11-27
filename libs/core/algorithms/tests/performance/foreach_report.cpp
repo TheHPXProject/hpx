@@ -114,6 +114,21 @@ int hpx_main(hpx::program_options::variables_map& vm)
                 [&]() { measure_parallel_foreach(data_representation, exec); });
         }
 
+        {
+            hpx::execution::experimental::suspending_fork_join_executor exec;
+            hpx::util::perftests_report("for_each",
+                "suspending_fork_join_executor", test_count,
+                [&]() { measure_parallel_foreach(data_representation, exec); });
+        }
+
+        {
+            hpx::execution::experimental::shared_suspending_fork_join_executor
+                exec;
+            hpx::util::perftests_report("for_each",
+                "shared_suspending_fork_join_executor", test_count,
+                [&]() { measure_parallel_foreach(data_representation, exec); });
+        }
+
         // the same loops chunked by task_size_chunk_size, based on the task
         // size of the loop body
         {
@@ -140,6 +155,26 @@ int hpx_main(hpx::program_options::variables_map& vm)
             hpx::execution::experimental::fork_join_executor exec;
             hpx::util::perftests_report(
                 "for_each", "fork_join_executor_task_size", test_count, [&]() {
+                    measure_parallel_foreach_task_size(
+                        data_representation, exec);
+                });
+        }
+
+        {
+            hpx::execution::experimental::suspending_fork_join_executor exec;
+            hpx::util::perftests_report("for_each",
+                "suspending_fork_join_executor_task_size", test_count, [&]() {
+                    measure_parallel_foreach_task_size(
+                        data_representation, exec);
+                });
+        }
+
+        {
+            hpx::execution::experimental::shared_suspending_fork_join_executor
+                exec;
+            hpx::util::perftests_report("for_each",
+                "shared_suspending_fork_join_executor_task_size", test_count,
+                [&]() {
                     measure_parallel_foreach_task_size(
                         data_representation, exec);
                 });

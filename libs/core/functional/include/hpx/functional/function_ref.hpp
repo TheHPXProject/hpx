@@ -17,7 +17,7 @@
 #include <hpx/functional/detail/vtable/vtable.hpp>
 #include <hpx/functional/traits/get_function_address.hpp>
 #include <hpx/functional/traits/get_function_annotation.hpp>
-#include <hpx/functional/traits/is_invocable.hpp>
+#include <hpx/modules/tag_invoke.hpp>
 #include <hpx/modules/tracing.hpp>
 
 #include <cstddef>

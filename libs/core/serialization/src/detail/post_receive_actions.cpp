@@ -151,15 +151,45 @@ namespace hpx::serialization::detail {
             });
         }
 
+        // the parcel waits for the steps of the earlier parcels only if it
+        // uses objects they have loaded; the objects it has loaded itself
+        // count as earlier ones for the parcels after it
+        std::shared_ptr<receive_completion> previous =
+            uses_earlier_objects_ ? last_ : nullptr;
+        uses_earlier_objects_ = false;
+        earlier_last_key_ = last_key_;
+        earlier_objects_ = any_object_;
+
         if (actions_.empty())
         {
             // only the steps of earlier parcels, if any
-            return {{}, last_};
+            return {{}, HPX_MOVE(previous)};
         }
 
-        auto completion = receive_completion::create(last_, actions_.size());
-        last_ = completion;
+        auto completion = receive_completion::create(previous, actions_.size());
+
+        // a later parcel using an object loaded so far waits for all steps
+        // registered so far
+        if (previous || !last_)
+        {
+            last_ = completion;
+        }
+        else
+        {
+            last_ = receive_completion::join(last_, completion);
+        }
         return {HPX_MOVE(actions_), HPX_MOVE(completion)};
+    }
+
+    std::shared_ptr<receive_completion> receive_completion::join(
+        std::shared_ptr<receive_completion> const& first,
+        std::shared_ptr<receive_completion> const& second)
+    {
+        // 'first' counts as one step (see create), 'second' as the other
+        auto result = create(first, 1);
+        second->when_done(
+            [result, s = second.get()]() { result->step_done(s->error()); });
+        return result;
     }
 
     std::shared_ptr<receive_completion> receive_completion::create(

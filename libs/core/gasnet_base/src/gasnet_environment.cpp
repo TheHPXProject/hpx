@@ -9,6 +9,7 @@
 
 #include <hpx/config.hpp>
 #include <hpx/assert.hpp>
+#include <hpx/modules/config_registry.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/gasnet_base.hpp>
 #include <hpx/modules/logging.hpp>
@@ -218,6 +219,28 @@ static inline void wait_done_obj(done_t* done, bool do_yield)
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+#if (defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_PARCELPORT_GASNET)) ||   \
+    defined(HPX_HAVE_MODULE_GASNET_BASE)
+namespace hpx::util {
+
+    // the GASNet library, for hpx::complete_version()
+    namespace {
+
+        std::string gasnet_library_version()
+        {
+            return "GASNET_VERSION:" +
+                std::to_string(GASNET_RELEASE_VERSION_MAJOR) + ':' +
+                std::to_string(GASNET_RELEASE_VERSION_MINOR) + ':' +
+                std::to_string(GASNET_RELEASE_VERSION_PATCH) + '-' +
+                "GASNET_CONDUIT:" + GASNET_CONDUIT_NAME_STR;
+        }
+
+        config_registry::add_library_version_helper register_gasnet_version{
+            {"GASNET", &gasnet_library_version}};
+    }    // namespace
+}    // namespace hpx::util
+#endif
+
 namespace hpx::util {
 
     namespace detail {

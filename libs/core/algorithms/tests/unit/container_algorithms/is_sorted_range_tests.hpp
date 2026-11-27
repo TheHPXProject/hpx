@@ -65,6 +65,31 @@ void test_sorted1(ExPolicy&& policy, IteratorTag)
         policy, sorted_c.begin(), sorted_c.end(), std::less<int>{}, proj));
 }
 
+// the end is a sentinel; the range is sorted, or unsorted at its start, in
+// its middle or at its end
+template <typename Sentinel, typename IteratorTag, typename... ExPolicy>
+void test_sorted_sent(IteratorTag, ExPolicy&&... policy)
+{
+    using base_iterator = std::vector<int>::iterator;
+    using iterator = test::test_iterator<base_iterator, IteratorTag>;
+
+    std::vector<int> c(10007);
+    std::size_t const last_pair = c.size() - 2;
+
+    std::iota(std::begin(c), std::end(c), 0);
+    HPX_TEST(hpx::ranges::is_sorted(
+        policy..., iterator(std::begin(c)), Sentinel(iterator(std::end(c)))));
+
+    for (std::size_t pos : {std::size_t(0), c.size() / 2, last_pair})
+    {
+        std::iota(std::begin(c), std::end(c), 0);
+        std::swap(c[pos], c[pos + 1]);
+
+        HPX_TEST(!hpx::ranges::is_sorted(policy..., iterator(std::begin(c)),
+            Sentinel(iterator(std::end(c)))));
+    }
+}
+
 template <typename ExPolicy, typename IteratorTag>
 void test_sorted1_async(ExPolicy&& p, IteratorTag)
 {

@@ -49,6 +49,7 @@ add_hpx_module(
     hpx_errors
     hpx_execution_base
     hpx_functional
+    hpx_hardware
     hpx_logging
     hpx_schedulers
     hpx_threading_base

@@ -48,7 +48,6 @@ namespace hpx::local::detail {
         bool use_process_mask_;
         bool cmd_line_parsed_;
         bool info_printed_;
-        bool version_printed_;
 
     protected:
         // Helper functions for checking command line options

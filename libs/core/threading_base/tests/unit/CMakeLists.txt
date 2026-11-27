@@ -13,12 +13,14 @@ set(tests
     set_thread_state_timed_self
     sized_function
     stack_sized_function
+    suspension_timeout
     task_size_annotations
     task_size_hint
     thread_description_address
     thread_exit_callbacks
     thread_data_is_background
     timed_function
+    with_annotations
 )
 
 if(HPX_WITH_TRACY)

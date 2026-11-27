@@ -582,8 +582,9 @@ namespace hpx::parcelset::detail {
 
     void parcel::take_post_receive_actions(serialization::input_archive& ar)
     {
-        // also without steps of its own: the parcel may use data that the
-        // steps of an earlier parcel in the same archive complete
+        // also without steps of its own: the parcel may use objects that an
+        // earlier parcel in the same archive has loaded and whose data that
+        // parcel's steps complete (see take_parcel_steps)
         auto* actions = ar.try_get_extra_data<
             serialization::detail::post_receive_actions>();
         if (actions != nullptr)
@@ -607,10 +608,11 @@ namespace hpx::parcelset::detail {
             return;
         }
 
-        // f is called once the steps of this parcel and of the parcels
-        // before it have finished, by the thread that finished the last one;
-        // if one of them failed, the arguments are incomplete and the action
-        // isn't scheduled (the waiter is called by 'completion')
+        // f is called once the steps of this parcel (and of the parcels
+        // before it whose objects it uses) have finished, by the thread that
+        // finished the last one; if one of them failed, the arguments are
+        // incomplete and the action isn't scheduled (the waiter is called by
+        // 'completion')
         //
         // All steps finish (the parcels after this one wait for them), also
         // if the waiter can't be set up or a waiter that runs while a step is
