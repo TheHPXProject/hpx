@@ -104,14 +104,26 @@ namespace {
         later[0] = point(mib, 0.3, 0.3, 1);
         HPX_TEST_EQ(tuning::faster_from(later, m.plain, 0.05), 16 * mib);
 
-        // overlapping quartiles are not faster
-        std::vector<tuning::transfer_point> noisy = t.conduit;
-        for (auto& p : noisy)
+        // a faster curve whose upper quartile reaches into the other's still
+        // counts (as on the V100 nodes at 1 MiB)
+        std::vector<tuning::transfer_point> skewed = t.conduit;
+        for (auto& p : skewed)
         {
             p.get_us.q3 = p.get_us.median * 2.0;
             p.set_us.q3 = p.set_us.median * 2.0;
         }
-        HPX_TEST_EQ(tuning::faster_from(noisy, t.plain, 0.05), std::size_t(0));
+        HPX_TEST_EQ(tuning::faster_from(skewed, t.plain, 0.05), mib);
+
+        // but not one whose median lies within the other's spread (the
+        // slower curve's lower quartile below the faster's median)
+        std::vector<tuning::transfer_point> noisy = t.plain;
+        for (auto& p : noisy)
+        {
+            p.get_us.q1 = p.get_us.median * 0.5;
+            p.set_us.q1 = p.set_us.median * 0.5;
+        }
+        HPX_TEST_EQ(
+            tuning::faster_from(t.conduit, noisy, 0.05), std::size_t(0));
     }
 
     void test_v100()

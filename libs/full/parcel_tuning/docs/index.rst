@@ -48,7 +48,7 @@ The module has two parts:
   faster at the largest size) and ``hpx.parcel.conduit_host_threshold`` (the
   largest of those sizes, at least the zero-copy threshold). A size counts as
   faster if its median, get and set together, is lower by more than 5% and
-  the interquartile ranges don't overlap. Which configuration is fastest by
+  lower than the other configuration's lower quartile. Which configuration is fastest by
   size is reported only: choosing the parcelport is left to the user. A rule
   whose measurements are missing, wrong, or didn't go through the conduit
   writes nothing and says why.

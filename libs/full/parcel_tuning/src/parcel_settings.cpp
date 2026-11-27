@@ -41,7 +41,12 @@ namespace hpx::tuning {
 
         bool is_faster(cost const& a, cost const& b, double const min_gain)
         {
-            return a.median < b.median * (1.0 - min_gain) && a.q3 < b.q1;
+            // lower by more than the margin, and below the bulk of the other
+            // (its lower quartile): a skewed curve whose upper quartile
+            // reaches into the other's still counts (on the V100 nodes at
+            // 1 MiB: 1.21 against 1.46 ms, upper quartile 1.437 ms against a
+            // lower quartile of 1.431 ms)
+            return a.median < b.median * (1.0 - min_gain) && a.median < b.q1;
         }
 
         // the points of both curves at the sizes both measured, ascending

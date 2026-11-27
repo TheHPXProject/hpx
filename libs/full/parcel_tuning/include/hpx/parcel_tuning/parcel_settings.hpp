@@ -43,8 +43,8 @@ namespace hpx::tuning {
     HPX_CXX_EXPORT struct parcel_rule_options
     {
         /// a configuration is faster at a size if its median (get and set
-        /// together) is lower by more than this fraction and the
-        /// interquartile ranges don't overlap
+        /// together) is lower by more than this fraction and lower than the
+        /// other's lower quartile
         double min_gain = 0.05;
         /// hpx.parcel.conduit_host_threshold
         std::size_t default_host_threshold = std::size_t(1) << 20;
