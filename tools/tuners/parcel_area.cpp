@@ -172,7 +172,15 @@ namespace hpx_tune {
         std::size_t parse_size(std::string const& text)
         {
             std::size_t pos = 0;
-            std::size_t value = std::stoull(text, &pos);
+            std::size_t value = 0;
+            try
+            {
+                value = std::stoull(text, &pos);
+            }
+            catch (std::exception const&)
+            {
+                throw std::invalid_argument("bad size: '" + text + "'");
+            }
             if (pos < text.size())
             {
                 char const suffix = text[pos];
@@ -183,7 +191,7 @@ namespace hpx_tune {
                 else if (suffix == 'G' || suffix == 'g')
                     value <<= 30;
                 else
-                    throw std::invalid_argument("bad size: " + text);
+                    throw std::invalid_argument("bad size: '" + text + "'");
             }
             return value;
         }
@@ -200,6 +208,11 @@ namespace hpx_tune {
             {
                 if (size >= from)
                     sizes.push_back(size);
+            }
+            if (sizes.empty())
+            {
+                throw std::invalid_argument(
+                    "--sizes " + text + ": no power of 2 in the range");
             }
             return sizes;
         }
@@ -683,7 +696,10 @@ namespace hpx_tune {
 
         parcel_run_options o;
         o.self = hpx::util::get_executable_filename(argv0);
+        // the options are checked here: a child that can't read them fails
+        // without saying why (the driver reports what an area throws)
         o.sizes = vm["sizes"].as<std::string>();
+        (void) parse_sizes(o.sizes);
         o.rounds = vm["rounds"].as<std::size_t>();
         o.threads = vm["child-threads"].as<std::size_t>();
         o.timeout = vm["child-timeout"].as<std::size_t>();
@@ -701,8 +717,7 @@ namespace hpx_tune {
             o.hpxrun = find_hpxrun(vm);
             if (o.hpxrun.empty())
             {
-                std::cerr << "hpx_tune: can't find hpxrun.py (see --hpxrun)\n";
-                return area_result{};
+                throw std::runtime_error("can't find hpxrun.py (see --hpxrun)");
             }
             o.in_slurm = in_slurm;
             if (vm.count("runwrapper"))
@@ -721,6 +736,14 @@ namespace hpx_tune {
         if (vm.count("placement"))
         {
             placements = vm["placement"].as<std::vector<std::string>>();
+            for (std::string const& p : placements)
+            {
+                if (p != "same-node" && p != "two-nodes")
+                {
+                    throw std::invalid_argument("--placement " + p +
+                        ": same-node or two-nodes expected");
+                }
+            }
         }
         else
         {
@@ -734,6 +757,23 @@ namespace hpx_tune {
         {
             parcelports =
                 vm["parcel-configurations"].as<std::vector<std::string>>();
+            for (std::string const& pp : parcelports)
+            {
+                bool known = false;
+#if defined(HPX_HAVE_PARCELPORT_TCP)
+                known = known || pp == "tcp";
+#endif
+#if defined(HPX_HAVE_PARCELPORT_MPI)
+                known = known || pp == "mpi";
+#endif
+                if (!known)
+                {
+                    throw std::invalid_argument("--parcel-configurations " +
+                        pp +
+                        ": not a parcelport this HPX measures (tcp or mpi, "
+                        "where compiled in)");
+                }
+            }
         }
         else
         {

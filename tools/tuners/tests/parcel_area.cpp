@@ -10,11 +10,11 @@
 // check the file it wrote: with HPX's ini reader (the host's fingerprint with
 // the parcel area's entries, a report of the rules for TCP) and by starting
 // the HPX runtime with it (--hpx:config), so that it is known to be accepted;
-// and the JSON report (--report: two passes, both configurations). The
-// test
-// checks the form of the file, not whether the settings are good for the
-// machine; whether the rules write settings at all depends on HPX (host
-// chunks through the device conduit) and on the machine.
+// and the JSON report (--report: two passes, both configurations). First an
+// option the area can't use (--sizes bogus): the tool fails and writes no
+// file. The test checks the form of the file, not whether the settings are
+// good for the machine; whether the rules write settings at all depends on
+// HPX (host chunks through the device conduit) and on the machine.
 //
 // HPX_TUNE_EXECUTABLE and HPX_TUNE_TEST_DIRECTORY are set by CMake.
 
@@ -24,6 +24,7 @@
 #include <hpx/modules/runtime_local.hpp>
 #include <hpx/modules/testing.hpp>
 
+#include <cstdio>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
@@ -77,6 +78,19 @@ namespace {
 
 int main(int argc, char* argv[])
 {
+    // an option the parcel area can't use: the tool says so, fails and
+    // writes no file (std::system's result isn't the exit code everywhere,
+    // only 0 means success)
+    {
+        std::string const bad_file =
+            std::string(HPX_TUNE_TEST_DIRECTORY) + "/hpx_tune_parcel_bad.ini";
+        std::remove(bad_file.c_str());
+        HPX_TEST_NEQ(
+            run_tool("--parcel --sizes bogus --output \"" + bad_file + "\""),
+            0);
+        HPX_TEST(!std::ifstream(bad_file).good());
+    }
+
     // the TCP parcelport on this node, without and (where it is built) with
     // the UCX device conduit; hpxrun.py starts the two localities itself
     HPX_TEST_EQ(run_tool("--parcel --placement same-node "
