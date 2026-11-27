@@ -109,11 +109,13 @@ namespace hpx::parcelset::device_conduits {
         struct send_state
         {
             hpx::move_only_function<void(std::exception_ptr)> sent;
+            ucx_conduit* conduit = nullptr;
         };
 
         struct recv_state
         {
             std::function<void(std::exception_ptr)> done;
+            ucx_conduit* conduit = nullptr;
         };
 
         void send_callback(
@@ -123,13 +125,19 @@ namespace hpx::parcelset::device_conduits {
             // completed, the conduit may be destroyed
             auto* state = static_cast<send_state*>(user_data);
             auto sent = HPX_MOVE(state->sent);
+            ucx_conduit* conduit = state->conduit;
             delete state;
             ucp_request_free(request);
 
-            // a failed send is reported (its parcel has left already)
-            sent(status == UCS_OK ?
-                    nullptr :
-                    make_error(status, "ucp_tag_send_nbx", conduit_send));
+            // a failed send is reported (its parcel has left already); run
+            // outside of UCX (see ucx_conduit::defer)
+            std::exception_ptr error = status == UCS_OK ?
+                nullptr :
+                make_error(status, "ucp_tag_send_nbx", conduit_send);
+            conduit->defer(
+                [sent = HPX_MOVE(sent), error = HPX_MOVE(error)]() mutable {
+                    sent(HPX_MOVE(error));
+                });
         }
 
         void recv_callback(void* request, ucs_status_t const status,
@@ -138,13 +146,19 @@ namespace hpx::parcelset::device_conduits {
             // done with UCX before the completion (see send_callback)
             auto* state = static_cast<recv_state*>(user_data);
             auto done = HPX_MOVE(state->done);
+            ucx_conduit* conduit = state->conduit;
             delete state;
             ucp_request_free(request);
 
-            // a failed receive fails the parcel (it isn't run)
-            done(status == UCS_OK ?
-                    nullptr :
-                    make_error(status, "ucp_tag_recv_nbx", conduit_recv));
+            // a failed receive fails the parcel (it isn't run); run outside
+            // of UCX (see ucx_conduit::defer)
+            std::exception_ptr error = status == UCS_OK ?
+                nullptr :
+                make_error(status, "ucp_tag_recv_nbx", conduit_recv);
+            conduit->defer(
+                [done = HPX_MOVE(done), error = HPX_MOVE(error)]() mutable {
+                    done(HPX_MOVE(error));
+                });
         }
 
         // a peer failed (with UCP_ERR_HANDLING_MODE_PEER): the transfers to
@@ -368,8 +382,31 @@ namespace hpx::parcelset::device_conduits {
         closing_.clear();
         endpoints_.clear();
 
+        // what closing the endpoints has completed
+        run_completions();
+
         ucp_worker_destroy(worker_);
         ucp_cleanup(context_);
+    }
+
+    void ucx_conduit::defer(hpx::move_only_function<void()> completion)
+    {
+        std::lock_guard<std::mutex> l(completions_mtx_);
+        completions_.push_back(HPX_MOVE(completion));
+    }
+
+    bool ucx_conduit::run_completions()
+    {
+        std::vector<hpx::move_only_function<void()>> completions;
+        {
+            std::lock_guard<std::mutex> l(completions_mtx_);
+            completions.swap(completions_);
+        }
+        for (auto& completion : completions)
+        {
+            completion();
+        }
+        return !completions.empty();
     }
 
     ///////////////////////////////////////////////////////////////////////////
@@ -544,7 +581,7 @@ namespace hpx::parcelset::device_conduits {
     {
         note_device(p);
 
-        auto* state = new send_state{HPX_MOVE(sent)};
+        auto* state = new send_state{HPX_MOVE(sent), this};
 
         ucp_request_param_t param;
         std::memset(&param, 0, sizeof(param));
@@ -647,7 +684,7 @@ namespace hpx::parcelset::device_conduits {
 
         note_device(p);
 
-        auto* state = new recv_state{HPX_MOVE(done)};
+        auto* state = new recv_state{HPX_MOVE(done), this};
 
         ucp_request_param_t param;
         std::memset(&param, 0, sizeof(param));
@@ -679,12 +716,18 @@ namespace hpx::parcelset::device_conduits {
         std::unique_lock<hpx::spinlock> l(progress_mtx_, std::try_to_lock);
         if (!l.owns_lock())
         {
-            return false;
+            // the completions of others' progress can be run here
+            return run_completions();
         }
 
         // progress registers the memory of rendezvous messages
         ensure_context(device_.load(std::memory_order_relaxed));
-        bool const did_work = ucp_worker_progress(worker_) != 0;
+        bool did_work = ucp_worker_progress(worker_) != 0;
+        l.unlock();
+
+        // the completions progress has found, without a lock held (they may
+        // suspend this thread)
+        did_work = run_completions() || did_work;
 
         // release the endpoints of removed localities once closed (not
         // urgent: skip it if sends hold the lock)
