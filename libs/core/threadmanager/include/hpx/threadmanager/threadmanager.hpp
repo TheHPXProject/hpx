@@ -337,6 +337,9 @@ namespace hpx::threads {
         void create_scheduler_local_workrequesting_mc(
             thread_pool_init_parameters const&,
             policies::thread_queue_init_parameters const&, std::size_t);
+        void create_scheduler_local_workrequesting_tuned_fifo(
+            thread_pool_init_parameters const&,
+            policies::thread_queue_init_parameters const&, std::size_t);
 
         mutable mutex_type mtx_;    // mutex protecting the members
 
