@@ -521,7 +521,7 @@ namespace hpx::parallel {
                     HPX_FORWARD(F, f), HPX_FORWARD(Proj, proj));
                 auto f1 =
                     hpx::threads::detail::with_task_size(HPX_MOVE(iteration),
-                        task_size_of_iteration<
+                        task_size_of_iteration_writing<FwdIter2,
                             task_size_argument_t<FwdIter1B, Proj>>(
                             iteration.f_, first));
 
@@ -774,7 +774,7 @@ namespace hpx::parallel {
                         HPX_FORWARD(Proj2, proj2));
                 auto f1 =
                     hpx::threads::detail::with_task_size(HPX_MOVE(iteration),
-                        task_size_of_iteration<
+                        task_size_of_iteration_writing<FwdIter3,
                             task_size_argument_t<FwdIter1B, Proj1>,
                             task_size_argument_t<FwdIter2, Proj2>>(
                             iteration.f_, first1, first2));
@@ -862,7 +862,7 @@ namespace hpx::parallel {
                         HPX_FORWARD(Proj2, proj2));
                 auto f1 =
                     hpx::threads::detail::with_task_size(HPX_MOVE(iteration),
-                        task_size_of_iteration<
+                        task_size_of_iteration_writing<FwdIter3,
                             task_size_argument_t<FwdIter1B, Proj1>,
                             task_size_argument_t<FwdIter2B, Proj2>>(
                             iteration.f_, first1, first2));

@@ -25,6 +25,10 @@ using task_size_checks::check_only_size;
 // With chunks of 100 elements, an operation of about a nanosecond per element
 // gives small chunks and a medium worker task. An operation that handles
 // several elements in a nanosecond gives nano chunks and a small worker task.
+// The operations on builtin elements get the run time of the bytes they read
+// and write (copy_bytes_per_ns, 16 by default: a nanosecond for 32 bytes), so
+// their chunks of 100 elements run for less than 100 ns: nano chunks and a
+// small worker task.
 //
 // The sizes are counted when the scheduler creates a thread (see
 // task_size_checks.hpp). The task policy makes the algorithms asynchronous,
@@ -35,33 +39,33 @@ auto const by_100 =
     hpx::execution::par(hpx::execution::task)
         .with(hpx::execution::experimental::static_chunk_size(100));
 
-// Assigning, swapping and destroying builtin elements takes about a
-// nanosecond each.
+// Assigning an int writes 4 bytes (0.125 ns), swapping two reads and
+// writes 16 (0.5 ns), and reverse swaps two elements per call (0.5 ns).
 void test_builtin_elements()
 {
     std::vector<int> v(10000, 1);
     std::vector<int> w(10000, 2);
 
     check_only_size([&] { hpx::fill(by_100, v.begin(), v.end(), 3).get(); },
-        task_size::medium);
+        task_size::small_);
     check_only_size([&] { hpx::fill_n(by_100, v.begin(), 10000, 4).get(); },
-        task_size::medium);
+        task_size::small_);
     // iota assigns an element and increments the value
     check_only_size([&] { hpx::iota(by_100, v.begin(), v.end(), 5).get(); },
-        task_size::medium);
+        task_size::small_);
     check_only_size(
         [&] { hpx::swap_ranges(by_100, v.begin(), v.end(), w.begin()).get(); },
-        task_size::medium);
+        task_size::small_);
 
     // reverse swaps half of the elements
     std::vector<int> r(20000, 1);
     check_only_size([&] { hpx::reverse(by_100, r.begin(), r.end()).get(); },
-        task_size::medium);
+        task_size::small_);
 }
 
 // Trivially copyable elements are copied with memmove at 16 bytes in a
 // nanosecond (the default of hpx.task_size_chunk_size.copy_bytes_per_ns), so
-// a chunk of 100 ints takes 25 nano calls.
+// a chunk of 100 ints takes 25 ns.
 void test_copied_elements()
 {
     std::vector<int> v(10000, 1);
@@ -137,7 +141,8 @@ void test_other_elements()
 
 // The unsequenced policies let the compiler vectorize a loop body of a
 // nanosecond, which then handles HPX_LANE_SIZE bytes of elements in that
-// time.
+// time. An operation that has the run time of its bytes keeps it: assigning
+// an int takes 0.125 ns with any policy.
 void test_unsequenced()
 {
     auto const unseq_by_100 =
@@ -147,12 +152,10 @@ void test_unsequenced()
     std::vector<int> v(10000, 1);
     check_only_size(
         [&] { hpx::fill(unseq_by_100, v.begin(), v.end(), 3).get(); },
-        HPX_LANE_SIZE / sizeof(int) > 1 ? task_size::small_ :
-                                          task_size::medium);
+        task_size::small_);
     check_only_size(
         [&] { hpx::iota(unseq_by_100, v.begin(), v.end(), 5).get(); },
-        HPX_LANE_SIZE / sizeof(int) > 1 ? task_size::small_ :
-                                          task_size::medium);
+        task_size::small_);
 }
 
 #if defined(HPX_HAVE_DATAPAR)
@@ -170,7 +173,7 @@ void test_datapar()
     std::vector<int> v(10000, 1);
     check_only_size(
         [&] { hpx::fill(simd_by_100, v.begin(), v.end(), 3).get(); },
-        lanes > 1 ? task_size::small_ : task_size::medium);
+        task_size::small_);
 
     // copy converts ints to doubles in packs only if their packs have the
     // same width, otherwise one by one in about a nanosecond each

@@ -376,8 +376,7 @@ namespace hpx::parallel {
                 copy_iteration<ExPolicy>(),
                 util::detail::get_transfer_task_size<
                     util::detail::pointer_category_t<InIter, OutIter>, InIter,
-                    OutIter>()
-                    .size);
+                    OutIter>());
         }
 
         HPX_CXX_CORE_EXPORT template <typename IterPair>

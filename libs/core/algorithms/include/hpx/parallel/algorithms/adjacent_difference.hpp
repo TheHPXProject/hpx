@@ -326,9 +326,9 @@ namespace hpx::parallel {
 
                 // an iteration has the size of the operation called with two
                 // adjacent elements
-                auto const size =
-                    task_size_of_iteration<task_size_argument_t<FwdIter1>,
-                        task_size_argument_t<FwdIter1>>(op, first);
+                auto const size = task_size_of_iteration_writing<FwdIter2,
+                    task_size_argument_t<FwdIter1>,
+                    task_size_argument_t<FwdIter1>>(op, first);
                 auto f1 = [op = HPX_FORWARD(Op, op)](zip_iterator part_begin,
                               std::size_t part_size) mutable {
                     // VS2015RC bails out when op is captured by ref

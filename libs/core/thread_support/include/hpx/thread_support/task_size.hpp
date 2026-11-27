@@ -451,6 +451,18 @@ namespace hpx::traits {
     // The function objects of the standard library: std::op<> is the
     // transparent one, std::op<T> a typed one (std::op<> is std::op<void>,
     // which is not builtin).
+    // Function objects of a builtin arithmetic operation. On builtin operands
+    // they cost about what moving their operands between memory and the core
+    // costs, so an algorithm gives them the run time of the bytes it reads
+    // and writes for an element (see hpx::parallel::detail::
+    // task_size_of_iteration). Comparisons and logical operations are not
+    // among them: in sort, merge or a search they steer the work, and
+    // division takes longer than its operands take to load.
+    HPX_CXX_CORE_EXPORT template <typename F>
+    struct is_arithmetic_builtin_operation : std::false_type
+    {
+    };
+
 #define HPX_TASK_SIZE_BUILTIN_OPERATION(op)                                    \
     template <>                                                                \
     struct is_transparent_builtin_operation<std::op<>> : std::true_type        \
@@ -484,6 +496,29 @@ namespace hpx::traits {
     HPX_TASK_SIZE_BUILTIN_OPERATION(bit_not);
 
 #undef HPX_TASK_SIZE_BUILTIN_OPERATION
+
+#define HPX_TASK_SIZE_ARITHMETIC_OPERATION(op)                                 \
+    template <>                                                                \
+    struct is_arithmetic_builtin_operation<std::op<>> : std::true_type         \
+    {                                                                          \
+    };                                                                         \
+                                                                               \
+    template <typename T>                                                      \
+    struct is_arithmetic_builtin_operation<std::op<T>>                         \
+      : std::bool_constant<detail::builtin_operand<T>>                         \
+    {                                                                          \
+    } /**/
+
+    HPX_TASK_SIZE_ARITHMETIC_OPERATION(plus);
+    HPX_TASK_SIZE_ARITHMETIC_OPERATION(minus);
+    HPX_TASK_SIZE_ARITHMETIC_OPERATION(multiplies);
+    HPX_TASK_SIZE_ARITHMETIC_OPERATION(negate);
+    HPX_TASK_SIZE_ARITHMETIC_OPERATION(bit_and);
+    HPX_TASK_SIZE_ARITHMETIC_OPERATION(bit_or);
+    HPX_TASK_SIZE_ARITHMETIC_OPERATION(bit_xor);
+    HPX_TASK_SIZE_ARITHMETIC_OPERATION(bit_not);
+
+#undef HPX_TASK_SIZE_ARITHMETIC_OPERATION
 
     // std::ranges has transparent comparisons only.
 #define HPX_TASK_SIZE_BUILTIN_RANGES_OPERATION(op)                             \

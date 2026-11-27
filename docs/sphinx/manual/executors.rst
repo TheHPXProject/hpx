@@ -716,6 +716,20 @@ that gives none:
        hpx::timed_task([](double x, double y) { return x + y; },
            std::chrono::duration<double, std::nano>(0.25)));
 
+The algorithms give the operations of the library that do little more than
+move their operands the run time of the bytes they read and write, at
+``hpx.task_size_chunk_size.copy_bytes_per_ns`` (16 bytes in a nanosecond by
+default, each byte read and written, so copying a double takes half a
+nanosecond): copying and moving trivially copyable elements, ``fill``,
+``iota``, ``swap_ranges`` and ``reverse`` on builtin elements, and the builtin
+arithmetic function objects (``std::plus``, ``std::minus``,
+``std::multiplies``, ``std::negate`` and the bitwise ones) called with builtin
+elements, counting the elements an algorithm reads and, for ``transform`` and
+``adjacent_difference``, the element it writes: adding two doubles into a
+third takes three quarters of a nanosecond. Consecutive loops over the same
+data are then sized alike. Comparisons, logical operations, ``std::divides``
+and ``std::modulus`` stay nano.
+
 By default, ``task_size_chunk_size`` makes chunks of at least 2.5
 microseconds and gives each core 8 of them. Values given to its
 constructor replace these defaults for one loop, the configuration entries

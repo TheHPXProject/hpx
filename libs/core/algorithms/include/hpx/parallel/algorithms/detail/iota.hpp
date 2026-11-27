@@ -111,10 +111,18 @@ namespace hpx::parallel::detail {
                 };
 
                 // an iteration assigns an element and increments the value:
-                // about a nanosecond if both are builtin, not known otherwise
-                constexpr auto size = hpx::traits::detail::builtin_operand<T> ?
-                    util::detail::element_operation_size<FwdIter>() :
-                    hpx::threads::task_size::unknown;
+                // the run time of writing the element if both are builtin, not
+                // known otherwise
+                auto const size = [] {
+                    if constexpr (hpx::traits::detail::builtin_operand<T>)
+                    {
+                        return util::detail::element_access_size<1, FwdIter>();
+                    }
+                    else
+                    {
+                        return hpx::threads::task_size_and_time{};
+                    }
+                }();
 
                 return util::partitioner<Expolicy, FwdIter,
                     FwdIter>::call_with_index(HPX_FORWARD(Expolicy, policy),

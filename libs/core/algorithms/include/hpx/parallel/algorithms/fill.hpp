@@ -232,7 +232,7 @@ namespace hpx::parallel {
                 return for_each_n<FwdIter>().call(HPX_FORWARD(ExPolicy, policy),
                     first, detail::distance(first, last),
                     hpx::threads::detail::with_task_size(fill_iteration<T>{val},
-                        util::detail::element_operation_size<FwdIter>()),
+                        util::detail::element_access_size<1, FwdIter>()),
                     hpx::identity_v);
             }
         };
@@ -268,7 +268,7 @@ namespace hpx::parallel {
                     HPX_FORWARD(ExPolicy, policy), first, count,
                     hpx::threads::detail::with_task_size(
                         [val](auto&& v) -> void { v = val; },
-                        util::detail::element_operation_size<FwdIter_>()),
+                        util::detail::element_access_size<1, FwdIter_>()),
                     hpx::identity_v);
             }
         };

@@ -12,6 +12,12 @@
 // (collect_execution_parameters). The test runs on 4 worker threads, with a
 // minimal chunk time of 1 us and one chunk per core: a core is given 1000
 // nano iterations.
+//
+// The builtin arithmetic function objects and the algorithms that call no
+// function get the run time of the bytes they read and write per element, at
+// copy_bytes_per_ns (16 by default, so a double moved costs 0.5 ns): copy and
+// negate 16 bytes (0.5 ns), adding two doubles into a third 24 bytes
+// (0.75 ns), fill 8 bytes (0.25 ns).
 
 #include <hpx/algorithm.hpp>
 #include <hpx/execution.hpp>
@@ -23,6 +29,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <type_traits>
 #include <vector>
 
@@ -88,6 +95,52 @@ namespace {
         HPX_TEST_EQ(wrong, std::size_t(0));
     }
 
+    // the cores and the chunk size the partitioner reports for run
+    template <typename Run>
+    void check_split(
+        Run&& run, std::size_t const cores, std::size_t const chunk_size)
+    {
+        recorded result;
+        auto policy = hpx::execution::par.with(recording_parameters(&result));
+        run(policy);
+
+        HPX_TEST_EQ(result.cores, cores);
+        HPX_TEST_EQ(result.chunk_size, chunk_size);
+    }
+
+    void test_byte_rates()
+    {
+        std::vector<double> a(count, 1.0), b(count, 2.0), c(count, 0.0);
+
+        // adding two doubles into a third: 24 bytes, 0.75 ns
+        check_split(
+            [&](auto& policy) {
+                hpx::transform(policy, a.begin(), a.end(), b.begin(), c.begin(),
+                    std::plus<>());
+            },
+            3, 1334);
+        HPX_TEST_EQ(c[count - 1], 3.0);
+
+        // a negation and a copy of a double: 16 bytes, 0.5 ns
+        check_split(
+            [&](auto& policy) {
+                hpx::transform(
+                    policy, a.begin(), a.end(), c.begin(), std::negate<>());
+            },
+            2, 2000);
+        check_split(
+            [&](auto& policy) {
+                hpx::copy(policy, a.begin(), a.end(), c.begin());
+            },
+            2, 2000);
+
+        // fill writes 8 bytes, 0.25 ns
+        check_split(
+            [&](auto& policy) { hpx::fill(policy, c.begin(), c.end(), 4.0); },
+            1, count);
+        HPX_TEST_EQ(c[0], 4.0);
+    }
+
     auto const increment = [](double& d) { d += 1.0; };
 
     template <typename Body>
@@ -138,6 +191,8 @@ namespace {
                         picoseconds(250)));
             },
             1, count);
+
+        test_byte_rates();
 
         return hpx::local::finalize();
     }

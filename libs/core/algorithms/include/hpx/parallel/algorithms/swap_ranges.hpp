@@ -152,7 +152,7 @@ namespace hpx::parallel {
                         using hpx::get;
                         std::ranges::swap(get<0>(t), get<1>(t));
                     },
-                    util::detail::element_operation_size<FwdIter1, FwdIter2>()),
+                    util::detail::element_access_size<2, FwdIter1, FwdIter2>()),
                 hpx::identity_v));
         }
 

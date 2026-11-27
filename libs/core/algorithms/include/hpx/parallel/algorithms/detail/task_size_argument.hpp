@@ -11,6 +11,7 @@
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/thread_support.hpp>
 #include <hpx/modules/type_support.hpp>
+#include <hpx/parallel/util/detail/transfer_task_size.hpp>
 
 #include <iterator>
 #include <type_traits>
@@ -42,6 +43,67 @@ namespace hpx::parallel::detail {
             hpx::traits::get_task_time<F>::call(f)};
     }
 
+    // The bytes of an element of Iter, 0 if it isn't of a builtin type.
+    HPX_CXX_CORE_EXPORT template <typename Iter>
+    inline constexpr std::size_t task_size_element_bytes = [] {
+        if constexpr (std::is_void_v<Iter>)
+        {
+            return std::size_t(0);
+        }
+        else if constexpr (hpx::traits::detail::builtin_operand<
+                               std::iter_value_t<Iter>>)
+        {
+            return sizeof(std::iter_value_t<Iter>);
+        }
+        else
+        {
+            return std::size_t(0);
+        }
+    }();
+
+    // The size of an iteration that dereferences the iterators its, calls f
+    // with arguments of the types Args and, unless OutIter is void, writes
+    // the result to an element of OutIter, as task_size_of_iteration
+    // describes. A builtin arithmetic operation on builtin elements (see
+    // traits::is_arithmetic_builtin_operation) costs about what its bytes
+    // cost to read and write: the iteration gets the run time of the
+    // elements of its and of the element it writes (see memory_task_size).
+    HPX_CXX_CORE_EXPORT template <typename OutIter, typename... Args,
+        typename F, typename... Iters>
+    [[nodiscard]] hpx::threads::task_size_and_time
+    task_size_of_iteration_writing(F const& f, Iters const&... its) noexcept
+    {
+        hpx::threads::task_size_and_time const call =
+            task_size_of_call<Args...>(f);
+        hpx::threads::task_size size = call.size;
+        ((size = hpx::threads::combined_task_size(size,
+              hpx::traits::iterator_dereference_task_size<Iters>::call(its))),
+            ...);
+        if (size != call.size)
+        {
+            return {size, hpx::chrono::picoseconds(0)};
+        }
+        if (call.time.count() > 0)
+        {
+            return call;
+        }
+
+        if constexpr (hpx::traits::is_arithmetic_builtin_operation<
+                          std::decay_t<F>>::value &&
+            sizeof...(Iters) != 0 &&
+            ((task_size_element_bytes<Iters> != 0) && ...) &&
+            (std::is_void_v<OutIter> || task_size_element_bytes<OutIter> != 0))
+        {
+            if (size != hpx::threads::task_size::unknown)
+            {
+                return util::detail::memory_task_size(
+                    (task_size_element_bytes<Iters> + ...) +
+                    task_size_element_bytes<OutIter>);
+            }
+        }
+        return {size, hpx::chrono::picoseconds(0)};
+    }
+
     // The size of an iteration that dereferences the iterators its and calls
     // f with arguments of the types Args, to be read before f is moved into
     // the function that calls it. Dereferencing an iterator that computes
@@ -53,16 +115,9 @@ namespace hpx::parallel::detail {
     // of f keeps the run time of f.
     HPX_CXX_CORE_EXPORT template <typename... Args, typename F,
         typename... Iters>
-    [[nodiscard]] constexpr hpx::threads::task_size_and_time
-    task_size_of_iteration(F const& f, Iters const&... its) noexcept
+    [[nodiscard]] hpx::threads::task_size_and_time task_size_of_iteration(
+        F const& f, Iters const&... its) noexcept
     {
-        hpx::threads::task_size_and_time const call =
-            task_size_of_call<Args...>(f);
-        hpx::threads::task_size size = call.size;
-        ((size = hpx::threads::combined_task_size(size,
-              hpx::traits::iterator_dereference_task_size<Iters>::call(its))),
-            ...);
-        return {
-            size, size == call.size ? call.time : hpx::chrono::picoseconds(0)};
+        return task_size_of_iteration_writing<void, Args...>(f, its...);
     }
 }    // namespace hpx::parallel::detail
