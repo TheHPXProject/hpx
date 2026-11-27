@@ -11,8 +11,8 @@
 #include <hpx/config.hpp>
 #include <hpx/execution_base/detail/execution_member_detect.hpp>
 #include <hpx/execution_base/traits/is_executor.hpp>
-#include <hpx/functional/tag_invoke.hpp>
 #include <hpx/modules/iterator_support.hpp>
+#include <hpx/modules/tag_invoke.hpp>
 
 #include <concepts>
 #include <type_traits>

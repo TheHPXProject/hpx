@@ -284,6 +284,7 @@ add_hpx_module(
   ADD_TO_GLOBAL_HEADER
     "hpx/parallel/util/detail/chunk_size.hpp"
     "hpx/parallel/util/detail/chunk_size_iterator.hpp"
+    "hpx/parallel/util/detail/handle_local_exceptions.hpp"
     "hpx/parallel/util/detail/handle_remote_exceptions.hpp"
   SOURCES ${algorithms_sources}
   MODULE_DEPENDENCIES

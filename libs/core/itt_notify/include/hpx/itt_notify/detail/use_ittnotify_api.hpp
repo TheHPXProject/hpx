@@ -10,6 +10,6 @@
 
 #if HPX_HAVE_ITTNOTIFY != 0
 
-HPX_CORE_EXPORT extern bool use_ittnotify_api;
+HPX_CXX_CORE_EXPORT extern HPX_CORE_EXPORT bool use_ittnotify_api;
 
 #endif

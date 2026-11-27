@@ -1022,6 +1022,19 @@ if(HPX_WITH_TASK_SIZE_DEFAULT_PARAMETERS)
 endif()
 
 hpx_option(
+  HPX_WITH_SUSPENDING_FORK_JOIN_EXECUTOR_AS_DEFAULT
+  BOOL
+  "Use a shared_suspending_fork_join_executor as the executor of the parallel execution policies par and par_unseq (default: OFF)"
+  OFF
+  CATEGORY "Thread Manager"
+  ADVANCED
+)
+
+if(HPX_WITH_SUSPENDING_FORK_JOIN_EXECUTOR_AS_DEFAULT)
+  hpx_add_config_define(HPX_HAVE_SUSPENDING_FORK_JOIN_EXECUTOR_AS_DEFAULT)
+endif()
+
+hpx_option(
   HPX_WITH_COROUTINE_COUNTERS BOOL
   "Enable keeping track of coroutine creation and rebind counts (default: OFF)"
   OFF

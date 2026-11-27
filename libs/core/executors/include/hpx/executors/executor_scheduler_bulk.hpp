@@ -7,18 +7,10 @@
 #pragma once
 
 #include <hpx/config.hpp>
-
-#include <hpx/execution_base/stdexec_forward.hpp>
-
-#include <hpx/execution/algorithms/bulk.hpp>
-#include <hpx/execution_base/completion_scheduler.hpp>
-#include <hpx/execution_base/completion_signatures.hpp>
-#include <hpx/execution_base/execution.hpp>
-#include <hpx/execution_base/get_env.hpp>
-#include <hpx/execution_base/receiver.hpp>
-#include <hpx/execution_base/sender.hpp>
 #include <hpx/executors/executor_scheduler.hpp>
 #include <hpx/modules/errors.hpp>
+#include <hpx/modules/execution.hpp>
+#include <hpx/modules/execution_base.hpp>
 
 #include <exception>
 #include <type_traits>

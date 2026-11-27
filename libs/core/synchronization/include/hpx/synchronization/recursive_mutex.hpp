@@ -15,8 +15,8 @@
 
 #include <hpx/config.hpp>
 #include <hpx/assert.hpp>
-#include <hpx/lock_registration/detail/register_locks.hpp>
 #include <hpx/modules/execution_base.hpp>
+#include <hpx/modules/lock_registration.hpp>
 #include <hpx/synchronization/spinlock.hpp>
 
 #include <atomic>

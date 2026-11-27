@@ -48,3 +48,17 @@ add_hpx_module(
   DEPENDENCIES ${additional_dependencies}
   CMAKE_SUBDIRS examples tests
 )
+
+# report in the MPI version whether the MPI library supports the GPU backend
+# (checked in hpx_check_mpi_gpu_aware for builds with CUDA or HIP)
+if(DEFINED HPX_MPI_CUDA_AWARE)
+  target_compile_definitions(
+    hpx_mpi_base
+    PRIVATE HPX_VERSION_MPI_CUDA_AWARE=$<BOOL:${HPX_MPI_CUDA_AWARE}>
+  )
+endif()
+if(DEFINED HPX_MPI_HIP_AWARE)
+  target_compile_definitions(
+    hpx_mpi_base PRIVATE HPX_VERSION_MPI_HIP_AWARE=$<BOOL:${HPX_MPI_HIP_AWARE}>
+  )
+endif()

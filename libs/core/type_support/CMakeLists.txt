@@ -25,6 +25,7 @@ set(type_support_headers
     hpx/type_support/is_contiguous_iterator.hpp
     hpx/type_support/lazy_conditional.hpp
     hpx/type_support/lazy_enable_if.hpp
+    hpx/type_support/lazy_shared_ptr.hpp
     hpx/type_support/pack.hpp
     hpx/type_support/macros.hpp
     hpx/type_support/meta.hpp

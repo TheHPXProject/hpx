@@ -488,6 +488,26 @@ void run_benchmark(Policy policy, std::size_t vector_size1,
             last1, first2, last2, dest);
     }
 
+    hpx::this_thread::sleep_for(std::chrono::seconds(1));
+
+    std::cout << "--- run_merge_benchmark_par_sweep_suspending_fork_join ---\n";
+    {
+        hpx::execution::experimental::suspending_fork_join_executor exec;
+        run_merge_benchmark_sweep("sfj_par", test_count, par.on(exec), first1,
+            last1, first2, last2, dest);
+    }
+
+    hpx::this_thread::sleep_for(std::chrono::seconds(1));
+
+    std::cout
+        << "--- run_merge_benchmark_par_sweep_shared_suspending_fork_join "
+           "---\n";
+    {
+        hpx::execution::experimental::shared_suspending_fork_join_executor exec;
+        run_merge_benchmark_sweep("ssfj_par", test_count, par.on(exec), first1,
+            last1, first2, last2, dest);
+    }
+
     std::cout << "----------------------------------------------\n";
 }
 

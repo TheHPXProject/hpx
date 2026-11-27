@@ -18,6 +18,12 @@ namespace hpx::config_registry {
             static std::vector<module_config> configs;
             return configs;
         }
+
+        [[nodiscard]] std::vector<library_version>& get_library_versions()
+        {
+            static std::vector<library_version> versions;
+            return versions;
+        }
     }    // namespace detail
 
     std::vector<module_config> const& get_module_configs()
@@ -34,5 +40,21 @@ namespace hpx::config_registry {
         module_config const& config)
     {
         add_module_config(config);
+    }
+
+    std::vector<library_version> const& get_library_versions()
+    {
+        return detail::get_library_versions();
+    }
+
+    void add_library_version(library_version const& version)
+    {
+        detail::get_library_versions().push_back(version);
+    }
+
+    add_library_version_helper::add_library_version_helper(
+        library_version const& version)
+    {
+        add_library_version(version);
     }
 }    // namespace hpx::config_registry

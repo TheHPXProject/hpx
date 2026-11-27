@@ -791,6 +791,8 @@ namespace hpx {
                 &detail::get_default_pool);
             hpx::threads::detail::set_get_default_timer_service(
                 &hpx::detail::get_default_timer_service);
+            hpx::threads::detail::set_register_pre_shutdown(
+                &hpx::register_pre_shutdown_function);
             hpx::threads::detail::set_get_locality_id(&get_locality_id);
             hpx::parallel::execution::detail::set_get_pu_mask(
                 &hpx::detail::get_pu_mask);

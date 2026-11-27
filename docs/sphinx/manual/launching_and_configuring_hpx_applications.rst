@@ -105,6 +105,11 @@ default has to be specified. Therefore ``$[section.key]`` refers to the property
 ``section.key``. If the property ``section.key`` is not set or empty, the overall
 expression will evaluate to an empty string.
 
+To write a literal ``${`` or ``$[`` in a property value, double the ``$``:
+``$${FOO}`` reads as ``${FOO}`` and ``$$[section.key]`` as ``$[section.key]``,
+and neither is expanded. Any other ``$``, including a ``$$`` that is not
+followed by ``{`` or ``[``, is taken as it is.
+
 .. note::
 
    Any property ``$[section.key:default]`` is evaluated whenever it is queried
@@ -723,6 +728,18 @@ default, which stands for the defaults compiled into |hpx|.
        move trivially copyable elements without calling a function derive the
        task size of a chunk from it. The default is ``16``, about the rate for
        data that is not in the caches.
+   * * ``hpx.task_size_chunk_size.<executor>.min_chunk_time_us``
+     * The value of this property defines the minimal run time of a chunk, in
+       microseconds, for the loops of one executor, in place of
+       ``hpx.task_size_chunk_size.min_chunk_time_us``. ``<executor>`` is
+       ``parallel`` for ``parallel_executor``, ``fork_join`` for
+       ``fork_join_executor``, ``suspending_fork_join`` for
+       ``suspending_fork_join_executor`` and ``shared_suspending_fork_join``
+       for ``shared_suspending_fork_join_executor``. Not set by default.
+   * * ``hpx.task_size_chunk_size.<executor>.<pool size>.min_chunk_time_us``
+     * The value of this property defines the minimal run time of a chunk, in
+       microseconds, for the loops of one executor that runs on ``<pool size>``
+       worker threads, in place of the entry above. Not set by default.
 
 The ``hpx.components`` configuration section
 ............................................
