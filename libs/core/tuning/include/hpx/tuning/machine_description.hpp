@@ -17,9 +17,8 @@
 
 namespace hpx::tuning {
 
-    /// The parts of the machine's topology the tuning rules depend on.
     /// A level of the machine's caches, as its first processing unit sees it
-    /// (see topology::get_cache_info).
+    /// (see topology::get_cache_info; level 1 is the data or unified L1).
     HPX_CXX_CORE_EXPORT struct cache_level
     {
         /// The level, 1 for L1.
@@ -38,6 +37,7 @@ namespace hpx::tuning {
         std::size_t pus = 0;
     };
 
+    /// The parts of the machine's topology the tuning rules depend on.
     HPX_CXX_CORE_EXPORT struct machine_description
     {
         std::size_t sockets = 0;
