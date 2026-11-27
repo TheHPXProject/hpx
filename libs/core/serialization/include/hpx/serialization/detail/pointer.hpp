@@ -17,6 +17,7 @@
 #include <hpx/serialization/detail/polymorphic_id_factory.hpp>
 #include <hpx/serialization/detail/polymorphic_intrusive_factory.hpp>
 #include <hpx/serialization/detail/polymorphic_nonintrusive_factory.hpp>
+#include <hpx/serialization/detail/post_receive_actions.hpp>
 #include <hpx/serialization/detail/preprocess_keep_alive.hpp>
 #include <hpx/serialization/macros.hpp>
 #include <hpx/serialization/serialization_fwd.hpp>
@@ -408,6 +409,29 @@ namespace hpx::serialization {
             }
         }
 
+        // The steps a received parcel waits for depend on whether it uses
+        // objects that earlier parcels of the message have loaded (see
+        // post_receive_actions::take_parcel_steps).
+        template <typename Archive>
+        void note_object_loaded(Archive& ar, std::uint64_t const pos)
+        {
+            if (auto* actions =
+                    ar.template try_get_extra_data<post_receive_actions>())
+            {
+                actions->object_loaded(pos);
+            }
+        }
+
+        template <typename Archive>
+        void note_back_reference(Archive& ar, std::uint64_t const pos)
+        {
+            if (auto* actions =
+                    ar.template try_get_extra_data<post_receive_actions>())
+            {
+                actions->back_reference(pos);
+            }
+        }
+
         // forwarded serialize pointer functions
         template <typename Pointer>
         HPX_FORCEINLINE void serialize_pointer_tracked(
@@ -453,6 +477,7 @@ namespace hpx::serialization {
                     Pointer temp =
                         detail::pointer_input_dispatcher<Pointer>::type::call(
                             ar);
+                    note_object_loaded(ar, pos);
                     register_pointer(ar, pos,
                         ptr_helper_ptr(    //-V824
                             new detail::erase_ptr_helper<Pointer>(
@@ -460,6 +485,7 @@ namespace hpx::serialization {
                 }
                 else
                 {
+                    note_back_reference(ar, pos);
                     auto& tracked = tracked_pointer(ar, pos);
                     if (tracked.type() != typeid(Pointer))
                     {
