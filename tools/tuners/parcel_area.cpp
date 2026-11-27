@@ -1077,6 +1077,6 @@ namespace hpx_tune {
 HPX_TUNE_REGISTER_AREA(parcel,
     hpx_tune::area{"parcel", "tune the parcel layer's settings", 20,
         &hpx_tune::parcel_options, &hpx_tune::tune_parcel,
-        &hpx_tune::run_as_child})
+        &hpx_tune::run_as_child, nullptr})
 
 #endif

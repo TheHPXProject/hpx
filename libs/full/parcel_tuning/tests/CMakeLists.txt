@@ -6,8 +6,10 @@
 
 include(HPX_Message)
 
+# the module's unit, regression and performance tests only with the tuner's
+# tests (HPX_WITH_TUNING_TESTS), the header tests always
 if(HPX_WITH_TESTS)
-  if(HPX_WITH_TESTS_UNIT)
+  if(HPX_WITH_TESTS_UNIT AND HPX_WITH_TUNING_TESTS)
     add_hpx_pseudo_target(tests.unit.modules.parcel_tuning)
     add_hpx_pseudo_dependencies(
       tests.unit.modules tests.unit.modules.parcel_tuning
@@ -15,7 +17,7 @@ if(HPX_WITH_TESTS)
     add_subdirectory(unit)
   endif()
 
-  if(HPX_WITH_TESTS_REGRESSIONS)
+  if(HPX_WITH_TESTS_REGRESSIONS AND HPX_WITH_TUNING_TESTS)
     add_hpx_pseudo_target(tests.regressions.modules.parcel_tuning)
     add_hpx_pseudo_dependencies(
       tests.regressions.modules tests.regressions.modules.parcel_tuning
@@ -23,7 +25,7 @@ if(HPX_WITH_TESTS)
     add_subdirectory(regressions)
   endif()
 
-  if(HPX_WITH_TESTS_BENCHMARKS)
+  if(HPX_WITH_TESTS_BENCHMARKS AND HPX_WITH_TUNING_TESTS)
     add_hpx_pseudo_target(tests.performance.modules.parcel_tuning)
     add_hpx_pseudo_dependencies(
       tests.performance.modules tests.performance.modules.parcel_tuning
