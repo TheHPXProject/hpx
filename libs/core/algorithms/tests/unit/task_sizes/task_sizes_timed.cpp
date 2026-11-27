@@ -206,6 +206,33 @@ namespace {
         };
         check_split(copy, 1, count);
 
+        // A copy whose share per core fits a fast level although the whole
+        // loop doesn't: 100000 doubles (1.6 MB) on one core at 8 bytes per
+        // ns (1 ns per element) need 100 cores of 1000 (1 us), each core's
+        // share at 4096 bytes per ns (2 ps per element) only one. The loop
+        // must not run on one core with the fast time: its time is that of
+        // the whole footprint on the cores it runs on (all available).
+        exd::set_memory_rates({{std::size_t(1) << 20, 4096}, {any_footprint, 8}});
+        {
+            constexpr std::size_t large = 100000;
+            std::vector<double> src(large, 1.0), dst(large, 0.0);
+            recorded result;
+            auto policy =
+                hpx::execution::par.with(recording_parameters(&result));
+            hpx::copy(policy, src.begin(), src.end(), dst.begin());
+            HPX_TEST(src == dst);
+
+            std::size_t const available = (std::max) (std::size_t(1),
+                hpx::execution::experimental::processing_units_count(
+                    hpx::execution::parallel_executor()));
+            HPX_TEST_EQ(result.cores, available);
+            HPX_TEST_EQ(result.chunk_size,
+                available <= 1 ?
+                    large :
+                    (std::max) ((large + available - 1) / available,
+                        std::size_t(1000)));
+        }
+
         // without rates, copy_bytes_per_ns for every footprint
         exd::set_memory_rates({});
         HPX_TEST_EQ(exd::get_copy_bytes_per_ns(1000), std::size_t(16));
