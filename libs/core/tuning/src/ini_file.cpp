@@ -8,6 +8,7 @@
 #include <hpx/tuning/ini_file.hpp>
 #include <hpx/tuning/tuned_setting.hpp>
 
+#include <cstddef>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -34,6 +35,36 @@ namespace hpx::tuning {
                 key.remove_prefix(prefix.size());
             return key;
         }
+
+        // A comment as lines of at most max_comment_line characters: "# "
+        // and the text, broken at blanks, the following lines indented
+        // ("#   "); a word longer than a line is broken where the line ends.
+        // HPX's ini reader cuts comments off with an expression that
+        // recurses once per character, which overflows an HPX thread's stack
+        // on lines of a few hundred characters.
+        void write_comment(std::ostringstream& os, std::string_view text)
+        {
+            std::string_view prefix = "# ";
+            while (true)
+            {
+                std::size_t const room = max_comment_line - prefix.size();
+                if (text.size() <= room)
+                {
+                    os << prefix << text << "\n";
+                    return;
+                }
+                std::size_t end = text.rfind(' ', room);
+                if (end == std::string_view::npos || end == 0)
+                    end = room;
+                os << prefix << text.substr(0, end) << "\n";
+                text.remove_prefix(end);
+                while (!text.empty() && text.front() == ' ')
+                    text.remove_prefix(1);
+                if (text.empty())
+                    return;
+                prefix = "#   ";
+            }
+        }
     }    // namespace
 
     std::string to_ini(std::vector<ini_section> const& sections,
@@ -50,18 +81,16 @@ namespace hpx::tuning {
         if (!comments.empty())
             os << "#\n";
         for (std::string const& c : comments)
-            os << "# " << c << "\n";
+            write_comment(os, c);
 
         for (ini_section const& section : sections)
         {
             os << "\n[" << section.name << "]\n";
             for (tuned_setting const& s : section.settings)
             {
-                os << "# " << s.reason;
-                if (s.is_default)
-                    os << " (HPX's default)";
-                os << "\n"
-                   << key_in_section(s.key, section.name) << " = " << s.value
+                write_comment(os,
+                    s.is_default ? s.reason + " (HPX's default)" : s.reason);
+                os << key_in_section(s.key, section.name) << " = " << s.value
                    << "\n";
             }
         }
