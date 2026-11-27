@@ -25,6 +25,7 @@
 #include <algorithm>
 #include <cctype>
 #include <string>
+#include <string_view>
 #include <vector>
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -154,6 +155,21 @@ namespace hpx::plugins {
                     data, more, hpx::string_util::is_any_of("\n"));
                 std::copy(
                     data.begin(), data.end(), std::back_inserter(fillini));
+            }
+
+            // the settings per destination class, by default the
+            // parcelport's (see parcelset::destination_class)
+            for (char const* c : {"same_node", "other_nodes"})
+            {
+                std::string const c_uc = std::string_view(c) == "same_node" ?
+                    "SAME_NODE" :
+                    "OTHER_NODES";
+                fillini.emplace_back(
+                    "[hpx.parcel." + name + "." + std::string(c) + "]");
+                fillini.emplace_back("conduit_host_chunks = ${HPX_PARCEL_" +
+                    name_uc + "_" + c_uc +
+                    "_CONDUIT_HOST_CHUNKS:$[hpx.parcel." + name +
+                    ".conduit_host_chunks]}");
             }
         }
 

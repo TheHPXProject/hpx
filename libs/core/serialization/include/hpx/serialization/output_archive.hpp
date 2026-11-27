@@ -463,7 +463,9 @@ namespace hpx::serialization {
             auto const* transport =
                 try_get_extra_data<detail::device_transport>();
             bool const host_candidate = memory == chunk_memory::host &&
-                may_arrive_later && count >= detail::host_transport_threshold();
+                may_arrive_later &&
+                count >= detail::host_transport_threshold(
+                             host_transport_same_node());
             bool const moved = memory == chunk_memory::device ||
                 (host_candidate && enable_host_transport());
 

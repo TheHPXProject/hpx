@@ -16,22 +16,25 @@ namespace hpx::serialization::detail {
 
     namespace {
 
-        std::atomic<std::size_t>& host_threshold() noexcept
+        std::atomic<std::size_t>& host_threshold(bool const same_node) noexcept
         {
-            static std::atomic<std::size_t> threshold{
+            static std::atomic<std::size_t> same{
                 (std::numeric_limits<std::size_t>::max)()};
-            return threshold;
+            static std::atomic<std::size_t> other{
+                (std::numeric_limits<std::size_t>::max)()};
+            return same_node ? same : other;
         }
     }    // namespace
 
-    std::size_t host_transport_threshold() noexcept
+    std::size_t host_transport_threshold(bool const same_node) noexcept
     {
-        return host_threshold().load(std::memory_order_relaxed);
+        return host_threshold(same_node).load(std::memory_order_relaxed);
     }
 
-    void set_host_transport_threshold(std::size_t const threshold) noexcept
+    void set_host_transport_threshold(
+        bool const same_node, std::size_t const threshold) noexcept
     {
-        host_threshold().store(threshold, std::memory_order_relaxed);
+        host_threshold(same_node).store(threshold, std::memory_order_relaxed);
     }
 }    // namespace hpx::serialization::detail
 

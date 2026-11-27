@@ -59,7 +59,11 @@ namespace hpx::serialization {
         // output archive tells it when it has one (see
         // detail::device_chunk_transport::host_chunk_waiting)
         host_transport_pending = 0x02000000,
-        all_archive_flags = 0x03efe000    // all of the above
+        // with enable_host_transport or host_transport_pending: the
+        // destination is on the sender's node, the threshold for such
+        // destinations applies (see detail::host_transport_threshold)
+        host_transport_same_node = 0x04000000,
+        all_archive_flags = 0x07efe000    // all of the above
     };
 
     HPX_CXX_CORE_EXPORT constexpr archive_flags operator|(
@@ -332,6 +336,14 @@ namespace hpx::serialization {
         {
             return static_cast<bool>(
                 flags_ & archive_flags::host_transport_pending);
+        }
+
+        // The destination of the archive is on the sender's node (with
+        // enable_host_transport or host_transport_pending).
+        [[nodiscard]] constexpr bool host_transport_same_node() const noexcept
+        {
+            return static_cast<bool>(
+                flags_ & archive_flags::host_transport_same_node);
         }
 
         [[nodiscard]] constexpr std::uint32_t flags() const noexcept

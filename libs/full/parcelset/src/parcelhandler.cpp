@@ -78,6 +78,7 @@ namespace hpx::parcelset {
             locality l = pp.here();
 
             locality_capabilities caps;
+            caps.node = this_node_identity();
             if (pp.allow_zero_copy_receive_optimizations())
             {
                 caps.flags |= locality_capabilities::zero_copy_receive;
@@ -86,9 +87,19 @@ namespace hpx::parcelset {
                 conduit != nullptr)
             {
                 caps.conduit = conduit->name();
-                if (conduit->moves_host_memory() && pp.conduit_host_chunks())
+                // per class of the sender (the receiver's setting for it)
+                if (conduit->moves_host_memory())
                 {
-                    caps.flags |= locality_capabilities::conduit_host_chunks;
+                    for (auto const c : {destination_class::same_node,
+                             destination_class::other_nodes})
+                    {
+                        if (pp.conduit_host_chunks(c))
+                        {
+                            caps.flags |=
+                                locality_capabilities::conduit_host_chunks_for(
+                                    c);
+                        }
+                    }
                 }
             }
             l.set_capabilities(HPX_MOVE(caps));
@@ -1814,6 +1825,17 @@ namespace hpx::parcelset {
         {
             f->get_plugin_info(ini_defs);
         }
+
+        // the settings per destination class (see destination_class), by
+        // default the plain ones
+        ini_defs.emplace_back("[hpx.parcel.same_node]");
+        ini_defs.emplace_back("conduit_host_threshold = "
+                              "${HPX_PARCEL_SAME_NODE_CONDUIT_HOST_THRESHOLD:"
+                              "$[hpx.parcel.conduit_host_threshold]}");
+        ini_defs.emplace_back("[hpx.parcel.other_nodes]");
+        ini_defs.emplace_back("conduit_host_threshold = "
+                              "${HPX_PARCEL_OTHER_NODES_CONDUIT_HOST_THRESHOLD:"
+                              "$[hpx.parcel.conduit_host_threshold]}");
         return ini_defs;
     }
 

@@ -350,10 +350,13 @@ namespace hpx::parcelset {
 
         /// Return whether host chunks of at least
         /// hpx.parcel.conduit_host_threshold bytes may go through the device
-        /// conduit (to destinations whose endpoint for this parcelport
-        /// receives them that way, see
-        /// locality_capabilities::conduit_host_chunks)
-        bool conduit_host_chunks() const noexcept;
+        /// conduit, to destinations of the given class (whose endpoint for
+        /// this parcelport receives them that way, see
+        /// locality_capabilities::conduit_host_chunks):
+        /// hpx.parcel.<parcelport>.same_node.conduit_host_chunks and
+        /// .other_nodes.conduit_host_chunks, both by default
+        /// hpx.parcel.<parcelport>.conduit_host_chunks
+        bool conduit_host_chunks(destination_class c) const noexcept;
 
         bool async_serialization() const noexcept;
 
@@ -406,7 +409,8 @@ namespace hpx::parcelset {
         bool allow_array_optimizations_;
         bool allow_zero_copy_optimizations_;
         bool allow_zero_copy_receive_optimizations_;
-        bool conduit_host_chunks_ = false;
+        bool conduit_host_chunks_same_node_ = false;
+        bool conduit_host_chunks_other_nodes_ = false;
 
         /// async serialization of parcels
         bool async_serialization_;

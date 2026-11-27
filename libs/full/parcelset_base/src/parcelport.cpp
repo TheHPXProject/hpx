@@ -85,10 +85,16 @@ namespace hpx::parcelset {
             async_serialization_ = true;
         }
 
-        // host chunks through the device conduit need the chunks
-        conduit_host_chunks_ = allow_zero_copy_optimizations_ &&
+        // host chunks through the device conduit need the chunks; a value
+        // per destination class, by default the parcelport's one
+        int const host_chunks =
+            hpx::util::get_entry_as<int>(ini, key + ".conduit_host_chunks", 0);
+        conduit_host_chunks_same_node_ = allow_zero_copy_optimizations_ &&
             hpx::util::get_entry_as<int>(
-                ini, key + ".conduit_host_chunks", 0) != 0;
+                ini, key + ".same_node.conduit_host_chunks", host_chunks) != 0;
+        conduit_host_chunks_other_nodes_ = allow_zero_copy_optimizations_ &&
+            hpx::util::get_entry_as<int>(ini,
+                key + ".other_nodes.conduit_host_chunks", host_chunks) != 0;
     }
 
     int parcelport::priority() const noexcept
@@ -424,9 +430,12 @@ namespace hpx::parcelset {
         return allow_zero_copy_receive_optimizations_;
     }
 
-    bool parcelport::conduit_host_chunks() const noexcept
+    bool parcelport::conduit_host_chunks(
+        destination_class const c) const noexcept
     {
-        return conduit_host_chunks_;
+        return c == destination_class::same_node ?
+            conduit_host_chunks_same_node_ :
+            conduit_host_chunks_other_nodes_;
     }
 
     bool parcelport::async_serialization() const noexcept

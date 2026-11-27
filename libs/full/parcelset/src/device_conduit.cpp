@@ -145,13 +145,22 @@ namespace hpx::parcelset {
             }
             current_conduit.store(conduit.get(), std::memory_order_release);
 
-            // the smallest host chunk the conduit moves (where enabled)
+            // the smallest host chunk the conduit moves (where enabled), per
+            // destination class, by default the one value
             if (conduit->moves_host_memory())
             {
-                serialization::detail::set_host_transport_threshold(
+                std::size_t const threshold =
                     hpx::util::get_entry_as<std::size_t>(cfg,
                         "hpx.parcel.conduit_host_threshold",
-                        std::size_t(1) << 20));
+                        std::size_t(1) << 20);
+                serialization::detail::set_host_transport_threshold(true,
+                    hpx::util::get_entry_as<std::size_t>(cfg,
+                        "hpx.parcel.same_node.conduit_host_threshold",
+                        threshold));
+                serialization::detail::set_host_transport_threshold(false,
+                    hpx::util::get_entry_as<std::size_t>(cfg,
+                        "hpx.parcel.other_nodes.conduit_host_threshold",
+                        threshold));
             }
         }
 
@@ -244,6 +253,7 @@ namespace hpx::parcelset {
             // otherwise, or if it isn't known (yet), the parcelport moves the
             // data
             bool host_chunks = false;
+            destination_class where = destination_class::other_nodes;
             {
                 auto& d = destinations();
                 std::shared_lock<std::shared_mutex> l(d.mtx);
@@ -252,8 +262,11 @@ namespace hpx::parcelset {
                 {
                     return 0;
                 }
-                host_chunks =
-                    it->second.has(locality_capabilities::conduit_host_chunks);
+                // the destination's class decides which of this parcelport's
+                // settings and of the destination's flags apply
+                where = it->second.class_for(this_node_identity());
+                host_chunks = it->second.has(
+                    locality_capabilities::conduit_host_chunks_for(where));
             }
 
             auto flags = serialization::archive_flags::enable_device_transport |
@@ -266,8 +279,13 @@ namespace hpx::parcelset {
             // message has such a chunk, which goes with the message
             // meanwhile
             if (host_chunks && c->moves_host_memory() &&
-                pp.conduit_host_chunks())
+                pp.conduit_host_chunks(where))
             {
+                if (where == destination_class::same_node)
+                {
+                    flags = flags |
+                        serialization::archive_flags::host_transport_same_node;
+                }
                 flags = flags |
                     (c->host_chunks_ready(locality_id) ?
                             serialization::archive_flags::

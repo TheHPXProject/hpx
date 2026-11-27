@@ -914,15 +914,24 @@ The ``hpx.parcel`` configuration section
        conduit for host chunks only to destinations whose endpoint for the same
        parcelport says they receive them that way, and once the conduit has
        found that it reaches the destination (until then, and if it doesn't,
-       the parcelport moves them). Useful for the TCP parcelport
-       on networks the conduit can use directly (RDMA). The default is ``1``:
-       with the default device conduit (``auto``, ``ucx`` unless |hpx| uses
-       MPI), large host chunks go through UCX. Conduits that move device
-       memory only (``nccl``) ignore it.
+       the parcelport moves them). For destinations on the same node and on
+       other nodes the parcelport's value can differ:
+       ``hpx.parcel.<parcelport>.same_node.conduit_host_chunks`` and
+       ``hpx.parcel.<parcelport>.other_nodes.conduit_host_chunks`` (both
+       defaulting to ``hpx.parcel.<parcelport>.conduit_host_chunks``); each
+       :term:`locality` publishes its node with its endpoints, and both sides
+       use their value for the class the other one is in. Useful for the TCP
+       parcelport on networks the conduit can use directly (RDMA). The
+       default is ``1``: with the default device conduit (``auto``, ``ucx``
+       unless |hpx| uses MPI), large host chunks go through UCX. Conduits
+       that move device memory only (``nccl``) ignore it.
    * * ``hpx.parcel.conduit_host_threshold``
      * This property defines the smallest chunk of host memory (in bytes) the
        device conduit moves if ``hpx.parcel.conduit_host_chunks`` is set; the
-       same for all parcelports. The default is ``1048576``.
+       same for all parcelports. ``hpx.parcel.same_node.conduit_host_threshold``
+       and ``hpx.parcel.other_nodes.conduit_host_threshold`` (both defaulting
+       to this value) set it for destinations on the sender's node and on
+       other nodes. The default is ``1048576``.
    * * ``hpx.parcel.message_handlers``
      * This property defines whether message handlers are loaded. The default is
        ``0``.

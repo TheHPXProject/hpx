@@ -64,6 +64,33 @@ if(HPX_WITH_DEVICE_CONDUIT_UCX)
     RUN_SERIAL
   )
 
+  # host chunks through the conduit by destination class (the localities of the
+  # test on one node): on for the same node, off for other nodes, and the other
+  # way round
+  add_hpx_executable(
+    destination_classes_test INTERNAL_FLAGS
+    SOURCES destination_classes.cpp
+    EXCLUDE_FROM_ALL
+    HPX_PREFIX ${HPX_BUILD_PREFIX}
+    FOLDER "Tests/Unit/Modules/Full/DeviceConduitUCX"
+  )
+
+  add_hpx_unit_test(
+    "modules.device_conduit_ucx" destination_classes
+    LOCALITIES 2
+    THREADS_PER_LOCALITY 2
+    RUN_SERIAL
+  )
+  add_hpx_unit_test(
+    "modules.device_conduit_ucx" destination_classes_other_nodes
+    EXECUTABLE destination_classes
+    PSEUDO_DEPS_NAME destination_classes
+    LOCALITIES 2
+    THREADS_PER_LOCALITY 2
+    RUN_SERIAL
+    ARGS --same-node-conduit=0
+  )
+
   # the conduit the configuration selects (by default: UCX); the test asks
   # mpi_base whether HPX uses MPI
   if(HPX_WITH_PARCELPORT_MPI OR HPX_WITH_ASYNC_MPI)

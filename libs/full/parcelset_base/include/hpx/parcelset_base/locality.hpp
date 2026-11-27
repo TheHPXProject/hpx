@@ -29,6 +29,22 @@
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx::parcelset {
 
+    /// Where a destination is seen from the sender: on the sender's node or
+    /// on another one (see locality_capabilities::node). Some settings of
+    /// the parcel layer have a value per class, for example
+    /// hpx.parcel.<parcelport>.same_node.conduit_host_chunks.
+    HPX_CXX_EXPORT enum class destination_class : std::uint8_t {
+        same_node,
+        other_nodes
+    };
+
+    /// The identity of the node this process runs on: the same for all
+    /// processes on one node (also of different builds), different for
+    /// different nodes; a hash of the host name and, where there is one, the
+    /// kernel's boot id. Never 0 (0 means unknown in
+    /// locality_capabilities::node).
+    HPX_CXX_EXPORT HPX_EXPORT std::uint64_t this_node_identity();
+
     /// What the parcelport behind an endpoint can do, besides being reached.
     /// The parcel handler sets it for the endpoints of its locality; it
     /// travels with them to the other localities (registration, AGAS), also
@@ -41,13 +57,40 @@ namespace hpx::parcelset {
         static constexpr std::uint32_t zero_copy_receive = 0x1;
 
         /// The locality receives host chunks through its device conduit
-        /// ('conduit') when they come through this parcelport.
+        /// ('conduit') when they come through this parcelport from a sender
+        /// on another node.
         static constexpr std::uint32_t conduit_host_chunks = 0x2;
+
+        /// The same for a sender on the locality's node.
+        static constexpr std::uint32_t conduit_host_chunks_same_node = 0x4;
 
         std::uint32_t flags = 0;
 
         /// The name of the locality's device conduit, empty if it has none.
         std::string conduit;
+
+        /// The node the locality runs on (this_node_identity), 0 if unknown.
+        std::uint64_t node = 0;
+
+        /// The class of this destination for a sender on 'sender_node':
+        /// other_nodes if either node is unknown.
+        [[nodiscard]] destination_class class_for(
+            std::uint64_t const sender_node) const noexcept
+        {
+            return node != 0 && node == sender_node ?
+                destination_class::same_node :
+                destination_class::other_nodes;
+        }
+
+        /// The flag saying that host chunks of a sender of the given class
+        /// go through the conduit.
+        [[nodiscard]] static constexpr std::uint32_t conduit_host_chunks_for(
+            destination_class const c) noexcept
+        {
+            return c == destination_class::same_node ?
+                conduit_host_chunks_same_node :
+                conduit_host_chunks;
+        }
 
         [[nodiscard]] bool has(std::uint32_t const f) const noexcept
         {
@@ -57,7 +100,7 @@ namespace hpx::parcelset {
         template <typename Archive>
         void serialize(Archive& ar, unsigned)
         {
-            ar & flags & conduit;
+            ar & flags & conduit & node;
         }
     };
 

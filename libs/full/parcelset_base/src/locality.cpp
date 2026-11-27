@@ -15,11 +15,76 @@
 #include <hpx/parcelset_base/locality.hpp>
 #include <hpx/parcelset_base/locality_interface.hpp>
 
+#include <cstddef>
+#include <cstdint>
+#include <fstream>
 #include <string>
+#include <string_view>
 #include <utility>
+
+#if defined(HPX_WINDOWS)
+#include <windows.h>
+#else
+#include <unistd.h>
+#endif
 
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx::parcelset {
+
+    namespace {
+
+        // FNV-1a: the same value in every process, unlike std::hash
+        std::uint64_t fnv1a(std::uint64_t h, std::string_view const text)
+        {
+            for (char const c : text)
+            {
+                h ^= static_cast<unsigned char>(c);
+                h *= 0x100000001b3ULL;
+            }
+            return h;
+        }
+
+        std::string host_name()
+        {
+#if defined(HPX_WINDOWS)
+            char name[MAX_COMPUTERNAME_LENGTH + 1] = {};
+            DWORD size = sizeof(name);
+            if (GetComputerNameA(name, &size))
+                return std::string(name, size);
+            return {};
+#else
+            char name[256] = {};
+            if (gethostname(name, sizeof(name) - 1) == 0)
+                return name;
+            return {};
+#endif
+        }
+
+        // the kernel's boot id tells containers or virtual machines with
+        // the same host name apart (and processes on one node share it)
+        std::string boot_id()
+        {
+#if defined(HPX_WINDOWS)
+            return {};
+#else
+            std::ifstream in("/proc/sys/kernel/random/boot_id");
+            std::string id;
+            std::getline(in, id);
+            return id;
+#endif
+        }
+    }    // namespace
+
+    std::uint64_t this_node_identity()
+    {
+        static std::uint64_t const identity = [] {
+            std::uint64_t h = fnv1a(0xcbf29ce484222325ULL, host_name());
+            h = fnv1a(h, "/");
+            h = fnv1a(h, boot_id());
+            return h == 0 ? 1 : h;
+        }();
+        return identity;
+    }
 
     locality::locality(locality const& other)
       : impl_(other.impl_ ? other.impl_->clone() : nullptr)
