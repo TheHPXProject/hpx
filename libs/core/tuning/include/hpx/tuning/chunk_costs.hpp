@@ -54,9 +54,8 @@ namespace hpx::tuning {
     };
 
     /// Measure the region times of the executors of chunk_executors() on all
-    /// worker threads of the running runtime's default pool. Each executor
-    /// and number of indices first runs one sample's regions untimed, to
-    /// warm up. Must be called on an HPX thread.
+    /// worker threads of the running runtime's default pool. Must be called
+    /// on an HPX thread.
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT std::vector<region_time>
     measure_region_times(chunk_cost_options const& options = {});
 

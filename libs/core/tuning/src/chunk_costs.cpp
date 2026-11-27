@@ -35,11 +35,8 @@ namespace hpx::tuning {
 
     namespace {
 
-        // The regions of one executor for each number of indices: one
-        // sample of options.regions regions that isn't timed, then repeats
-        // samples of options.regions regions each. The untimed sample lets
-        // the executor's workers (just started, as is the runtime for the
-        // first executor) and the cores' clock settle before the timing.
+        // The regions of one executor for each number of indices: a few to
+        // warm up, then repeats samples of options.regions regions each.
         template <typename Executor>
         void measure_executor(Executor const& exec, std::string const& name,
             std::size_t const pool_size, chunk_cost_options const& options,
@@ -58,7 +55,7 @@ namespace hpx::tuning {
                 std::size_t const indices = multiple * pool_size;
                 hpx::util::counting_shape const shape(std::size_t(0), indices);
 
-                for (std::size_t i = 0; i != options.regions; ++i)
+                for (std::size_t i = 0; i != 10; ++i)
                 {
                     hpx::parallel::execution::bulk_sync_execute(
                         exec, body, shape);
