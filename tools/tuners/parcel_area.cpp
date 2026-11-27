@@ -100,6 +100,12 @@ namespace hpx_tune_detail {
         }
     }
 
+    // whether this HPX can move host chunks through a device conduit
+    constexpr bool host_chunks_supported() noexcept
+    {
+        return has_moves_host_memory<hpx::parcelset::device_conduit>::value;
+    }
+
     // what the runtime of this locality took for the host chunks of the
     // parcelport it bootstraps with (a check's child, see verify_parcel)
     std::vector<std::pair<std::string, std::string>> verify_entries()
@@ -109,10 +115,7 @@ namespace hpx_tune_detail {
         std::string const key = "hpx.parcel." + pp;
         auto const* conduit = hpx::parcelset::get_device_conduit();
         return {
-            {"host_chunk_support",
-                has_moves_host_memory<hpx::parcelset::device_conduit>::value ?
-                    "1" :
-                    "0"},
+            {"host_chunk_support", host_chunks_supported() ? "1" : "0"},
             {"conduit", conduit != nullptr ? conduit->name() : "none"},
             {"conduit_moves_host_memory",
                 conduit_moves_host_memory(conduit) ? "1" : "0"},
@@ -323,7 +326,11 @@ namespace hpx_tune {
             if (conduit == "none")
             {
                 ini.push_back("hpx.parcel.device_conduit=none");
-                ini.push_back("hpx.parcel.conduit_host_chunks=0");
+                // the key exists only where host chunks can go through a
+                // conduit (#8242); an unknown key on the command line stops
+                // the runtime
+                if (hpx_tune_detail::host_chunks_supported())
+                    ini.push_back("hpx.parcel.conduit_host_chunks=0");
             }
             else
             {
@@ -948,7 +955,10 @@ namespace hpx_tune {
 
             conduits = {"none"};
 #if defined(HPX_HAVE_DEVICE_CONDUIT_UCX)
-            conduits.push_back("ucx");
+            // with the conduit only where it can move host chunks: otherwise
+            // the same measurement as without it
+            if (hpx_tune_detail::host_chunks_supported())
+                conduits.push_back("ucx");
 #endif
             return setup;
         }
