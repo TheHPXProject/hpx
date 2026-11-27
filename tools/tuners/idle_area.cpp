@@ -70,9 +70,12 @@ namespace hpx_tune {
             std::vector<std::string> tuned_for;
             for (configuration const& c : configurations)
             {
+                // the tuner as the section names it ("none" for none)
                 tuned_for.push_back(tuning::json_object({
                     {"scheduler", tuning::json_string(c.scheduler)},
-                    {"tuner", tuning::json_string(c.tuner)},
+                    {"tuner",
+                        tuning::json_string(
+                            c.tuner.empty() ? "none" : c.tuner)},
                 }));
             }
             // the pool sizes asked for, empty for pools of any size

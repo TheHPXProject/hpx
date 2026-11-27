@@ -174,7 +174,7 @@ namespace {
                      "\", \"compared\": true}") != std::string::npos);
         for (char const* member : {"\"areas\": {\"idle\": {",
                  "\"configurations\": [{\"scheduler\": "
-                 "\"local-priority-fifo\", \"tuner\": \"\"}]",
+                 "\"local-priority-fifo\", \"tuner\": \"none\"}]",
                  "\"clock_read_ns\": {\"count\": 3, ",
                  "\"spin_rate_rounds_per_us\": {", "\"timed_waits\": [{",
                  "\"wake_up\": {\"asleep_us\": {",
