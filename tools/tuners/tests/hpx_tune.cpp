@@ -23,11 +23,14 @@
 #include <hpx/modules/tuning.hpp>
 #include <hpx/version.hpp>
 
+#include "../child.hpp"
+
 #include <cstddef>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -148,6 +151,42 @@ namespace {
     }
 }    // namespace
 
+// child.hpp's run_program: a program started without a shell gets its
+// arguments as they are, and its prefixed lines come back
+void test_run_program()
+{
+    // one argument with blanks, quotes and backslashes, echoed back
+    std::string const text = "a b \"q\" c:\\x\\ \\\"d\\\\";
+    hpx_tune::child_output const echoed =
+        hpx_tune::run_program({HPX_TUNE_CMAKE_COMMAND, "-E", "echo",
+                                  hpx_tune::child_line_prefix("test") + text},
+            "test");
+    HPX_TEST_EQ(echoed.exit_code, 0);
+    HPX_TEST_EQ(echoed.lines.size(), std::size_t(1));
+    if (!echoed.lines.empty())
+        HPX_TEST_EQ(echoed.lines.front(), text);
+
+    // the exit code of a program that fails
+    hpx_tune::child_output const refused = hpx_tune::run_program(
+        {HPX_TUNE_EXECUTABLE, "--child=no_such_area"}, "test");
+    HPX_TEST_NEQ(refused.exit_code, 0);
+    HPX_TEST(refused.lines.empty());
+
+    // a program that doesn't exist
+    bool thrown = false;
+    try
+    {
+        hpx_tune::run_program(
+            {std::string(HPX_TUNE_TEST_DIRECTORY) + "/no_such_program"},
+            "test");
+    }
+    catch (std::runtime_error const&)
+    {
+        thrown = true;
+    }
+    HPX_TEST(thrown);
+}
+
 int main(int argc, char* argv[])
 {
     // the idle area with its defaults: the default scheduler, the machine's
@@ -186,6 +225,8 @@ int main(int argc, char* argv[])
     // a child of an area that starts none is refused (the dispatch of
     // child.hpp, before the command line is parsed)
     HPX_TEST_NEQ(run_tool("--child=no_such_area"), 0);
+
+    test_run_program();
 
     return hpx::util::report_errors();
 }
