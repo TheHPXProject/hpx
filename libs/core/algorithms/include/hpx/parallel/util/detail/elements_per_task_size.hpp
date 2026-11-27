@@ -92,12 +92,18 @@ namespace hpx::parallel::util::detail {
 
     // The number of elements the loop body f handles in the time its task
     // size stands for, when the elements of IterOrR (an iterator or a range)
-    // are processed with the execution policy ExPolicy.
+    // are processed with the execution policy ExPolicy. One for a loop body
+    // that gives the run time of an element (see hpx::timed_task): the
+    // parameters object is given that time (see measure_iteration).
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename IterOrR,
         typename F>
     [[nodiscard]] std::size_t elements_per_task_size(F const& f) noexcept
     {
         using function_type = std::decay_t<F>;
+        if (hpx::traits::get_task_time<function_type>::call(f).count() > 0)
+        {
+            return 1;
+        }
         return elements_per_call<std::decay_t<ExPolicy>,
             typename partition_iterator<std::decay_t<IterOrR>>::type,
             function_type>::call(f,

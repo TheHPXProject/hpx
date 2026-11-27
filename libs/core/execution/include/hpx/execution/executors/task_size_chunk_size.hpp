@@ -74,12 +74,19 @@ namespace hpx::execution::experimental {
         // from the task size of the loop body.
         using uses_task_size = std::true_type;
 
-        // The run time of one iteration as given by the size of the loop body,
-        // f is not invoked. null_duration if the size is not known.
+        // The run time of one iteration as given by the loop body: its time
+        // if it gives one (see hpx::timed_task), else the time its size
+        // stands for; f is not invoked. null_duration if neither is known.
         template <typename Executor, typename F>
         static hpx::chrono::steady_duration measure_iteration(
             Executor&&, F&& f, std::size_t) noexcept
         {
+            if (auto const time =
+                    hpx::traits::get_task_time<std::decay_t<F>>::call(f);
+                time.count() > 0)
+            {
+                return time;
+            }
             auto const size =
                 hpx::traits::get_task_size<std::decay_t<F>>::call(f);
             if (size == hpx::threads::task_size::unknown)
@@ -105,13 +112,17 @@ namespace hpx::execution::experimental {
             {
                 return available_pus;
             }
-            auto const per_iteration = iteration_duration.value();
+            // in picoseconds: an iteration may run for less than a
+            // nanosecond
+            auto const per_iteration = iteration_duration.as_picoseconds();
 
             // the iterations one core needs, computed without multiplying by
             // count, which could overflow
             auto const [min_chunk_time, chunks_per_core] = get_values();
             auto const per_core =
-                min_chunk_time * static_cast<rep>(chunks_per_core);
+                std::chrono::duration_cast<hpx::chrono::picoseconds>(
+                    min_chunk_time) *
+                static_cast<hpx::chrono::picoseconds::rep>(chunks_per_core);
             auto const iterations_per_core =
                 static_cast<std::size_t>(per_core / per_iteration);
             std::size_t const cores =
@@ -130,7 +141,7 @@ namespace hpx::execution::experimental {
             {
                 return 0;    // use the default
             }
-            auto const per_iteration = iteration_duration.value();
+            auto const per_iteration = iteration_duration.as_picoseconds();
 
             // a single core runs the whole loop as one chunk, on the calling
             // thread
@@ -145,8 +156,12 @@ namespace hpx::execution::experimental {
             std::size_t const balanced = (count + num_chunks - 1) / num_chunks;
 
             // iterations that run for at least min_chunk_time, rounding up
+            auto const min_time =
+                std::chrono::duration_cast<hpx::chrono::picoseconds>(
+                    min_chunk_time);
             auto const min_iterations = static_cast<std::size_t>(
-                (min_chunk_time + per_iteration - duration(1)) / per_iteration);
+                (min_time + per_iteration - hpx::chrono::picoseconds(1)) /
+                per_iteration);
 
             return (std::min) (count, (std::max) (balanced, min_iterations));
         }

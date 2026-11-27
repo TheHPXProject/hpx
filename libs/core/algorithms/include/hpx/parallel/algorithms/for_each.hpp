@@ -673,6 +673,18 @@ struct hpx::traits::get_task_size<
     }
 };
 
+template <typename ExPolicy, typename F, typename Proj>
+struct hpx::traits::get_task_time<
+    hpx::parallel::detail::for_each_iteration<ExPolicy, F, Proj>>
+{
+    [[nodiscard]] static constexpr hpx::chrono::picoseconds call(
+        hpx::parallel::detail::for_each_iteration<ExPolicy, F, Proj> const&
+            f) noexcept
+    {
+        return get_task_time<std::decay_t<F>>::call(f.f_);
+    }
+};
+
 #if defined(HPX_HAVE_THREAD_DESCRIPTION)
 namespace hpx::traits {
 

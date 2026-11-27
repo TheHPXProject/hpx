@@ -7,8 +7,10 @@
 # The task sizes the algorithms give their worker tasks, see
 # task_size_checks.hpp
 set(tests task_sizes_multi_call task_sizes_no_function task_sizes_predicates
-          task_sizes_reduce_merge task_sizes_scans
+          task_sizes_reduce_merge task_sizes_scans task_sizes_timed
 )
+
+set(task_sizes_timed_PARAMETERS THREADS_PER_LOCALITY 4)
 
 foreach(test ${tests})
   set(sources ${test}.cpp)
