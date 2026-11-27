@@ -105,6 +105,11 @@ default has to be specified. Therefore ``$[section.key]`` refers to the property
 ``section.key``. If the property ``section.key`` is not set or empty, the overall
 expression will evaluate to an empty string.
 
+To write a literal ``${`` or ``$[`` in a property value, double the ``$``:
+``$${FOO}`` reads as ``${FOO}`` and ``$$[section.key]`` as ``$[section.key]``,
+and neither is expanded. Any other ``$``, including a ``$$`` that is not
+followed by ``{`` or ``[``, is taken as it is.
+
 .. note::
 
    Any property ``$[section.key:default]`` is evaluated whenever it is queried
