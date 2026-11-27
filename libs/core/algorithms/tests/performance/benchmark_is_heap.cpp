@@ -8,6 +8,7 @@
 
 #include <hpx/algorithm.hpp>
 #include <hpx/chrono.hpp>
+#include <hpx/datapar.hpp>
 #include <hpx/format.hpp>
 #include <hpx/init.hpp>
 #include <hpx/modules/testing.hpp>
@@ -26,6 +27,10 @@
 ///////////////////////////////////////////////////////////////////////////////
 unsigned int seed = (unsigned int) std::random_device{}();
 std::mt19937 _rand(seed);
+
+// The benchmarks store the found result here, as otherwise the compiler may
+// remove a call to is_heap whose result is never used
+bool volatile is_heap_res = false;
 ///////////////////////////////////////////////////////////////////////////////
 
 struct random_fill
@@ -83,13 +88,25 @@ int hpx_main(hpx::program_options::variables_map& vm)
             static_cast<int>((std::numeric_limits<std::size_t>::max)());
 
     hpx::util::perftests_report("hpx::is_heap", "seq", test_count,
-        [&] { (void) hpx::is_heap(seq, std::begin(v), std::end(v)); });
+        [&] { is_heap_res = hpx::is_heap(seq, std::begin(v), std::end(v)); });
+
+#if defined(HPX_HAVE_DATAPAR)
+    hpx::util::perftests_report("hpx::is_heap", "simd", test_count,
+        [&] { is_heap_res = hpx::is_heap(simd, std::begin(v), std::end(v)); });
+#endif
 
     hpx::util::perftests_report("hpx::is_heap", "par", test_count,
-        [&] { (void) hpx::is_heap(par, std::begin(v), std::end(v)); });
+        [&] { is_heap_res = hpx::is_heap(par, std::begin(v), std::end(v)); });
 
-    hpx::util::perftests_report("hpx::is_heap", "par_unseq", test_count,
-        [&] { (void) hpx::is_heap(par_unseq, std::begin(v), std::end(v)); });
+    hpx::util::perftests_report("hpx::is_heap", "par_unseq", test_count, [&] {
+        is_heap_res = hpx::is_heap(par_unseq, std::begin(v), std::end(v));
+    });
+
+#if defined(HPX_HAVE_DATAPAR)
+    hpx::util::perftests_report("hpx::is_heap", "par_simd", test_count, [&] {
+        is_heap_res = hpx::is_heap(par_simd, std::begin(v), std::end(v));
+    });
+#endif
 
     hpx::util::perftests_print_times();
 

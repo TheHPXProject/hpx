@@ -34,6 +34,8 @@ if(HPX_WITH_DATAPAR)
       for_loop_datapar
       generate_datapar
       generaten_datapar
+      is_heap_datapar
+      is_heap_until_datapar
       lexicographical_compare_datapar
       mismatch_binary_datapar
       mismatch_datapar

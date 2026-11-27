@@ -8,6 +8,7 @@
 
 #include <hpx/algorithm.hpp>
 #include <hpx/chrono.hpp>
+#include <hpx/datapar.hpp>
 #include <hpx/format.hpp>
 #include <hpx/init.hpp>
 #include <hpx/modules/testing.hpp>
@@ -91,6 +92,14 @@ int hpx_main(hpx::program_options::variables_map& vm)
                 hpx::execution::seq, std::begin(v), std::end(v)));
     });
 
+#if defined(HPX_HAVE_DATAPAR)
+    hpx::util::perftests_report("hpx::heap_until", "simd", test_count, [&] {
+        heap_until_pos = std::distance(std::begin(v),
+            hpx::is_heap_until(
+                hpx::execution::simd, std::begin(v), std::end(v)));
+    });
+#endif
+
     hpx::util::perftests_report("hpx::heap_until", "par", test_count, [&] {
         heap_until_pos = std::distance(std::begin(v),
             hpx::is_heap_until(
@@ -103,6 +112,14 @@ int hpx_main(hpx::program_options::variables_map& vm)
                 hpx::is_heap_until(
                     hpx::execution::par_unseq, std::begin(v), std::end(v)));
         });
+
+#if defined(HPX_HAVE_DATAPAR)
+    hpx::util::perftests_report("hpx::heap_until", "par_simd", test_count, [&] {
+        heap_until_pos = std::distance(std::begin(v),
+            hpx::is_heap_until(
+                hpx::execution::par_simd, std::begin(v), std::end(v)));
+    });
+#endif
 
     hpx::util::perftests_print_times();
 
