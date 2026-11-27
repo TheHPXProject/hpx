@@ -12,7 +12,6 @@
 #include <hpx/datastructures/tuple.hpp>
 #include <hpx/modules/serialization.hpp>
 #include <hpx/modules/type_support.hpp>
-#include <hpx/contracts.hpp>
 
 #include <cstddef>
 #include <memory>
@@ -118,7 +117,6 @@ namespace hpx::util::detail {
     {
         template <typename T>
         static void save_element(Archive& ar, T& t)
-          HPX_PRE(ar.archive_is_saving())
         {
             if constexpr (!std::is_default_constructible_v<T>)
             {

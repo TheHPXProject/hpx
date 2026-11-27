@@ -258,8 +258,7 @@ namespace hpx {
         //      false. [Note: Because the created stop_token object can never
         //      receive a stop request, no resources are allocated for a stop
         //      state]
-        constexpr stop_token() noexcept
-          = default;
+        constexpr stop_token() noexcept = default;
 
         stop_token(stop_token const& rhs) = default;
         stop_token(stop_token&&) noexcept = default;
