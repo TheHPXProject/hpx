@@ -590,12 +590,20 @@ namespace hpx::parallel {
                     return part_init;
                 };
 
+#if defined(HPX_HAVE_DATAPAR)
+                using loop_policy_type =
+                    decltype(hpx::execution::experimental::to_non_simd(
+                        std::declval<ExPolicy>()));
+#else
+                using loop_policy_type = std::decay_t<ExPolicy>;
+#endif
+
                 auto f3 = [op](zip_iterator part_begin, std::size_t part_size,
                               T val) mutable -> void {
                     FwdIter2 dst = get<1>(part_begin.get_iterator_tuple());
 
                     // MSVC 2015 fails if op is captured by reference
-                    util::const_loop_n<std::decay_t<ExPolicy>>(
+                    util::const_loop_n<loop_policy_type>(
                         dst, part_size, [=, &val](FwdIter2 it) mutable -> void {
                             *it = HPX_INVOKE(op, val, *it);
                         });
@@ -673,10 +681,18 @@ namespace hpx::parallel {
                     return part_init;
                 };
 
+#if defined(HPX_HAVE_DATAPAR)
+                using loop_policy_type =
+                    decltype(hpx::execution::experimental::to_non_simd(
+                        std::declval<ExPolicy>()));
+#else
+                using loop_policy_type = std::decay_t<ExPolicy>;
+#endif
+
                 auto f3 = [op](zip_iterator part_begin, std::size_t part_size,
                               value_type val) mutable -> void {
                     FwdIter2 dst = get<1>(part_begin.get_iterator_tuple());
-                    util::const_loop_n<std::decay_t<ExPolicy>>(
+                    util::const_loop_n<loop_policy_type>(
                         dst, part_size, [=, &val](FwdIter2 it) mutable -> void {
                             *it = HPX_INVOKE(op, val, *it);
                         });
