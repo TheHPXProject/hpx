@@ -132,10 +132,12 @@ namespace hpx_tune {
     // size, so every row gets the same ones, and without --pool-size one row
     // per configuration holds for pools of any size (a pool of half a NUMA
     // domain gets them as well as a whole one).
-    area_result tune_idle(po::variables_map const& vm,
-        tuning::machine_description const& /* machine */,
-        tuning::microbenchmark_options const& options, bool const verbose)
+    area_result tune_idle(area_context const& context)
     {
+        po::variables_map const& vm = context.vm;
+        tuning::microbenchmark_options const& options = context.options;
+        bool const verbose = context.verbose;
+
         std::vector<std::size_t> pool_sizes = {tuning::any_pool_size};
         if (vm.count("pool-size"))
             pool_sizes = vm["pool-size"].as<std::vector<std::size_t>>();
@@ -211,3 +213,8 @@ namespace hpx_tune {
                 configurations, pool_sizes, clock, spin, measured, settings)};
     }
 }    // namespace hpx_tune
+
+// the first area: it measures in this process, on which nothing of HPX runs
+HPX_TUNE_REGISTER_AREA(idle,
+    hpx_tune::area{"idle", "tune the scheduler's idle settings", 0,
+        &hpx_tune::idle_options, &hpx_tune::tune_idle, nullptr})

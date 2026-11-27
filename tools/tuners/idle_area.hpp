@@ -29,7 +29,5 @@ namespace hpx_tune {
     // for the configurations given on the command line (default: the
     // default scheduler), for the pool sizes given there, or else for pools
     // of any size.
-    area_result tune_idle(hpx::program_options::variables_map const& vm,
-        hpx::tuning::machine_description const& machine,
-        hpx::tuning::microbenchmark_options const& options, bool verbose);
+    area_result tune_idle(area_context const& context);
 }    // namespace hpx_tune

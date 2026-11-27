@@ -6,15 +6,15 @@
 
 // hpx_tune: measures the machine it runs on and writes HPX settings for it as
 // an ini file, to be passed to an HPX application with --hpx:config. The
-// settings come in areas, chosen on the command line; without an area option
-// every area the build supports is tuned:
-//
-//   --idle  the scheduler's idle settings (idle_area.hpp)
+// settings come in areas, each selected with --<area> (--idle: the
+// scheduler's idle settings, idle_area.hpp, ...); without an area option
+// every area the build has is tuned.
 //
 // This file is the driver: the command line, the order of the areas, the
-// host's fingerprint and the file. Each area lives in files of its own and
-// gives the driver its options and a function returning an area_result
-// (area.hpp). The measurements and the rules are those of the tuning module
+// host's fingerprint and the files. It knows no area by name: each area
+// lives in files of its own and registers itself (area.hpp) with its
+// options, the function that measures it, and the function its children run
+// (child.hpp). The measurements and the rules are those of the tuning module
 // (hpx/modules/tuning.hpp).
 
 #include <hpx/config.hpp>
@@ -25,7 +25,6 @@
 
 #include "area.hpp"
 #include "child.hpp"
-#include "idle_area.hpp"
 
 #include <chrono>
 #include <cstddef>
@@ -40,6 +39,7 @@
 namespace po = hpx::program_options;
 namespace tuning = hpx::tuning;
 
+using hpx_tune::area;
 using hpx_tune::area_result;
 
 namespace {
@@ -66,12 +66,15 @@ namespace {
     }
 
     // A child of an area (child.hpp) measures for that area: it starts the
-    // HPX runtime itself and writes its results for the parent. Each area
-    // that starts children adds its entry here.
-    int run_as_child_of(
-        std::string const& area, int /* argc */, char* /* argv */[])
+    // HPX runtime itself and writes its results for the parent.
+    int run_as_child_of(std::string const& name, int argc, char* argv[])
     {
-        std::cerr << "hpx_tune: no area '" << area << "' starts children\n";
+        for (area const& a : hpx_tune::registered_areas())
+        {
+            if (a.name == name && a.child_main != nullptr)
+                return a.child_main(argc, argv);
+        }
+        std::cerr << "hpx_tune: no area '" << name << "' starts children\n";
         return 1;
     }
 }    // namespace
@@ -80,24 +83,31 @@ int main(int argc, char* argv[])
 {
     // a child of an area: before the command line is parsed, as a child's
     // command line has HPX's options too
-    if (std::string const area = hpx_tune::child_area(argc, argv);
-        !area.empty())
+    if (std::string const child_of = hpx_tune::child_area(argc, argv);
+        !child_of.empty())
     {
-        return run_as_child_of(area, argc, argv);
+        return run_as_child_of(child_of, argc, argv);
     }
+
+    std::vector<area> const areas = hpx_tune::registered_areas();
 
     po::options_description general(
         "usage: hpx_tune [areas] [options]\n\n"
         "Measures this machine and writes HPX settings for it as an ini file\n"
-        "to be passed to an HPX application with --hpx:config. Without an\n"
-        "area option every area this build supports is tuned.\n\n"
+        "to be passed to an HPX application with --hpx:config. Writing it as\n"
+        ".hpx.ini (--output=.hpx.ini) makes the settings the defaults of the\n"
+        "HPX applications started in that directory, as HPX reads .hpx.ini\n"
+        "from the current and the home directory on its own. Without an\n"
+        "area option every area this build has is tuned.\n\n"
         "Areas and general options");
+    general.add_options()("help,h", "print this help");
+    for (area const& a : areas)
+        general.add_options()(a.name.c_str(), a.description.c_str());
     // clang-format off
     general.add_options()
-        ("help,h", "print this help")
-        ("idle", "tune the scheduler's idle settings")
         ("output,o", po::value<std::string>()->default_value("hpx-tuned.ini"),
-            "the ini file to write")
+            "the ini file to write (.hpx.ini: the default settings of HPX "
+            "applications started in its directory)")
         ("report", po::value<std::string>(),
             "also write every area's measurements to this JSON file")
         ("repeats,r", po::value<std::size_t>()->default_value(21),
@@ -106,7 +116,12 @@ int main(int argc, char* argv[])
     // clang-format on
 
     po::options_description desc;
-    desc.add(general).add(hpx_tune::idle_options());
+    desc.add(general);
+    for (area const& a : areas)
+    {
+        if (a.options != nullptr)
+            desc.add(a.options());
+    }
 
     po::variables_map vm;
     try
@@ -125,9 +140,16 @@ int main(int argc, char* argv[])
         return 0;
     }
 
-    // without an area option, every area this build supports
-    bool const all_areas = vm.count("idle") == 0;
-    bool const idle = all_areas || vm.count("idle") != 0;
+    // the areas selected on the command line, in their order; without an
+    // area option, every area this build has
+    std::vector<area> selected;
+    for (area const& a : areas)
+    {
+        if (vm.count(a.name) != 0)
+            selected.push_back(a);
+    }
+    if (selected.empty())
+        selected = areas;
 
     bool const verbose = vm.count("verbose") != 0;
     tuning::microbenchmark_options options;
@@ -165,10 +187,21 @@ int main(int argc, char* argv[])
     // The order of the areas matters: this process never starts the HPX
     // runtime (no HPX main wrapping, no hpx::init), so that the idle area
     // measures a machine on which nothing of HPX runs. The idle area
-    // therefore runs first; an area that starts processes or a runtime has
-    // to come after it.
-    if (idle)
-        add("idle", hpx_tune::tune_idle(vm, machine, options, verbose));
+    // therefore runs first; an area that starts processes or a runtime comes
+    // after it (area::order). An area that can't measure (an invalid option,
+    // a child that fails) throws; the tool then writes no file.
+    hpx_tune::area_context const context{
+        vm, machine, options, verbose, argv[0], fingerprint};
+    try
+    {
+        for (area const& a : selected)
+            add(a.name, a.tune(context));
+    }
+    catch (std::exception const& e)
+    {
+        std::cerr << "hpx_tune: " << e.what() << "\n";
+        return 1;
+    }
 
     std::vector<std::string> const fingerprint_comments =
         tuning::to_comments(fingerprint);
