@@ -55,8 +55,8 @@ namespace {
             {point(mib, 0.73, 0.75, 0), point(4 * mib, 2.83, 2.79, 0),
                 point(16 * mib, 13.4, 12.4, 0), point(64 * mib, 71.2, 71.6, 0)},
             {point(mib, 0.53, 0.71, 1), point(4 * mib, 1.87, 2.44, 1),
-                point(16 * mib, 9.61, 10.6, 1),
-                point(64 * mib, 61.0, 66.7, 1)}};
+                point(16 * mib, 9.61, 10.6, 1), point(64 * mib, 61.0, 66.7, 1)},
+            {}};
     }
 
     tuning::parcelport_measurements mpi()
@@ -65,8 +65,8 @@ namespace {
             {point(mib, 0.49, 0.62, 0), point(4 * mib, 1.97, 2.58, 0),
                 point(16 * mib, 9.56, 11.0, 0), point(64 * mib, 58.4, 66.1, 0)},
             {point(mib, 0.49, 0.64, 1), point(4 * mib, 2.05, 2.44, 1),
-                point(16 * mib, 9.63, 11.1, 1),
-                point(64 * mib, 61.1, 69.1, 1)}};
+                point(16 * mib, 9.63, 11.1, 1), point(64 * mib, 61.1, 69.1, 1)},
+            {}};
     }
 
     tuning::tuned_setting const* find(
