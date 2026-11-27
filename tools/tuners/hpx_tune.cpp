@@ -88,6 +88,9 @@ namespace {
     tuning::host_fingerprint read_profile(hpx::util::section const& file)
     {
         tuning::host_fingerprint profile;
+        // get_section throws if a section on the way (hpx.tuning) is missing
+        if (!file.has_section(tuning::fingerprint_section))
+            return profile;
         hpx::util::section const* const fingerprint =
             file.get_section(tuning::fingerprint_section);
         if (fingerprint == nullptr)
