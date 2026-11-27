@@ -78,7 +78,7 @@ double run_merge_benchmark_hpx(int const test_count, ExPolicy policy,
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-using picoseconds = std::chrono::duration<long long, std::pico>;
+using hpx::chrono::picoseconds;
 
 struct adaptive_chunk_size
 {
