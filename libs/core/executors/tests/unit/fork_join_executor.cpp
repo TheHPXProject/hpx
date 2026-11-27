@@ -484,6 +484,64 @@ void test_executor(hpx::threads::thread_priority priority,
     test_processing_mask(priority, stacksize, schedule);
 }
 
+// Every index of the shape is processed exactly once, also when the work is
+// unevenly distributed (only the indices of the first worker take time, the
+// others have to steal them in the dynamic schedule), and the results land
+// at the right positions.
+void test_bulk_sync_each_index_once(fork_join_executor::loop_schedule schedule)
+{
+    std::cerr << "test_bulk_sync_each_index_once, schedule = " << schedule
+              << "\n";
+
+    fork_join_executor exec{hpx::threads::thread_priority::bound,
+        hpx::threads::thread_stacksize::small_, schedule};
+    std::size_t const num_threads = hpx::get_num_worker_threads();
+
+    for (std::size_t const n : {std::size_t(0), std::size_t(1), std::size_t(3),
+             std::size_t(4), std::size_t(5), std::size_t(64), std::size_t(1001),
+             std::size_t(100003)})
+    {
+        for (bool const skewed : {false, true})
+        {
+            std::vector<std::atomic<int>> counts(n);
+            std::size_t const slow = skewed ? n / num_threads + 1 : 0;
+
+            auto f = [&](std::size_t const i) {
+                if (i < slow)
+                {
+                    hpx::chrono::high_resolution_timer const t;
+                    while (t.elapsed_nanoseconds() < 1000)
+                    {
+                    }
+                }
+                ++counts[i];
+                return i;
+            };
+
+            std::vector<std::size_t> const results =
+                hpx::parallel::execution::bulk_sync_execute(
+                    exec, f, hpx::util::counting_shape(std::size_t(0), n));
+
+            HPX_TEST_EQ(results.size(), n);
+            for (std::size_t i = 0; i != n; ++i)
+            {
+                HPX_TEST_EQ(counts[i].load(), 1);
+                HPX_TEST_EQ(results[i], i);
+                counts[i] = 0;
+            }
+
+            hpx::parallel::execution::bulk_sync_execute(
+                exec, [&](std::size_t const i) { f(i); },
+                hpx::util::counting_shape(std::size_t(0), n));
+
+            for (std::size_t i = 0; i != n; ++i)
+            {
+                HPX_TEST_EQ(counts[i].load(), 1);
+            }
+        }
+    }
+}
+
 void test_fork_join_static_large_range()
 {
     // Regression test for #6922
@@ -546,6 +604,9 @@ int hpx_main()
 
     // Call regression test for #6922
     test_fork_join_static_large_range();
+
+    test_bulk_sync_each_index_once(fork_join_executor::loop_schedule::static_);
+    test_bulk_sync_each_index_once(fork_join_executor::loop_schedule::dynamic);
 
     // Using thread_priority::low hangs for unknown reasons.
     for (auto const priority : {

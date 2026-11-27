@@ -7,9 +7,11 @@
 #include <hpx/config.hpp>
 #include <hpx/execution/detail/task_size_chunk_size_defaults.hpp>
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cstddef>
+#include <vector>
 
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx::execution::experimental::detail {
@@ -31,6 +33,13 @@ namespace hpx::execution::experimental::detail {
             default_min_chunk_time.count());
         std::atomic<std::size_t> chunks_per_core(default_chunks_per_core);
         std::atomic<std::size_t> copy_bytes_per_ns(default_copy_bytes_per_ns);
+
+        // the memory rates (set_memory_rates): the rows first, then their
+        // number, which a reader loads first
+        constexpr std::size_t max_memory_rates = 8;
+        std::atomic<std::size_t> memory_rate_limits[max_memory_rates] = {};
+        std::atomic<std::size_t> memory_rate_values[max_memory_rates] = {};
+        std::atomic<std::size_t> memory_rate_count(0);
     }    // namespace
 
     task_size_chunk_size_defaults get_task_size_chunk_size_defaults() noexcept
@@ -54,9 +63,41 @@ namespace hpx::execution::experimental::detail {
             std::memory_order_relaxed);
     }
 
+    void set_memory_rates(std::vector<memory_rate> const& rates) noexcept
+    {
+        std::size_t const count = (std::min) (rates.size(), max_memory_rates);
+        memory_rate_count.store(0, std::memory_order_release);
+        for (std::size_t i = 0; i != count; ++i)
+        {
+            memory_rate_limits[i].store(
+                rates[i].bytes_per_core, std::memory_order_relaxed);
+            memory_rate_values[i].store(
+                rates[i].bytes_per_ns == 0 ? 1 : rates[i].bytes_per_ns,
+                std::memory_order_relaxed);
+        }
+        memory_rate_count.store(count, std::memory_order_release);
+    }
+
+    std::size_t get_copy_bytes_per_ns(
+        std::size_t const footprint_per_core) noexcept
+    {
+        std::size_t const count =
+            memory_rate_count.load(std::memory_order_acquire);
+        for (std::size_t i = 0; i != count; ++i)
+        {
+            if (footprint_per_core <=
+                memory_rate_limits[i].load(std::memory_order_relaxed))
+            {
+                return memory_rate_values[i].load(std::memory_order_relaxed);
+            }
+        }
+        return copy_bytes_per_ns.load(std::memory_order_relaxed);
+    }
+
     void reset_task_size_chunk_size_defaults() noexcept
     {
         set_task_size_chunk_size_defaults({default_min_chunk_time,
             default_chunks_per_core, default_copy_bytes_per_ns});
+        set_memory_rates({});
     }
 }    // namespace hpx::execution::experimental::detail

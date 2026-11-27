@@ -102,13 +102,18 @@ namespace hpx::segmented {
             hpx::identity_v, std::true_type{});
     }
 
+    // The execution policy overloads of the segmented algorithms are
+    // constrained with concepts and take values by value. Overloads for
+    // specific execution policies (e.g. the Thrust policies) with the same
+    // parameters and a more constrained policy concept are then preferred
+    // over them, and the generic Thrust dispatch (hpx/thrust/algorithms.hpp,
+    // Args&&...) doesn't bind the arguments better than they do.
     HPX_CXX_EXPORT template <typename ExPolicy, typename SegIter, typename T>
-        requires(hpx::is_execution_policy_v<ExPolicy> &&
-            hpx::traits::is_iterator_v<SegIter> &&
-            hpx::traits::is_segmented_iterator_v<SegIter>)
+        requires(
+            hpx::execution_policy<ExPolicy> && hpx::segmented_iterator<SegIter>)
     hpx::parallel::util::detail::algorithm_result_t<ExPolicy, SegIter>
-    hpx_invoke(hpx::fill_t, ExPolicy&& policy, SegIter first, SegIter last,
-        T const& value)
+    hpx_invoke(
+        hpx::fill_t, ExPolicy&& policy, SegIter first, SegIter last, T value)
     {
         static_assert(std::forward_iterator<SegIter>,
             "Requires at least forward iterator.");
@@ -136,13 +141,11 @@ namespace hpx::segmented {
 
     HPX_CXX_EXPORT template <typename ExPolicy, typename SegIter, typename Size,
         typename T>
-        requires(hpx::is_execution_policy_v<ExPolicy> &&
-            hpx::traits::is_iterator_v<SegIter> &&
-            hpx::traits::is_segmented_iterator_v<SegIter> &&
-            std::is_integral_v<Size>)
+        requires(hpx::execution_policy<ExPolicy> &&
+            hpx::segmented_iterator<SegIter> && std::is_integral_v<Size>)
     hpx::parallel::util::detail::algorithm_result_t<ExPolicy, SegIter>
-    hpx_invoke(hpx::fill_n_t, ExPolicy&& policy, SegIter first, Size count,
-        T const& value)
+    hpx_invoke(
+        hpx::fill_n_t, ExPolicy&& policy, SegIter first, Size count, T value)
     {
         static_assert(std::forward_iterator<SegIter>,
             "Requires at least forward iterator.");

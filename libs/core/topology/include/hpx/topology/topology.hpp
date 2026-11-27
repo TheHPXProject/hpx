@@ -98,6 +98,24 @@ namespace hpx::threads {
 
 #include <hpx/config/warnings_prefix.hpp>
 
+    /// The cache of one level above a processing unit (see
+    /// topology::get_cache_info).
+    HPX_CXX_CORE_EXPORT struct cache_info
+    {
+        /// The size of the cache in bytes, 0 if the processing unit has no
+        /// cache of the level.
+        std::size_t size = 0;
+
+        /// The size of a cache line in bytes.
+        std::size_t line_size = 0;
+
+        /// The number of cores that share the cache.
+        std::size_t cores = 0;
+
+        /// The number of processing units that share the cache.
+        std::size_t pus = 0;
+    };
+
     HPX_CXX_CORE_EXPORT struct HPX_CORE_EXPORT topology
     {
         topology();
@@ -316,6 +334,18 @@ namespace hpx::threads {
 
         /// Return the size of the cache associated with the given mask.
         std::size_t get_cache_size(mask_cref_type mask, int level) const;
+
+        /// Return the cache of the given level (1 to 5) above the given
+        /// processing unit: its size, the size of its lines, and the number
+        /// of cores and processing units that share it, so that a core's
+        /// share of a cache is its size divided by its cores. All members
+        /// are 0 if the processing unit has no cache of the level, or if the
+        /// level or the processing unit don't exist.
+        ///
+        /// \param num_pu [in] The number of the processing unit (as for
+        ///               get_pu_number).
+        /// \param level  [in] The level of the cache, 1 to 5.
+        cache_info get_cache_info(std::size_t num_pu, int level) const;
 
         mask_type get_cpubind_mask(error_code& ec = throws) const;
         mask_type get_cpubind_mask(

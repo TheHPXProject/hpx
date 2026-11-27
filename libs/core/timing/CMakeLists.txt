@@ -8,9 +8,9 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 # Default location is $HPX_ROOT/libs/timing/include
 set(timing_headers
-    hpx/timing/high_resolution_clock.hpp hpx/timing/high_resolution_timer.hpp
-    hpx/timing/scoped_timer.hpp hpx/timing/steady_clock.hpp
-    hpx/timing/tick_counter.hpp
+    hpx/timing/durations.hpp hpx/timing/high_resolution_clock.hpp
+    hpx/timing/high_resolution_timer.hpp hpx/timing/scoped_timer.hpp
+    hpx/timing/steady_clock.hpp hpx/timing/tick_counter.hpp
 )
 
 # Default location is $HPX_ROOT/libs/timing/include_compatibility

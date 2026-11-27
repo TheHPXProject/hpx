@@ -124,6 +124,12 @@ namespace hpx::util {
                 return traits::get_task_size<F, Size>::call(_f);
             }
 
+            [[nodiscard]] constexpr hpx::chrono::picoseconds get_task_time()
+                const noexcept
+            {
+                return traits::get_task_time<F>::call(_f);
+            }
+
         public:    // exposition-only
             F _f;
 #if defined(HPX_DEBUG)
@@ -190,6 +196,16 @@ namespace hpx::traits {
             util::detail::one_shot_wrapper<F> const& f) noexcept
         {
             return f.template get_task_size<Size>();
+        }
+    };
+
+    template <typename F>
+    struct get_task_time<util::detail::one_shot_wrapper<F>>
+    {
+        [[nodiscard]] static constexpr hpx::chrono::picoseconds call(
+            util::detail::one_shot_wrapper<F> const& f) noexcept
+        {
+            return f.get_task_time();
         }
     };
 }    // namespace hpx::traits

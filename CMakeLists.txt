@@ -75,7 +75,11 @@ set(HPX_VERSION_FULL
 )
 
 set(HPX_LIBRARY_VERSION "${HPX_VERSION}")
-set(HPX_SOVERSION ${HPX_VERSION_MAJOR})
+# HPX does not keep its ABI stable between any two releases, so the SONAME of
+# its libraries holds the full version: a binary built against one release
+# doesn't start with the libraries of another, instead of silently using a
+# mismatched ABI
+set(HPX_SOVERSION "${HPX_VERSION}")
 set(HPX_PACKAGE_NAME HPX)
 # To keep track of the hpx_root when other subprojects are declared
 set(HPX_SOURCE_DIR "${PROJECT_SOURCE_DIR}")

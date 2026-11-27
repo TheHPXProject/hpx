@@ -771,19 +771,13 @@ namespace hpx::execution::experimental::detail {
             std::uint32_t chunk_size;
             std::uint32_t num_chunks;
 
-            // For sequential policy: single chunk covering entire range
+            // For sequential policy: single chunk covering entire range, also
+            // for bulk_unchunked (the chunk invokes f once per element, but
+            // takes a single item from the queue instead of one per element)
             if constexpr (!OperationState::is_parallel)
             {
-                if constexpr (OperationState::is_chunked)
-                {
-                    chunk_size = size;
-                    num_chunks = 1;
-                }
-                else
-                {
-                    chunk_size = 1;
-                    num_chunks = size;
-                }
+                chunk_size = size;
+                num_chunks = 1;
                 op_state->num_worker_threads = 1;
             }
             else if constexpr (OperationState::is_chunked)

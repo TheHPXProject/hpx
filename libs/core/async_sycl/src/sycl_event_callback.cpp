@@ -264,6 +264,24 @@ namespace hpx { namespace sycl { namespace experimental { namespace detail {
         return work_count;
     }
 
+    namespace {
+
+        // the polling function this module registers with a scheduler
+        hpx::threads::policies::detail::polling_status registered_poll(
+            void* /*context*/)
+        {
+            return hpx::sycl::experimental::detail::poll();
+        }
+
+        std::size_t registered_work_count(void* /*context*/)
+        {
+            return get_work_count();
+        }
+
+        constexpr hpx::threads::policies::detail::polling_function
+            polling_function{&registered_poll, &registered_work_count, nullptr};
+    }    // namespace
+
     // -------------------------------------------------------------
     /// Register SYCL event polling function with the scheduler (see
     /// scheduler_base.hpp)
@@ -282,8 +300,7 @@ namespace hpx { namespace sycl { namespace experimental { namespace detail {
         optional_queue.emplace(
             ::sycl::default_selector_v, ::sycl::property::queue::in_order{});
         auto* sched = pool.get_scheduler();
-        sched->set_sycl_polling_functions(
-            &hpx::sycl::experimental::detail::poll, &get_work_count);
+        sched->add_polling_function(&polling_function);
     }
 
     // -------------------------------------------------------------
@@ -311,7 +328,7 @@ namespace hpx { namespace sycl { namespace experimental { namespace detail {
         --get_register_polling_count();
 #endif
         auto* sched = pool.get_scheduler();
-        sched->clear_sycl_polling_function();
+        sched->remove_polling_function(&polling_function);
 
         std::unique_lock<detail::sycl_default_queue_mutex_type> queue_write_lk(
             detail::get_default_queue_mtx());

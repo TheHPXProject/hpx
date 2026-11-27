@@ -16,6 +16,7 @@
 
 #include <cstddef>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -121,6 +122,73 @@ void move_algo_tests_with_policy_async(std::size_t size,
     compare_vectors(v1, v3);
 }
 
+template <typename ExPolicy>
+void check_move_partition_layout(ExPolicy const& policy,
+    std::vector<hpx::id_type> const& input_owners,
+    std::vector<hpx::id_type> const& output_owners)
+{
+    hpx::partitioned_vector<int> input(
+        6, hpx::explicit_container_layout({2, 4}, input_owners));
+    hpx::partitioned_vector<int> output(
+        8, -1, hpx::explicit_container_layout({4, 4}, output_owners));
+
+    auto position = input.begin();
+    for (int value = 1; value <= 6; ++value, ++position)
+    {
+        *position = value;
+    }
+
+    auto operation =
+        hpx::move(policy, input.begin(), input.end(), output.begin());
+    auto result = [&]() {
+        if constexpr (hpx::is_async_execution_policy_v<ExPolicy>)
+        {
+            return operation.get();
+        }
+        else
+        {
+            return operation;
+        }
+    }();
+
+    HPX_TEST(result == output.begin() + 6);
+    position = output.begin();
+    for (int index = 0; index != 8; ++index, ++position)
+    {
+        int const expected = index < 6 ? index + 1 : -1;
+        HPX_TEST_EQ(*position, expected);
+    }
+}
+
+void move_partition_layout_tests()
+{
+    std::vector<hpx::id_type> localities = hpx::find_all_localities();
+    std::vector<hpx::id_type> input_owners(2, hpx::find_here());
+    std::vector<hpx::id_type> output_owners(2, hpx::find_here());
+
+    check_move_partition_layout(
+        hpx::execution::seq, input_owners, output_owners);
+    check_move_partition_layout(
+        hpx::execution::par, input_owners, output_owners);
+    check_move_partition_layout(
+        hpx::execution::seq(hpx::execution::task), input_owners, output_owners);
+    check_move_partition_layout(
+        hpx::execution::par(hpx::execution::task), input_owners, output_owners);
+
+    if (localities.size() > 1)
+    {
+        input_owners[1] = localities[1];
+        check_move_partition_layout(
+            hpx::execution::seq, input_owners, output_owners);
+        check_move_partition_layout(
+            hpx::execution::par, input_owners, output_owners);
+        check_move_partition_layout(hpx::execution::seq(hpx::execution::task),
+            input_owners, output_owners);
+        check_move_partition_layout(hpx::execution::par(hpx::execution::task),
+            input_owners, output_owners);
+    }
+}
+
 template <typename T, typename DistPolicy>
 void move_tests_with_policy(
     std::size_t size, std::size_t localities, DistPolicy const& policy, T value)
@@ -187,8 +255,45 @@ void move_tests(T value, T other_value)
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+struct move_assignment_result
+{
+    int value = 0;
+
+    move_assignment_result& operator=(int&& input)
+    {
+        value = input;
+        return *this;
+    }
+
+    move_assignment_result& operator=(int const&& input)
+    {
+        value = -input;
+        return *this;
+    }
+};
+
+template <typename InputIterator>
+void captured_move_constness_test(int expected)
+{
+    using output_iterator = std::vector<move_assignment_result>::iterator;
+    using algorithm =
+        hpx::parallel::detail::captured_move<InputIterator, output_iterator>;
+    std::vector<move_assignment_result> output(1);
+    HPX_TEST_EQ(
+        algorithm::sequential(hpx::execution::seq, {42}, output.begin()),
+        std::size_t(1));
+    HPX_TEST_EQ(output[0].value, expected);
+    output[0].value = 0;
+    HPX_TEST_EQ(algorithm::parallel(hpx::execution::par, {42}, output.begin()),
+        std::size_t(1));
+    HPX_TEST_EQ(output[0].value, expected);
+}
+
 int main()
 {
+    captured_move_constness_test<std::vector<int>::iterator>(42);
+    captured_move_constness_test<std::vector<int>::const_iterator>(-42);
+    move_partition_layout_tests();
     move_tests<double>(43, 42);
     move_tests<int>(43, 42);
     move_tests<std::string>("test", "not_test");

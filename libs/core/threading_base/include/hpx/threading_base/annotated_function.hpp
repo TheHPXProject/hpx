@@ -177,6 +177,18 @@ struct hpx::traits::get_task_size<hpx::detail::annotated_function<F>, Size>
     }
 };
 
+template <typename F>
+struct hpx::traits::get_task_time<hpx::detail::annotated_function<F>>
+{
+    [[nodiscard]] static constexpr hpx::chrono::picoseconds call(
+        hpx::detail::annotated_function<F> const& f) noexcept
+    {
+        return get_task_time<
+            typename hpx::detail::annotated_function<F>::fun_type>::call(f
+                .get_bound_function());
+    }
+};
+
 template <typename F, hpx::threads::thread_stacksize Default>
 struct hpx::traits::get_stack_size<hpx::detail::annotated_function<F>, Default>
   : get_stack_size<typename hpx::detail::annotated_function<F>::fun_type,

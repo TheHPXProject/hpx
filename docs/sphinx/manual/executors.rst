@@ -696,6 +696,49 @@ instead of being spread over all cores:
                      hpx::execution::experimental::task_size_chunk_size()),
        v.begin(), v.end(), hpx::nano_task([](int& i) { ++i; }));
 
+A size stands for a range of run times a hundred times wide: a loop body of a
+quarter of a nanosecond is nano, and so is one of 30 nanoseconds.
+``hpx::timed_task(f, time)`` gives a function the run time of one of its calls
+instead, as any ``std::chrono`` duration, also one below a nanosecond
+(``hpx::chrono::picoseconds``). The function has the size its time falls into,
+so the scheduler sees a size as before, and ``task_size_chunk_size`` takes the
+time itself as the run time of one iteration. For a loop body the time is that
+of one element of the loop, whatever the execution policy.
+``hpx::traits::get_task_time`` reads the time, which is zero for a function
+that gives none:
+
+.. code-block:: c++
+
+   // adding two doubles takes about a quarter of a nanosecond
+   hpx::transform(hpx::execution::par.with(
+                      hpx::execution::experimental::task_size_chunk_size()),
+       a.begin(), a.end(), b.begin(), c.begin(),
+       hpx::timed_task([](double x, double y) { return x + y; },
+           std::chrono::duration<double, std::nano>(0.25)));
+
+The algorithms give the operations of the library that do little more than
+move their operands the run time of the bytes they read and write, at
+``hpx.task_size_chunk_size.copy_bytes_per_ns`` (16 bytes in a nanosecond by
+default, each byte read and written, so copying a double takes half a
+nanosecond): copying and moving trivially copyable elements, ``fill``,
+``iota``, ``swap_ranges`` and ``reverse`` on builtin elements, and the builtin
+arithmetic function objects (``std::plus``, ``std::minus``,
+``std::multiplies``, ``std::negate`` and the bitwise ones) called with builtin
+elements, counting the elements an algorithm reads and, for ``transform`` and
+``adjacent_difference``, the element it writes: adding two doubles into a
+third takes three quarters of a nanosecond. Consecutive loops over the same
+data are then sized alike. Comparisons, logical operations, ``std::divides``
+and ``std::modulus`` stay nano.
+
+How fast a core moves data depends on where the data is. With the entries
+``copy_bytes_per_ns_l1`` to ``copy_bytes_per_ns_memory`` of
+``hpx.task_size_chunk_size`` (see :ref:`ini_hpx_task_size_chunk_size`),
+``task_size_chunk_size`` takes the rate from the loop's footprint: the whole
+loop's data on one core decides whether the loop runs on more than one core,
+and each core's share of the data, compared with its share of each cache
+(``hpx::threads::topology::get_cache_info``), how fast it runs there. A time
+given with ``hpx::timed_task`` is used as it is.
+
 By default, ``task_size_chunk_size`` makes chunks of at least 2.5
 microseconds and gives each core 8 of them. Values given to its
 constructor replace these defaults for one loop, the configuration entries
@@ -753,7 +796,9 @@ Wrappers forward the size of the function they wrap. The ones |hpx| provides
 the parallel algorithms create around their loop bodies, for instance) do. A
 wrapper of your own can do the same by specializing
 ``hpx::traits::get_task_size``, the same way wrappers forward annotations with
-``hpx::traits::get_function_annotation``. It derives from the specialization
+``hpx::traits::get_function_annotation``; a time given with
+``hpx::timed_task`` is forwarded by specializing ``hpx::traits::get_task_time``
+the same way. It derives from the specialization
 for the wrapped function, which gives it ``value``, and forwards ``call``:
 
 .. code-block:: c++

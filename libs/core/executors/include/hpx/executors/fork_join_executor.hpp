@@ -667,6 +667,30 @@ namespace hpx::execution::experimental {
                     tstate.store(state, std::memory_order_release);
                 }
 
+                // Invoke the element function for the elements [first, last)
+                // of the shape.
+                static void invoke_range(region_data& data, F& element_function,
+                    S const& shape, Tuple& argument_pack, std::size_t first,
+                    std::size_t const last)
+                {
+                    auto it = std::next(hpx::util::begin(shape), first);
+                    for (; first != last; ++first, ++it)
+                    {
+                        if constexpr (std::is_void_v<Result>)
+                        {
+                            invoke_helper(index_pack_type{}, element_function,
+                                *it, argument_pack);
+                        }
+                        else
+                        {
+                            auto& results =
+                                *static_cast<Result*>(data.results_);
+                            results[first] = invoke_helper(index_pack_type{},
+                                element_function, *it, argument_pack);
+                        }
+                    }
+                }
+
                 // Main entry point for a single parallel region (static
                 // scheduling).
                 static void call_static(region_data_type& rdata,
@@ -689,7 +713,7 @@ namespace hpx::execution::experimental {
                             // Set up the local queues and state.
                             std::size_t const size = hpx::util::size(shape);
 
-                            auto part_begin =
+                            auto const part_begin =
                                 (thread_index * size) / num_threads;
                             auto const part_end =
                                 ((thread_index + 1) * size) / num_threads;
@@ -699,24 +723,8 @@ namespace hpx::execution::experimental {
                             // Process local items.
                             HPX_TRACING_MARK_EVENT(
                                 "fork_join_executor::call_static");
-                            for (; part_begin != part_end; ++part_begin)
-                            {
-                                auto it = std::next(
-                                    hpx::util::begin(shape), part_begin);
-                                if constexpr (std::is_void_v<Result>)
-                                {
-                                    invoke_helper(index_pack_type{},
-                                        element_function, *it, argument_pack);
-                                }
-                                else
-                                {
-                                    auto& results =
-                                        *static_cast<Result*>(data.results_);
-                                    results[part_begin] = invoke_helper(
-                                        index_pack_type{}, element_function,
-                                        *it, argument_pack);
-                                }
-                            }
+                            invoke_range(data, element_function, shape,
+                                argument_pack, part_begin, part_end);
                         },
                         [&](std::exception_ptr&& ep) {
                             std::lock_guard<decltype(exception_mutex)> l(
@@ -762,27 +770,27 @@ namespace hpx::execution::experimental {
 
                             set_state(data.state_, thread_state::active);
 
+                            // Items are taken in chunks of 1/num_threads of
+                            // the items left in a queue (but at least one), a
+                            // single atomic operation per chunk. The chunks
+                            // shrink as a queue drains, which leaves enough
+                            // items for the other workers to steal: even if all
+                            // the work sits in one queue, each worker can take
+                            // a share of it.
+                            auto const divisor =
+                                static_cast<std::uint32_t>(num_threads);
+
                             // Process local items first.
                             HPX_TRACING_MARK_EVENT(
                                 "fork_join_executor::call_dynamic");
-                            hpx::optional<std::uint32_t> index;
-                            while ((index = local_queue.pop_left()))
+                            hpx::optional<
+                                std::pair<std::uint32_t, std::uint32_t>>
+                                chunk;
+                            while (
+                                (chunk = local_queue.pop_left_chunk(divisor)))
                             {
-                                auto it =
-                                    std::next(hpx::util::begin(shape), *index);
-                                if constexpr (std::is_void_v<Result>)
-                                {
-                                    invoke_helper(index_pack_type{},
-                                        element_function, *it, argument_pack);
-                                }
-                                else
-                                {
-                                    auto& results =
-                                        *static_cast<Result*>(data.results_);
-                                    results[*index] = invoke_helper(
-                                        index_pack_type{}, element_function,
-                                        *it, argument_pack);
-                                }
+                                invoke_range(data, element_function, shape,
+                                    argument_pack, chunk->first, chunk->second);
                             }
 
                             // As loop schedule is dynamic, steal from neighboring
@@ -803,25 +811,12 @@ namespace hpx::execution::experimental {
                                 queue_type& neighbor_queue =
                                     queues[neighbor_index].data_;
 
-                                while ((index = neighbor_queue.pop_right()))
+                                while ((chunk = neighbor_queue.pop_right_chunk(
+                                            divisor)))
                                 {
-                                    auto it = std::next(
-                                        hpx::util::begin(shape), *index);
-
-                                    if constexpr (std::is_void_v<Result>)
-                                    {
-                                        invoke_helper(index_pack_type{},
-                                            element_function, *it,
-                                            argument_pack);
-                                    }
-                                    else
-                                    {
-                                        auto& results = *static_cast<Result*>(
-                                            data.results_);
-                                        results[*index] = invoke_helper(
-                                            index_pack_type{}, element_function,
-                                            *it, argument_pack);
-                                    }
+                                    invoke_range(data, element_function, shape,
+                                        argument_pack, chunk->first,
+                                        chunk->second);
                                 }
                             }
                         },

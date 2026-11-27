@@ -163,6 +163,17 @@ struct hpx::traits::get_task_size<
     }
 };
 
+template <typename F, hpx::threads::thread_stacksize StackSize>
+struct hpx::traits::get_task_time<
+    hpx::threads::stack_sized_function<F, StackSize>>
+{
+    [[nodiscard]] static constexpr hpx::chrono::picoseconds call(
+        hpx::threads::stack_sized_function<F, StackSize> const& f) noexcept
+    {
+        return get_task_time<F>::call(f.f);
+    }
+};
+
 namespace hpx::threads::detail {
 
     // Replace stack_size with the stack size of f if f has one. The stack size

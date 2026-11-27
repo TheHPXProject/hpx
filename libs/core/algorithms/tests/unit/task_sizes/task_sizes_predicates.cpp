@@ -91,7 +91,10 @@ void test_predicate_sizes()
         },
         task_size::medium);
 
-    // adjacent_find, adjacent_difference
+    // adjacent_find, adjacent_difference; adjacent_difference subtracts with
+    // std::minus, a builtin arithmetic operation, which has the run time of
+    // the bytes it reads and writes: an int read and one written (0.25 ns), so
+    // 100 chunks of 100 make a small task
     check_only_size(
         [&] { hpx::adjacent_find(by_100, v.begin(), v.end()).get(); },
         task_size::medium);
@@ -100,7 +103,7 @@ void test_predicate_sizes()
             hpx::adjacent_difference(by_100, v.begin(), v.end(), out.begin())
                 .get();
         },
-        task_size::medium);
+        task_size::small_);
 
     // is_sorted, is_heap, is_partitioned
     check_only_size([&] { hpx::is_sorted(by_100, v.begin(), v.end()).get(); },

@@ -7,6 +7,7 @@
 
 set(tests
     execution_agent
+    polling_functions
     scheduling_policy_idle_step
     set_thread_affinity
     set_thread_state_timed_self
@@ -17,6 +18,7 @@ set(tests
     thread_description_address
     thread_exit_callbacks
     thread_data_is_background
+    timed_function
 )
 
 if(HPX_WITH_TRACY)

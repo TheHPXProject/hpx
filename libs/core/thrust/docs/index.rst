@@ -101,6 +101,60 @@ as action arguments.
   memory (see below) is sent from and received into its own memory, without
   staging copies.
 
+Several GPUs per Locality
+-------------------------
+
+A ``device_vector`` is sent from the GPU its memory is on, whatever GPU is
+current. It is received on
+
+#. the GPU the memory of the receiving vector is on, if it has memory (a
+   vector deserialized into an existing object),
+#. for an argument of an action, the GPU of the target of the component the
+   action is invoked on: a component names its target with a ``get_target()``
+   member function returning, for instance, an
+   ``hpx::cuda::experimental::target``, or with a specialization of
+   ``hpx::traits::component_target``,
+#. for the result of a remote call, the GPU of the default target
+   (``hpx::cuda::experimental::get_default_target()``) of the locality that
+   made the call. All threads share the default target: set it before making
+   calls, not while calls are in flight,
+#. else the GPU current on the thread that decodes the parcel.
+
+.. code-block:: c++
+
+    #include <hpx/include/components.hpp>
+    #include <hpx/modules/async_cuda.hpp>
+    #include <hpx/modules/thrust.hpp>
+
+    struct partition : hpx::components::component_base<partition>
+    {
+        partition() = default;
+        explicit partition(int device)
+          : target_(device)
+        {
+        }
+
+        // device_vector arguments of the actions of this component are
+        // received on this GPU
+        hpx::cuda::experimental::target const& get_target() const noexcept
+        {
+            return target_;
+        }
+
+        void set(thrust::device_vector<double> const& data);
+        HPX_DEFINE_COMPONENT_ACTION(partition, set)
+
+        hpx::cuda::experimental::target target_;
+    };
+
+A target stands for the GPU its ``native_handle().get_device()`` returns if
+that is an integer (see ``hpx::traits::target_device``); other targets, for
+instance ``hpx::compute::host::target``, stand for none. Results are received
+on the default target's GPU only if their type holds device data
+(``hpx::traits::has_device_data``, true for ``thrust::device_vector``):
+specialize it for other result types holding device vectors, for instance a
+``struct`` with a ``device_vector`` member.
+
 Pooled Memory
 =============
 

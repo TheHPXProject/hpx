@@ -680,14 +680,13 @@ namespace hpx::threads::detail {
                 may_exit = false;
             }
 
-#if defined(HPX_HAVE_MODULE_ASYNC_MPI) ||                                      \
-    defined(HPX_HAVE_MODULE_ASYNC_CUDA) || defined(HPX_HAVE_MODULE_ASYNC_SYCL)
+            // the registered polling functions (one load and a branch if
+            // there are none)
             if (scheduler.custom_polling_function() ==
                 policies::detail::polling_status::busy)
             {
                 idle_loop_count = 0;
             }
-#endif
         }
     }
 }    // namespace hpx::threads::detail
