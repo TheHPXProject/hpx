@@ -10,7 +10,6 @@
 
 #include <hpx/hpx_main.hpp>
 
-#include <algorithm>
 #include <cstddef>
 #include <string>
 #include <vector>
@@ -95,13 +94,20 @@ void test_long_comments()
     std::size_t begin = 0;
     std::size_t lines = 0;
     std::string comments;
+    // the pieces of the long word: comment lines of nothing but 'x'
+    std::size_t long_word_pieces = 0;
     while (begin < ini.size())
     {
         std::size_t const end = ini.find('\n', begin);
         std::string const line = ini.substr(begin, end - begin);
         HPX_TEST_LTE(line.size(), tuning::max_comment_line);
         if (line.size() > 2 && line[0] == '#')
-            comments += line.substr(line.find_first_not_of("# ")) + " ";
+        {
+            std::string const text = line.substr(line.find_first_not_of("# "));
+            comments += text + " ";
+            if (text.find_first_not_of('x') == std::string::npos)
+                long_word_pieces += text.size();
+        }
         ++lines;
         begin = end + 1;
     }
@@ -114,8 +120,7 @@ void test_long_comments()
             std::string::npos);
     }
     HPX_TEST(comments.find("(HPX's default)") != std::string::npos);
-    HPX_TEST_EQ(
-        std::count(comments.begin(), comments.end(), 'x'), std::ptrdiff_t(250));
+    HPX_TEST_EQ(long_word_pieces, long_word.size());
     HPX_TEST(ini.find("\nenable = 1\n") != std::string::npos);
 }
 
