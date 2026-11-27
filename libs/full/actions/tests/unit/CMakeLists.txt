@@ -16,7 +16,15 @@ set(thread_stacksize_PARAMETERS LOCALITIES 2)
 set(thread_affinity_PARAMETERS THREADS_PER_LOCALITY 4 RUN_SERIAL)
 set(thread_affinity_LIBRARIES DEPENDENCIES PRIVATE Hwloc::hwloc)
 
-if(HPX_WITH_STACKOVERFLOW_DETECTION)
+# The handler only exists in the x86 Linux coroutine context and is left out
+# with AddressSanitizer. The POSIX one (ppc64, s390x) is untested and would hang
+# on faults it doesn't report, and Boost.Context (arm, riscv) has none.
+if(HPX_WITH_STACKOVERFLOW_DETECTION
+   AND NOT HPX_WITH_SANITIZERS
+   AND NOT HPX_WITH_GENERIC_CONTEXT_COROUTINES
+   AND __target_arch MATCHES "^(i386|ix86|x86_64)$"
+)
+  set(stackoverflow_tests ON)
   set(tests ${tests} thread_stacksize_overflow thread_stacksize_overflow_v2)
 endif()
 
@@ -55,7 +63,7 @@ if(HPX_WITH_COMPILE_ONLY_TESTS
   )
 endif()
 
-if(HPX_WITH_STACKOVERFLOW_DETECTION)
+if(stackoverflow_tests)
   # both tests crash on purpose, so they are judged by their output: the
   # overflow has to be reported as one, the null pointer dereference must only
   # be reported as a fatal error
