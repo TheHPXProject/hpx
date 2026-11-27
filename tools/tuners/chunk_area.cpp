@@ -86,6 +86,7 @@ namespace hpx_tune {
                 members.emplace_back(
                     "executor", tuning::json_string(t.executor));
                 members.emplace_back("pool_size", std::to_string(t.pool_size));
+                members.emplace_back("cores", std::to_string(t.cores));
                 members.emplace_back("indices", std::to_string(t.indices));
                 members.emplace_back("time_us", tuning::to_json(t.time_us));
                 return tuning::json_object(members);
@@ -107,6 +108,7 @@ namespace hpx_tune {
                 fitted.push_back(tuning::json_object({
                     {"executor", tuning::json_string(c.executor)},
                     {"pool_size", std::to_string(c.pool_size)},
+                    {"cores", std::to_string(c.cores)},
                     {"region_us", tuning::json_number(c.region_us)},
                     {"chunk_us", tuning::json_number(c.chunk_us)},
                     {"residual_us", tuning::json_number(c.residual_us)},
@@ -149,6 +151,16 @@ namespace hpx_tune {
             if (!sizes.empty() && sizes.front() / 2 != 0)
                 sizes.insert(sizes.begin(), sizes.front() / 2);
             return sizes;
+        }
+    }    // namespace
+
+    namespace {
+
+        std::string workers(
+            std::size_t const cores, std::size_t const pool_size)
+        {
+            return (cores == pool_size ? "" : std::to_string(cores) + " of ") +
+                std::to_string(pool_size) + " workers";
         }
     }    // namespace
 
@@ -251,8 +263,8 @@ namespace hpx_tune {
         std::vector<std::string> comments;
         for (tuning::chunk_cost const& c : costs)
         {
-            comments.push_back("chunk: " + c.executor + " at " +
-                std::to_string(c.pool_size) + " workers: region " +
+            comments.push_back("chunk: " + c.executor + " on " +
+                workers(c.cores, c.pool_size) + ": region " +
                 number(c.region_us) + " us, chunk " + number(c.chunk_us) +
                 " us (residual " + number(c.residual_us) + " us)");
         }
@@ -263,14 +275,15 @@ namespace hpx_tune {
             {
                 tuning::region_time const& t = measured[i];
                 std::cout << "chunk: run " << run_of[i] << ", " << t.executor
-                          << ", " << t.pool_size << " workers, " << t.indices
+                          << ", " << workers(t.cores, t.pool_size) << ", "
+                          << t.indices
                           << " indices: " << number(t.time_us.median)
                           << " us\n";
             }
             for (tuning::region_time const& t : times)
             {
-                std::cout << "chunk: " << t.executor << ", " << t.pool_size
-                          << " workers, " << t.indices
+                std::cout << "chunk: " << t.executor << ", "
+                          << workers(t.cores, t.pool_size) << ", " << t.indices
                           << " indices: " << number(t.time_us.median)
                           << " us (quartiles " << number(t.time_us.q1) << " to "
                           << number(t.time_us.q3) << ")\n";

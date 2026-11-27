@@ -35,14 +35,15 @@ namespace hpx::tuning {
 
     namespace {
 
-        // The regions of one executor for each number of indices: a few to
-        // warm up, then repeats samples of options.regions regions each.
+        // The regions of one executor on the given number of workers
+        // (cores) for each number of indices: a few to warm up, then repeats
+        // samples of options.regions regions each.
         template <typename Executor>
         void measure_executor(Executor const& exec, std::string const& name,
-            std::size_t const pool_size, chunk_cost_options const& options,
-            std::vector<region_time>& times)
+            std::size_t const pool_size, std::size_t const cores,
+            chunk_cost_options const& options, std::vector<region_time>& times)
         {
-            std::size_t const largest = pool_size *
+            std::size_t const largest = cores *
                 (options.multiples.empty() ?
                         1 :
                         *std::max_element(options.multiples.begin(),
@@ -52,7 +53,7 @@ namespace hpx::tuning {
 
             for (std::size_t const multiple : options.multiples)
             {
-                std::size_t const indices = multiple * pool_size;
+                std::size_t const indices = multiple * cores;
                 hpx::util::counting_shape const shape(std::size_t(0), indices);
 
                 for (std::size_t i = 0; i != 10; ++i)
@@ -77,8 +78,8 @@ namespace hpx::tuning {
                         static_cast<double>(
                             (std::max) (options.regions, std::size_t(1))));
                 }
-                times.push_back(region_time{
-                    name, pool_size, indices, summarize(HPX_MOVE(samples))});
+                times.push_back(region_time{name, pool_size, cores, indices,
+                    summarize(HPX_MOVE(samples))});
             }
         }
 
@@ -105,23 +106,48 @@ namespace hpx::tuning {
             ex::processing_units_count(hpx::execution::parallel_executor());
         std::vector<region_time> times;
 
+        // the regions on the whole pool, then on the narrow numbers of
+        // workers: as task_size_chunk_size runs a loop on fewer cores
+        // (with_processing_units_count), or on all workers for an executor
+        // that can't run on fewer, with the indices of such a loop
+        auto const measure = [&](auto const& exec, std::string const& name) {
+            measure_executor(exec, name, pool_size, pool_size, options, times);
+            for (std::size_t const cores : options.narrow_cores)
+            {
+                if (cores == 0 || cores >= pool_size)
+                    continue;
+                if constexpr (requires {
+                                  ex::with_processing_units_count(
+                                      exec, std::size_t(1));
+                              })
+                {
+                    measure_executor(
+                        ex::with_processing_units_count(exec, cores), name,
+                        pool_size, cores, options, times);
+                }
+                else
+                {
+                    measure_executor(
+                        exec, name, pool_size, cores, options, times);
+                }
+            }
+        };
+
         // one executor after the other, each destroyed before the next is
         // created, so that the waiting workers of one don't disturb the
         // others (the shared executor's workers stay until the runtime
         // stops, so it comes last)
-        measure_executor(hpx::execution::parallel_executor(), "parallel",
-            pool_size, options, times);
+        measure(hpx::execution::parallel_executor(), "parallel");
         {
             ex::fork_join_executor const exec;
-            measure_executor(exec, "fork_join", pool_size, options, times);
+            measure(exec, "fork_join");
         }
         {
             ex::suspending_fork_join_executor const exec;
-            measure_executor(
-                exec, "suspending_fork_join", pool_size, options, times);
+            measure(exec, "suspending_fork_join");
         }
-        measure_executor(ex::shared_suspending_fork_join_executor(),
-            "shared_suspending_fork_join", pool_size, options, times);
+        measure(ex::shared_suspending_fork_join_executor(),
+            "shared_suspending_fork_join");
         return times;
     }
 
@@ -129,10 +155,11 @@ namespace hpx::tuning {
     {
         std::ostringstream os;
         os << std::setprecision(17) << time.executor << ' ' << time.pool_size
-           << ' ' << time.indices << ' ' << time.time_us.count << ' '
-           << time.time_us.min << ' ' << time.time_us.q1 << ' '
-           << time.time_us.median << ' ' << time.time_us.q3 << ' '
-           << time.time_us.p90 << ' ' << time.time_us.max;
+           << ' ' << time.cores << ' ' << time.indices << ' '
+           << time.time_us.count << ' ' << time.time_us.min << ' '
+           << time.time_us.q1 << ' ' << time.time_us.median << ' '
+           << time.time_us.q3 << ' ' << time.time_us.p90 << ' '
+           << time.time_us.max;
         return os.str();
     }
 
@@ -140,10 +167,10 @@ namespace hpx::tuning {
     {
         std::istringstream is(line);
         region_time time;
-        if (!(is >> time.executor >> time.pool_size >> time.indices >>
-                time.time_us.count >> time.time_us.min >> time.time_us.q1 >>
-                time.time_us.median >> time.time_us.q3 >> time.time_us.p90 >>
-                time.time_us.max))
+        if (!(is >> time.executor >> time.pool_size >> time.cores >>
+                time.indices >> time.time_us.count >> time.time_us.min >>
+                time.time_us.q1 >> time.time_us.median >> time.time_us.q3 >>
+                time.time_us.p90 >> time.time_us.max))
         {
             return std::nullopt;
         }
@@ -156,12 +183,13 @@ namespace hpx::tuning {
     std::vector<region_time> median_of_runs(
         std::vector<region_time> const& times)
     {
-        using key_type = std::tuple<std::string, std::size_t, std::size_t>;
+        using key_type =
+            std::tuple<std::string, std::size_t, std::size_t, std::size_t>;
         std::vector<key_type> order;
         std::map<key_type, std::vector<region_time const*>> runs;
         for (region_time const& t : times)
         {
-            key_type key(t.executor, t.pool_size, t.indices);
+            key_type key(t.executor, t.pool_size, t.cores, t.indices);
             auto& run = runs[key];
             if (run.empty())
                 order.push_back(key);
@@ -185,15 +213,14 @@ namespace hpx::tuning {
     std::vector<chunk_cost> fit_chunk_costs(
         std::vector<region_time> const& times)
     {
-        // the region times of each executor and pool size, in the order of
-        // their first appearance
-        std::vector<std::pair<std::string, std::size_t>> order;
-        std::map<std::pair<std::string, std::size_t>,
-            std::vector<region_time const*>>
-            groups;
+        // the region times of each executor, pool size and number of
+        // workers, in the order of their first appearance
+        using key_type = std::tuple<std::string, std::size_t, std::size_t>;
+        std::vector<key_type> order;
+        std::map<key_type, std::vector<region_time const*>> groups;
         for (region_time const& t : times)
         {
-            auto const key = std::make_pair(t.executor, t.pool_size);
+            key_type const key(t.executor, t.pool_size, t.cores);
             auto& group = groups[key];
             if (group.empty())
                 order.push_back(key);
@@ -204,7 +231,7 @@ namespace hpx::tuning {
         for (auto const& key : order)
         {
             auto group = groups[key];
-            std::size_t const n = key.second;
+            std::size_t const n = std::get<2>(key);
             if (group.size() < 2 || n == 0)
                 continue;
             std::sort(group.begin(), group.end(),
@@ -236,8 +263,9 @@ namespace hpx::tuning {
             }
 
             chunk_cost cost;
-            cost.executor = key.first;
-            cost.pool_size = n;
+            cost.executor = std::get<0>(key);
+            cost.pool_size = std::get<1>(key);
+            cost.cores = n;
             cost.chunk_us = sxx > 0.0 ? sxy / sxx : 0.0;
             cost.region_us = mean_t - cost.chunk_us * mean_k;
 
@@ -288,12 +316,16 @@ namespace hpx::tuning {
         double const k =
             static_cast<double>((std::max) (chunks_per_core, std::size_t(1)));
 
-        // parallel_executor's costs for each pool size
+        // parallel_executor's costs for each pool size, and each executor's
+        // on two workers (the floor)
         std::map<std::size_t, chunk_cost const*> reference;
+        std::map<std::pair<std::string, std::size_t>, chunk_cost const*> two;
         for (chunk_cost const& c : costs)
         {
-            if (c.executor == "parallel")
+            if (c.executor == "parallel" && c.cores == c.pool_size)
                 reference[c.pool_size] = &c;
+            if (c.cores == 2 && c.pool_size > 2)
+                two[std::make_pair(c.executor, c.pool_size)] = &c;
         }
 
         struct value
@@ -306,6 +338,8 @@ namespace hpx::tuning {
 
         for (chunk_cost const& c : costs)
         {
+            if (c.cores != c.pool_size)
+                continue;
             auto const ref = reference.find(c.pool_size);
             if (ref == reference.end())
                 continue;
@@ -339,6 +373,24 @@ namespace hpx::tuning {
                     " us against " + number(p.time_at_pool_size_us) +
                     " us of parallel_executor" + workers + " (ratio; spread " +
                     number(100.0 * c.spread) + "%)";
+            }
+
+            // the floor: the step from one core to two has to pay
+            if (auto const narrow =
+                    two.find(std::make_pair(c.executor, c.pool_size));
+                narrow != two.end())
+            {
+                chunk_cost const& t = *narrow->second;
+                double const floor = t.chunk_us + t.region_us / k;
+                bool const raised =
+                    c.executor != "parallel" && v.min_chunk_time_us < floor;
+                if (raised)
+                    v.min_chunk_time_us = floor;
+                v.reason += std::string(raised ? "; raised to" : "; floor") +
+                    " " + number(floor) +
+                    " us, the step to two workers (region " +
+                    number(t.region_us) + " us, chunk " + number(t.chunk_us) +
+                    " us)";
             }
 
             auto it = std::find_if(executors.begin(), executors.end(),

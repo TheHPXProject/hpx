@@ -44,7 +44,7 @@ namespace {
         for (std::size_t const k : {1, 4, 16})
         {
             times.push_back(tuning::region_time{
-                executor, n, k * n, at(r + static_cast<double>(k) * o)});
+                executor, n, n, k * n, at(r + static_cast<double>(k) * o)});
         }
     }
 
@@ -62,7 +62,7 @@ namespace {
         add_times(times, "fork_join", 32, 6.0, 0.1);
         // only one number of indices: not fitted
         times.push_back(
-            tuning::region_time{"suspending_fork_join", 16, 16, at(3.0)});
+            tuning::region_time{"suspending_fork_join", 16, 16, 16, at(3.0)});
         return times;
     }
 
@@ -152,6 +152,28 @@ namespace {
                          2.5 * 4.1 / 10.5) < 0.001);
         }
 
+        // the floor: fork_join on two workers of the 16 costs 8 us per
+        // region and 0.1 us per chunk, so its value is at least
+        // 0.1 + 8 / 8 = 1.1 us, above the fitted 2.5 * 0.6 / 1.75
+        {
+            std::vector<tuning::region_time> times = made_up_times();
+            for (std::size_t const k : {1, 4, 16})
+            {
+                times.push_back(tuning::region_time{"fork_join", 16, 2, k * 2,
+                    at(8.0 + static_cast<double>(k) * 0.1)});
+            }
+            auto const sections =
+                tuning::chunk_sections(tuning::fit_chunk_costs(times), 2.5,
+                    tuning::chunk_rule::fitted, 8);
+            HPX_TEST(std::abs(value_of(sections,
+                                  "hpx.task_size_chunk_size.fork_join.16") -
+                         1.1) < 0.001);
+            // the other pool size has no floor
+            HPX_TEST(std::abs(value_of(sections,
+                                  "hpx.task_size_chunk_size.fork_join.32") -
+                         2.5 * (0.1 + 6.0 / 8.0) / (1.0 + 20.0 / 8.0)) < 0.001);
+        }
+
         // no parallel_executor at a pool size: nothing for it
         {
             std::vector<tuning::chunk_cost> only_fork_join;
@@ -176,19 +198,20 @@ namespace {
 
     void test_lines()
     {
-        tuning::region_time const time{"fork_join", 16, 64, at(5.25)};
+        tuning::region_time const time{"fork_join", 16, 2, 64, at(5.25)};
         std::optional<tuning::region_time> const back =
             tuning::from_line(tuning::to_line(time));
         HPX_TEST(back.has_value());
         HPX_TEST_EQ(back->executor, time.executor);
         HPX_TEST_EQ(back->pool_size, time.pool_size);
+        HPX_TEST_EQ(back->cores, time.cores);
         HPX_TEST_EQ(back->indices, time.indices);
         HPX_TEST_EQ(back->time_us.count, time.time_us.count);
         HPX_TEST(close_to(back->time_us.median, time.time_us.median));
         HPX_TEST(close_to(back->time_us.q3, time.time_us.q3));
 
         HPX_TEST(!tuning::from_line(""));
-        HPX_TEST(!tuning::from_line("fork_join 16 64"));
+        HPX_TEST(!tuning::from_line("fork_join 16 2 64"));
         HPX_TEST(!tuning::from_line(tuning::to_line(time) + " more"));
     }
 
@@ -200,13 +223,13 @@ namespace {
         for (double const median : {5.0, 9.0, 6.0})
         {
             times.push_back(
-                tuning::region_time{"fork_join", 16, 16, at(median)});
+                tuning::region_time{"fork_join", 16, 16, 16, at(median)});
             times.push_back(
-                tuning::region_time{"fork_join", 16, 64, at(2.0 * median)});
+                tuning::region_time{"fork_join", 16, 16, 64, at(2.0 * median)});
         }
         // a second executor with an even number of runs: the lower middle
-        times.push_back(tuning::region_time{"parallel", 16, 16, at(12.0)});
-        times.push_back(tuning::region_time{"parallel", 16, 16, at(10.0)});
+        times.push_back(tuning::region_time{"parallel", 16, 16, 16, at(12.0)});
+        times.push_back(tuning::region_time{"parallel", 16, 16, 16, at(10.0)});
 
         std::vector<tuning::region_time> const combined =
             tuning::median_of_runs(times);
@@ -241,17 +264,22 @@ namespace {
 
         std::vector<tuning::region_time> const times =
             tuning::measure_region_times(options);
-        HPX_TEST_EQ(
-            times.size(), tuning::chunk_executors().size() * std::size_t(2));
+        // the whole pool, and one and two workers if the pool is larger
+        std::size_t const pool_size = times.empty() ? 0 : times[0].pool_size;
+        std::size_t const widths =
+            1 + (pool_size > 1 ? 1 : 0) + (pool_size > 2 ? 1 : 0);
+        HPX_TEST_EQ(times.size(),
+            tuning::chunk_executors().size() * widths * std::size_t(2));
         for (tuning::region_time const& t : times)
         {
             HPX_TEST(t.pool_size > 0);
-            HPX_TEST(t.indices == t.pool_size || t.indices == 2 * t.pool_size);
+            HPX_TEST(t.cores == t.pool_size || t.cores == 1 || t.cores == 2);
+            HPX_TEST(t.indices == t.cores || t.indices == 2 * t.cores);
             HPX_TEST_EQ(t.time_us.count, std::size_t(3));
             HPX_TEST(t.time_us.median > 0.0);
         }
         HPX_TEST_EQ(tuning::fit_chunk_costs(times).size(),
-            tuning::chunk_executors().size());
+            tuning::chunk_executors().size() * widths);
     }
 
     int hpx_main()
