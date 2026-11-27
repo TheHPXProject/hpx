@@ -10,6 +10,8 @@
 
 #include <chrono>
 #include <cstddef>
+#include <string>
+#include <string_view>
 #include <vector>
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -63,8 +65,32 @@ namespace hpx::execution::experimental::detail {
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT std::size_t get_copy_bytes_per_ns(
         std::size_t footprint_per_core) noexcept;
 
-    // Restore the defaults compiled into the library (and no memory rates).
+    // Restore the defaults compiled into the library, without any memory
+    // rates and minimal run times for single executors.
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void
     reset_task_size_chunk_size_defaults() noexcept;
+
+    // The minimal run time of a chunk configured for one executor with
+    // hpx.task_size_chunk_size.<executor>.min_chunk_time_us (pool_size 0, for
+    // every number of worker threads), or for one number of its worker
+    // threads with hpx.task_size_chunk_size.<executor>.<pool_size>.
+    HPX_CXX_CORE_EXPORT struct executor_min_chunk_time
+    {
+        std::string executor;
+        std::size_t pool_size;
+        std::chrono::nanoseconds min_chunk_time;
+    };
+
+    // The minimal run time of a chunk configured for the executor with the
+    // given name and number of worker threads: the entry for that number if
+    // there is one, else the one for all numbers, else the default one.
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT std::chrono::nanoseconds
+    get_executor_min_chunk_time(
+        std::string_view executor, std::size_t pool_size) noexcept;
+
+    // Replace the configured minimal run times of the executors. Not thread
+    // safe: the runtime calls it at startup, before any loop is chunked.
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void set_executor_min_chunk_times(
+        std::vector<executor_min_chunk_time> times);
     /// \endcond
 }    // namespace hpx::execution::experimental::detail

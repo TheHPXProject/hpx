@@ -9,6 +9,7 @@
 #include <hpx/config.hpp>
 
 #include <hpx/assert.hpp>
+#include <hpx/modules/config_registry.hpp>
 #include <hpx/modules/lcw_base.hpp>
 #include <hpx/modules/logging.hpp>
 #include <hpx/modules/runtime_configuration.hpp>
@@ -24,6 +25,28 @@
 #include <string>
 
 ///////////////////////////////////////////////////////////////////////////////
+#if (defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_PARCELPORT_LCW)) ||      \
+    defined(HPX_HAVE_MODULE_LCW_BASE)
+#include <lcw.hpp>
+
+namespace hpx::util {
+
+    // the LCW library, for hpx::complete_version()
+    namespace {
+
+        std::string lcw_library_version()
+        {
+            return std::to_string(LCW_VERSION_MAJOR) + "." +
+                std::to_string(LCW_VERSION_MINOR) + "." +
+                std::to_string(LCW_VERSION_PATCH);
+        }
+
+        config_registry::add_library_version_helper register_lcw_version{
+            {"LCW", &lcw_library_version}};
+    }    // namespace
+}    // namespace hpx::util
+#endif
+
 namespace hpx { namespace util {
 
     namespace detail {

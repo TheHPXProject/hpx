@@ -9,9 +9,6 @@
 #pragma once
 
 #include <hpx/config.hpp>
-
-#include <hpx/execution_base/stdexec_forward.hpp>
-
 #include <hpx/assert.hpp>
 #include <hpx/execution/algorithms/detail/single_result.hpp>
 #include <hpx/modules/concepts.hpp>

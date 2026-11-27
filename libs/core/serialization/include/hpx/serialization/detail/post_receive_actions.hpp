@@ -10,6 +10,7 @@
 #include <hpx/modules/type_support.hpp>
 
 #include <cstddef>
+#include <cstdint>
 #include <exception>
 #include <functional>
 #include <memory>
@@ -22,14 +23,20 @@
 
 namespace hpx::serialization::detail {
 
-    // The completion of a parcel's steps and of those of the parcels before
-    // it in the same archive.
+    // The completion of a parcel's steps, and of those of the parcels before
+    // it in the same archive if it uses objects they have loaded.
     HPX_CXX_CORE_EXPORT class HPX_CORE_EXPORT receive_completion
     {
     public:
         // 'steps' steps, complete after 'previous' (may be null)
         static std::shared_ptr<receive_completion> create(
             std::shared_ptr<receive_completion> previous, std::size_t steps);
+
+        // complete once both 'first' and 'second' are (neither is null),
+        // with the first error of the two
+        static std::shared_ptr<receive_completion> join(
+            std::shared_ptr<receive_completion> const& first,
+            std::shared_ptr<receive_completion> const& second);
 
         explicit receive_completion(std::size_t pending) noexcept
           : pending_(pending)
@@ -126,17 +133,45 @@ namespace hpx::serialization::detail {
             return actions_.empty() && transfers_.empty();
         }
 
+        // An object shared through a tracked pointer was loaded; 'key' is
+        // its position in the archive as the sender wrote it (keys grow
+        // through a message, the objects of a parcel have larger keys than
+        // those of the parcels before it).
+        void object_loaded(std::uint64_t const key) noexcept
+        {
+            if (!any_object_ || key > last_key_)
+            {
+                last_key_ = key;
+                any_object_ = true;
+            }
+        }
+
+        // A back-reference to the object loaded with 'key' was loaded: the
+        // parcel uses it, and if an earlier parcel of the message has loaded
+        // it, the steps that complete it (see take_parcel_steps).
+        void back_reference(std::uint64_t const key) noexcept
+        {
+            if (earlier_objects_ && key <= earlier_last_key_)
+            {
+                uses_earlier_objects_ = true;
+            }
+        }
+
         // hand the actions to the parcel that was just de-serialized
         [[nodiscard]] actions_type move_actions() noexcept
         {
             return HPX_MOVE(actions_);
         }
 
-        // What a parcel just de-serialized waits for: its own steps, and the
-        // steps registered for the parcels de-serialized before it from the
-        // same archive. Objects shared through pointers are loaded once, by
+        // What a parcel just de-serialized waits for: its own steps, and, if
+        // it uses objects the parcels de-serialized before it from the same
+        // archive have loaded (back_reference), the steps registered for
+        // those parcels. Objects shared through pointers are loaded once, by
         // the first parcel referring to them, but the later ones use them as
-        // well. 'completion' is null if there's nothing to wait for; the
+        // well. A parcel that doesn't waits for its own steps only: it must
+        // not wait for transfers that may depend on it (e.g. a device
+        // conduit's control message sent with the parcels whose data it
+        // moves). 'completion' is null if there's nothing to wait for; the
         // parcel starts 'actions', each calls completion->step_done() when
         // it has finished.
         struct parcel_steps
@@ -152,12 +187,27 @@ namespace hpx::serialization::detail {
             actions_.clear();
             transfers_.clear();
             last_.reset();
+            any_object_ = false;
+            earlier_objects_ = false;
+            uses_earlier_objects_ = false;
         }
 
     private:
         actions_type actions_;
         actions_type transfers_;
+
+        // the completion of all steps registered so far
         std::shared_ptr<receive_completion> last_;
+
+        // the largest key of the objects loaded so far, and of those the
+        // parcels before the current one have loaded
+        std::uint64_t last_key_ = 0;
+        std::uint64_t earlier_last_key_ = 0;
+        bool any_object_ = false;
+        bool earlier_objects_ = false;
+
+        // the current parcel uses an object an earlier one has loaded
+        bool uses_earlier_objects_ = false;
     };
 }    // namespace hpx::serialization::detail
 

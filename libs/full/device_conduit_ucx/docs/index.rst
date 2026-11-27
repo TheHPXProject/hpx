@@ -57,5 +57,9 @@ endpoints at shutdown waits for the peers. Use ``none`` only where no locality
 leaves before the others (no localities connecting and disconnecting
 dynamically).
 
+The conduit runs the completions of its transfers after UCX's progress has
+returned, never inside UCX's callbacks: UCX calls them with its worker lock
+held, and a completion may suspend its HPX thread.
+
 See the :ref:`API reference <modules_device_conduit_ucx_api>` of this module
 for more details.
