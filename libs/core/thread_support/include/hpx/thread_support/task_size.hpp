@@ -130,11 +130,33 @@ namespace hpx::threads {
     /// The size of a function together with the run time of one of its
     /// calls, for a function whose run time is known more precisely than its
     /// size (see hpx::timed_task). time is zero if the function says nothing
-    /// finer than its size.
+    /// finer than its size. bytes is the number of bytes a call reads and
+    /// writes if its time follows from them (the library's operations on
+    /// builtin elements), zero otherwise: task_size_chunk_size then takes the
+    /// time from the rate at which a core moves the loop's data (see
+    /// get_copy_bytes_per_ns).
     HPX_CXX_CORE_EXPORT struct task_size_and_time
     {
-        task_size size = task_size::unknown;
-        hpx::chrono::picoseconds time = hpx::chrono::picoseconds(0);
+        constexpr task_size_and_time() noexcept
+          : size(task_size::unknown)
+          , time(0)
+          , bytes(0)
+        {
+        }
+
+        // not from a size alone, so that a size doesn't convert to it
+        constexpr task_size_and_time(task_size const size_,
+            hpx::chrono::picoseconds const time_,
+            std::size_t const bytes_ = 0) noexcept
+          : size(size_)
+          , time(time_)
+          , bytes(bytes_)
+        {
+        }
+
+        task_size size;
+        hpx::chrono::picoseconds time;
+        std::size_t bytes;
 
         // where only the size is needed
         constexpr operator task_size() const noexcept
@@ -323,6 +345,25 @@ namespace hpx::traits {
     template <typename F>
         requires(!std::is_same_v<F, std::remove_cvref_t<F>>)
     struct get_task_time<F> : get_task_time<std::remove_cvref_t<F>>
+    {
+    };
+
+    // The bytes a call of F reads and writes, for a function whose run time
+    // follows from them (the library's operations on builtin elements, see
+    // task_size_and_time); zero for all others, user functions among them.
+    HPX_CXX_CORE_EXPORT template <typename F, typename Enable = void>
+    struct get_task_bytes
+    {
+        [[nodiscard]] static constexpr std::size_t call(F const&) noexcept
+        {
+            return 0;
+        }
+    };
+
+    // A qualified function has the bytes of the unqualified one.
+    template <typename F>
+        requires(!std::is_same_v<F, std::remove_cvref_t<F>>)
+    struct get_task_bytes<F> : get_task_bytes<std::remove_cvref_t<F>>
     {
     };
 

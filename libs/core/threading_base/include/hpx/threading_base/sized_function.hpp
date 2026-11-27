@@ -201,6 +201,10 @@ namespace hpx::threads::detail {
         // nothing finer than its size (see get_task_time)
         hpx::chrono::picoseconds time;
 
+        // the bytes a call of the other function reads and writes, zero if
+        // its time doesn't follow from them (see get_task_bytes)
+        std::size_t bytes;
+
         // constrained, so that the wrapper is invocable exactly as f is
         // (callers detect which arguments f takes)
         template <typename... Ts>
@@ -229,7 +233,8 @@ namespace hpx::threads::detail {
             traits::get_task_size_for<Sized, Args...>::call(sized);
         hpx::chrono::picoseconds const time =
             traits::get_task_time<Sized>::call(sized);
-        return {HPX_FORWARD(F, f), size, time};
+        std::size_t const bytes = traits::get_task_bytes<Sized>::call(sized);
+        return {HPX_FORWARD(F, f), size, time, bytes};
     }
 
     // Returns f with the given size, for instance a size read from a
@@ -238,7 +243,7 @@ namespace hpx::threads::detail {
     constexpr size_of_function<std::decay_t<F>> with_task_size(
         F&& f, task_size const size)
     {
-        return {HPX_FORWARD(F, f), size, hpx::chrono::picoseconds(0)};
+        return {HPX_FORWARD(F, f), size, hpx::chrono::picoseconds(0), 0};
     }
 
     // Returns f with the given size and run time of a call,
@@ -247,7 +252,7 @@ namespace hpx::threads::detail {
     constexpr size_of_function<std::decay_t<F>> with_task_size(
         F&& f, task_size_and_time const size)
     {
-        return {HPX_FORWARD(F, f), size.size, size.time};
+        return {HPX_FORWARD(F, f), size.size, size.time, size.bytes};
     }
 
     // Store the size of f in the hint of the thread that runs it. Task sizes
@@ -282,6 +287,16 @@ struct hpx::traits::get_task_time<hpx::threads::detail::size_of_function<F>>
         hpx::threads::detail::size_of_function<F> const& f) noexcept
     {
         return f.time.count() != 0 ? f.time : get_task_time<F>::call(f.f);
+    }
+};
+
+template <typename F>
+struct hpx::traits::get_task_bytes<hpx::threads::detail::size_of_function<F>>
+{
+    [[nodiscard]] static constexpr std::size_t call(
+        hpx::threads::detail::size_of_function<F> const& f) noexcept
+    {
+        return f.bytes != 0 ? f.bytes : get_task_bytes<F>::call(f.f);
     }
 };
 

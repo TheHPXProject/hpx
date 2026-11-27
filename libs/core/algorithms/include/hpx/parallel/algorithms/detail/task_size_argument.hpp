@@ -40,7 +40,8 @@ namespace hpx::parallel::detail {
         F const& f) noexcept
     {
         return {hpx::traits::get_task_size_for<F, Args...>::call(f),
-            hpx::traits::get_task_time<F>::call(f)};
+            hpx::traits::get_task_time<F>::call(f),
+            hpx::traits::get_task_bytes<F>::call(f)};
     }
 
     // The bytes of an element of Iter, 0 if it isn't of a builtin type.

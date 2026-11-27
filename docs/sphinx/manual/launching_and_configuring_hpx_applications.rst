@@ -665,6 +665,10 @@ default, which stands for the defaults compiled into |hpx|.
    min_chunk_time_us = ${HPX_TASK_SIZE_CHUNK_SIZE_MIN_CHUNK_TIME_US}
    chunks_per_core = ${HPX_TASK_SIZE_CHUNK_SIZE_CHUNKS_PER_CORE}
    copy_bytes_per_ns = ${HPX_TASK_SIZE_CHUNK_SIZE_COPY_BYTES_PER_NS}
+   copy_bytes_per_ns_l1 = ${HPX_TASK_SIZE_CHUNK_SIZE_COPY_BYTES_PER_NS_L1}
+   copy_bytes_per_ns_l2 = ${HPX_TASK_SIZE_CHUNK_SIZE_COPY_BYTES_PER_NS_L2}
+   copy_bytes_per_ns_l3 = ${HPX_TASK_SIZE_CHUNK_SIZE_COPY_BYTES_PER_NS_L3}
+   copy_bytes_per_ns_memory = ${HPX_TASK_SIZE_CHUNK_SIZE_COPY_BYTES_PER_NS_MEMORY}
 
 .. _ini_hpx_task_size_chunk_size:
 
@@ -686,6 +690,21 @@ default, which stands for the defaults compiled into |hpx|.
        the like) on them, derive the run time of an iteration from it, from
        the bytes the iteration reads and writes (see :ref:`task_sizes`). The
        default is ``16``, about the rate for data that is not in the caches.
+   * * ``hpx.task_size_chunk_size.copy_bytes_per_ns_l1``,
+       ``hpx.task_size_chunk_size.copy_bytes_per_ns_l2``,
+       ``hpx.task_size_chunk_size.copy_bytes_per_ns_l3``
+     * The value of each of these properties defines the number of bytes a
+       core copies in a nanosecond, from ``1`` up to ``4096``, if the loop's
+       data on that core fits its share of the cache of that level (the size
+       of the cache above the first processing unit divided by the cores that
+       share it). Empty by default: such data is copied at
+       ``copy_bytes_per_ns``.
+   * * ``hpx.task_size_chunk_size.copy_bytes_per_ns_memory``
+     * The value of this property defines the number of bytes a core copies in
+       a nanosecond, from ``1`` up to ``4096``, if the loop's data on that core
+       doesn't fit its share of the last cache. Empty by default: such data is
+       copied at ``copy_bytes_per_ns``. Without any of the four entries,
+       ``copy_bytes_per_ns`` is the rate for all data.
 
 The ``hpx.components`` configuration section
 ............................................

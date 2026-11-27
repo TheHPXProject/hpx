@@ -333,6 +333,14 @@ namespace hpx::util {
             "chunks_per_core = ${HPX_TASK_SIZE_CHUNK_SIZE_CHUNKS_PER_CORE}",
             "copy_bytes_per_ns = "
             "${HPX_TASK_SIZE_CHUNK_SIZE_COPY_BYTES_PER_NS}",
+            "copy_bytes_per_ns_l1 = "
+            "${HPX_TASK_SIZE_CHUNK_SIZE_COPY_BYTES_PER_NS_L1}",
+            "copy_bytes_per_ns_l2 = "
+            "${HPX_TASK_SIZE_CHUNK_SIZE_COPY_BYTES_PER_NS_L2}",
+            "copy_bytes_per_ns_l3 = "
+            "${HPX_TASK_SIZE_CHUNK_SIZE_COPY_BYTES_PER_NS_L3}",
+            "copy_bytes_per_ns_memory = "
+            "${HPX_TASK_SIZE_CHUNK_SIZE_COPY_BYTES_PER_NS_MEMORY}",
 
             "[hpx.commandline]",
             // enable aliasing

@@ -10,6 +10,7 @@
 
 #include <chrono>
 #include <cstddef>
+#include <vector>
 
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx::execution::experimental::detail {
@@ -39,7 +40,30 @@ namespace hpx::execution::experimental::detail {
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void set_task_size_chunk_size_defaults(
         task_size_chunk_size_defaults const& defaults) noexcept;
 
-    // Restore the defaults compiled into the library.
+    // The rate at which a core copies data whose footprint on that core is
+    // at most bytes_per_core: a core's share of a cache, or the largest
+    // std::size_t for data in memory.
+    HPX_CXX_CORE_EXPORT struct memory_rate
+    {
+        std::size_t bytes_per_core;
+        std::size_t bytes_per_ns;
+    };
+
+    // The rates by footprint per core, by ascending bytes_per_core (at most
+    // eight are kept); empty, copy_bytes_per_ns is the rate for every
+    // footprint. The runtime sets them at startup from the cache shares of
+    // the topology and hpx.task_size_chunk_size.copy_bytes_per_ns_l1 to
+    // _memory. A rate of 0 is taken as 1.
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void set_memory_rates(
+        std::vector<memory_rate> const& rates) noexcept;
+
+    // The rate at which a core copies data of the given footprint on that
+    // core, in bytes per nanosecond: that of the first of the memory rates
+    // the footprint fits, else copy_bytes_per_ns.
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT std::size_t get_copy_bytes_per_ns(
+        std::size_t footprint_per_core) noexcept;
+
+    // Restore the defaults compiled into the library (and no memory rates).
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void
     reset_task_size_chunk_size_defaults() noexcept;
     /// \endcond
