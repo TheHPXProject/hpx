@@ -7,6 +7,7 @@
 #include <hpx/config.hpp>
 
 #include <hpx/assert.hpp>
+#include <hpx/modules/config_registry.hpp>
 #include <hpx/modules/lci_base.hpp>
 #include <hpx/modules/logging.hpp>
 #include <hpx/modules/runtime_configuration.hpp>
@@ -22,6 +23,26 @@
 #include <string>
 
 ///////////////////////////////////////////////////////////////////////////////
+#if (defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_PARCELPORT_LCI)) ||      \
+    defined(HPX_HAVE_MODULE_LCI_BASE)
+#include <lci.hpp>
+
+namespace hpx::util {
+
+    // the LCI library, for hpx::complete_version()
+    namespace {
+
+        std::string lci_library_version()
+        {
+            return "the one and only LCI";
+        }
+
+        config_registry::add_library_version_helper register_lci_version{
+            {"LCI", &lci_library_version}};
+    }    // namespace
+}    // namespace hpx::util
+#endif
+
 namespace hpx { namespace util {
 
     namespace detail {

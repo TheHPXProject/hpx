@@ -10,7 +10,9 @@
 #if defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_DEVICE_CONDUIT_UCX)
 #include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/async_distributed.hpp>
+#include <hpx/modules/config_registry.hpp>
 #include <hpx/modules/errors.hpp>
+#include <hpx/modules/format.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/logging.hpp>
 #include <hpx/modules/naming_base.hpp>
@@ -40,6 +42,24 @@
 #include <string>
 #include <utility>
 #include <vector>
+
+namespace hpx::parcelset { namespace {
+
+    // the UCX library this process loaded, and the one HPX was built
+    // with, for hpx::complete_version()
+    std::string ucx_library_version()
+    {
+        unsigned major = 0;
+        unsigned minor = 0;
+        unsigned release = 0;
+        ucp_get_version(&major, &minor, &release);
+        return hpx::util::format("V{}.{}.{} (built with V{}.{})", major, minor,
+            release, UCP_API_MAJOR, UCP_API_MINOR);
+    }
+
+    config_registry::add_library_version_helper register_ucx_version{
+        {"UCX", &ucx_library_version}};
+}}    // namespace hpx::parcelset
 
 namespace hpx::parcelset::device_conduits {
 

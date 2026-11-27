@@ -47,4 +47,25 @@ namespace hpx::config_registry {
     {
         explicit add_module_config_helper(module_config const& config);
     };
+
+    // The version of a library HPX uses (MPI, CUDA, UCX, ...), registered by
+    // the module that uses it, printed by hpx::complete_version(). The
+    // version is a function, so that it can report the library the process
+    // loaded, which may differ from the one HPX was built with.
+    struct library_version
+    {
+        std::string name;
+        std::string (*version)();
+    };
+
+    [[nodiscard]] HPX_CONFIG_REGISTRY_EXPORT std::vector<library_version> const&
+    get_library_versions();
+
+    HPX_CONFIG_REGISTRY_EXPORT void add_library_version(
+        library_version const& version);
+
+    struct HPX_CONFIG_REGISTRY_EXPORT add_library_version_helper
+    {
+        explicit add_library_version_helper(library_version const& version);
+    };
 }    // namespace hpx::config_registry
