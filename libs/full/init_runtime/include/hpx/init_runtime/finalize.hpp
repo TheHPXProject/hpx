@@ -11,6 +11,7 @@
 #pragma once
 
 #include <hpx/config.hpp>
+#include <hpx/contracts.hpp>
 #include <hpx/modules/errors.hpp>
 #if defined(HPX_HAVE_DISTRIBUTED_RUNTIME)
 #include <hpx/modules/naming_base.hpp>

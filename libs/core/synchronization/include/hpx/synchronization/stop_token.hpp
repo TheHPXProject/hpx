@@ -11,6 +11,7 @@
 #pragma once
 
 #include <hpx/config.hpp>
+#include <hpx/contracts.hpp>
 #include <hpx/assert.hpp>
 #include <hpx/modules/memory.hpp>
 #include <hpx/modules/thread_support.hpp>
@@ -258,7 +259,6 @@ namespace hpx {
         //      receive a stop request, no resources are allocated for a stop
         //      state]
         constexpr stop_token() noexcept
-          // HPX_POST(!this->stop_possible() && !this->stop_requested())
           = default;
 
         stop_token(stop_token const& rhs) = default;
@@ -468,7 +468,7 @@ namespace hpx {
         // Returns: true if this call made a stop request; otherwise false
         /// makes a stop request for the associated stop-state, if any
         bool request_stop() const noexcept
-          HPX_PRE(this->stop_possible()) HPX_POST(!this->stop_possible() || this->stop_requested())
+          HPX_POST(!this->stop_possible() || this->stop_requested())
         {
             return !!state_ && state_->request_stop();
         }

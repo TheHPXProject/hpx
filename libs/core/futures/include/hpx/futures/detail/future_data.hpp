@@ -447,7 +447,6 @@ namespace hpx::lcos::detail {
         // Set the result of the requested action.
         template <typename... Ts>
         void set_value(Ts&&... ts)
-            HPX_PRE(state_.load(std::memory_order_relaxed) == empty)
         {
             hpx::intrusive_ptr<future_data_base> this_(this);    // keep alive
 

@@ -124,7 +124,6 @@ namespace hpx {
         }
 
         void reset(error_code& ec = throws)
-          HPX_PRE(this->valid())
         {
             if (function_.empty())
             {
