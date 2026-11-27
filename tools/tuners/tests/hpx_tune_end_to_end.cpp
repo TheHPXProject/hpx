@@ -263,7 +263,8 @@ namespace {
     // given bytes on pool_size workers. The algorithm asks measure_iteration
     // for the time of an iteration, which takes the rate of the whole
     // footprint on one core to decide on the cores and then the rate of a
-    // core's share of it; it then asks processing_units_count and
+    // core's share of it, and, while that time gives fewer cores, the rate
+    // of the larger share; it then asks processing_units_count and
     // get_chunk_size again with that time.
     struct expected_decision
     {
@@ -298,8 +299,18 @@ namespace {
 
         std::int64_t time = time_for(v, bytes, count * bytes);
         std::size_t footprint = count * bytes;
-        if (std::size_t const cores = cores_for(v, time, count); cores > 1)
+        std::size_t cores = cores_for(v, time, count);
+        if (cores > 1)
         {
+            footprint = count * bytes / cores;
+            time = time_for(v, bytes, footprint);
+        }
+        while (cores > 1)
+        {
+            std::size_t const next = cores_for(v, time, count);
+            if (next >= cores)
+                break;
+            cores = next;
             footprint = count * bytes / cores;
             time = time_for(v, bytes, footprint);
         }
