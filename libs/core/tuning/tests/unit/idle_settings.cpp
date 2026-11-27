@@ -67,8 +67,10 @@ void test_linux_like()
     HPX_TEST(find(s, "hpx.max_idle_backoff_time").is_default);
 }
 
-// Windows: every timed wait lasts a millisecond or more; the longest step
-// grows to the shortest sleep and the spin covers it
+// Windows: every timed wait lasts a millisecond or more, longer than the
+// default longest step (a coarse timer); the longest step grows to the
+// shortest sleep, the spin stays the default, as a notification wakes a
+// sleeping worker long before its timed wait would end
 void test_windows_like()
 {
     tuning::idle_measurements m;
@@ -79,8 +81,42 @@ void test_windows_like()
     auto const s = tuning::derive_idle_settings(m);
     HPX_TEST_EQ(
         find(s, "hpx.max_idle_backoff_time").value, std::string("1101"));
+    HPX_TEST_EQ(find(s, "hpx.min_idle_backoff_time").value, std::string("50"));
+    HPX_TEST(find(s, "hpx.min_idle_backoff_time").is_default);
+    HPX_TEST(find(s, "hpx.min_idle_backoff_time").reason.find("coarse") !=
+        std::string::npos);
+}
+
+// the 15.6 ms tick of Windows' default timer, and a wake cost of 108 us as
+// measured on a 32 core Windows machine
+void test_windows_timer_tick()
+{
+    tuning::idle_measurements m;
+    m.timed_waits = waits(15821.5);
+    m.wake.asleep_us = at(110.2);
+    m.wake.spinning_us = at(1.8);
+
+    auto const s = tuning::derive_idle_settings(m);
     HPX_TEST_EQ(
-        find(s, "hpx.min_idle_backoff_time").value, std::string("1100"));
+        find(s, "hpx.max_idle_backoff_time").value, std::string("15822"));
+    HPX_TEST_EQ(find(s, "hpx.min_idle_backoff_time").value, std::string("50"));
+    // the reason records the wake cost
+    HPX_TEST(find(s, "hpx.min_idle_backoff_time").reason.find("108.4") !=
+        std::string::npos);
+}
+
+// a shortest sleep of exactly the default longest step is not a coarse
+// timer: the spin is the shortest sleep
+void test_sleep_at_longest_step()
+{
+    tuning::idle_measurements m;
+    m.timed_waits = waits(1000.0);
+    m.wake.asleep_us = at(30.0);
+    m.wake.spinning_us = at(1.0);
+
+    auto const s = tuning::derive_idle_settings(m);
+    HPX_TEST_EQ(
+        find(s, "hpx.min_idle_backoff_time").value, std::string("1000"));
 }
 
 // a wake costing more than the shortest sleep lengthens the spin
@@ -111,6 +147,8 @@ int main()
 {
     test_linux_like();
     test_windows_like();
+    test_windows_timer_tick();
+    test_sleep_at_longest_step();
     test_expensive_wake();
     test_no_measurements();
     return hpx::util::report_errors();

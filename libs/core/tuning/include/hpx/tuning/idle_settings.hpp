@@ -55,7 +55,12 @@ namespace hpx::tuning {
     ///   the cost of a wake up, at most hpx.max_idle_backoff_time. A backoff
     ///   step shorter than the shortest sleep, slept, lasts as long as that
     ///   sleep, so it is spun instead; and spinning about as long as a wake
-    ///   costs is the competitive rule of spinning before blocking.
+    ///   costs is the competitive rule of spinning before blocking. With a
+    ///   coarse timer, a shortest sleep longer than the default longest step
+    ///   (Windows: the 15.6 ms tick), the spin stays the default: a
+    ///   notification wakes a sleeping worker after about the wake cost, so
+    ///   the shortest sleep only says how long an idle worker stays asleep,
+    ///   and spinning that long would keep every idle worker busy.
     ///
     /// Without measurements a setting keeps its default and says so.
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT std::vector<tuned_setting>
