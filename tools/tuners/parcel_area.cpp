@@ -18,7 +18,10 @@
 #include <hpx/hpx_init.hpp>
 #include <hpx/include/actions.hpp>
 #include <hpx/include/runtime.hpp>
+#include <hpx/modules/filesystem.hpp>
+#include <hpx/modules/ini.hpp>
 #include <hpx/modules/parcel_tuning.hpp>
+#include <hpx/modules/parcelset.hpp>
 #include <hpx/modules/prefix.hpp>
 #include <hpx/modules/program_options.hpp>
 #include <hpx/modules/serialization.hpp>
@@ -41,6 +44,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -65,9 +69,74 @@ namespace hpx_tune_detail {
         }
         return entries;
     }
+
+    // whether this HPX's device conduits can move host chunks (#8242 added
+    // device_conduit::moves_host_memory); a key in the configuration can't
+    // tell, as a file's keys are accepted whether HPX reads them or not
+    template <typename Conduit, typename = void>
+    struct has_moves_host_memory : std::false_type
+    {
+    };
+
+    template <typename Conduit>
+    struct has_moves_host_memory<Conduit,
+        std::void_t<
+            decltype(std::declval<Conduit const&>().moves_host_memory())>>
+      : std::true_type
+    {
+    };
+
+    template <typename Conduit>
+    bool conduit_moves_host_memory(Conduit const* conduit)
+    {
+        if constexpr (has_moves_host_memory<Conduit>::value)
+        {
+            return conduit != nullptr && conduit->moves_host_memory();
+        }
+        else
+        {
+            (void) conduit;
+            return false;
+        }
+    }
+
+    // what the runtime of this locality took for the host chunks of the
+    // parcelport it bootstraps with (a check's child, see verify_parcel)
+    std::vector<std::pair<std::string, std::string>> verify_entries()
+    {
+        std::string const pp =
+            hpx::get_config_entry("hpx.parcel.bootstrap", "");
+        std::string const key = "hpx.parcel." + pp;
+        auto const* conduit = hpx::parcelset::get_device_conduit();
+        return {
+            {"host_chunk_support",
+                has_moves_host_memory<hpx::parcelset::device_conduit>::value ?
+                    "1" :
+                    "0"},
+            {"conduit", conduit != nullptr ? conduit->name() : "none"},
+            {"conduit_moves_host_memory",
+                conduit_moves_host_memory(conduit) ? "1" : "0"},
+            {"parcelport", pp},
+            {"device_conduit",
+                hpx::get_config_entry("hpx.parcel.device_conduit", "")},
+            {"conduit_host_chunks",
+                hpx::get_config_entry("hpx.parcel.conduit_host_chunks", "")},
+            {"parcelport_conduit_host_chunks",
+                hpx::get_config_entry(key + ".conduit_host_chunks", "")},
+            {"zero_copy_optimization",
+                hpx::get_config_entry(key + ".zero_copy_optimization", "")},
+            {"conduit_host_threshold",
+                hpx::get_config_entry("hpx.parcel.conduit_host_threshold", "")},
+            {"zero_copy_serialization_threshold",
+                hpx::get_config_entry(
+                    key + ".zero_copy_serialization_threshold", "")},
+        };
+    }
 }    // namespace hpx_tune_detail
 
 HPX_PLAIN_ACTION(hpx_tune_detail::host_entries, hpx_tune_host_entries_action)
+HPX_PLAIN_ACTION(
+    hpx_tune_detail::verify_entries, hpx_tune_verify_entries_action)
 
 namespace hpx_tune {
 
@@ -246,6 +315,11 @@ namespace hpx_tune {
 #endif
             ini.push_back("hpx.parcel.bootstrap=" + parcelport);
 
+            // a check's child: the conduit's settings are the file's
+            if (conduit == "verify")
+            {
+                return ini;
+            }
             if (conduit == "none")
             {
                 ini.push_back("hpx.parcel.device_conduit=none");
@@ -281,6 +355,17 @@ namespace hpx_tune {
             std::vector<std::pair<std::string, std::string>> here;
             std::vector<std::pair<std::string, std::string>> peer;
             std::vector<tuning::transfer_point> points;
+            // a check's child: the settings each locality took, and the
+            // chunks per round through the conduit at each size
+            std::vector<std::pair<std::string, std::string>> local;
+            std::vector<std::pair<std::string, std::string>> remote;
+            struct checked_size
+            {
+                std::size_t size = 0;
+                double chunks_per_round = 0.0;
+                std::size_t errors = 0;
+            };
+            std::vector<checked_size> checked;
         };
 
         child_result parse_child(std::vector<std::string> const& lines)
@@ -306,6 +391,21 @@ namespace hpx_tune {
                     int v = 0;
                     is >> v;
                     r.host_chunk_support = v != 0;
+                }
+                else if (kind == "checked")
+                {
+                    child_result::checked_size c;
+                    is >> c.size >> c.chunks_per_round >> c.errors;
+                    if (is)
+                        r.checked.push_back(c);
+                }
+                else if (kind == "local" || kind == "remote")
+                {
+                    std::string key, value;
+                    is >> key;
+                    std::getline(is >> std::ws, value);
+                    (kind == "local" ? r.local : r.remote)
+                        .emplace_back(key, value);
                 }
                 else if (kind == "here" || kind == "peer")
                 {
@@ -342,6 +442,8 @@ namespace hpx_tune {
             bool progress = false;
             std::size_t child = 0;       // the child being measured, from 1
             std::size_t children = 0;    // the children to measure
+            // a check's children: --hpx:config=<file> (see verify_parcel)
+            std::vector<std::string> verify_args;
         };
 
         // inside a Slurm job step: "env -u SLURM_... " for every variable of the
@@ -388,8 +490,10 @@ namespace hpx_tune {
             std::string const& placement)
         {
             std::string const threads = std::to_string(o.threads);
-            std::vector<std::string> args = {
-                "--sizes=" + o.sizes, "--rounds=" + std::to_string(o.rounds)};
+            std::vector<std::string> args = conduit == "verify" ?
+                o.verify_args :
+                std::vector<std::string>{"--sizes=" + o.sizes,
+                    "--rounds=" + std::to_string(o.rounds)};
             for (std::string const& s : child_settings(parcelport, conduit))
                 args.push_back("--hpx:ini=" + s);
             std::string const area = "parcel:" + parcelport + ":" + conduit;
@@ -687,108 +791,180 @@ namespace hpx_tune {
     }    // namespace
 
     // The parcel area: phases 3 and 4 of the design, the first version.
+    namespace {
+
+        // what tuning and checking share: how the children are started,
+        // the placements, the parcelports and the conduits (the options are
+        // checked here, before any child starts)
+        struct parcel_setup
+        {
+            parcel_run_options o;
+            std::vector<std::string> placements;
+            std::vector<std::string> parcelports;
+            std::vector<std::string> conduits;
+        };
+
+        // the parcel layer's part of the fingerprint that describes the
+        // build: its parcelports and its conduits
+        void add_build_entries(tuning::host_fingerprint& fingerprint,
+            std::vector<std::string> const& conduits)
+        {
+            std::string compiled;
+            for (char const* pp : {
+#if defined(HPX_HAVE_PARCELPORT_TCP)
+                     "tcp",
+#endif
+#if defined(HPX_HAVE_PARCELPORT_MPI)
+                     "mpi",
+#endif
+#if defined(HPX_HAVE_PARCELPORT_LCI)
+                     "lci",
+#endif
+#if defined(HPX_HAVE_PARCELPORT_LCW)
+                     "lcw",
+#endif
+#if defined(HPX_HAVE_PARCELPORT_GASNET)
+                     "gasnet",
+#endif
+                     ""})
+            {
+                if (*pp != '\0')
+                    compiled += (compiled.empty() ? "" : ",") + std::string(pp);
+            }
+            fingerprint.add("parcel_parcelports", compiled);
+            std::string compiled_conduits;
+            for (std::string const& c : conduits)
+            {
+                if (c != "none")
+                {
+                    compiled_conduits +=
+                        (compiled_conduits.empty() ? "" : ",") + c;
+                }
+            }
+            fingerprint.add("parcel_conduits",
+                compiled_conduits.empty() ? "none" : compiled_conduits);
+        }
+
+        parcel_setup make_setup(area_context const& context)
+        {
+            po::variables_map const& vm = context.vm;
+            char const* const argv0 = context.executable;
+            bool const verbose = context.verbose;
+
+            parcel_setup setup;
+            parcel_run_options& o = setup.o;
+            std::vector<std::string>& placements = setup.placements;
+            std::vector<std::string>& parcelports = setup.parcelports;
+            std::vector<std::string>& conduits = setup.conduits;
+            o.self = hpx::util::get_executable_filename(argv0);
+            // the options are checked here: a child that can't read them fails
+            // without saying why (the driver reports what an area throws)
+            o.sizes = vm["sizes"].as<std::string>();
+            (void) parse_sizes(o.sizes);
+            o.rounds = vm["rounds"].as<std::size_t>();
+            o.threads = vm["child-threads"].as<std::size_t>();
+            o.timeout = vm["child-timeout"].as<std::size_t>();
+            o.verbose = verbose;
+            o.progress = vm.count("progress") != 0;
+
+            bool const in_slurm = std::getenv("SLURM_JOB_ID") != nullptr;
+            if (vm.count("launcher"))
+            {
+                o.launcher = vm["launcher"].as<std::string>();
+            }
+            else
+            {
+                o.python = HPX_TUNE_PYTHON;
+                o.hpxrun = find_hpxrun(vm);
+                if (o.hpxrun.empty())
+                {
+                    throw std::runtime_error(
+                        "can't find hpxrun.py (see --hpxrun)");
+                }
+                o.in_slurm = in_slurm;
+                if (vm.count("runwrapper"))
+                    o.runwrapper = vm["runwrapper"].as<std::string>();
+                o.wrapper_args_given =
+                    vm.count("wrapper-args-same-node") != 0 ||
+                    vm.count("wrapper-args-two-nodes") != 0;
+                o.wrapper_args_same_node = vm.count("wrapper-args-same-node") ?
+                    vm["wrapper-args-same-node"].as<std::string>() :
+                    "-N 1 -c {threads} --overlap --cpu-bind=none";
+                o.wrapper_args_two_nodes = vm.count("wrapper-args-two-nodes") ?
+                    vm["wrapper-args-two-nodes"].as<std::string>() :
+                    "-N 2 -c {threads} --overlap --cpu-bind=none";
+            }
+
+            if (vm.count("placement"))
+            {
+                placements = vm["placement"].as<std::vector<std::string>>();
+                for (std::string const& p : placements)
+                {
+                    if (p != "same-node" && p != "two-nodes")
+                    {
+                        throw std::invalid_argument("--placement " + p +
+                            ": same-node or two-nodes expected");
+                    }
+                }
+            }
+            else
+            {
+                placements.push_back("same-node");
+                if (in_slurm && slurm_nodes() >= 2)
+                    placements.push_back("two-nodes");
+            }
+
+            if (vm.count("parcel-configurations"))
+            {
+                parcelports =
+                    vm["parcel-configurations"].as<std::vector<std::string>>();
+                for (std::string const& pp : parcelports)
+                {
+                    bool known = false;
+#if defined(HPX_HAVE_PARCELPORT_TCP)
+                    known = known || pp == "tcp";
+#endif
+#if defined(HPX_HAVE_PARCELPORT_MPI)
+                    known = known || pp == "mpi";
+#endif
+                    if (!known)
+                    {
+                        throw std::invalid_argument("--parcel-configurations " +
+                            pp +
+                            ": not a parcelport this HPX measures (tcp or mpi, "
+                            "where compiled in)");
+                    }
+                }
+            }
+            else
+            {
+#if defined(HPX_HAVE_PARCELPORT_TCP)
+                parcelports.push_back("tcp");
+#endif
+#if defined(HPX_HAVE_PARCELPORT_MPI)
+                parcelports.push_back("mpi");
+#endif
+            }
+
+            conduits = {"none"};
+#if defined(HPX_HAVE_DEVICE_CONDUIT_UCX)
+            conduits.push_back("ucx");
+#endif
+            return setup;
+        }
+    }    // namespace
+
     area_result tune_parcel(area_context const& context)
     {
         po::variables_map const& vm = context.vm;
-        char const* const argv0 = context.executable;
         bool const verbose = context.verbose;
         tuning::host_fingerprint& fingerprint = context.fingerprint;
 
-        parcel_run_options o;
-        o.self = hpx::util::get_executable_filename(argv0);
-        // the options are checked here: a child that can't read them fails
-        // without saying why (the driver reports what an area throws)
-        o.sizes = vm["sizes"].as<std::string>();
-        (void) parse_sizes(o.sizes);
-        o.rounds = vm["rounds"].as<std::size_t>();
-        o.threads = vm["child-threads"].as<std::size_t>();
-        o.timeout = vm["child-timeout"].as<std::size_t>();
-        o.verbose = verbose;
-        o.progress = vm.count("progress") != 0;
-
-        bool const in_slurm = std::getenv("SLURM_JOB_ID") != nullptr;
-        if (vm.count("launcher"))
-        {
-            o.launcher = vm["launcher"].as<std::string>();
-        }
-        else
-        {
-            o.python = HPX_TUNE_PYTHON;
-            o.hpxrun = find_hpxrun(vm);
-            if (o.hpxrun.empty())
-            {
-                throw std::runtime_error("can't find hpxrun.py (see --hpxrun)");
-            }
-            o.in_slurm = in_slurm;
-            if (vm.count("runwrapper"))
-                o.runwrapper = vm["runwrapper"].as<std::string>();
-            o.wrapper_args_given = vm.count("wrapper-args-same-node") != 0 ||
-                vm.count("wrapper-args-two-nodes") != 0;
-            o.wrapper_args_same_node = vm.count("wrapper-args-same-node") ?
-                vm["wrapper-args-same-node"].as<std::string>() :
-                "-N 1 -c {threads} --overlap --cpu-bind=none";
-            o.wrapper_args_two_nodes = vm.count("wrapper-args-two-nodes") ?
-                vm["wrapper-args-two-nodes"].as<std::string>() :
-                "-N 2 -c {threads} --overlap --cpu-bind=none";
-        }
-
-        std::vector<std::string> placements;
-        if (vm.count("placement"))
-        {
-            placements = vm["placement"].as<std::vector<std::string>>();
-            for (std::string const& p : placements)
-            {
-                if (p != "same-node" && p != "two-nodes")
-                {
-                    throw std::invalid_argument("--placement " + p +
-                        ": same-node or two-nodes expected");
-                }
-            }
-        }
-        else
-        {
-            placements.push_back("same-node");
-            if (in_slurm && slurm_nodes() >= 2)
-                placements.push_back("two-nodes");
-        }
-
-        std::vector<std::string> parcelports;
-        if (vm.count("parcel-configurations"))
-        {
-            parcelports =
-                vm["parcel-configurations"].as<std::vector<std::string>>();
-            for (std::string const& pp : parcelports)
-            {
-                bool known = false;
-#if defined(HPX_HAVE_PARCELPORT_TCP)
-                known = known || pp == "tcp";
-#endif
-#if defined(HPX_HAVE_PARCELPORT_MPI)
-                known = known || pp == "mpi";
-#endif
-                if (!known)
-                {
-                    throw std::invalid_argument("--parcel-configurations " +
-                        pp +
-                        ": not a parcelport this HPX measures (tcp or mpi, "
-                        "where compiled in)");
-                }
-            }
-        }
-        else
-        {
-#if defined(HPX_HAVE_PARCELPORT_TCP)
-            parcelports.push_back("tcp");
-#endif
-#if defined(HPX_HAVE_PARCELPORT_MPI)
-            parcelports.push_back("mpi");
-#endif
-        }
-
-        std::vector<std::string> conduits = {"none"};
-#if defined(HPX_HAVE_DEVICE_CONDUIT_UCX)
-        conduits.push_back("ucx");
-#endif
+        parcel_setup setup = make_setup(context);
+        parcel_run_options& o = setup.o;
+        std::vector<std::string> const& placements = setup.placements;
+        std::vector<std::string> const& parcelports = setup.parcelports;
+        std::vector<std::string> const& conduits = setup.conduits;
 
         std::size_t const passes =
             (std::max) (vm["passes"].as<std::size_t>(), std::size_t(1));
@@ -949,39 +1125,7 @@ namespace hpx_tune {
         result.report = report.text(passes, seed);
 
         // the parcel layer's part of the fingerprint
-        std::string compiled;
-        for (char const* pp : {
-#if defined(HPX_HAVE_PARCELPORT_TCP)
-                 "tcp",
-#endif
-#if defined(HPX_HAVE_PARCELPORT_MPI)
-                 "mpi",
-#endif
-#if defined(HPX_HAVE_PARCELPORT_LCI)
-                 "lci",
-#endif
-#if defined(HPX_HAVE_PARCELPORT_LCW)
-                 "lcw",
-#endif
-#if defined(HPX_HAVE_PARCELPORT_GASNET)
-                 "gasnet",
-#endif
-                 ""})
-        {
-            if (*pp != '\0')
-                compiled += (compiled.empty() ? "" : ",") + std::string(pp);
-        }
-        fingerprint.add("parcel_parcelports", compiled);
-        std::string compiled_conduits;
-        for (std::string const& c : conduits)
-        {
-            if (c != "none")
-            {
-                compiled_conduits += (compiled_conduits.empty() ? "" : ",") + c;
-            }
-        }
-        fingerprint.add("parcel_conduits",
-            compiled_conduits.empty() ? "none" : compiled_conduits);
+        add_build_entries(fingerprint, conduits);
         std::string measured_list;
         for (std::string const& m : measured_names)
             measured_list += (measured_list.empty() ? "" : ",") + m;
@@ -994,6 +1138,237 @@ namespace hpx_tune {
                 "conduit (hpx.parcel.conduit_host_chunks is unknown)");
         }
         result.sections = tuning::to_sections(written);
+        return result;
+    }
+
+    namespace {
+
+        std::size_t entry_as_size(
+            std::vector<std::pair<std::string, std::string>> const& entries,
+            std::string const& key, std::size_t const dflt)
+        {
+            for (auto const& [k, v] : entries)
+            {
+                if (k == key && !v.empty())
+                {
+                    try
+                    {
+                        return std::stoull(v);
+                    }
+                    catch (std::exception const&)
+                    {
+                        return dflt;
+                    }
+                }
+            }
+            return dflt;
+        }
+
+        std::string entry_of(
+            std::vector<std::pair<std::string, std::string>> const& entries,
+            std::string const& key)
+        {
+            for (auto const& [k, v] : entries)
+            {
+                if (k == key)
+                    return v;
+            }
+            return {};
+        }
+
+        bool is_on(std::string const& value)
+        {
+            return !value.empty() && value != "0";
+        }
+
+        // the same setting: as numbers where both are numbers
+        bool same_value(std::string const& a, std::string const& b)
+        {
+            try
+            {
+                std::size_t na = 0;
+                std::size_t nb = 0;
+                unsigned long long const va = std::stoull(a, &na);
+                unsigned long long const vb = std::stoull(b, &nb);
+                if (na == a.size() && nb == b.size())
+                    return va == vb;
+            }
+            catch (std::exception const&)
+            {
+            }
+            return a == b;
+        }
+    }    // namespace
+
+    verify_result verify_parcel(verify_context const& vc)
+    {
+        area_context const& context = vc.context;
+        parcel_setup setup = make_setup(context);
+        parcel_run_options& o = setup.o;
+        o.verify_args = {"--hpx:config=" +
+            hpx::filesystem::absolute(hpx::filesystem::path(vc.file)).string()};
+        o.children = setup.placements.size() * setup.parcelports.size();
+
+        hpx::util::section file;
+        file.read(vc.file);
+
+        add_build_entries(context.fingerprint, setup.conduits);
+
+        verify_result result;
+        std::vector<std::string> items;
+        std::size_t const mib = std::size_t(1) << 20;
+
+        for (std::string const& placement : setup.placements)
+        {
+            for (std::string const& pp : setup.parcelports)
+            {
+                ++o.child;
+                std::string const what = placement + ", " + pp;
+                child_result const r = run_child(o, pp, "verify", placement);
+                if (!r.complete || r.local.empty())
+                {
+                    result.failures.push_back(what + ": the child failed");
+                    result.lines.push_back(what + ": the child failed");
+                    continue;
+                }
+                std::size_t const failures_before = result.failures.size();
+                auto const fail = [&](std::string const& text) {
+                    result.failures.push_back(what + ": " + text);
+                };
+
+                // both localities took the same
+                for (char const* key : {"conduit", "conduit_moves_host_memory",
+                         "parcelport_conduit_host_chunks",
+                         "zero_copy_optimization", "conduit_host_threshold",
+                         "zero_copy_serialization_threshold"})
+                {
+                    std::string const a = entry_of(r.local, key);
+                    std::string const b = entry_of(r.remote, key);
+                    if (!same_value(a, b))
+                    {
+                        fail(std::string("the localities differ in ") + key +
+                            " (" + a + ", " + b + ")");
+                    }
+                }
+
+                // the runtime took what the file says
+                std::pair<std::string, char const*> const keys[] = {
+                    {"hpx.parcel.device_conduit", "device_conduit"},
+                    {"hpx.parcel.conduit_host_chunks", "conduit_host_chunks"},
+                    {"hpx.parcel." + pp + ".conduit_host_chunks",
+                        "parcelport_conduit_host_chunks"},
+                    {"hpx.parcel.conduit_host_threshold",
+                        "conduit_host_threshold"}};
+                for (auto const& [key, name] : keys)
+                {
+                    if (!file.has_entry(key))
+                        continue;
+                    std::string const in_file = file.get_entry(key);
+                    std::string const taken = entry_of(r.local, name);
+                    if (!same_value(in_file, taken))
+                    {
+                        fail(key + ": the file says " + in_file +
+                            ", the runtime has " + taken);
+                    }
+                }
+
+                bool const support =
+                    entry_of(r.local, "host_chunk_support") == "1";
+                bool const moves =
+                    entry_of(r.local, "conduit_moves_host_memory") == "1" &&
+                    entry_of(r.remote, "conduit_moves_host_memory") == "1";
+                bool const on = is_on(entry_of(r.local,
+                                    "parcelport_conduit_host_chunks")) &&
+                    is_on(
+                        entry_of(r.remote, "parcelport_conduit_host_chunks")) &&
+                    entry_of(r.local, "zero_copy_optimization") != "0";
+                std::string const conduit = entry_of(r.local, "conduit");
+                std::size_t const threshold =
+                    (std::max) (entry_as_size(
+                                    r.local, "conduit_host_threshold", mib),
+                        entry_as_size(r.local,
+                            "zero_copy_serialization_threshold", 8192));
+
+                // what the file asks for this parcelport
+                std::string const pp_key =
+                    "hpx.parcel." + pp + ".conduit_host_chunks";
+                bool const file_on = file.has_entry(pp_key) ?
+                    is_on(file.get_entry(pp_key)) :
+                    (file.has_entry("hpx.parcel.conduit_host_chunks") &&
+                        is_on(
+                            file.get_entry("hpx.parcel.conduit_host_chunks")));
+                if (!support && file_on)
+                {
+                    fail("the file turns host chunks through the device "
+                         "conduit on, which this HPX can't do");
+                }
+                else if (support && on && !moves)
+                {
+                    fail("host chunks through the device conduit are on, but "
+                         "no device conduit moves host memory (conduit: " +
+                        conduit + ")");
+                }
+
+                bool const expected_on = support && moves && on;
+                std::string sizes_text;
+                std::vector<std::string> sizes_json;
+                for (auto const& c : r.checked)
+                {
+                    bool const expect = expected_on && c.size >= threshold;
+                    sizes_text += (sizes_text.empty() ? "" : ", ") +
+                        std::to_string(c.size) + ": " +
+                        number(c.chunks_per_round);
+                    sizes_json.push_back(
+                        tuning::json_object({{"size", std::to_string(c.size)},
+                            {"through_conduit", expect ? "true" : "false"},
+                            {"chunks_per_round",
+                                tuning::json_number(c.chunks_per_round)},
+                            {"errors", std::to_string(c.errors)}}));
+                    if (c.errors != 0)
+                    {
+                        fail(std::to_string(c.size) + " bytes: " +
+                            std::to_string(c.errors) + " wrong transfers");
+                    }
+                    if (expect && c.chunks_per_round < 0.5)
+                    {
+                        fail(std::to_string(c.size) +
+                            " bytes: through the conduit expected, " +
+                            number(c.chunks_per_round) + " chunks per round");
+                    }
+                    else if (!expect && c.chunks_per_round != 0.0)
+                    {
+                        fail(std::to_string(c.size) +
+                            " bytes: through the parcelport expected, " +
+                            number(c.chunks_per_round) + " chunks per round");
+                    }
+                }
+                if (r.checked.empty())
+                    fail("no transfers");
+
+                bool const holds = result.failures.size() == failures_before;
+                std::string const how = !support ?
+                    std::string("this HPX doesn't move host chunks through a "
+                                "device conduit") :
+                    expected_on ?
+                    "host chunks through " + conduit + " from " +
+                        std::to_string(threshold) + " bytes" :
+                    std::string("host chunks through the parcelport");
+                result.lines.push_back(what + ": " + how + ": " +
+                    (holds ? "as the file says" : "not as the file says") +
+                    " (" + sizes_text + ")");
+                items.push_back(tuning::json_object(
+                    {{"placement", tuning::json_string(placement)},
+                        {"parcelport", tuning::json_string(pp)},
+                        {"conduit", tuning::json_string(conduit)},
+                        {"host_chunk_support", support ? "true" : "false"},
+                        {"through_conduit_from",
+                            expected_on ? std::to_string(threshold) : "null"},
+                        {"holds", holds ? "true" : "false"},
+                        {"sizes", tuning::json_array(sizes_json)}}));
+            }
+        }
+        result.report =
+            tuning::json_object({{"checks", tuning::json_array(items)}});
         return result;
     }
 
@@ -1060,6 +1435,57 @@ namespace hpx_tune {
             return hpx::finalize();
         }
 
+        // a check's child: what both localities took from the file, and
+        // the transfers around the threshold (the conduit's chunks per
+        // round at each size; 1 through the conduit, 0 through the
+        // parcelport)
+        int verify_child_main(po::variables_map&)
+        {
+            std::string const child_prefix = child_line_prefix("parcel");
+            std::vector<hpx::id_type> const remotes =
+                hpx::find_remote_localities();
+            if (remotes.empty())
+            {
+                std::cout << child_prefix << " error no remote locality\n";
+                return hpx::finalize();
+            }
+
+            auto const local = hpx_tune_detail::verify_entries();
+            auto const remote =
+                hpx_tune_verify_entries_action()(remotes.front());
+            for (auto const& [key, value] : local)
+                std::cout << child_prefix << " local " << key << " " << value
+                          << "\n";
+            for (auto const& [key, value] : remote)
+                std::cout << child_prefix << " remote " << key << " " << value
+                          << "\n";
+
+            // sizes around the threshold, the largest the tool measures
+            std::size_t const mib = std::size_t(1) << 20;
+            std::size_t const threshold =
+                (std::max) (entry_as_size(local, "conduit_host_threshold", mib),
+                    std::size_t(8192));
+            std::vector<std::size_t> sizes = {threshold / 2, threshold - 4096,
+                threshold, 2 * threshold, 64 * mib};
+            std::sort(sizes.begin(), sizes.end());
+            sizes.erase(std::unique(sizes.begin(), sizes.end()), sizes.end());
+            sizes.erase(std::remove_if(sizes.begin(), sizes.end(),
+                            [&](std::size_t const n) { return n > 64 * mib; }),
+                sizes.end());
+
+            tuning::transfer_options options;
+            options.sizes = sizes;
+            options.rounds = 3;
+            for (tuning::transfer_point const& p :
+                tuning::measure_transfers(remotes.front(), options))
+            {
+                std::cout << child_prefix << " checked " << p.size << " "
+                          << p.conduit_chunks_per_round << " " << p.errors
+                          << "\n";
+            }
+            std::cout << child_prefix << " end\n" << std::flush;
+            return hpx::finalize();
+        }
     }    // namespace
 
     int run_as_child(int argc, char* argv[])
@@ -1068,7 +1494,20 @@ namespace hpx_tune {
         desc.add(parcel_options());
         hpx::init_params params;
         params.desc_cmdline = desc;
-        return hpx::init(child_main, argc, argv, params);
+
+        // --child=parcel:<parcelport>:verify is a check's child
+        bool verify = false;
+        for (int i = 1; i < argc; ++i)
+        {
+            std::string const arg(argv[i]);
+            if (arg.rfind("--child=parcel:", 0) == 0 && arg.size() >= 7 &&
+                arg.substr(arg.size() - 7) == ":verify")
+            {
+                verify = true;
+            }
+        }
+        return hpx::init(
+            verify ? verify_child_main : child_main, argc, argv, params);
     }
 }    // namespace hpx_tune
 
@@ -1077,6 +1516,6 @@ namespace hpx_tune {
 HPX_TUNE_REGISTER_AREA(parcel,
     hpx_tune::area{"parcel", "tune the parcel layer's settings", 20,
         &hpx_tune::parcel_options, &hpx_tune::tune_parcel,
-        &hpx_tune::run_as_child, nullptr})
+        &hpx_tune::run_as_child, &hpx_tune::verify_parcel})
 
 #endif

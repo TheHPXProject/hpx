@@ -29,6 +29,14 @@ namespace hpx_tune {
     // entries to the host fingerprint.
     area_result tune_parcel(area_context const& context);
 
+    // Check a written file (hpx_tune --check): for each parcelport and
+    // placement, a child of two localities started with the file reports
+    // the settings its runtime took and moves data around the threshold;
+    // the file holds if the transfers go through the device conduit where
+    // its settings say so and nowhere else. Adds the parcel area's build
+    // entries to the host fingerprint, for the driver to compare.
+    verify_result verify_parcel(verify_context const& context);
+
     // run as a child of the parcel area (--child=parcel:..., see child.hpp):
     // starts the HPX runtime and measures one configuration
     int run_as_child(int argc, char* argv[]);

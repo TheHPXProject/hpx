@@ -60,6 +60,21 @@ namespace {
             std::istreambuf_iterator<char>());
     }
 
+    void write_file(std::string const& name, std::string const& text)
+    {
+        std::ofstream out(name);
+        out << text;
+    }
+
+    // hpx_tune --check=<file> for the parcel area alone, TCP on this node
+    int check_file(std::string const& file, std::string const& report)
+    {
+        return run_tool("--check=\"" + file +
+            "\" --parcel --placement same-node --parcel-configurations tcp "
+            "--child-threads 2 --report \"" +
+            report + "\"");
+    }
+
     bool contains(std::string const& text, std::string const& what)
     {
         return text.find(what) != std::string::npos;
@@ -140,6 +155,48 @@ int main(int argc, char* argv[])
     HPX_TEST_EQ(hpx::local::init(check_with_runtime,
                     static_cast<int>(args.size() - 1), args.data()),
         0);
+
+    // the file checked: an application started with it moves its data the
+    // way the file says (tuner chapter 10, level 1)
+    std::string const check_report =
+        std::string(HPX_TUNE_TEST_DIRECTORY) + "/hpx_tune_parcel_check.json";
+    HPX_TEST_EQ(check_file(parcel_file, check_report), 0);
+    {
+        std::string const report = read_file(check_report);
+        HPX_TEST(contains(report, "\"parcel\": {"));
+        HPX_TEST(contains(report, "\"holds\": true"));
+        HPX_TEST(!contains(report, "\"holds\": false"));
+    }
+
+    // values the tool may not write here: host chunks off for TCP, a
+    // threshold of 256 KiB (with or without host chunks in this HPX)
+    std::string const tcp_off =
+        std::string(HPX_TUNE_TEST_DIRECTORY) + "/hpx_tune_parcel_tcp_off.ini";
+    // (an empty fingerprint section: the driver of 7181f669ab throws on a
+    // file without one, status/parcel.md)
+    write_file(tcp_off,
+        "[hpx.tuning.fingerprint]\n[hpx.parcel]\nconduit_host_threshold = "
+        "262144\n"
+        "[hpx.parcel.tcp]\nconduit_host_chunks = 0\n");
+    HPX_TEST_EQ(check_file(tcp_off, check_report), 0);
+
+    // a parcelport this build may not have: never a failure
+    std::string const other_parcelport = std::string(HPX_TUNE_TEST_DIRECTORY) +
+        "/hpx_tune_parcel_other_parcelport.ini";
+    write_file(other_parcelport,
+        "[hpx.tuning.fingerprint]\n[hpx.parcel.lcw]\nconduit_host_chunks = 1\n"
+        "zero_copy_serialization_threshold = 4096\n");
+    HPX_TEST_EQ(check_file(other_parcelport, check_report), 0);
+
+    // host chunks through a conduit that isn't there: the file can't do
+    // what it says, the check fails
+    std::string const no_conduit = std::string(HPX_TUNE_TEST_DIRECTORY) +
+        "/hpx_tune_parcel_no_conduit.ini";
+    write_file(no_conduit,
+        "[hpx.tuning.fingerprint]\n[hpx.parcel]\ndevice_conduit = none\n"
+        "[hpx.parcel.tcp]\nconduit_host_chunks = 1\n");
+    HPX_TEST_NEQ(check_file(no_conduit, check_report), 0);
+    HPX_TEST(contains(read_file(check_report), "\"holds\": false"));
 
     return hpx::util::report_errors();
 }
