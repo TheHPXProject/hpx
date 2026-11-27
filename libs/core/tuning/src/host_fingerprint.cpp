@@ -19,9 +19,37 @@
 
 namespace hpx::tuning {
 
+    namespace {
+
+        // a value as HPX's ini reader gives it back: every '#' (the start of
+        // a comment there, which nothing escapes) written as "%23", and
+        // without the white space around it, which the reader drops
+        std::string normalized_value(std::string_view const value)
+        {
+            std::size_t const first = value.find_first_not_of(" 	
+");
+            if (first == std::string_view::npos)
+                return {};
+            std::size_t const last = value.find_last_not_of(" 	
+");
+
+            std::string result;
+            result.reserve(last - first + 1);
+            for (char const c : value.substr(first, last - first + 1))
+            {
+                if (c == '#')
+                    result += "%23";
+                else
+                    result += c;
+            }
+            return result;
+        }
+    }    // namespace
+
     void host_fingerprint::add(
-        std::string key, std::string value, bool const compared)
+        std::string key, std::string const& raw_value, bool const compared)
     {
+        std::string value = normalized_value(raw_value);
         for (fingerprint_entry& e : entries)
         {
             if (e.key == key)

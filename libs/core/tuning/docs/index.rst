@@ -313,7 +313,11 @@ profile is for the hosts of a partition), ``cpu_model``, ``architecture``,
 ``stdlib`` (from |hpx|'s version). Other tuning areas append their own
 entries with ``add``, their keys starting with the area's name
 (``parcel_conduits``). Keys are single words with underscores, since a dot
-would read as a further section level in an ini file.
+would read as a further section level in an ini file. A value is stored as |hpx|'s
+ini reader reads it back: without leading and trailing white space, and
+with every ``#`` (where the reader's comments start, with no way to escape
+it) written as ``%23``, so that a profile read from a file and this host
+compare equal (a Linux kernel's version is ``#1 SMP ...``).
 
 ``to_comments`` gives one comment line per entry (``fingerprint: cpu_model =
 ...``) and ``to_section`` the section ``[hpx.tuning.fingerprint]`` with one
