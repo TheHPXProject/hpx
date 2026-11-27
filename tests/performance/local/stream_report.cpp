@@ -60,6 +60,10 @@ std::string get_executor_name(std::size_t executor)
         return "scheduler_executor";
     case 5:
         return "concurrent_executor";
+    case 6:
+        return "suspending_fork_join_executor";
+    case 7:
+        return "shared_suspending_fork_join_executor";
     default:
         return "no-executor";
     }
@@ -82,6 +86,10 @@ std::string get_allocator_name(std::size_t allocator)
         return "default_scheduler_executor_allocator";
     case 5:
         return "gpu allocator";
+    case 6:
+        return "default_suspending_fork_join_policy_allocator";
+    case 7:
+        return "default_shared_suspending_fork_join_policy_allocator";
     default:
         return "no-allocator";
     }
@@ -515,6 +523,36 @@ int hpx_main(hpx::program_options::variables_map& vm)
         }
 
         {
+            // Suspending fork-join executor and allocator with it.
+            executor = 6;
+            using executor_type =
+                hpx::execution::experimental::suspending_fork_join_executor;
+            executor_type exec;
+            auto policy = hpx::execution::par.on(exec);
+            hpx::compute::host::detail::policy_allocator<STREAM_TYPE,
+                decltype(policy)>
+                alloc(policy);
+
+            run_benchmark<>(warmup_iterations, iterations, vector_size,
+                std::move(alloc), std::move(policy), executor);
+        }
+
+        {
+            // Shared suspending fork-join executor and allocator with it.
+            executor = 7;
+            using executor_type = hpx::execution::experimental::
+                shared_suspending_fork_join_executor;
+            executor_type exec;
+            auto policy = hpx::execution::par.on(exec);
+            hpx::compute::host::detail::policy_allocator<STREAM_TYPE,
+                decltype(policy)>
+                alloc(policy);
+
+            run_benchmark<>(warmup_iterations, iterations, vector_size,
+                std::move(alloc), std::move(policy), executor);
+        }
+
+        {
             // thread_pool_scheduler used through a scheduler_executor.
             executor = 4;
             using executor_type =
@@ -550,6 +588,36 @@ int hpx_main(hpx::program_options::variables_map& vm)
             executor = 3;
             using executor_type =
                 hpx::execution::experimental::fork_join_executor;
+            executor_type exec;
+            auto policy = hpx::execution::par.on(exec);
+            hpx::compute::host::detail::policy_allocator<STREAM_TYPE,
+                decltype(policy)>
+                alloc(policy);
+
+            run_benchmark<true>(warmup_iterations, iterations, vector_size,
+                std::move(alloc), policy.with(tscs), executor);
+        }
+
+        {
+            // Suspending fork-join executor and allocator with it.
+            executor = 6;
+            using executor_type =
+                hpx::execution::experimental::suspending_fork_join_executor;
+            executor_type exec;
+            auto policy = hpx::execution::par.on(exec);
+            hpx::compute::host::detail::policy_allocator<STREAM_TYPE,
+                decltype(policy)>
+                alloc(policy);
+
+            run_benchmark<true>(warmup_iterations, iterations, vector_size,
+                std::move(alloc), policy.with(tscs), executor);
+        }
+
+        {
+            // Shared suspending fork-join executor and allocator with it.
+            executor = 7;
+            using executor_type = hpx::execution::experimental::
+                shared_suspending_fork_join_executor;
             executor_type exec;
             auto policy = hpx::execution::par.on(exec);
             hpx::compute::host::detail::policy_allocator<STREAM_TYPE,

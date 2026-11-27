@@ -649,15 +649,9 @@ namespace hpx::this_thread {
             std::int64_t const suspension_tag =
                 thrd_data->get_state().tag() + 1;
 
-            std::atomic<bool> timer_started(false);
-            threads::thread_id_ref_type const timer_id =
-                threads::detail::set_thread_state_timed(
-                    thrd_data->get_scheduler_base(), abs_time, id,
-                    threads::thread_schedule_state::pending,
-                    threads::thread_restart_state::timeout,
-                    threads::thread_priority::boost,
-                    threads::thread_schedule_hint(), &timer_started, true,
-                    suspension_tag, ec);
+            threads::detail::suspension_timeout timeout =
+                threads::detail::suspension_timeout::set(abs_time, id,
+                    suspension_tag, threads::thread_priority::boost, ec);
             if (ec)
                 return threads::thread_restart_state::unknown;
 
@@ -692,14 +686,7 @@ namespace hpx::this_thread {
                 HPX_ASSERT(statex == threads::thread_restart_state::abort ||
                     statex == threads::thread_restart_state::signaled);
 
-                error_code ec1(throwmode::lightweight);    // do not throw
-                hpx::util::yield_while<true>(
-                    [&timer_started]() { return !timer_started.load(); },
-                    "set_thread_state_timed");
-                threads::set_thread_state(timer_id.noref(),
-                    threads::thread_schedule_state::pending,
-                    threads::thread_restart_state::abort,
-                    threads::thread_priority::boost, true, ec1);
+                timeout.cancel();
             }
         }
 

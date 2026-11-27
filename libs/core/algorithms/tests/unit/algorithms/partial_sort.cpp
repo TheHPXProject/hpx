@@ -230,6 +230,43 @@ void test_partial_sort_edge_cases()
     }
 }
 
+// Only ranges with a sorted part of at least 4096 elements are split further
+// in parallel. The iterator returned must still be the end of the whole range.
+void test_partial_sort_large_returns_last()
+{
+    using namespace hpx::execution;
+    using compare_t = std::less<std::uint64_t>;
+
+    for (std::size_t size : {10007u, 100000u})
+    {
+        std::vector<std::uint64_t> input(size);
+        std::iota(input.begin(), input.end(), std::uint64_t{0});
+        std::shuffle(input.begin(), input.end(), gen);
+
+        std::size_t const middle_index = size / 2;
+
+        {
+            auto values = input;
+            auto result = hpx::partial_sort(par, values.begin(),
+                values.begin() + static_cast<std::ptrdiff_t>(middle_index),
+                values.end(), compare_t());
+            HPX_TEST(result == values.end());
+            for (std::uint64_t j = 0; j < middle_index; ++j)
+                HPX_TEST_EQ(values[j], j);
+        }
+
+        {
+            auto values = input;
+            auto f = hpx::partial_sort(par(task), values.begin(),
+                values.begin() + static_cast<std::ptrdiff_t>(middle_index),
+                values.end(), compare_t());
+            HPX_TEST(f.get() == values.end());
+            for (std::uint64_t j = 0; j < middle_index; ++j)
+                HPX_TEST_EQ(values[j], j);
+        }
+    }
+}
+
 void test_partial_sort_sorted_prefix_with_smaller_tail()
 {
     using namespace hpx::execution;
@@ -280,6 +317,7 @@ void partial_sort_test()
     test_partial_sort<std::random_access_iterator_tag>();
     test_partial_sort<std::forward_iterator_tag>();
     test_partial_sort_edge_cases();
+    test_partial_sort_large_returns_last();
     test_partial_sort_sorted_prefix_with_smaller_tail();
 }
 

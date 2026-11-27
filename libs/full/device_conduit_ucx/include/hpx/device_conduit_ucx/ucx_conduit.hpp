@@ -109,6 +109,18 @@ namespace hpx::parcelset::device_conduits {
         // progress
         void note_device(void const* p) noexcept;
 
+    public:
+        // A completion of a send or receive, run outside of UCX (see
+        // run_completions): UCX calls the callbacks of requests while it
+        // holds its worker lock, and a completion may suspend its HPX thread
+        // (it may send parcels, e.g. when the sent parcels are released),
+        // which would leave the lock taken.
+        void defer(hpx::move_only_function<void()> completion);
+
+    private:
+        // runs the deferred completions (no lock held)
+        bool run_completions();
+
         // sends unless the endpoint was closed since (its locality was
         // removed)
         void start_send(std::uint32_t locality_id, std::uint64_t generation,
@@ -138,6 +150,11 @@ namespace hpx::parcelset::device_conduits {
 
         // one thread at a time makes progress
         hpx::spinlock progress_mtx_;
+
+        // the deferred completions (a lock that never suspends: taken in
+        // UCX's callbacks)
+        std::mutex completions_mtx_;
+        std::vector<hpx::move_only_function<void()>> completions_;
     };
 }    // namespace hpx::parcelset::device_conduits
 

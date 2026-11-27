@@ -23,7 +23,6 @@
 #include <hpx/version.hpp>
 
 #if HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
-#include <hpx/itt_notify/detail/use_ittnotify_api.hpp>
 #include <hpx/modules/itt_notify.hpp>
 #endif
 

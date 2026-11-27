@@ -13,6 +13,7 @@
 #include <hpx/config.hpp>
 #include <hpx/execution/detail/task_size_chunk_size_defaults.hpp>
 #include <hpx/execution/executors/execution_parameters.hpp>
+#include <hpx/execution/executors/get_min_chunk_time.hpp>
 #include <hpx/modules/execution_base.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/serialization.hpp>
@@ -50,7 +51,10 @@ namespace hpx::execution::experimental {
         ///       microseconds) and \a hpx.task_size_chunk_size.chunks_per_core.
         ///       The defaults are read when a loop is chunked, so an object
         ///       created before the runtime has started (for instance as part
-        ///       of a global execution policy) uses the configured ones.
+        ///       of a global execution policy) uses the configured ones. An
+        ///       executor can ask for a minimal run time of its own (see
+        ///       \a hpx::execution::experimental::get_min_chunk_time), which
+        ///       replaces the default one for its loops.
         ///
         constexpr task_size_chunk_size() noexcept = default;
 
@@ -167,7 +171,7 @@ namespace hpx::execution::experimental {
 
             // the iterations one core needs, computed without multiplying by
             // count, which could overflow
-            auto const [min_chunk_time, chunks_per_core] = get_values();
+            auto const [min_chunk_time, chunks_per_core] = get_values(exec);
             auto const per_core =
                 std::chrono::duration_cast<hpx::chrono::picoseconds>(
                     min_chunk_time) *
@@ -182,7 +186,7 @@ namespace hpx::execution::experimental {
 
         // chunks_per_core chunks per core, none shorter than min_chunk_time.
         template <typename Executor>
-        std::size_t get_chunk_size(Executor&&,
+        std::size_t get_chunk_size(Executor&& exec,
             hpx::chrono::steady_duration const& iteration_duration,
             std::size_t const cores, std::size_t const count) const noexcept
         {
@@ -199,7 +203,7 @@ namespace hpx::execution::experimental {
                 return count;
             }
 
-            auto const [min_chunk_time, chunks_per_core] = get_values();
+            auto const [min_chunk_time, chunks_per_core] = get_values(exec);
             std::size_t const num_chunks =
                 chunks_per_core * (std::max) (cores, std::size_t(1));
             std::size_t const balanced = (count + num_chunks - 1) / num_chunks;
@@ -222,21 +226,27 @@ namespace hpx::execution::experimental {
         using rep = duration::rep;
 
         // The minimal run time of a chunk and the number of chunks per core,
-        // the current defaults for the ones that were not given.
-        std::pair<duration, std::size_t> get_values() const noexcept
+        // for the ones that were not given the executor's minimal run time
+        // (the current default unless it asks for another one) and the
+        // current default number of chunks per core.
+        template <typename Executor>
+        std::pair<duration, std::size_t> get_values(
+            Executor const& exec) const noexcept
         {
             if (min_chunk_time_ >= duration::zero() && chunks_per_core_ != 0)
             {
                 return {min_chunk_time_, chunks_per_core_};
             }
 
-            auto const defaults = detail::get_task_size_chunk_size_defaults();
             return {min_chunk_time_ >= duration::zero() ?
                     min_chunk_time_ :
-                    hpx::chrono::steady_duration(defaults.min_chunk_time)
+                    hpx::chrono::steady_duration(
+                        hpx::execution::experimental::get_min_chunk_time(exec))
                         .value(),
-                chunks_per_core_ != 0 ? chunks_per_core_ :
-                                        defaults.chunks_per_core};
+                chunks_per_core_ != 0 ?
+                    chunks_per_core_ :
+                    detail::get_task_size_chunk_size_defaults()
+                        .chunks_per_core};
         }
 
         friend class hpx::serialization::access;

@@ -84,8 +84,8 @@ namespace hpx::util::detail {
         std::int64_t microsecs_ = 0;
         /// id of currently scheduled thread
         threads::thread_id_ref_type id_;
-        /// id of the timer thread for the currently scheduled thread
-        threads::thread_id_ref_type timerid_;
+        /// the timeout that starts the currently scheduled thread
+        threads::detail::suspension_timeout timeout_;
         /// description of this interval timer
         std::string description_;
 

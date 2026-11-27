@@ -14,7 +14,7 @@ namespace hpx::execution::experimental::detail {
 
     // CPO tag that prefers target.query(tag, args...) and otherwise invokes
     // Fallback{}(target, args...).
-    template <typename Tag, typename Fallback>
+    HPX_CXX_CORE_EXPORT template <typename Tag, typename Fallback>
     struct query_first_tag_fallback
     {
     protected:
