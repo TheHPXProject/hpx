@@ -10,8 +10,10 @@
 // file is known to be accepted, the second with HPX's ini reader alone (the
 // runtime is started once per process). A file has to hold the host's
 // fingerprint and one idle section per configuration and pool size, with
-// valid backoff times. The test checks the form of the files, not whether
-// the settings are good for the machine.
+// valid backoff times. The first run writes a report too (--report), which
+// has to hold the fingerprint and the idle area's measurements. The test
+// checks the form of the files, not whether the settings are good for the
+// machine.
 //
 // HPX_TUNE_EXECUTABLE and HPX_TUNE_TEST_DIRECTORY are set by CMake.
 
@@ -42,6 +44,9 @@ namespace {
         std::string(HPX_TUNE_TEST_DIRECTORY) + "/hpx_tune_default.ini";
     std::string const explicit_file =
         std::string(HPX_TUNE_TEST_DIRECTORY) + "/hpx_tune_explicit.ini";
+    // the report of the first run
+    std::string const report_file =
+        std::string(HPX_TUNE_TEST_DIRECTORY) + "/hpx_tune_default.json";
 
     // run hpx_tune with the given arguments, return its exit code
     int run_tool(std::string const& arguments)
@@ -144,6 +149,37 @@ namespace {
             std::string());
     }
 
+    // the report of the first run: the version, the fingerprint and the
+    // idle area's measurements and settings (its form, not a JSON parse)
+    void check_report()
+    {
+        std::string const json = read_file(report_file);
+        HPX_TEST_EQ(
+            json.find("{\"hpx_tune\": " +
+                hpx::tuning::json_string(hpx::full_version_as_string()) +
+                ", \"written\": "),
+            std::string::size_type(0));
+        HPX_TEST(json.find(", \"fingerprint\": {\"host_name\": {\"value\": ") !=
+            std::string::npos);
+        HPX_TEST(json.find("\"pus\": {\"value\": \"" +
+                     std::to_string(hpx::tuning::describe_machine(
+                         hpx::threads::get_topology())
+                             .pus) +
+                     "\", \"compared\": true}") != std::string::npos);
+        for (char const* member : {"\"areas\": {\"idle\": {",
+                 "\"configurations\": [{\"scheduler\": "
+                 "\"local-priority-fifo\", \"tuner\": \"\"}]",
+                 "\"clock_read_ns\": {\"count\": 3, ",
+                 "\"spin_rate_rounds_per_us\": {", "\"timed_waits\": [{",
+                 "\"wake_up\": {\"asleep_us\": {",
+                 "\"settings\": [{\"key\": \"hpx."})
+        {
+            HPX_TEST_MSG(json.find(member) != std::string::npos, member);
+        }
+        HPX_TEST(json.size() > 5);
+        HPX_TEST_EQ(json.substr(json.size() - 5), std::string("]}}}\n"));
+    }
+
     int check_with_runtime()
     {
         check_default_file();
@@ -192,12 +228,14 @@ int main(int argc, char* argv[])
     // the idle area with its defaults: the default scheduler, the machine's
     // whole-domain pool sizes (the parcel area, which starts localities of
     // its own, has a test of its own)
-    HPX_TEST_EQ(
-        run_tool("--idle --repeats 3 --output \"" + default_file + "\""), 0);
+    HPX_TEST_EQ(run_tool("--idle --repeats 3 --output \"" + default_file +
+                    "\" --report \"" + report_file + "\""),
+        0);
     std::string const text = read_file(default_file);
     HPX_TEST_EQ(text.find("# Copyright (c) "), std::string::size_type(0));
     HPX_TEST(text.find("\n[hpx.tuning.fingerprint]\n") != std::string::npos);
     HPX_TEST(text.find("\n[hpx.idle_tuning.") != std::string::npos);
+    check_report();
 
     // the idle area alone, with an explicit configuration and pool size
     HPX_TEST_EQ(
