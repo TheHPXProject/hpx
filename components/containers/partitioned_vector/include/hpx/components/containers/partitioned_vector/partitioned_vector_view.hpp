@@ -77,7 +77,6 @@ namespace hpx {
           , cbegin_(begin)
           , cend_(begin)
           , block_(block)
-          // HPX_PRE(sw_sizes.size() == N)
         {
             using indices = typename hpx::util::make_index_pack<N>::type;
 

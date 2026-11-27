@@ -825,7 +825,7 @@ namespace hpx {
         // HPX_PRE(this->valid()) HPX_POST(!this->valid())
         {
 #if defined(HPX_COMPUTE_DEVICE_CODE)
-            // HPX_ASSERT(false);
+            HPX_ASSERT(false);
             using future_type = decltype(base_type::then_alloc(
                 alloc, std::move(*this), std::forward<F>(f), ec));
             return future_type{};
