@@ -32,9 +32,7 @@ namespace hpx_tune {
     // line (or half a NUMA domain and the machine's whole domains, one
     // worker per core) and derive the minimal run time of a chunk of each
     // executor by the rule given.
-    area_result tune_chunk(hpx::program_options::variables_map const& vm,
-        hpx::tuning::machine_description const& machine, std::size_t repeats,
-        bool verbose);
+    area_result tune_chunk(area_context const& context);
 
     // A child of the chunk area (hpx_tune --child=chunk ...): starts the HPX
     // runtime with the HPX options of its command line, times the regions

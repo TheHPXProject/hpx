@@ -175,10 +175,13 @@ namespace hpx_tune {
         return desc;
     }
 
-    area_result tune_chunk(po::variables_map const& vm,
-        tuning::machine_description const& machine, std::size_t const repeats,
-        bool const verbose)
+    area_result tune_chunk(area_context const& context)
     {
+        po::variables_map const& vm = context.vm;
+        tuning::machine_description const& machine = context.machine;
+        std::size_t const repeats = context.options.repeats;
+        bool const verbose = context.verbose;
+
         std::vector<std::size_t> pool_sizes = default_pool_sizes(machine);
         if (vm.count("chunk-pool-size"))
         {
@@ -318,3 +321,10 @@ namespace hpx_tune {
             argc, argv, params);
     }
 }    // namespace hpx_tune
+
+// after the idle area (0), as its children start the HPX runtime
+HPX_TUNE_REGISTER_AREA(chunk,
+    hpx_tune::area{"chunk",
+        "tune the minimal run time of a chunk of each executor", 10,
+        &hpx_tune::chunk_options, &hpx_tune::tune_chunk,
+        &hpx_tune::chunk_child_main})

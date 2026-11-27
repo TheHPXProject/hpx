@@ -4,43 +4,18 @@
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-# The smoke tests of hpx_tune: run the tool and check the files it writes,
-# tests.unit.tools.tuners.hpx_tune (the idle area) and
-# tests.unit.tools.tuners.hpx_tune_chunk (the chunk area)
+# The smoke tests of hpx_tune, tests.unit.tools.tuners.*: they run the tool and
+# check the files it writes. Each area has its tests in a file of its own,
+# <area>.cmake in this directory (idle.cmake, ...), so that adding an area
+# doesn't change this file.
 
 add_hpx_pseudo_target(tests.unit.tools.tuners)
 add_hpx_pseudo_dependencies(tests.unit tests.unit.tools.tuners)
 
-add_hpx_executable(
-  hpx_tune_test INTERNAL_FLAGS
-  SOURCES hpx_tune.cpp ../child.cpp
-  EXCLUDE_FROM_ALL
-  FOLDER "Tests/Unit/Tools/Tuners"
+file(GLOB tuner_area_tests CONFIGURE_DEPENDS
+     "${CMAKE_CURRENT_SOURCE_DIR}/*.cmake"
 )
-
-# the tool it runs, and where it writes its files
-add_dependencies(hpx_tune_test hpx_tune)
-target_compile_definitions(
-  hpx_tune_test
-  PRIVATE "HPX_TUNE_EXECUTABLE=\"$<TARGET_FILE:hpx_tune>\""
-          "HPX_TUNE_TEST_DIRECTORY=\"${CMAKE_CURRENT_BINARY_DIR}\""
-          "HPX_TUNE_CMAKE_COMMAND=\"${CMAKE_COMMAND}\""
-)
-
-add_hpx_unit_test("tools.tuners" hpx_tune)
-
-add_hpx_executable(
-  hpx_tune_chunk_test INTERNAL_FLAGS
-  SOURCES hpx_tune_chunk.cpp
-  EXCLUDE_FROM_ALL
-  FOLDER "Tests/Unit/Tools/Tuners"
-)
-
-add_dependencies(hpx_tune_chunk_test hpx_tune)
-target_compile_definitions(
-  hpx_tune_chunk_test
-  PRIVATE "HPX_TUNE_EXECUTABLE=\"$<TARGET_FILE:hpx_tune>\""
-          "HPX_TUNE_TEST_DIRECTORY=\"${CMAKE_CURRENT_BINARY_DIR}\""
-)
-
-add_hpx_unit_test("tools.tuners" hpx_tune_chunk THREADS_PER_LOCALITY 2)
+list(SORT tuner_area_tests)
+foreach(area_tests ${tuner_area_tests})
+  include(${area_tests})
+endforeach()

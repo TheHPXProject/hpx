@@ -30,6 +30,11 @@ void test_section_name()
     HPX_TEST_EQ(tuning::section_name(row),
         std::string(
             "hpx.idle_tuning.local-priority-tuned-fifo.adaptive-spin.40"));
+
+    // a row for pools of every size has no size in its name
+    row.pool_size = tuning::any_pool_size;
+    HPX_TEST_EQ(tuning::section_name(row),
+        std::string("hpx.idle_tuning.local-priority-tuned-fifo.adaptive-spin"));
 }
 
 void test_to_ini()
