@@ -374,11 +374,13 @@ namespace hpx::parallel::detail {
             Sent last, Size count, T const& value, Pred&& pred, Proj&& proj)
         {
             if constexpr (hpx::execution_policy_has_scheduler_executor_v<
-                              ExPolicy> &&
-                hpx::is_async_execution_policy_v<ExPolicy>)
+                              ExPolicy>)
             {
                 namespace ex = hpx::execution::experimental;
                 using base_type = algorithm<search_n<FwdIter, Sent>, FwdIter>;
+                auto sched = orgpolicy.executor().sched();
+                using exception_policy_type = decltype(ex::to_task(
+                    orgpolicy.on(ex::scheduler_executor(sched))));
                 auto deferred = ex::let_value(ex::just(),
                     [policy = HPX_FORWARD(ExPolicy, orgpolicy), first, last,
                         count, value = value, pred = HPX_FORWARD(Pred, pred),
@@ -386,9 +388,10 @@ namespace hpx::parallel::detail {
                         return parallel_impl(HPX_MOVE(policy), first, last,
                             count, value, HPX_MOVE(pred), HPX_MOVE(proj));
                     });
-                return ex::let_error(HPX_MOVE(deferred),
+                auto handled = ex::let_error(HPX_MOVE(deferred),
                     typename base_type::template sender_algorithm_error_handler<
-                        ExPolicy>{});
+                        exception_policy_type>{});
+                return ex::continues_on(HPX_MOVE(handled), HPX_MOVE(sched));
             }
             else
             {

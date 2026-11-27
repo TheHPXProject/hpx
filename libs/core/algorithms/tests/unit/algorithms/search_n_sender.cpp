@@ -12,6 +12,7 @@
 #include <functional>
 #include <memory>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
 struct move_sensitive_pred
@@ -123,6 +124,33 @@ void test_synchronous_scheduler()
         hpx::search_n(policy, data.begin(), data.end(), 0, 7) == data.begin());
     HPX_TEST(
         hpx::search_n(policy, data.begin(), data.end(), 6, 7) == data.end());
+
+    bool caught = false;
+    try
+    {
+        (void) hpx::search_n(policy, data.begin(), data.end(), 2, 7,
+            std::equal_to<int>{},
+            [](int) -> int { throw std::runtime_error("projection failed"); });
+    }
+    catch (hpx::exception_list const&)
+    {
+        caught = true;
+    }
+    HPX_TEST(caught);
+}
+
+void test_direct_sync_wait()
+{
+    std::vector<int> data{1, 1, 7, 7, 7};
+    auto exec = sender_test::ex::explicit_scheduler_executor(
+        sender_test::ex::thread_pool_policy_scheduler(hpx::launch::async));
+    auto policy = hpx::execution::par(hpx::execution::task).on(exec);
+
+    auto result = sender_test::ex::sync_wait(
+        hpx::search_n(policy, data.begin(), data.end(), 2, 7));
+    HPX_TEST(result.has_value());
+    if (result.has_value())
+        HPX_TEST(hpx::get<0>(*result) == data.begin() + 2);
 }
 
 int hpx_main()
@@ -131,6 +159,7 @@ int hpx_main()
     test_deferred_projection();
     test_deferred_projection_error();
     test_synchronous_scheduler();
+    test_direct_sync_wait();
     return hpx::local::finalize();
 }
 
