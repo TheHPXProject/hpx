@@ -54,14 +54,6 @@ namespace hpx::local::detail {
         return strm.str();
     }
 
-    ///////////////////////////////////////////////////////////////////////
-    int print_version(std::ostream& out)
-    {
-        out << std::endl << hpx::copyright() << std::endl;
-        out << hpx::complete_version() << std::endl;
-        return 1;
-    }
-
     int print_info(std::ostream& out, command_line_handling const& cfg)
     {
         out << "Static configuration:\n---------------------\n";
@@ -434,7 +426,6 @@ namespace hpx::local::detail {
       , use_process_mask_(false)
       , cmd_line_parsed_(false)
       , info_printed_(false)
-      , version_printed_(false)
     {
     }
 
@@ -1072,17 +1063,9 @@ namespace hpx::local::detail {
             return 1;    // exit application gracefully
         }
 
-        // print version/copyright information
-        if (vm_.count("hpx:version"))
-        {
-            if (!version_printed_)
-            {
-                detail::print_version(std::cout);
-                version_printed_ = true;
-            }
-
-            return 1;
-        }
+        // --hpx:version is handled late, once the plugins are loaded and have
+        // registered the versions of the libraries they use (see
+        // handle_late_options)
 
         // print configuration information (static and dynamic)
         if (vm_.count("hpx:info"))

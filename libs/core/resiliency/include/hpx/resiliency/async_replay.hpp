@@ -14,9 +14,9 @@
 #include <hpx/resiliency/resiliency_cpos.hpp>
 #include <hpx/resiliency/util.hpp>
 
-#include <hpx/functional/invoke.hpp>
 #include <hpx/modules/async_local.hpp>
 #include <hpx/modules/futures.hpp>
+#include <hpx/modules/tag_invoke.hpp>
 #include <hpx/modules/type_support.hpp>
 
 #include <cstddef>

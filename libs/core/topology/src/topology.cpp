@@ -1704,6 +1704,81 @@ namespace hpx::threads {
     }
 
     ///////////////////////////////////////////////////////////////////////////
+    cache_info topology::get_cache_info(
+        std::size_t const num_pu, int const level) const
+    {
+        cache_info info;
+        if (level < 1 || level > 5)
+        {
+            return info;
+        }
+
+        std::unique_lock<mutex_type> lk(topo_mtx);
+
+        hwloc_obj_t const pu_obj = hwloc_get_obj_by_type(
+            topo, HWLOC_OBJ_PU, static_cast<unsigned>(num_pu));
+        if (pu_obj == nullptr)
+        {
+            return info;
+        }
+
+        hwloc_obj_t cache_obj = nullptr;
+#if HWLOC_API_VERSION >= 0x00020000
+        hwloc_obj_type_t type = HWLOC_OBJ_L1CACHE;
+        switch (level)
+        {
+        case 2:
+            type = HWLOC_OBJ_L2CACHE;
+            break;
+
+        case 3:
+            type = HWLOC_OBJ_L3CACHE;
+            break;
+
+        case 4:
+            type = HWLOC_OBJ_L4CACHE;
+            break;
+
+        case 5:
+            type = HWLOC_OBJ_L5CACHE;
+            break;
+
+        default:
+            break;
+        }
+        cache_obj = hwloc_get_ancestor_obj_by_type(topo, type, pu_obj);
+#else
+        // traverse up until the requested cache level is found
+        int levels = 0;
+        for (hwloc_obj_t obj = pu_obj; obj != nullptr; obj = obj->parent)
+        {
+            if (obj->type == HWLOC_OBJ_CACHE && ++levels == level)
+            {
+                cache_obj = obj;
+                break;
+            }
+        }
+#endif
+        if (cache_obj == nullptr || cache_obj->attr == nullptr)
+        {
+            return info;
+        }
+
+        info.size = static_cast<std::size_t>(cache_obj->attr->cache.size);
+        info.line_size =
+            static_cast<std::size_t>(cache_obj->attr->cache.linesize);
+        if (cache_obj->cpuset != nullptr)
+        {
+            int const pus = hwloc_bitmap_weight(cache_obj->cpuset);
+            info.pus = pus > 0 ? static_cast<std::size_t>(pus) : 0;
+            int const cores = hwloc_get_nbobjs_inside_cpuset_by_type(
+                topo, cache_obj->cpuset, HWLOC_OBJ_CORE);
+            info.cores = cores > 0 ? static_cast<std::size_t>(cores) : 0;
+        }
+        return info;
+    }
+
+    ///////////////////////////////////////////////////////////////////////////
     hwloc_bitmap_t topology::mask_to_bitmap(
         mask_cref_type mask, hwloc_obj_type_t htype, unsigned* count) const
     {

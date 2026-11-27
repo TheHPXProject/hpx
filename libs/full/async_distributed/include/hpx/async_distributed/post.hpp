@@ -64,7 +64,7 @@ namespace hpx::detail {
 #endif
 
 #if defined(HPX_HAVE_CXX26_REFLECTION)
-#include <hpx/actions_base/reflect_action.hpp>
+#include <hpx/modules/actions_base.hpp>
 
 namespace hpx {
 

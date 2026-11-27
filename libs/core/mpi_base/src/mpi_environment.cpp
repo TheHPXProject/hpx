@@ -11,7 +11,9 @@
 #include <hpx/config.hpp>
 #include <hpx/assert.hpp>
 #include <hpx/modules/concepts.hpp>
+#include <hpx/modules/config_registry.hpp>
 #include <hpx/modules/errors.hpp>
+#include <hpx/modules/format.hpp>
 #include <hpx/modules/logging.hpp>
 #include <hpx/modules/mpi_base.hpp>
 #include <hpx/modules/runtime_configuration.hpp>
@@ -21,6 +23,7 @@
 #include <cstddef>
 #include <cstdlib>
 #include <map>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 
@@ -108,6 +111,65 @@ namespace hpx::util {
     defined(HPX_HAVE_MODULE_MPI_BASE)
 
 namespace hpx::util {
+
+    namespace {
+
+        // the MPI library, for hpx::complete_version()
+        std::string mpi_library_version()
+        {
+            std::ostringstream strm;
+
+            // add type and library version
+#if defined(OPEN_MPI)
+            hpx::util::format_to(strm, "OpenMPI V{}.{}.{}", OMPI_MAJOR_VERSION,
+                OMPI_MINOR_VERSION, OMPI_RELEASE_VERSION);
+#elif defined(MPICH)
+            hpx::util::format_to(strm, "MPICH V{}", MPICH_VERSION);
+#elif defined(MVAPICH2_VERSION)
+            hpx::util::format_to(strm, "MVAPICH2 V{}", MVAPICH2_VERSION);
+#elif defined(MSMPI_VER)
+            hpx::util::format_to(strm, "MSMPI V{}", MSMPI_VER);
+#else
+            strm << "Unknown MPI";
+#endif
+            // add general MPI version
+#if defined(MPI_VERSION) && defined(MPI_SUBVERSION)
+            hpx::util::format_to(
+                strm, ", MPI V{}.{}", MPI_VERSION, MPI_SUBVERSION);
+#else
+            strm << ", unknown MPI version";
+#endif
+            // add whether the MPI library can send GPU device memory, and whether
+            // the parcelports do so (see HPX_WITH_PARCELPORT_CUDA_SUPPORT and
+            // HPX_WITH_PARCELPORT_HIP_SUPPORT)
+#if defined(HPX_VERSION_MPI_CUDA_AWARE)
+#if HPX_VERSION_MPI_CUDA_AWARE != 0
+#if defined(HPX_HAVE_PARCELPORT_CUDA_SUPPORT)
+            strm << ", CUDA-aware";
+#else
+            strm << ", CUDA-aware (not used by the parcelport)";
+#endif
+#else
+            strm << ", not CUDA-aware";
+#endif
+#endif
+#if defined(HPX_VERSION_MPI_HIP_AWARE)
+#if HPX_VERSION_MPI_HIP_AWARE != 0
+#if defined(HPX_HAVE_PARCELPORT_HIP_SUPPORT)
+            strm << ", ROCm-aware";
+#else
+            strm << ", ROCm-aware (not used by the parcelport)";
+#endif
+#else
+            strm << ", not ROCm-aware";
+#endif
+#endif
+            return strm.str();
+        }
+
+        config_registry::add_library_version_helper register_mpi_version{
+            {"MPI", &mpi_library_version}};
+    }    // namespace
 
     mpi_environment::mutex_type mpi_environment::mtx_;
     bool mpi_environment::enabled_ = false;
