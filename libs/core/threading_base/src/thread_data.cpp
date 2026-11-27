@@ -73,6 +73,7 @@ namespace hpx::threads {
                 init_data.schedulehint.hint :
                 static_cast<std::uint16_t>(-1))
       , priority_(init_data.priority)
+      , task_size_(init_data.schedulehint.task_size())
       , current_state_(thread_state(
             init_data.initial_state, thread_restart_state::signaled))
       , scheduler_base_(init_data.scheduler_base)
@@ -251,6 +252,7 @@ namespace hpx::threads {
             hpx::tracing::task_deleted(this);
 
         priority_ = init_data.priority;
+        task_size_ = init_data.schedulehint.task_size();
         state_ |= state::enabled_interrupt;
         state_ &= ~(state::requested_interrupt | state::running_exit_funcs |
             state::ran_exit_funcs | state::is_background);

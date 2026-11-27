@@ -56,20 +56,28 @@ namespace hpx::threads::policies {
         // queues are looked at every round, the queues to steal from every
         // step.steal_check_rounds rounds. Inlined into idle_callback, as it
         // was while it was local to scheduler_base.cpp: a call here would be
-        // made every time an idle worker starts to spin.
+        // made every time an idle worker starts to spin. Returns why the
+        // spin ended: a thread showed up in the worker's own queues, a victim
+        // had work to steal, or the rounds of the step ran out. The
+        // scheduler reports it to a tuner (see idle_spin_end); without a
+        // tuner the value is not used.
         template <typename Round, typename HasOwnWork, typename HasVisibleWork>
-        HPX_FORCEINLINE void spin(idle_step const& step, Round&& round,
+        HPX_FORCEINLINE idle_spin_end spin(idle_step const& step, Round&& round,
             HasOwnWork&& has_own_work, HasVisibleWork&& has_visible_work)
         {
             for (std::uint64_t i = 1; i <= step.spin_rounds; ++i)
             {
                 round();
-                if (has_own_work() ||
-                    (i % step.steal_check_rounds == 0 && has_visible_work()))
+                if (has_own_work())
                 {
-                    break;
+                    return idle_spin_end::own_work;
+                }
+                if (i % step.steal_check_rounds == 0 && has_visible_work())
+                {
+                    return idle_spin_end::work_to_steal;
                 }
             }
+            return idle_spin_end::ran_out;
         }
     }    // namespace detail
 #endif
@@ -127,21 +135,29 @@ namespace hpx::threads::policies {
                 auto const has_work_to_steal = [&] {
                     return has_visible_work(num_thread);
                 };
+                // why the spin ended, used only to count it for a tuner
+                [[maybe_unused]] idle_spin_end end;
                 if (step.pauses_per_round ==
                     scheduling_policy::calibration_pauses_per_round)
                 {
-                    detail::spin(
+                    end = detail::spin(
                         step, [] { detail::spin_round(); }, has_own_work,
                         has_work_to_steal);
                 }
                 else
                 {
-                    detail::spin(
+                    end = detail::spin(
                         step,
                         [pauses = step.pauses_per_round] {
                             detail::spin_round(pauses);
                         },
                         has_own_work, has_work_to_steal);
+                }
+                // how the spin ended, for a tuner; outside of the spin, so
+                // it costs no round
+                if constexpr (Rules::counts)
+                {
+                    rules.on_spin_end(num_thread, end);
                 }
 
                 // No fence after leaving the spin. A seq_cst fence here,
@@ -172,6 +188,11 @@ namespace hpx::threads::policies {
             {
                 l.unlock();
                 spin_as_sentinel(num_thread, step);
+                // a period spun through as the sentinel instead of sleeping
+                if constexpr (Rules::counts)
+                {
+                    rules.on_sentinel(num_thread);
+                }
                 return true;
             }
 
@@ -193,9 +214,19 @@ namespace hpx::threads::policies {
             auto& word = sleep_mask_[num_thread / 64].data_;
             word.fetch_or(bit, std::memory_order_relaxed);
 
-            if (!has_visible_work(num_thread) &&
-                data.wait_cond.wait_for(l, step.period) ==    //-V1089
-                    std::cv_status::no_timeout)
+            // The three ways a period that is slept through ends, counted for
+            // a tuner: work showed up before the wait, so the worker doesn't
+            // wait at all; a new thread woke it up (a notification); or the
+            // period ran out.
+            if (has_visible_work(num_thread))
+            {
+                if constexpr (Rules::counts)
+                {
+                    rules.on_work_before_sleep(num_thread);
+                }
+            }
+            else if (data.wait_cond.wait_for(l, step.period) ==    //-V1089
+                std::cv_status::no_timeout)
             {
                 // reset counter if thread was woken up
                 data.wait_count.store(0, std::memory_order_relaxed);
@@ -207,6 +238,14 @@ namespace hpx::threads::policies {
                 {
                     data.free_pass = free_pass_after_wake();
                 }
+                if constexpr (Rules::counts)
+                {
+                    rules.on_woken_up(num_thread, true);
+                }
+            }
+            else if constexpr (Rules::counts)
+            {
+                rules.on_woken_up(num_thread, false);
             }
 
             // withdraw the announcement if nobody claimed it

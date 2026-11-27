@@ -8,16 +8,23 @@
 #include <hpx/assert.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/threading_base/scheduler_tuning.hpp>
+#include <hpx/threading_base/tuners/recording_tuner.hpp>
 
 #include <algorithm>
 #include <atomic>
+#include <charconv>
+#include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <utility>
+#include <vector>
 
 namespace hpx::threads::policies {
 
@@ -64,20 +71,86 @@ namespace hpx::threads::policies {
 
     scheduler_tuner::~scheduler_tuner() = default;
 
+    void static_tuner::attach(scheduler_tuning_parameters&) {}
+
     namespace {
 
-        // keeps the values the settings were configured with
-        struct static_tuner final : scheduler_tuner
+        std::chrono::milliseconds read_period(std::string const& value)
         {
-            void attach(scheduler_tuning_parameters&) override {}
-        };
+            long long ms = 0;
+            auto const [ptr, ec] =
+                std::from_chars(value.data(), value.data() + value.size(), ms);
+            if (ec != std::errc() || ptr != value.data() + value.size() ||
+                ms <= 0)
+            {
+                HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
+                    "recording_tuner",
+                    "invalid hpx.scheduler_tuner.period: {} (expected a "
+                    "number of milliseconds greater than 0)",
+                    value);
+            }
+            return std::chrono::milliseconds(ms);
+        }
+
+        // whether the rows have the counts since the start (columns=totals)
+        // instead of those since the last row (deltas, the default)
+        bool read_totals(scheduler_tuner_context const& context)
+        {
+            return context.get_entry("columns", "deltas") == "totals";
+        }
+
+        // The "recording" tuner: a file_recording_tuner,
+        // configured with hpx.scheduler_tuner.<key>:
+        //   period   ms between rows (100)
+        //   file     the CSV file (scheduler-tuning-<pool>.csv, or
+        //            scheduler-tuning.csv if the pool isn't known)
+        //   columns  deltas: the counts since the last row (default), or
+        //            totals: the counts since the start
+        std::unique_ptr<scheduler_tuner> make_recording_tuner(
+            scheduler_tuner_context const& context)
+        {
+            // the runtime configuration has the entry, empty by default
+            std::string file = context.get_entry("file", "");
+            if (file.empty())
+            {
+                file = context.pool_name.empty() ?
+                    std::string("scheduler-tuning.csv") :
+                    "scheduler-tuning-" + context.pool_name + ".csv";
+            }
+            return std::make_unique<file_recording_tuner>(file,
+                read_period(context.get_entry("period", "100")),
+                read_totals(context), context.pool_name);
+        }
+
+    }    // namespace
+
+    std::optional<tuner_recording_options> get_tuner_recording_options(
+        scheduler_tuner_context const& context)
+    {
+        // hpx.scheduler_tuner.record=<prefix>: <prefix>-<pool>.csv, or
+        // <prefix>.csv if the pool isn't known
+        std::string const prefix = context.get_entry("record", "");
+        if (prefix.empty())
+            return std::nullopt;
+
+        return tuner_recording_options{context.pool_name.empty() ?
+                prefix + ".csv" :
+                prefix + "-" + context.pool_name + ".csv",
+            read_period(context.get_entry("period", "100")),
+            read_totals(context)};
+    }
+
+    namespace {
 
         struct tuner_registry
         {
             tuner_registry()
             {
                 factories.emplace(
-                    "static", [] { return std::make_unique<static_tuner>(); });
+                    "static", [](scheduler_tuner_context const& context) {
+                        return make_scheduler_tuner<static_tuner>(context);
+                    });
+                factories.emplace("recording", &make_recording_tuner);
             }
 
             std::mutex mtx;
@@ -101,7 +174,7 @@ namespace hpx::threads::policies {
     }
 
     std::unique_ptr<scheduler_tuner> create_scheduler_tuner(
-        std::string const& name)
+        std::string const& name, scheduler_tuner_context const& context)
     {
         auto& registry = get_tuner_registry();
         scheduler_tuner_factory factory;
@@ -118,6 +191,17 @@ namespace hpx::threads::policies {
             }
             factory = it->second;
         }
-        return factory();
+
+        auto tuner = factory(context);
+        if (!tuner->records() && !context.get_entry("record", "").empty())
+        {
+            HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
+                "create_scheduler_tuner",
+                "the scheduler tuner {} doesn't record although "
+                "hpx.scheduler_tuner.record is set (its factory has to create "
+                "it with make_scheduler_tuner)",
+                name);
+        }
+        return tuner;
     }
 }    // namespace hpx::threads::policies

@@ -11,10 +11,18 @@
 #pragma once
 
 #include <hpx/config.hpp>
+#include <hpx/assert.hpp>
+#include <hpx/modules/execution_base.hpp>
+#include <hpx/modules/functional.hpp>
+#include <hpx/modules/synchronization.hpp>
+#include <hpx/modules/thread_support.hpp>
 #include <hpx/modules/threading_base.hpp>
+#include <hpx/modules/timing.hpp>
 #include <hpx/schedulers/local_priority_queue_scheduler.hpp>
 #include <hpx/schedulers/lockfree_queue_backends.hpp>
 
+#include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -104,6 +112,212 @@ namespace hpx::threads::policies {
         {
             return this->rules_.parameters();
         }
+
+        /// The tunable settings of the rules of this scheduler.
+        [[nodiscard]] scheduler_tuning_parameters const*
+        find_tuning_parameters() const noexcept override
+        {
+            return &this->rules_.parameters();
+        }
+
+        /// What this scheduler counted for its tuner.
+        [[nodiscard]] scheduler_tuning_counters const* get_tuning_counters()
+            const noexcept override
+        {
+            return &this->rules_.counters();
+        }
+
+        // The tuner sees the counters every update period (see
+        // scheduler_tuner::update). This runs on an ordinary HPX thread of
+        // this scheduler's pool, started once the workers run and ended
+        // before they stop (the pool calls these two). The thread waits on a
+        // condition variable with the period as its timeout, so that a stop
+        // ends the wait at once without waking up the thread from whatever
+        // else it may wait for. It is a background thread of the pool, so a
+        // tuner that waits for its next update doesn't keep a blocking stop
+        // waiting. Its timed wait keeps ordinary threads in the pool, though
+        // (those of the timer), so the thread is ended before the pool is
+        // suspended and started again when it is resumed. A tuner without an
+        // update period runs no thread.
+        void on_pool_started() override
+        {
+            start_tuner();
+        }
+
+        void on_pool_stopping() override
+        {
+            end_tuner();
+        }
+
+        void on_pool_suspending() override
+        {
+            end_tuner();
+        }
+
+        void on_pool_resumed() override
+        {
+            start_tuner();
+        }
+
+    private:
+        // Whether the tuner's thread runs. Starting and ending it may be
+        // asked for at the same time (two calls of resume_pool, a stop while
+        // the pool is resumed), so each claims the state for its whole
+        // operation: a start only from idle, an end only from running, and
+        // either waits while the other is busy. Nothing is locked while an
+        // end waits for the thread to finish.
+        enum class tuner_state : std::uint8_t
+        {
+            idle,
+            busy,
+            running
+        };
+
+        // Claim the state from the given one for an operation (it is busy
+        // then); returns false if the state is the one the operation leads
+        // to already, so that there is nothing to do.
+        bool claim_tuner_state(
+            tuner_state const from, tuner_state const done, char const* what)
+        {
+            tuner_state seen = from;
+            hpx::util::yield_while(
+                [&] {
+                    seen = from;
+                    if (tuner_state_.compare_exchange_strong(
+                            seen, tuner_state::busy, std::memory_order_acquire))
+                    {
+                        return false;
+                    }
+                    return seen != done;    // wait while another is busy
+                },
+                what);
+            return seen == from;
+        }
+
+        void start_tuner()
+        {
+            // a tuner without an update period runs no thread, and a pool
+            // resumed without having been suspended still runs it
+            auto const period = this->rules_.update_period();
+            if (period.count() <= 0 ||
+                !claim_tuner_state(tuner_state::idle, tuner_state::running,
+                    "local_priority_tuned_scheduler::start_tuner"))
+            {
+                return;
+            }
+
+            {
+                std::unique_lock<hpx::spinlock> l(tuner_mtx_);
+                tuner_stop_ = false;
+                tuner_done_ = false;
+            }
+
+            thread_init_data data(
+                [this, period](thread_restart_state) -> thread_result_type {
+                    run_tuner(period);
+                    return {
+                        thread_schedule_state::terminated, invalid_thread_id};
+                },
+                threads::thread_description("scheduler_tuner_update"),
+                thread_priority::normal, thread_schedule_hint(),
+                thread_stacksize::small_,
+                // created suspended, so that it is a background thread
+                // before it runs; run_now, as only threads created pending
+                // can be staged
+                thread_schedule_state::suspended, true, this);
+
+            try
+            {
+                this->create_thread(data, &tuner_thread_, hpx::throws);
+            }
+            catch (...)
+            {
+                // the thread doesn't run if it can't be created
+                tuner_state_.store(
+                    tuner_state::idle, std::memory_order_release);
+                throw;
+            }
+            HPX_ASSERT(tuner_thread_);
+
+            // The thread is waiting for its next update most of the time.
+            // An ordinary thread that waits counts as work the pool still
+            // has: suspending the pool waits until only background threads
+            // are left (suspend_internal), and a blocking stop waits on
+            // is_busy, which counts the same, so either would wait for the
+            // tuner forever. As a background thread (marked, and counted
+            // with increment_background_thread_count, as the background
+            // work of the scheduling loop is) it is left out of these
+            // counts; a suspended pool just doesn't run it until it is
+            // resumed. While it waits, suspend doesn't keep a background
+            // thread alive (keep_alive_thread_id), tuner_thread_ does, until
+            // on_pool_stopping has ended it. Marked before it is made
+            // pending, so it is never counted as ordinary work.
+            get_thread_id_data(tuner_thread_)->set_is_background();
+            this->increment_background_thread_count();
+            threads::set_thread_state(
+                tuner_thread_.noref(), thread_schedule_state::pending);
+
+            tuner_state_.store(tuner_state::running, std::memory_order_release);
+        }
+
+        void end_tuner()
+        {
+            if (!claim_tuner_state(tuner_state::running, tuner_state::idle,
+                    "local_priority_tuned_scheduler::end_tuner"))
+            {
+                return;
+            }
+
+            {
+                std::unique_lock<hpx::spinlock> l(tuner_mtx_);
+                tuner_stop_ = true;
+            }
+            tuner_cond_.notify_all();
+
+            // the pool may be stopped from an HPX thread or from another
+            // thread, yield_while works for both
+            hpx::util::yield_while(
+                [this] {
+                    std::unique_lock<hpx::spinlock> l(tuner_mtx_);
+                    return !tuner_done_;
+                },
+                "local_priority_tuned_scheduler::end_tuner");
+
+            tuner_thread_ = invalid_thread_id;
+            tuner_state_.store(tuner_state::idle, std::memory_order_release);
+        }
+
+        void run_tuner(std::chrono::milliseconds const period)
+        {
+            std::unique_lock<hpx::spinlock> l(tuner_mtx_);
+
+            // however the loop ends (also if the tuner throws), stop being a
+            // background thread and let on_pool_stopping return; runs with
+            // the lock held, before l is destroyed
+            auto on_exit = hpx::experimental::scope_exit([this] {
+                this->decrement_background_thread_count();
+                tuner_done_ = true;
+            });
+
+            while (!tuner_stop_)
+            {
+                {
+                    // the tuner runs without the lock, a stop waits for it
+                    hpx::unlock_guard<std::unique_lock<hpx::spinlock>> ul(l);
+                    this->rules_.update_tuner();
+                }
+
+                tuner_cond_.wait_for(l, hpx::chrono::steady_duration(period),
+                    [this] { return tuner_stop_; });
+            }
+        }
+
+        hpx::spinlock tuner_mtx_;
+        hpx::condition_variable_any tuner_cond_;
+        bool tuner_stop_ = false;
+        bool tuner_done_ = true;
+        thread_id_ref_type tuner_thread_;
+        std::atomic<tuner_state> tuner_state_{tuner_state::idle};
     };
 }    // namespace hpx::threads::policies
 

@@ -487,6 +487,12 @@ namespace hpx::threads {
             priority_ = priority;
         }
 
+        // the size of the thread, as given by the hint it was created with
+        constexpr threads::task_size get_task_size() const noexcept
+        {
+            return task_size_;
+        }
+
         bool is_background() const noexcept
         {
             std::scoped_lock<mutex_type> l(mtx_);
@@ -744,6 +750,7 @@ namespace hpx::threads {
 
         std::uint16_t last_worker_thread_num_;
         thread_priority priority_;
+        threads::task_size task_size_;
 
         HPX_NO_UNIQUE_ADDRESS hpx::tracing::task_timer_data timer_data_;
 

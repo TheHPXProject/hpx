@@ -216,6 +216,10 @@ namespace hpx::threads::detail {
 
         if (!threads_.empty())
         {
+            // let the scheduler end the HPX threads it runs on its own (see
+            // scheduler_base::on_pool_stopping)
+            sched_->Scheduler::on_pool_stopping();
+
             // wait for all work to be done before requesting threads to shut
             // down, but only if all threads were successfully initialized
             if (blocking)
@@ -362,6 +366,23 @@ namespace hpx::threads::detail {
             return false;
         }
 
+        // all workers have passed the barrier, if the scheduler fails to act
+        // on that they only have to be stopped
+        try
+        {
+            sched_->Scheduler::on_pool_started();
+        }
+        catch (std::exception const& e)
+        {
+            LTM_(always).format(
+                "run: {} failed with: {}", id_.name(), e.what());
+
+            stop_locked(l);
+            threads_.clear();
+
+            return false;
+        }
+
         LTM_(info).format("run: {} running", id_.name());
         return true;
     }
@@ -397,6 +418,13 @@ namespace hpx::threads::detail {
     void scheduled_thread_pool<Scheduler>::resume_direct(error_code& ec)
     {
         this->resume_internal(true, ec);
+
+        // let the scheduler start the HPX threads it ended for the
+        // suspension (see scheduler_base::on_pool_suspending)
+        if (!ec)
+        {
+            sched_->Scheduler::on_pool_resumed();
+        }
     }
 
     template <typename Scheduler>
@@ -447,6 +475,11 @@ namespace hpx::threads::detail {
                 "cannot suspend a pool from itself");
             return;
         }
+
+        // let the scheduler end the HPX threads it runs on its own, which
+        // would keep the pool from being suspended (see
+        // scheduler_base::on_pool_suspending)
+        sched_->Scheduler::on_pool_suspending();
 
         this->suspend_internal(ec);
     }

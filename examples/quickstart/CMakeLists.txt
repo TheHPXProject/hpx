@@ -30,6 +30,7 @@ set(example_programs
     mutex_docs
     pipeline1
     safe_object
+    scheduler_tuner_docs
     shared_mutex
     simple_future_continuation
     task_group_docs
@@ -156,6 +157,7 @@ set(hello_world_2_PARAMETERS THREADS_PER_LOCALITY 4)
 set(hello_world_distributed_PARAMETERS THREADS_PER_LOCALITY 4)
 set(interval_timer_PARAMETERS THREADS_PER_LOCALITY 4)
 set(local_channel_PARAMETERS THREADS_PER_LOCALITY 4)
+set(scheduler_tuner_docs_PARAMETERS THREADS_PER_LOCALITY 4)
 set(sender_diamond_PARAMETERS THREADS_PER_LOCALITY 4)
 set(sierpinski_PARAMETERS THREADS_PER_LOCALITY 4)
 set(partitioned_vector_spmd_foreach_PARAMETERS THREADS_PER_LOCALITY 4)

@@ -347,7 +347,9 @@ int main(int argc, char* argv[])
 
     {
         policies::register_scheduler_tuner(
-            "test", [] { return std::make_unique<test_tuner>(); });
+            "test", [](policies::scheduler_tuner_context const&) {
+                return std::make_unique<test_tuner>();
+            });
 
         hpx::local::init_params init_args;
         init_args.cfg = {"hpx.os_threads=2", "hpx.scheduler_tuner=test"};

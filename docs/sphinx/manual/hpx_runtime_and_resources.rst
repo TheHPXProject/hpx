@@ -69,6 +69,43 @@ sizes as ``std::uint32_t``, the idle backoff times (in microseconds) as
 with ``hpx::threads::policies::register_scheduler_tuner`` before the runtime
 is started.
 
+The scheduler counts what it does where it makes its decisions: the threads it
+creates, runs and steals by their size, whom it wakes up for new threads, and
+how the idle periods of its worker threads end. A tuner with an update period
+(``hpx::threads::policies::scheduler_tuner::update_period``) reads these
+counters every period on an |hpx| thread of the scheduler's pool and may change
+the settings in response. The ``recording`` tuner keeps the configured values
+and writes the counters to a CSV file, to collect what a tuner would see from
+real workloads (see :ref:`ini_hpx_scheduler_tuner`). With
+``hpx.scheduler_tuner.record`` any tuner writes the same rows after each of
+its updates, so that what it decided can be checked against what it saw.
+Recording is a mixin, ``hpx::threads::policies::recorded<Base>``, that adds
+to the tuner ``Base`` and calls it statically, so that the scheduler's call
+into the tuner stays its only virtual call; an application can stack such
+mixins on its own tuner. Its factory supports ``hpx.scheduler_tuner.record``
+if it creates the tuner with ``hpx::threads::policies::make_scheduler_tuner``,
+which adds the recording when it is asked for.
+
+A tuner derives from ``hpx::threads::policies::scheduler_tuner``. The example
+below lowers the idle spin time (``hpx.min_idle_backoff_time``, a ``float``
+in microseconds) of worker threads whose spins mostly run out without finding
+work, and raises it while their spins mostly find work. It finds the setting
+by name in ``attach``, compares the counters with its last reading in every
+``update`` (they are ``std::uint32_t`` and wrap around, so it subtracts as
+``std::uint32_t``), reads its period from an entry of its own
+(``hpx.scheduler_tuner.spin_period``), and is registered under the name
+``spin`` before the runtime is started:
+
+.. literalinclude:: ../../examples/quickstart/scheduler_tuner_docs.cpp
+   :language: c++
+   :start-after: //[scheduler_tuner_docs
+   :end-before: //]
+
+A tuner is created with the scheduler of each thread pool that uses it, before
+the worker threads start, and its ``update`` runs on one |hpx| thread at a time,
+so a tuner needs no locks of its own. ``update`` should return quickly: it runs
+on a worker thread of the pool it tunes.
+
 Static priority scheduling policy
 ---------------------------------
 

@@ -28,6 +28,7 @@ set(threading_base_headers
     hpx/threading_base/scheduler_mode.hpp
     hpx/threading_base/scheduler_state.hpp
     hpx/threading_base/scheduler_tuning.hpp
+    hpx/threading_base/scheduler_tuning_counters.hpp
     hpx/threading_base/scheduling_policy.hpp
     hpx/threading_base/scoped_annotation.hpp
     hpx/threading_base/set_thread_affinity.hpp
@@ -47,6 +48,7 @@ set(threading_base_headers
     hpx/threading_base/thread_specific_ptr.hpp
     hpx/threading_base/threading_base_fwd.hpp
     hpx/threading_base/tracing_sample_rate.hpp
+    hpx/threading_base/tuners/recording_tuner.hpp
     hpx/threading_base/with_annotations.hpp
 )
 
@@ -95,6 +97,7 @@ set(threading_base_sources
     scheduler_base.cpp
     scheduler_base_tuned.cpp
     scheduler_tuning.cpp
+    scheduler_tuning_counters.cpp
     scheduling_policy.cpp
     set_thread_affinity.cpp
     set_thread_state.cpp
@@ -106,6 +109,7 @@ set(threading_base_sources
     thread_helpers.cpp
     thread_num_tss.cpp
     thread_pool_base.cpp
+    tuners/recording_tuner.cpp
 )
 
 if(HPX_WITH_THREAD_BACKTRACE_ON_SUSPENSION)

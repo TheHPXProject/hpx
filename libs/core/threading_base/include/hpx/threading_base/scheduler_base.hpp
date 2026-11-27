@@ -386,6 +386,46 @@ namespace hpx::threads::policies {
 
         virtual void on_start_thread(std::size_t num_thread) = 0;
         virtual void on_stop_thread(std::size_t num_thread) = 0;
+
+        /// Called once by the thread pool of this scheduler after all of its
+        /// workers have started up, right before they enter their scheduling
+        /// loops, so that HPX threads created here run. If it throws, the
+        /// pool stops its workers again and fails to run. Does nothing by
+        /// default.
+        virtual void on_pool_started() {}
+
+        /// Called by the thread pool of this scheduler when it starts to stop
+        /// its workers, while they still run HPX threads; also called if the
+        /// pool is stopped more than once. The pool holds its lock, so this
+        /// must not call back into the pool. Does nothing by default.
+        virtual void on_pool_stopping() {}
+
+        /// Called by the thread pool of this scheduler when it is about to
+        /// suspend its workers (suspend_direct), while they still run HPX
+        /// threads, and when it has resumed them (resume_direct). A scheduler
+        /// that runs HPX threads of its own ends them before the pool is
+        /// suspended: the pool waits until it runs no threads but background
+        /// threads, and a background thread that waits with a timeout keeps
+        /// ordinary threads in the pool (the timer's). Do nothing by default.
+        virtual void on_pool_suspending() {}
+        virtual void on_pool_resumed() {}
+
+        /// What this scheduler counts for its tuner (see
+        /// scheduler_tuning_counters), nullptr if it doesn't count.
+        [[nodiscard]] virtual scheduler_tuning_counters const*
+        get_tuning_counters() const noexcept
+        {
+            return nullptr;
+        }
+
+        /// The tunable settings of this scheduler (see
+        /// scheduler_tuning_parameters), nullptr if it has none.
+        [[nodiscard]] virtual scheduler_tuning_parameters const*
+        find_tuning_parameters() const noexcept
+        {
+            return nullptr;
+        }
+
         virtual void on_error(
             std::size_t num_thread, std::exception_ptr const& e) = 0;
 
@@ -554,6 +594,13 @@ namespace hpx::threads::policies {
             // worker, or for a sleeper's backoff period to end (at most
             // max_idle_backoff_time), and is never lost.
             return spinning_workers_.data_.load(std::memory_order_relaxed) != 0;
+        }
+
+        // Does an idle worker spin as the sentinel (see spin_as_sentinel)?
+        // Not counted by has_spinning_worker; read only to count events.
+        bool has_sentinel() const noexcept
+        {
+            return sentinel_.data_.worker.load(std::memory_order_relaxed) != 0;
         }
 
         // Wake up one sleeping worker (one that announced itself in
