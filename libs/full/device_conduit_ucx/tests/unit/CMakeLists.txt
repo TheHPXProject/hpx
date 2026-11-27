@@ -64,10 +64,15 @@ if(HPX_WITH_DEVICE_CONDUIT_UCX)
     RUN_SERIAL
   )
 
-  # the conduit the configuration selects (by default: UCX)
+  # the conduit the configuration selects (by default: UCX); the test asks
+  # mpi_base whether HPX uses MPI
+  if(HPX_WITH_PARCELPORT_MPI OR HPX_WITH_ASYNC_MPI)
+    set(configured_conduit_DEPENDENCIES Mpi::mpi)
+  endif()
   add_hpx_executable(
     configured_conduit_test INTERNAL_FLAGS
     SOURCES configured_conduit.cpp
+    DEPENDENCIES ${configured_conduit_DEPENDENCIES}
     EXCLUDE_FROM_ALL
     HPX_PREFIX ${HPX_BUILD_PREFIX}
     FOLDER "Tests/Unit/Modules/Full/DeviceConduitUCX"
