@@ -308,14 +308,16 @@ namespace hpx::actions {
 
         /// Automatic invocation count registration -- eliminates the need
         /// for HPX_REGISTER_ACTION for reflection-based plain actions.
-        static detail::register_action_invocation_count<reflect_action>
+        static detail::register_action_invocation_count<
+            detail::action_type_t<reflect_action, Derived>>
             invocation_count_registrar_;
     };
 
     /// \cond NOINTERNAL
     template <std::meta::info F, typename Derived>
         requires(std::meta::is_namespace_member(F) && std::meta::is_function(F))
-    detail::register_action_invocation_count<reflect_action<F, Derived>>
+    detail::register_action_invocation_count<
+        detail::action_type_t<reflect_action<F, Derived>, Derived>>
         reflect_action<F, Derived>::invocation_count_registrar_;
     /// \endcond
 
@@ -341,13 +343,15 @@ namespace hpx::actions {
             return actions::action_flavor::direct_action;
         }
 
-        static detail::register_action_invocation_count<reflect_direct_action>
+        static detail::register_action_invocation_count<
+            detail::action_type_t<reflect_direct_action, Derived>>
             invocation_count_registrar_;
     };
     /// \cond NOINTERNAL
     template <std::meta::info F, typename Derived>
         requires(std::meta::is_namespace_member(F) && std::meta::is_function(F))
-    detail::register_action_invocation_count<reflect_direct_action<F, Derived>>
+    detail::register_action_invocation_count<
+        detail::action_type_t<reflect_direct_action<F, Derived>, Derived>>
         reflect_direct_action<F, Derived>::invocation_count_registrar_;
     /// \endcond
 

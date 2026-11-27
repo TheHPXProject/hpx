@@ -66,6 +66,20 @@ static_assert(hpx::actions::action_priority<declared_direct_action>() ==
 static_assert(declared_direct_action::get_action_type() ==
     hpx::actions::action_flavor::direct_action);
 
+// Remote calls count under the named action, so its registrar has to refer
+// to that type, while reflect_action<F> used directly still refers to itself.
+static_assert(std::is_same_v<
+    decltype(declared_action::invocation_count_registrar_),
+    hpx::actions::detail::register_action_invocation_count<declared_action>>);
+static_assert(std::is_same_v<
+    decltype(declared_direct_action::invocation_count_registrar_),
+    hpx::actions::detail::register_action_invocation_count<
+        declared_direct_action>>);
+static_assert(std::is_same_v<decltype(hpx::actions::reflect_action<
+                                 ^^declared>::invocation_count_registrar_),
+    hpx::actions::detail::register_action_invocation_count<
+        hpx::actions::reflect_action<^^declared>>>);
+
 int main()
 {
     // Test: action name extraction for simple namespace function
