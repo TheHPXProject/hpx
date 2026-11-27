@@ -224,18 +224,29 @@ namespace hpx {
 
     namespace {
 
-        // HPX and the libraries every build uses; the modules register the
-        // libraries they use themselves (MPI, CUDA, UCX, ...)
-        config_registry::add_library_version_helper register_hpx_version{
-            {"HPX", &build_string}};
-        config_registry::add_library_version_helper register_boost_version{
-            {"Boost", &boost_version}};
-        config_registry::add_library_version_helper register_hwloc_version{
-            {"Hwloc", &hwloc_version}};
+        // HPX and the libraries every build uses, registered once; the
+        // modules register the libraries they use themselves (MPI, CUDA,
+        // UCX, ...). complete_version() calls it too: an initializer of
+        // another file may ask for the version before this file's
+        // initializers have run.
+        void register_builtin_versions()
+        {
+            [[maybe_unused]] static bool const registered = [] {
+                config_registry::add_library_version({"HPX", &build_string});
+                config_registry::add_library_version({"Boost", &boost_version});
+                config_registry::add_library_version({"Hwloc", &hwloc_version});
+                return true;
+            }();
+        }
+
+        [[maybe_unused]] bool const builtin_versions_registered =
+            (register_builtin_versions(), true);
     }    // namespace
 
     std::string complete_version()
     {
+        register_builtin_versions();
+
         // the registered libraries: HPX first, the others by name
         auto versions = hpx::config_registry::get_library_versions();
         std::sort(
