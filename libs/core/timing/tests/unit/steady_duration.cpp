@@ -20,8 +20,8 @@ using hpx::chrono::steady_duration;
 
 namespace {
 
-    void check(steady_duration const& d, std::chrono::nanoseconds const value,
-        std::int64_t const ps)
+    void check_duration(steady_duration const& d,
+        std::chrono::nanoseconds const value, std::int64_t const ps)
     {
         HPX_TEST(d.value() == value);
         HPX_TEST_EQ(d.as_picoseconds().count(), ps);
@@ -32,15 +32,16 @@ namespace {
         using std::chrono::nanoseconds;
 
         // rounded up, the given duration kept
-        check(picoseconds(250), nanoseconds(1), 250);
-        check(picoseconds(1500), nanoseconds(2), 1500);
-        check(std::chrono::duration<double, std::nano>(0.75), nanoseconds(1),
-            750);
+        check_duration(picoseconds(250), nanoseconds(1), 250);
+        check_duration(picoseconds(1500), nanoseconds(2), 1500);
+        check_duration(std::chrono::duration<double, std::nano>(0.75),
+            nanoseconds(1), 750);
 
         // whole ticks
-        check(picoseconds(1000), nanoseconds(1), 1000);
-        check(nanoseconds(5), nanoseconds(5), 5000);
-        check(std::chrono::microseconds(3), nanoseconds(3000), 3000000);
+        check_duration(picoseconds(1000), nanoseconds(1), 1000);
+        check_duration(nanoseconds(5), nanoseconds(5), 5000);
+        check_duration(
+            std::chrono::microseconds(3), nanoseconds(3000), 3000000);
 
         // a duration below a tick is not zero
         HPX_TEST(static_cast<bool>(steady_duration(picoseconds(1))));

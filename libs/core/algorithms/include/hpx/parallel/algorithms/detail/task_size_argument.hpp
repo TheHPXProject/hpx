@@ -13,6 +13,7 @@
 #include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/util/detail/transfer_task_size.hpp>
 
+#include <cstddef>
 #include <iterator>
 #include <type_traits>
 
@@ -43,23 +44,26 @@ namespace hpx::parallel::detail {
             hpx::traits::get_task_time<F>::call(f)};
     }
 
-    // The bytes of an element of Iter, 0 if it isn't of a builtin type.
+    // The bytes of an element of Iter, 0 if it isn't of a builtin type or
+    // if Iter is void (no element written). A class template, so that
+    // std::iter_value_t is named only for the iterators it is defined for.
+    HPX_CXX_CORE_EXPORT template <typename Iter, typename Enable = void>
+    struct task_size_element_bytes_of : std::integral_constant<std::size_t, 0>
+    {
+    };
+
+    template <typename Iter>
+        requires(!std::is_void_v<Iter> &&
+            requires { typename std::iter_value_t<Iter>; } &&
+            hpx::traits::detail::builtin_operand<std::iter_value_t<Iter>>)
+    struct task_size_element_bytes_of<Iter>
+      : std::integral_constant<std::size_t, sizeof(std::iter_value_t<Iter>)>
+    {
+    };
+
     HPX_CXX_CORE_EXPORT template <typename Iter>
-    inline constexpr std::size_t task_size_element_bytes = [] {
-        if constexpr (std::is_void_v<Iter>)
-        {
-            return std::size_t(0);
-        }
-        else if constexpr (hpx::traits::detail::builtin_operand<
-                               std::iter_value_t<Iter>>)
-        {
-            return sizeof(std::iter_value_t<Iter>);
-        }
-        else
-        {
-            return std::size_t(0);
-        }
-    }();
+    inline constexpr std::size_t task_size_element_bytes =
+        task_size_element_bytes_of<Iter>::value;
 
     // The size of an iteration that dereferences the iterators its, calls f
     // with arguments of the types Args and, unless OutIter is void, writes

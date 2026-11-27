@@ -26,6 +26,7 @@
 #include <hpx/modules/testing.hpp>
 #include <hpx/modules/timing.hpp>
 
+#include <algorithm>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -76,16 +77,36 @@ namespace {
 
     constexpr std::size_t count = 4000;
 
+    // The split of the loop for the given cores (on 4 workers) and the
+    // minimal iterations of a chunk (1 us of them), on the workers this run
+    // has: a CI runner may give the test fewer than 4. One core runs the
+    // loop as one chunk, more get chunks of at least min_iterations.
+    void check_result(recorded const& result, std::size_t const cores,
+        std::size_t const min_iterations)
+    {
+        std::size_t const available = (std::max) (std::size_t(1),
+            hpx::execution::experimental::processing_units_count(
+                hpx::execution::parallel_executor()));
+        std::size_t const expected_cores = (std::min) (cores, available);
+        std::size_t const expected_chunk = expected_cores <= 1 ?
+            count :
+            (std::max) ((count + expected_cores - 1) / expected_cores,
+                min_iterations);
+
+        HPX_TEST_EQ(result.cores, expected_cores);
+        HPX_TEST_EQ(result.chunk_size, expected_chunk);
+    }
+
     template <typename Run>
-    void check(Run&& run, std::size_t const cores, std::size_t const chunk_size)
+    void check_cores(
+        Run&& run, std::size_t const cores, std::size_t const min_iterations)
     {
         std::vector<double> v(count, 0.0);
         recorded result;
         auto policy = hpx::execution::par.with(recording_parameters(&result));
         run(policy, v);
 
-        HPX_TEST_EQ(result.cores, cores);
-        HPX_TEST_EQ(result.chunk_size, chunk_size);
+        check_result(result, cores, min_iterations);
 
         std::size_t wrong = 0;
         for (double const d : v)
@@ -98,14 +119,13 @@ namespace {
     // the cores and the chunk size the partitioner reports for run
     template <typename Run>
     void check_split(
-        Run&& run, std::size_t const cores, std::size_t const chunk_size)
+        Run&& run, std::size_t const cores, std::size_t const min_iterations)
     {
         recorded result;
         auto policy = hpx::execution::par.with(recording_parameters(&result));
         run(policy);
 
-        HPX_TEST_EQ(result.cores, cores);
-        HPX_TEST_EQ(result.chunk_size, chunk_size);
+        check_result(result, cores, min_iterations);
     }
 
     void test_byte_rates()
@@ -137,7 +157,7 @@ namespace {
         // fill writes 8 bytes, 0.25 ns
         check_split(
             [&](auto& policy) { hpx::fill(policy, c.begin(), c.end(), 4.0); },
-            1, count);
+            1, 4000);
         HPX_TEST_EQ(c[0], 4.0);
     }
 
@@ -154,28 +174,28 @@ namespace {
     int hpx_main(int, char**)
     {
         // a nano body: 4000 iterations of 1 ns, 4 cores of 1000
-        check(for_each_with(hpx::nano_task(increment)), 4, 1000);
+        check_cores(for_each_with(hpx::nano_task(increment)), 4, 1000);
 
         // 0.25 ns: a core takes 4000 iterations, one core
-        check(for_each_with(hpx::timed_task(increment, picoseconds(250))), 1,
-            count);
+        check_cores(for_each_with(hpx::timed_task(increment, picoseconds(250))),
+            1, count);
 
         // 0.5 ns: a core takes 2000 iterations, two cores
-        check(for_each_with(hpx::timed_task(increment, picoseconds(500))), 2,
-            2000);
+        check_cores(for_each_with(hpx::timed_task(increment, picoseconds(500))),
+            2, 2000);
 
         // 0.75 ns: a core takes 1333 iterations, three cores, chunks of
         // at least 1 us (1334 iterations)
-        check(for_each_with(hpx::timed_task(increment, picoseconds(750))), 3,
-            1334);
+        check_cores(for_each_with(hpx::timed_task(increment, picoseconds(750))),
+            3, 1334);
 
         // through a wrapper that forwards the time
-        check(for_each_with(hpx::bind_front(
-                  hpx::timed_task(increment, picoseconds(250)))),
+        check_cores(for_each_with(hpx::bind_front(
+                        hpx::timed_task(increment, picoseconds(250)))),
             1, count);
 
         // through task_size_of_iteration: transform
-        check(
+        check_cores(
             [](auto& policy, std::vector<double>& v) {
                 hpx::transform(policy, v.begin(), v.end(), v.begin(),
                     hpx::timed_task(
@@ -184,7 +204,7 @@ namespace {
             1, count);
 
         // through for_loop's wrapper
-        check(
+        check_cores(
             [](auto& policy, std::vector<double>& v) {
                 hpx::experimental::for_loop(policy, std::size_t(0), v.size(),
                     hpx::timed_task([&v](std::size_t i) { v[i] += 1.0; },
