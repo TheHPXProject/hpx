@@ -102,6 +102,11 @@ namespace hpx_tune {
             return result;
         }
 
+        // A child runs on one worker bound to the first processing unit
+        // (--hpx:threads=1 --hpx:pu-offset=0), whose caches
+        // machine_description describes: on a machine with two core types
+        // that is the first core's type.
+
         // the options a child of the memory area understands besides HPX's
         po::options_description child_options()
         {
@@ -136,9 +141,16 @@ namespace hpx_tune {
             std::size_t const copies =
                 (std::max) (std::size_t(1), (std::size_t(64) << 20) / half);
 
-            // warm up: touch both buffers
-            for (std::size_t i = 0; i != 2; ++i)
-                std::memcpy(dst.data(), src.data(), half);
+            // warm up for 100 ms: touch both buffers, and let the core reach
+            // its clock (after an idle machine the first copies run at a
+            // fraction of the rate)
+            auto const warm_until = std::chrono::steady_clock::now() +
+                std::chrono::milliseconds(100);
+            while (std::chrono::steady_clock::now() < warm_until)
+            {
+                for (std::size_t i = 0; i != copies; ++i)
+                    std::memcpy(dst.data(), src.data(), half);
+            }
 
             std::vector<double> rates;
             rates.reserve(repeats);
@@ -272,7 +284,7 @@ namespace hpx_tune {
             throw std::invalid_argument("--memory-runs: must be at least 1");
 
         std::vector<footprint> const fps = footprints(machine);
-        std::vector<std::string> args = {"--hpx:threads=1",
+        std::vector<std::string> args = {"--hpx:threads=1", "--hpx:pu-offset=0",
             "--repeats=" + std::to_string(context.options.repeats)};
         for (footprint const& f : fps)
         {
@@ -425,7 +437,7 @@ namespace hpx_tune {
         hpx::util::section file;
         file.read(context.file);
 
-        std::vector<std::string> args = {"--hpx:threads=1",
+        std::vector<std::string> args = {"--hpx:threads=1", "--hpx:pu-offset=0",
             "--hpx:config=" + context.file, "--memory-verify"};
         std::map<int, std::size_t> shares;
         for (footprint const& f : footprints(machine))
