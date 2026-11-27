@@ -420,8 +420,15 @@ namespace hpx::parallel {
                     HPX_MOVE(left), HPX_MOVE(right));
             }
 
+            // The range was narrowed to [first, c_last). The caller expects
+            // the end of the whole range, as in the cases above, not the end
+            // of the part that was sorted.
             return parallel_partial_sort(HPX_FORWARD(ExPolicy, policy), first,
-                middle, c_last, level - 1, HPX_FORWARD(Comp, comp));
+                middle, c_last, level - 1, HPX_FORWARD(Comp, comp))
+                .then(hpx::launch::sync, [last](hpx::future<Iter>&& f) -> Iter {
+                    f.get();
+                    return last;
+                });
         }
         /// \endcond NOINTERNAL
     }    // end namespace detail
