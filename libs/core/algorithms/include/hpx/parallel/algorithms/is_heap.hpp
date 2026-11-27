@@ -612,7 +612,8 @@ namespace hpx {
             )
         // clang-format on
         static decltype(auto) invoke_default(ExPolicy&& policy, RandIter first,
-            RandIter last, Comp comp = Comp()) HPX_PRE(first <= last)
+            RandIter last, Comp comp = Comp()) 
+            // HPX_PRE(first <= last) // Commented until ICE (concerning decltype(auto)) in gcc is resolved
         {
             static_assert(std::random_access_iterator<RandIter>,
                 "Requires a random access iterator.");
@@ -664,7 +665,8 @@ namespace hpx {
             )
         // clang-format on
         static decltype(auto) invoke_default(ExPolicy&& policy, RandIter first,
-            RandIter last, Comp comp = Comp()) HPX_PRE(first <= last)
+            RandIter last, Comp comp = Comp()) 
+            // HPX_PRE(first <= last) // Commented until ICE (concerning decltype(auto)) in gcc is resolved
         {
             static_assert(std::random_access_iterator<RandIter>,
                 "Requires a random access iterator.");
