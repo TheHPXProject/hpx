@@ -19,6 +19,7 @@ set(tests
     thread_description_address
     thread_exit_callbacks
     thread_data_is_background
+    with_annotations
 )
 
 if(HPX_WITH_TRACY)
