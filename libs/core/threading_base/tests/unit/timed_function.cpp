@@ -108,6 +108,18 @@ namespace {
                         std::chrono::duration<std::uint32_t, std::nano>(30)),
             task_size::nano, 30000);
 
+        // floating point times at the end of the range of picoseconds: 2^63
+        // is beyond it, 9.2e18 is not
+        check_timed(hpx::timed_task(&add_one,
+                        std::chrono::duration<double, std::pico>(0x1p63)),
+            task_size::large, (picoseconds::max) ().count());
+        check_timed(hpx::timed_task(&add_one,
+                        std::chrono::duration<double, std::pico>(9.2e18)),
+            task_size::large, std::int64_t(9200000000000000000));
+        check_timed(hpx::timed_task(&add_one,
+                        std::chrono::duration<double, std::nano>(1e17)),
+            task_size::large, (picoseconds::max) ().count());
+
         // functions that say nothing finer than their size
         auto const lambda = [](int i) { return i; };
         HPX_TEST_EQ(get_task_time<decltype(lambda)>::call(lambda).count(),

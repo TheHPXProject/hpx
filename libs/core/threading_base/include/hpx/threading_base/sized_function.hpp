@@ -155,7 +155,21 @@ namespace hpx::threads {
         using wide = std::chrono::duration<
             std::common_type_t<Rep, hpx::chrono::picoseconds::rep>, Period>;
         hpx::chrono::picoseconds ps = (hpx::chrono::picoseconds::max) ();
-        if constexpr (std::ratio_less_v<Period, std::pico>)
+        if constexpr (std::is_floating_point_v<Rep>)
+        {
+            // in picoseconds of the given representation, compared strictly:
+            // the largest number of picoseconds rounds up to 2^63 there
+            Rep const count = std::chrono::duration_cast<
+                std::chrono::duration<Rep, std::pico>>(time)
+                                  .count();
+            if (count <
+                static_cast<Rep>((hpx::chrono::picoseconds::max) ().count()))
+            {
+                ps = hpx::chrono::picoseconds(
+                    static_cast<hpx::chrono::picoseconds::rep>(count));
+            }
+        }
+        else if constexpr (std::ratio_less_v<Period, std::pico>)
         {
             ps = std::chrono::duration_cast<hpx::chrono::picoseconds>(time);
         }
