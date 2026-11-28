@@ -15,6 +15,8 @@
 #include <hpx/modules/serialization.hpp>
 #include <hpx/modules/synchronization.hpp>
 
+#include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
@@ -87,6 +89,18 @@ namespace hpx::parcelset::device_conduits {
         [[nodiscard]] static std::string name_impl()
         {
             return "nccl";
+        }
+
+        /// The defaults of [hpx.parcel.conduit.nccl]: stall_timeout (the
+        /// seconds after which a round in flight is reported, 0: never),
+        /// stall_action ('report' or 'fail'), test_hold_rounds (for tests).
+        static void config_defaults(std::vector<std::string>& ini);
+
+        /// The number of rounds reported as stalled so far (see
+        /// hpx.parcel.conduit.nccl.stall_timeout).
+        [[nodiscard]] std::uint64_t stalled_rounds() const noexcept
+        {
+            return stalled_rounds_.load(std::memory_order_relaxed);
         }
 
         [[nodiscard]] bool can_reach_impl(std::uint32_t) const noexcept
@@ -171,6 +185,35 @@ namespace hpx::parcelset::device_conduits {
 
         // keeps 'd' until its call has returned (nullptr: nothing to keep)
         void keep_deferred(std::shared_ptr<deferred> d);
+
+        // a round in flight for longer than the stall timeout
+        struct stalled_round
+        {
+            std::uint32_t peer;
+            bool sending;
+            int device;
+            int remote_device;
+            std::uint64_t number;
+            std::uint64_t launch;
+            std::chrono::steady_clock::duration age;
+            std::vector<std::uint64_t> tags;
+            std::vector<std::uint64_t> sizes;
+        };
+
+        // logs the stalled round 'r' of channel 'c' with the other rounds
+        // in flight on its GPU
+        void report_stall(stalled_round const& r, channel const* c);
+
+        // see config_defaults
+        std::chrono::steady_clock::duration stall_timeout_{};
+        bool fail_stalled_ = false;
+        std::chrono::milliseconds hold_rounds_{0};
+
+        // numbers the launches of rounds of this process (in order)
+        std::atomic<std::uint64_t> launches_{0};
+
+        // the rounds reported as stalled
+        std::atomic<std::uint64_t> stalled_rounds_{0};
     };
 }    // namespace hpx::parcelset::device_conduits
 

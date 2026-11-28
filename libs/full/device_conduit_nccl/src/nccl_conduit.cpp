@@ -39,6 +39,7 @@
 #endif
 
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
@@ -46,9 +47,12 @@
 #include <deque>
 #include <exception>
 #include <functional>
+#include <iomanip>
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
+#include <sstream>
 #include <string>
 #include <system_error>
 #include <thread>
@@ -80,6 +84,15 @@ namespace hpx::parcelset::device_conduits {
             "hpx::parcelset::device_conduits::nccl_conduit::progress";
         constexpr char const conduit_round[] =
             "hpx::parcelset::device_conduits::nccl_conduit::round_ready";
+
+        // a duration in seconds, with one decimal
+        std::string seconds_text(std::chrono::steady_clock::duration const d)
+        {
+            std::ostringstream os;
+            os << std::fixed << std::setprecision(1)
+               << std::chrono::duration<double>(d).count();
+            return os.str();
+        }
 
         std::exception_ptr make_error(char const* function, std::string msg)
         {
@@ -518,6 +531,15 @@ namespace hpx::parcelset::device_conduits {
         {
             std::vector<operation> operations;
             cudaEvent_t event = nullptr;
+
+            // the round's number (of its channel), when it was formed, and
+            // when and as which launch of this process it was issued (for
+            // the report of a stalled round)
+            std::uint64_t number = 0;
+            std::chrono::steady_clock::time_point formed_at;
+            std::chrono::steady_clock::time_point issued_at;
+            std::uint64_t launch = 0;
+            bool reported = false;
         };
 
         channel(std::uint32_t const peer, bool const sending,
@@ -774,7 +796,52 @@ namespace hpx::parcelset::device_conduits {
     }
 
     ///////////////////////////////////////////////////////////////////////////
-    nccl_conduit::nccl_conduit(util::runtime_configuration const&) {}
+    void nccl_conduit::config_defaults(std::vector<std::string>& ini)
+    {
+        ini.emplace_back("[hpx.parcel.conduit.nccl]");
+        // a round in flight for longer than this many seconds is reported
+        // (0: never): rounds of several communicators on one GPU can
+        // deadlock (see the module's documentation)
+        ini.emplace_back(
+            "stall_timeout = ${HPX_PARCEL_CONDUIT_NCCL_STALL_TIMEOUT:30}");
+        // what happens then: 'report' (a warning in the parcel log) or
+        // 'fail' (the channel's transfers fail with an error)
+        ini.emplace_back(
+            "stall_action = ${HPX_PARCEL_CONDUIT_NCCL_STALL_ACTION:report}");
+        // for tests only: the sender holds each round back this many
+        // milliseconds before issuing it
+        ini.emplace_back("test_hold_rounds = 0");
+    }
+
+    nccl_conduit::nccl_conduit(util::runtime_configuration const& cfg)
+    {
+        double const timeout = std::stod(
+            cfg.get_entry("hpx.parcel.conduit.nccl.stall_timeout", "30"));
+        if (timeout < 0)
+        {
+            HPX_THROW_EXCEPTION(hpx::error::bad_parameter, "nccl_conduit",
+                "hpx.parcel.conduit.nccl.stall_timeout must not be negative, "
+                "not {}",
+                timeout);
+        }
+        stall_timeout_ =
+            std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+                std::chrono::duration<double>(timeout));
+
+        std::string const action =
+            cfg.get_entry("hpx.parcel.conduit.nccl.stall_action", "report");
+        if (action != "report" && action != "fail")
+        {
+            HPX_THROW_EXCEPTION(hpx::error::bad_parameter, "nccl_conduit",
+                "hpx.parcel.conduit.nccl.stall_action must be 'report' or "
+                "'fail', not '{}'",
+                action);
+        }
+        fail_stalled_ = action == "fail";
+
+        hold_rounds_ = std::chrono::milliseconds(std::stoll(
+            cfg.get_entry("hpx.parcel.conduit.nccl.test_hold_rounds", "0")));
+    }
 
     nccl_conduit::~nccl_conduit()
     {
@@ -1204,6 +1271,8 @@ namespace hpx::parcelset::device_conduits {
                         r.tags.push_back(op.tag);
                         r.sizes.push_back(op.size);
                     }
+                    formed.number = r.round;
+                    formed.formed_at = std::chrono::steady_clock::now();
                     c.formed.push_back(HPX_MOVE(formed));
                     rounds.push_back(HPX_MOVE(r));
                     did_work = true;
@@ -1255,6 +1324,8 @@ namespace hpx::parcelset::device_conduits {
                     }
                     break;
                 }
+                formed.number = c.next_round;
+                formed.formed_at = std::chrono::steady_clock::now();
                 c.ready.erase(it);
                 ++c.next_round;
                 c.formed.push_back(HPX_MOVE(formed));
@@ -1492,6 +1563,14 @@ namespace hpx::parcelset::device_conduits {
                 {
                     break;
                 }
+                if (c.sending && hold_rounds_.count() != 0 &&
+                    std::chrono::steady_clock::now() -
+                            c.formed.front().formed_at <
+                        hold_rounds_)
+                {
+                    // held back (hpx.parcel.conduit.nccl.test_hold_rounds)
+                    break;
+                }
                 r = HPX_MOVE(c.formed.front());
                 c.formed.pop_front();
             }
@@ -1577,6 +1656,8 @@ namespace hpx::parcelset::device_conduits {
             }
             did_work = true;
 
+            r.issued_at = std::chrono::steady_clock::now();
+            r.launch = launches_.fetch_add(1, std::memory_order_relaxed);
             c.in_flight.push_back(HPX_MOVE(r));
             if (result == ncclInProgress)
             {
@@ -1633,6 +1714,38 @@ namespace hpx::parcelset::device_conduits {
             did_work = true;
         }
 
+        // the oldest round in flight has stalled (it is reported once)
+        std::optional<stalled_round> stalled;
+        if (!error && stall_timeout_.count() != 0 && !c.in_flight.empty())
+        {
+            auto& r = c.in_flight.front();
+            auto const age = std::chrono::steady_clock::now() - r.issued_at;
+            if (!r.reported && age > stall_timeout_)
+            {
+                r.reported = true;
+                stalled = stalled_round{c.peer, c.sending, c.device,
+                    c.remote_device, r.number, r.launch, age, {}, {}};
+                for (auto const& op : r.operations)
+                {
+                    stalled->tags.push_back(op.tag);
+                    stalled->sizes.push_back(op.size);
+                }
+                if (fail_stalled_)
+                {
+                    error = make_error(conduit_progress,
+                        "round " + std::to_string(r.number) +
+                            " to/from "
+                            "locality " +
+                            std::to_string(c.peer) + " has not finished in " +
+                            seconds_text(age) +
+                            " s (hpx.parcel.conduit.nccl.stall_timeout), "
+                            "possibly a deadlock of NCCL launches on GPU " +
+                            std::to_string(c.device) +
+                            " (see the device_conduit_nccl documentation)");
+                }
+            }
+        }
+
         // an NCCL error is reported by the communicator too (the peer
         // failed or left)
         if (!error && c.comm != nullptr && c.comm_ready)
@@ -1659,6 +1772,10 @@ namespace hpx::parcelset::device_conduits {
         }
         cl.unlock();
         keep_deferred(HPX_MOVE(later));
+        if (stalled)
+        {
+            report_stall(*stalled, &c);
+        }
 
         // the sender holds the chunks of the receives it wasn't asked for
         // (a failure before or with the first round included)
@@ -1676,6 +1793,89 @@ namespace hpx::parcelset::device_conduits {
             done(error);
         }
         return did_work;
+    }
+
+    void nccl_conduit::report_stall(stalled_round const& r, channel const* c)
+    {
+        stalled_rounds_.fetch_add(1, std::memory_order_relaxed);
+
+        auto const list = [](std::vector<std::uint64_t> const& v) {
+            std::string text;
+            for (std::size_t i = 0; i != v.size() && i != 8; ++i)
+            {
+                text += (i == 0 ? "" : ",") + std::to_string(v[i]);
+            }
+            return v.size() > 8 ? text + ",..." : text;
+        };
+
+        // the other rounds in flight on the same GPU, in the order this
+        // process launched them (the channels busy elsewhere are left out)
+        std::vector<std::shared_ptr<channel>> channels;
+        {
+            std::lock_guard<hpx::spinlock> l(channels_mtx_);
+            for (auto const* map : {&senders_, &receivers_})
+            {
+                for (auto const& [key, other] : *map)
+                {
+                    channels.push_back(other);
+                }
+            }
+            channels.insert(channels.end(), removed_.begin(), removed_.end());
+        }
+        auto const now = std::chrono::steady_clock::now();
+        std::map<std::uint64_t, std::string> others;
+        std::size_t busy = 0;
+        for (auto const& other : channels)
+        {
+            if (other.get() == c || other->device != r.device)
+            {
+                continue;
+            }
+            std::unique_lock<hpx::spinlock> ol(
+                other->comm_mtx, std::try_to_lock);
+            if (!ol.owns_lock())
+            {
+                ++busy;
+                continue;
+            }
+            for (auto const& f : other->in_flight)
+            {
+                others[f.launch] = std::string(other->sending ? "to" : "from") +
+                    " locality " + std::to_string(other->peer) + " GPU " +
+                    std::to_string(other->remote_device) + " round " +
+                    std::to_string(f.number) + " (launch " +
+                    std::to_string(f.launch) + ", " +
+                    seconds_text(now - f.issued_at) + " s)";
+            }
+        }
+
+        std::string text;
+        for (auto const& [launch, what] : others)
+        {
+            text += "; " + what;
+        }
+        LPT_(warning).format(
+            "nccl_conduit: round {} {} locality {} (GPU {} here, {} there; "
+            "launch {}; tags {}; sizes {}) has not finished after {} s. "
+            "Other rounds in flight on GPU {}: {}{}{}. {}",
+            r.number, r.sending ? "to" : "from", r.peer, r.device,
+            r.remote_device, r.launch, list(r.tags), list(r.sizes),
+            seconds_text(r.age), r.device, others.size(), text,
+            busy != 0 ? " (" + std::to_string(busy) + " channels not seen)" :
+                        std::string(),
+            others.empty() ?
+                "The peer may be slow, or may have stopped taking part." :
+                "Rounds of several communicators in flight on one GPU can "
+                "deadlock if the processes launched them in different orders "
+                "(see the device_conduit_nccl documentation); compare with "
+                "the peer's report.");
+        if (fail_stalled_)
+        {
+            LPT_(warning).format("nccl_conduit: the channel {} locality {} "
+                                 "fails (hpx.parcel.conduit.nccl.stall_action"
+                                 " = fail)",
+                r.sending ? "to" : "from", r.peer);
+        }
     }
 
     void nccl_conduit::keep_deferred(std::shared_ptr<deferred> d)
