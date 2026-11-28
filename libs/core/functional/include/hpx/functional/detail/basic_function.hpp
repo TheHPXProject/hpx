@@ -75,6 +75,7 @@ namespace hpx::util::detail {
         [[nodiscard]] hpx::tracing::annotation_handle
         get_function_annotation_tracing() const;
         [[nodiscard]] threads::task_size get_task_size() const noexcept;
+        [[nodiscard]] threads::thread_stacksize get_stack_size() const noexcept;
 
     protected:
         vtable const* vptr;
@@ -251,6 +252,7 @@ namespace hpx::util::detail {
         using base_type::get_function_address;
         using base_type::get_function_annotation;
         using base_type::get_function_annotation_tracing;
+        using base_type::get_stack_size;
         using base_type::get_task_size;
 
     private:

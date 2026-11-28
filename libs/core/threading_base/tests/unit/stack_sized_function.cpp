@@ -8,7 +8,9 @@
 // get_stack_size, the wrapper nests with with_task_size in both orders (each
 // trait looks through the other wrapper), set_stack_size lets the function's
 // stack size win, the wrapper forwards arguments, keeps the function's
-// address and annotation, and runs through async and post.
+// address and annotation, and runs through async and post. Also checks that
+// deferred_call, the binders, one_shot and the type erased functions pass on
+// the stack size of the function they call.
 
 #include <hpx/functional.hpp>
 #include <hpx/future.hpp>
@@ -337,6 +339,138 @@ void test_launch()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+void test_wrappers()
+{
+    auto lambda = [](int i) { return i; };
+    auto large = large_stack(lambda);
+
+    // hpx::async binds its arguments with deferred_call, and the binders and
+    // one_shot see through to the function they call
+    using hpx::placeholders::_1;
+    static_assert(stacksize_of<decltype(hpx::util::deferred_call(large, 1))> ==
+        thread_stacksize::large);
+    static_assert(stacksize_of<decltype(hpx::bind(large, _1))> ==
+        thread_stacksize::large);
+    static_assert(stacksize_of<decltype(hpx::bind_front(large, 1))> ==
+        thread_stacksize::large);
+    static_assert(stacksize_of<decltype(hpx::bind_back(large, 1))> ==
+        thread_stacksize::large);
+    static_assert(stacksize_of<decltype(hpx::util::one_shot(large))> ==
+        thread_stacksize::large);
+
+    HPX_TEST(stacksize_of_object(hpx::util::deferred_call(large, 1)) ==
+        thread_stacksize::large);
+    HPX_TEST(
+        stacksize_of_object(hpx::bind(large, _1)) == thread_stacksize::large);
+    HPX_TEST(stacksize_of_object(hpx::bind_front(large, 1)) ==
+        thread_stacksize::large);
+    HPX_TEST(stacksize_of_object(hpx::bind_back(large, 1)) ==
+        thread_stacksize::large);
+    HPX_TEST(stacksize_of_object(hpx::util::one_shot(large)) ==
+        thread_stacksize::large);
+
+    // a function without a stack size has none, or the default
+    static_assert(stacksize_of<decltype(hpx::util::deferred_call(lambda, 1))> ==
+        thread_stacksize::unknown);
+    static_assert(stacksize_of<decltype(hpx::bind(lambda, _1))> ==
+        thread_stacksize::unknown);
+    static_assert(
+        hpx::traits::get_stack_size_v<decltype(hpx::bind_front(lambda, 1)),
+            thread_stacksize::huge> == thread_stacksize::huge);
+
+    // the task size and the stack size both get through
+    auto both = nano_task(no_stack(lambda));
+    static_assert(size_of<decltype(hpx::util::deferred_call(both, 1))> ==
+        task_size::nano);
+    static_assert(stacksize_of<decltype(hpx::util::deferred_call(both, 1))> ==
+        thread_stacksize::nostack);
+
+    // and the wrappers still call the function
+    HPX_TEST_EQ(hpx::util::deferred_call(large, 7)(), 7);
+    HPX_TEST_EQ(hpx::bind_front(large, 8)(), 8);
+
+    // bind calls a nested bind expression before the function, on the same
+    // thread, and that may need a stack of its own, so bind reports no stack
+    // size then, or the default
+    auto no_stack_f = no_stack(lambda);
+    auto nested = hpx::bind(no_stack_f, hpx::bind(lambda, 2));
+    static_assert(stacksize_of<decltype(nested)> == thread_stacksize::unknown);
+    static_assert(hpx::traits::get_stack_size_v<decltype(nested),
+                      thread_stacksize::medium> == thread_stacksize::medium);
+    HPX_TEST(stacksize_of_object(nested) == thread_stacksize::unknown);
+    HPX_TEST_EQ(nested(), 2);
+
+    // a placeholder or a protected bind expression isn't called by bind
+    static_assert(stacksize_of<decltype(hpx::bind(no_stack_f, _1))> ==
+        thread_stacksize::nostack);
+    static_assert(stacksize_of<decltype(hpx::bind(
+                      no_stack_f, hpx::util::protect(hpx::bind(lambda, 2))))> ==
+        thread_stacksize::nostack);
+
+    // bind_front and bind_back pass a bind expression on as it is
+    static_assert(stacksize_of<decltype(hpx::bind_front(no_stack_f,
+                      hpx::bind(lambda, 2)))> == thread_stacksize::nostack);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+void test_type_erased()
+{
+    // a type erased function has the stack size of the function stored in
+    // it, which is known at run time only
+    hpx::move_only_function<int()> move_only = large_stack([] { return 1; });
+    static_assert(
+        stacksize_of<decltype(move_only)> == thread_stacksize::unknown);
+    HPX_TEST(stacksize_of_object(move_only) == thread_stacksize::large);
+
+    hpx::function<int()> const f = no_stack([] { return 1; });
+    HPX_TEST(stacksize_of_object(f) == thread_stacksize::nostack);
+    HPX_TEST_EQ(f(), 1);
+
+    // a function without a stack size has none, or the default, and so has
+    // an empty one
+    hpx::function<int()> const plain = [] { return 1; };
+    HPX_TEST(stacksize_of_object(plain) == thread_stacksize::unknown);
+    HPX_TEST((hpx::traits::get_stack_size<hpx::function<int()>,
+                  thread_stacksize::medium>::call(plain) ==
+        thread_stacksize::medium));
+    HPX_TEST(stacksize_of_object(hpx::function<int()>()) ==
+        thread_stacksize::unknown);
+    HPX_TEST(stacksize_of_object(hpx::move_only_function<int()>()) ==
+        thread_stacksize::unknown);
+
+    // the wrappers see through to it
+    using hpx::placeholders::_1;
+    HPX_TEST(stacksize_of_object(hpx::util::deferred_call(f)) ==
+        thread_stacksize::nostack);
+    HPX_TEST(stacksize_of_object(hpx::bind(f)) == thread_stacksize::nostack);
+    HPX_TEST(
+        stacksize_of_object(hpx::bind_front(f)) == thread_stacksize::nostack);
+    HPX_TEST(
+        stacksize_of_object(hpx::bind_back(f)) == thread_stacksize::nostack);
+    HPX_TEST(stacksize_of_object(hpx::util::one_shot(f)) ==
+        thread_stacksize::nostack);
+    HPX_TEST(stacksize_of_object(hpx::annotated_function(f, "f")) ==
+        thread_stacksize::nostack);
+
+    // so do type erased functions storing a wrapper
+    hpx::function<int()> const bound = hpx::bind_front(f);
+    HPX_TEST(stacksize_of_object(bound) == thread_stacksize::nostack);
+
+    // both sizes are stored
+    hpx::function<int()> const sized =
+        hpx::threads::with_annotations<task_size::small_,
+            thread_stacksize::huge>([] { return 2; });
+    HPX_TEST(hpx::traits::get_task_size<hpx::function<int()>>::call(sized) ==
+        task_size::small_);
+    HPX_TEST(stacksize_of_object(sized) == thread_stacksize::huge);
+
+    // and set_stack_size takes the stack size from the function object
+    thread_stacksize stack_size = thread_stacksize::small_;
+    hpx::threads::detail::set_stack_size(stack_size, f);
+    HPX_TEST(stack_size == thread_stacksize::nostack);
+}
+
+///////////////////////////////////////////////////////////////////////////////
 int hpx_main()
 {
     test_trait();
@@ -346,6 +480,8 @@ int hpx_main()
     test_hpx_names();
     test_annotation();
     test_launch();
+    test_wrappers();
+    test_type_erased();
 
     return hpx::local::finalize();
 }

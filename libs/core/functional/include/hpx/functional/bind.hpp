@@ -271,6 +271,28 @@ namespace hpx {
                 return traits::get_task_size<F, Size>::call(_f);
             }
 
+            // A bound argument that is a bind expression itself is called
+            // before f, on the same thread, and may need a stack of its own
+            // (or suspend where f doesn't), so the stack size of f is the
+            // stack size of the call only if there is none.
+            static constexpr bool has_nested_bind_expressions =
+                (hpx::is_bind_expression_v<std::decay_t<Ts>> || ...);
+
+            template <threads::thread_stacksize Default =
+                          threads::thread_stacksize::unknown>
+            [[nodiscard]] constexpr threads::thread_stacksize get_stack_size()
+                const noexcept
+            {
+                if constexpr (has_nested_bind_expressions)
+                {
+                    return Default;
+                }
+                else
+                {
+                    return traits::get_stack_size<F, Default>::call(_f);
+                }
+            }
+
         private:
             F _f;
             util::member_pack_for<Ts...> _args;
@@ -369,6 +391,23 @@ namespace hpx::traits {
             hpx::detail::bound<F, Ts...> const& f) noexcept
         {
             return f.template get_task_size<Size>();
+        }
+    };
+
+    // the stack size is the one of the function it calls, unless it also calls
+    // nested bind expressions, which may need a stack of their own
+    template <threads::thread_stacksize Default, typename F, typename... Ts>
+    struct get_stack_size<hpx::detail::bound<F, Ts...>, Default>
+    {
+        static constexpr threads::thread_stacksize value =
+            hpx::detail::bound<F, Ts...>::has_nested_bind_expressions ?
+            Default :
+            get_stack_size<F, Default>::value;
+
+        [[nodiscard]] static constexpr threads::thread_stacksize call(
+            hpx::detail::bound<F, Ts...> const& f) noexcept
+        {
+            return f.template get_stack_size<Default>();
         }
     };
 }    // namespace hpx::traits

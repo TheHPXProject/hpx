@@ -160,6 +160,14 @@ namespace hpx::detail {
             return traits::get_task_size<F, Size>::call(_f);
         }
 
+        template <threads::thread_stacksize Default =
+                      threads::thread_stacksize::unknown>
+        [[nodiscard]] constexpr threads::thread_stacksize get_stack_size()
+            const noexcept
+        {
+            return traits::get_stack_size<F, Default>::call(_f);
+        }
+
     private:
         F _f;
         util::member_pack_for<Ts...> _args;
@@ -250,6 +258,18 @@ namespace hpx::traits {
             hpx::detail::bound_back<F, Ts...> const& f) noexcept
         {
             return f.template get_task_size<Size>();
+        }
+    };
+
+    // the stack size is the one of the function it calls
+    template <threads::thread_stacksize Default, typename F, typename... Ts>
+    struct get_stack_size<hpx::detail::bound_back<F, Ts...>, Default>
+      : get_stack_size<F, Default>
+    {
+        [[nodiscard]] static constexpr threads::thread_stacksize call(
+            hpx::detail::bound_back<F, Ts...> const& f) noexcept
+        {
+            return f.template get_stack_size<Default>();
         }
     };
 }    // namespace hpx::traits

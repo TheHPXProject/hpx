@@ -124,6 +124,14 @@ namespace hpx::util {
                 return traits::get_task_size<F, Size>::call(_f);
             }
 
+            template <threads::thread_stacksize Default =
+                          threads::thread_stacksize::unknown>
+            [[nodiscard]] constexpr threads::thread_stacksize get_stack_size()
+                const noexcept
+            {
+                return traits::get_stack_size<F, Default>::call(_f);
+            }
+
         public:    // exposition-only
             F _f;
 #if defined(HPX_DEBUG)
@@ -190,6 +198,18 @@ namespace hpx::traits {
             util::detail::one_shot_wrapper<F> const& f) noexcept
         {
             return f.template get_task_size<Size>();
+        }
+    };
+
+    // the stack size is the one of the function it calls
+    template <threads::thread_stacksize Default, typename F>
+    struct get_stack_size<util::detail::one_shot_wrapper<F>, Default>
+      : get_stack_size<F, Default>
+    {
+        [[nodiscard]] static constexpr threads::thread_stacksize call(
+            util::detail::one_shot_wrapper<F> const& f) noexcept
+        {
+            return f.template get_stack_size<Default>();
         }
     };
 }    // namespace hpx::traits

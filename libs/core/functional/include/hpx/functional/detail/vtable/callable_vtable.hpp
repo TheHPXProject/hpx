@@ -62,6 +62,14 @@ namespace hpx::util::detail {
         threads::task_size (*get_task_size)(void*) = nullptr;
 
         template <typename T>
+        HPX_FORCEINLINE static threads::thread_stacksize _get_stack_size(
+            void* f)
+        {
+            return traits::get_stack_size<T>::call(vtable::get<T>(f));
+        }
+        threads::thread_stacksize (*get_stack_size)(void*) = nullptr;
+
+        template <typename T>
         explicit constexpr callable_info_vtable(construct_vtable<T>) noexcept
 #if defined(HPX_HAVE_THREAD_DESCRIPTION)
           : get_function_address(
@@ -74,6 +82,7 @@ namespace hpx::util::detail {
 #else
           : get_task_size(&callable_info_vtable::_get_task_size<T>)
 #endif
+          , get_stack_size(&callable_info_vtable::_get_stack_size<T>)
         {
         }
 

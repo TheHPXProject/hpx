@@ -162,4 +162,12 @@ namespace hpx::util::detail {
             return threads::task_size::unknown;
         return vptr->get_task_size(object);
     }
+
+    threads::thread_stacksize function_base::get_stack_size() const noexcept
+    {
+        // an empty function has no stack size
+        if (empty())
+            return threads::thread_stacksize::unknown;
+        return vptr->get_stack_size(object);
+    }
 }    // namespace hpx::util::detail
