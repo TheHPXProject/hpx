@@ -18,6 +18,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <ratio>
 #include <type_traits>
 #include <utility>
 
@@ -133,13 +134,32 @@ namespace hpx::threads {
     ///
     /// \param f    Function to wrap
     /// \param time The run time of one call of \a f. Times are kept in
-    ///             picoseconds; a time of zero or less gives no size.
+    ///             picoseconds, saturated at the largest number of them
+    ///             (about 106 days); a time of zero or less gives no size.
     HPX_CXX_CORE_EXPORT template <typename F, typename Rep, typename Period>
     constexpr timed_function<std::decay_t<F>> timed_task(
         F&& f, std::chrono::duration<Rep, Period> const& time)
     {
-        auto const ps =
-            std::chrono::duration_cast<hpx::chrono::picoseconds>(time);
+        using input = std::chrono::duration<Rep, Period>;
+        if (time <= input::zero())
+        {
+            return {HPX_FORWARD(F, f),
+                task_size_and_time{
+                    task_size::unknown, hpx::chrono::picoseconds(0)}};
+        }
+
+        // compared in the given unit: converting a longer time to
+        // picoseconds would overflow
+        hpx::chrono::picoseconds ps = (hpx::chrono::picoseconds::max) ();
+        if constexpr (std::ratio_less_v<Period, std::pico>)
+        {
+            ps = std::chrono::duration_cast<hpx::chrono::picoseconds>(time);
+        }
+        else if (time <= std::chrono::duration_cast<input>(
+                             (hpx::chrono::picoseconds::max) ()))
+        {
+            ps = std::chrono::duration_cast<hpx::chrono::picoseconds>(time);
+        }
         task_size const size = task_size_of_duration(ps);
         return {HPX_FORWARD(F, f),
             task_size_and_time{size,
