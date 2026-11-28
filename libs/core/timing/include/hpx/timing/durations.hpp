@@ -27,19 +27,20 @@ namespace hpx::chrono {
     /// \cond NOINTERNAL
     namespace detail {
 
-        // time * count for a positive time and count, saturated at the
+        // time * count for a positive time, saturated at the
         // largest number of picoseconds (about 106 days) instead of
         // overflowing; time * count as it is for all others.
         HPX_CXX_CORE_EXPORT [[nodiscard]] constexpr picoseconds
         saturating_product(
-            picoseconds const time, std::int64_t const count) noexcept
+            picoseconds const time, std::uint64_t const count) noexcept
         {
-            if (time.count() > 0 && count > 0 &&
-                time.count() > (picoseconds::max) ().count() / count)
+            if (time.count() > 0 &&
+                count > static_cast<std::uint64_t>(
+                            (picoseconds::max) ().count() / time.count()))
             {
                 return (picoseconds::max) ();
             }
-            return time * count;
+            return time * static_cast<picoseconds::rep>(count);
         }
     }    // namespace detail
     /// \endcond

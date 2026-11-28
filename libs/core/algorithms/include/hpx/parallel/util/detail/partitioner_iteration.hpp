@@ -141,8 +141,8 @@ struct hpx::traits::get_task_size<
             time.count() > 0)
         {
             return threads::task_size_of_duration(
-                hpx::chrono::detail::saturating_product(time,
-                    static_cast<hpx::chrono::picoseconds::rep>(f.iterations_)));
+                hpx::chrono::detail::saturating_product(
+                    time, static_cast<std::uint64_t>(f.iterations_)));
         }
         threads::task_size const size = threads::bulk_task_size(
             get_task_size<std::decay_t<F>>::call(f.f_), f.iterations_);

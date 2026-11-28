@@ -22,6 +22,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <limits>
 #include <type_traits>
 #include <utility>
@@ -254,7 +255,19 @@ namespace hpx::execution::experimental {
                 static_cast<ps_rep>(static_cast<long double>(remainder) *
                     static_cast<long double>(factor) /
                     static_cast<long double>(part));
-            return static_cast<std::size_t>(quotient * factor + extra);
+            // the sum fits in 64 unsigned bits (quotient * factor and extra
+            // are at most the largest ps_rep), but not always in ps_rep
+            std::uint64_t const result =
+                static_cast<std::uint64_t>(quotient * factor) +
+                static_cast<std::uint64_t>(extra);
+            if constexpr (sizeof(std::size_t) < sizeof(std::uint64_t))
+            {
+                if (result > (std::numeric_limits<std::size_t>::max)())
+                {
+                    return (std::numeric_limits<std::size_t>::max)();
+                }
+            }
+            return static_cast<std::size_t>(result);
         }
 
         // The minimal run time of a chunk and the number of chunks per core,
