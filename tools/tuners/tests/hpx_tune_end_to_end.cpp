@@ -545,13 +545,20 @@ int main(int argc, char* argv[])
                     areas_file + "\""),
         0);
 
-    // the runtime started with the file
+    // the runtime started with the file, on pool_size workers unless the
+    // command line (CTest's) already says how many: HPX refuses the option
+    // twice
     std::string const config = "--hpx:config=" + areas_file;
     std::string const threads = "--hpx:threads=" + std::to_string(pool_size);
     {
         std::vector<char*> args(argv, argv + argc);
         args.push_back(const_cast<char*>(config.c_str()));
-        args.push_back(const_cast<char*>(threads.c_str()));
+        if (std::none_of(argv + 1, argv + argc, [](char const* arg) {
+                return std::strncmp(arg, "--hpx:threads", 13) == 0;
+            }))
+        {
+            args.push_back(const_cast<char*>(threads.c_str()));
+        }
         args.push_back(nullptr);
         HPX_TEST_EQ(hpx::local::init(check_with_file,
                         static_cast<int>(args.size() - 1), args.data()),
