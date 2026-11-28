@@ -411,15 +411,16 @@ namespace hpx::serialization {
 
         // The steps a received parcel waits for depend on whether it uses
         // objects that earlier parcels of the message have loaded (see
-        // post_receive_actions::take_parcel_steps).
+        // post_receive_actions::take_parcel_steps). Every loaded object is
+        // recorded, also before the parcel's first step is registered (a
+        // load() may read a tracked object and register a step afterwards):
+        // a later parcel referring back to it waits for the steps of the
+        // parcels up to this one, one that doesn't waits for its own only.
         template <typename Archive>
         void note_object_loaded(Archive& ar, std::uint64_t const pos)
         {
-            if (auto* actions =
-                    ar.template try_get_extra_data<post_receive_actions>())
-            {
-                actions->object_loaded(pos);
-            }
+            ar.template get_extra_data<post_receive_actions>().object_loaded(
+                pos);
         }
 
         template <typename Archive>
