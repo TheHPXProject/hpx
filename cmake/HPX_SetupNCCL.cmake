@@ -7,14 +7,16 @@
 include(HPX_Message)
 
 # Finds the library of the NCCL device conduit: NCCL with CUDA, RCCL (the same
-# API) with HIP, and defines HPX::nccl for it. Non-blocking communicators and
-# ncclGetLastError need NCCL 2.14 or newer (RCCL of ROCm 5.4 or newer).
+# API) with HIP, and defines HPX::nccl for it. Non-blocking communicators
+# (ncclConfig_t, ncclCommInitRankConfig, ncclInProgress) and ncclGetLastError
+# need NCCL or RCCL 2.14 or newer (the RCCL of ROCm 5.4 is 2.13 and lacks them).
 macro(hpx_setup_nccl)
   if(NOT TARGET HPX::nccl)
     if(HPX_WITH_HIP)
       # RCCL_ROOT (the module of the CI stack sets it) or the ROCm directory
       find_package(
         rccl
+        2.14
         REQUIRED
         CONFIG
         HINTS
