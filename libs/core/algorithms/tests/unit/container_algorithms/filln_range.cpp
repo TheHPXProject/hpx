@@ -119,6 +119,26 @@ void test_fill_n_list_initialized()
         HPX_TEST(f.get() == c.begin() + 6);
         expect_filled(c, 6);
     }
+
+    // the overloads that take a range
+    {
+        std::vector<int> c(10, 0);
+        auto it = hpx::ranges::fill_n(seq, c, {7});
+        HPX_TEST(it == c.end());
+        expect_filled(c, 10);
+    }
+    {
+        std::vector<int> c(10, 0);
+        auto it = hpx::ranges::fill_n(par, c, {7});
+        HPX_TEST(it == c.end());
+        expect_filled(c, 10);
+    }
+    {
+        std::vector<int> c(10, 0);
+        auto f = hpx::ranges::fill_n(par(task), c, {7});
+        HPX_TEST(f.get() == c.end());
+        expect_filled(c, 10);
+    }
 }
 
 void fill_test()
