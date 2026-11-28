@@ -17,6 +17,8 @@
 #include <cstddef>
 #include <iterator>
 #include <string>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 using iterator = std::vector<int>::iterator;
@@ -56,8 +58,8 @@ void test_set_operation(ExPolicy&& policy, Op op, StdOp std_op)
         b[i] = static_cast<int>(3 * i);
 
     std::vector<int> expected;
-    std_op(a.begin(), a.end(), b.begin(), b.end(),
-        std::back_inserter(expected));
+    std_op(
+        a.begin(), a.end(), b.begin(), b.end(), std::back_inserter(expected));
 
     std::vector<int> out(a.size() + b.size());
     auto result = op(policy, a.begin(), sentinel{a.end()}, b.begin(),
