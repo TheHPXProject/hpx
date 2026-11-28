@@ -109,6 +109,45 @@ namespace hpx_tune_detail {
         return has_moves_host_memory<hpx::parcelset::device_conduit>::value;
     }
 
+    // whether this HPX has the host chunks' settings per destination class
+    // (#8265 added parcelport::conduit_host_chunks(destination_class), with
+    // the keys hpx.parcel.<parcelport>.same_node.conduit_host_chunks,
+    // hpx.parcel.same_node.conduit_host_threshold and their other_nodes
+    // counterparts; without it neither the function nor the type of its
+    // argument exist)
+    template <typename Parcelport, typename = void>
+    struct has_destination_classes : std::false_type
+    {
+    };
+
+    template <typename Parcelport>
+    struct has_destination_classes<Parcelport,
+        std::void_t<decltype(&Parcelport::conduit_host_chunks)>>
+      : std::true_type
+    {
+    };
+
+    constexpr bool destination_classes_supported() noexcept
+    {
+        return has_destination_classes<hpx::parcelset::parcelport>::value;
+    }
+
+    // the destination class a placement measures: same-node the localities
+    // on the sender's node, two-nodes the others
+    std::string class_of(std::string const& placement)
+    {
+        return placement == "same-node" ? "same_node" : "other_nodes";
+    }
+
+    // a setting's key for one destination class: the class's name before the
+    // last part (hpx.parcel.tcp.conduit_host_chunks becomes
+    // hpx.parcel.tcp.same_node.conduit_host_chunks)
+    std::string key_for_class(std::string const& key, std::string const& cls)
+    {
+        auto const dot = key.rfind('.');
+        return key.substr(0, dot) + "." + cls + key.substr(dot);
+    }
+
     // what the runtime of this locality took for the host chunks of the
     // parcelport it bootstraps with (a check's child, see verify_parcel)
     std::vector<std::pair<std::string, std::string>> verify_entries()
@@ -117,7 +156,7 @@ namespace hpx_tune_detail {
             hpx::get_config_entry("hpx.parcel.bootstrap", "");
         std::string const key = "hpx.parcel." + pp;
         auto const* conduit = hpx::parcelset::get_device_conduit();
-        return {
+        std::vector<std::pair<std::string, std::string>> entries = {
             {"host_chunk_support", host_chunks_supported() ? "1" : "0"},
             {"conduit", conduit != nullptr ? conduit->name() : "none"},
             {"conduit_moves_host_memory",
@@ -137,6 +176,27 @@ namespace hpx_tune_detail {
                 hpx::get_config_entry(
                     key + ".zero_copy_serialization_threshold", "")},
         };
+
+        // the values per destination class, each by default the one value
+        // (as the parcel layer reads them)
+        if constexpr (destination_classes_supported())
+        {
+            std::string const chunks =
+                hpx::get_config_entry(key + ".conduit_host_chunks", "");
+            std::string const threshold =
+                hpx::get_config_entry("hpx.parcel.conduit_host_threshold", "");
+            for (std::string const cls : {"same_node", "other_nodes"})
+            {
+                entries.emplace_back(cls + "_parcelport_conduit_host_chunks",
+                    hpx::get_config_entry(
+                        key + "." + cls + ".conduit_host_chunks", chunks));
+                entries.emplace_back(cls + "_conduit_host_threshold",
+                    hpx::get_config_entry(
+                        "hpx.parcel." + cls + ".conduit_host_threshold",
+                        threshold));
+            }
+        }
+        return entries;
     }
 }    // namespace hpx_tune_detail
 
@@ -1135,11 +1195,23 @@ namespace hpx_tune {
             }
             report.end_placement(rules);
 
-            // one value per setting for all destinations until the parcel
-            // layer has settings per destination class: the two-node
-            // placement's where it was measured
-            if (written.empty() || placement == "two-nodes")
+            // with settings per destination class each placement's for its
+            // class (a rule left open for one class leaves HPX's default for
+            // it); without them one value per setting for all destinations:
+            // the two-node placement's where it was measured
+            if constexpr (hpx_tune_detail::destination_classes_supported())
+            {
+                for (tuning::tuned_setting s : rules.settings)
+                {
+                    s.key = hpx_tune_detail::key_for_class(
+                        s.key, hpx_tune_detail::class_of(placement));
+                    written.push_back(HPX_MOVE(s));
+                }
+            }
+            else if (written.empty() || placement == "two-nodes")
+            {
                 written = rules.settings;
+            }
         }
 
         result.report = report.text(passes, seed);
@@ -1290,11 +1362,23 @@ namespace hpx_tune {
                     result.failures.push_back(what + ": " + text);
                 };
 
+                // the entries of this placement's destination class, where
+                // this HPX has settings per class
+                bool const classes =
+                    hpx_tune_detail::destination_classes_supported();
+                std::string const cls = hpx_tune_detail::class_of(placement);
+                std::string const chunks_name = classes ?
+                    cls + "_parcelport_conduit_host_chunks" :
+                    std::string("parcelport_conduit_host_chunks");
+                std::string const threshold_name = classes ?
+                    cls + "_conduit_host_threshold" :
+                    std::string("conduit_host_threshold");
+
                 // both localities took the same
-                for (char const* key : {"conduit", "conduit_moves_host_memory",
-                         "parcelport_conduit_host_chunks",
-                         "zero_copy_optimization", "conduit_host_threshold",
-                         "zero_copy_serialization_threshold"})
+                for (std::string const& key : {std::string("conduit"),
+                         std::string("conduit_moves_host_memory"), chunks_name,
+                         std::string("zero_copy_optimization"), threshold_name,
+                         std::string("zero_copy_serialization_threshold")})
                 {
                     std::string const a = entry_of(r.local, key);
                     std::string const b = entry_of(r.remote, key);
@@ -1306,13 +1390,24 @@ namespace hpx_tune {
                 }
 
                 // the runtime took what the file says
-                std::pair<std::string, char const*> const keys[] = {
+                std::vector<std::pair<std::string, std::string>> keys = {
                     {"hpx.parcel.device_conduit", "device_conduit"},
                     {"hpx.parcel.conduit_host_chunks", "conduit_host_chunks"},
                     {"hpx.parcel." + pp + ".conduit_host_chunks",
                         "parcelport_conduit_host_chunks"},
                     {"hpx.parcel.conduit_host_threshold",
                         "conduit_host_threshold"}};
+                if (classes)
+                {
+                    keys.emplace_back(
+                        hpx_tune_detail::key_for_class(
+                            "hpx.parcel." + pp + ".conduit_host_chunks", cls),
+                        chunks_name);
+                    keys.emplace_back(
+                        hpx_tune_detail::key_for_class(
+                            "hpx.parcel.conduit_host_threshold", cls),
+                        threshold_name);
+                }
                 for (auto const& [key, name] : keys)
                 {
                     if (!file.has_entry(key))
@@ -1331,22 +1426,23 @@ namespace hpx_tune {
                 bool const moves =
                     entry_of(r.local, "conduit_moves_host_memory") == "1" &&
                     entry_of(r.remote, "conduit_moves_host_memory") == "1";
-                bool const on = is_on(entry_of(r.local,
-                                    "parcelport_conduit_host_chunks")) &&
-                    is_on(
-                        entry_of(r.remote, "parcelport_conduit_host_chunks")) &&
+                bool const on = is_on(entry_of(r.local, chunks_name)) &&
+                    is_on(entry_of(r.remote, chunks_name)) &&
                     entry_of(r.local, "zero_copy_optimization") != "0";
                 std::string const conduit = entry_of(r.local, "conduit");
                 std::size_t const threshold =
-                    (std::max) (entry_as_size(
-                                    r.local, "conduit_host_threshold", mib),
+                    (std::max) (entry_as_size(r.local, threshold_name, mib),
                         entry_as_size(r.local,
                             "zero_copy_serialization_threshold", 8192));
 
                 // what the file asks for this parcelport
                 std::string const pp_key =
                     "hpx.parcel." + pp + ".conduit_host_chunks";
-                bool const file_on = file.has_entry(pp_key) ?
+                std::string const class_key =
+                    hpx_tune_detail::key_for_class(pp_key, cls);
+                bool const file_on = classes && file.has_entry(class_key) ?
+                    is_on(file.get_entry(class_key)) :
+                    file.has_entry(pp_key) ?
                     is_on(file.get_entry(pp_key)) :
                     (file.has_entry("hpx.parcel.conduit_host_chunks") &&
                         is_on(
