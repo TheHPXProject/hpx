@@ -16,9 +16,16 @@ set(thread_stacksize_PARAMETERS LOCALITIES 2)
 set(thread_affinity_PARAMETERS THREADS_PER_LOCALITY 4 RUN_SERIAL)
 set(thread_affinity_LIBRARIES DEPENDENCIES PRIVATE Hwloc::hwloc)
 
-if(HPX_WITH_THREAD_STACKOVERFLOW_DETECTION)
-  set(threading_tests ${threading_tests} thread_stacksize_overflow)
-  set(threading_tests ${threading_tests} thread_stacksize_overflow_v2)
+# The handler only exists in the x86 Linux coroutine context and is left out
+# with AddressSanitizer. The POSIX one (ppc64, s390x) is untested and would hang
+# on faults it doesn't report, and Boost.Context (arm, riscv) has none.
+if(HPX_WITH_STACKOVERFLOW_DETECTION
+   AND NOT HPX_WITH_SANITIZERS
+   AND NOT HPX_WITH_GENERIC_CONTEXT_COROUTINES
+   AND __target_arch MATCHES "^(i386|ix86|x86_64)$"
+)
+  set(stackoverflow_tests ON)
+  set(tests ${tests} thread_stacksize_overflow thread_stacksize_overflow_v2)
 endif()
 
 foreach(test ${tests})
@@ -56,16 +63,18 @@ if(HPX_WITH_COMPILE_ONLY_TESTS
   )
 endif()
 
-if(HPX_WITH_THREAD_STACKOVERFLOW_DETECTION)
+if(stackoverflow_tests)
+  # both tests crash on purpose, so they are judged by their output: the
+  # overflow has to be reported as one, the null pointer dereference must only
+  # be reported as a fatal error
   set_tests_properties(
-    tests.unit.threads.thread_stacksize_overflow
+    tests.unit.modules.actions.thread_stacksize_overflow
     PROPERTIES PASS_REGULAR_EXPRESSION
                "Stack overflow in coroutine at address 0x[0-9a-fA-F]*"
   )
-
   set_tests_properties(
-    tests.unit.threads.thread_stacksize_overflow_v2
-    PROPERTIES PASS_REGULAR_EXPRESSION
-               "Stack overflow in coroutine at address 0x[0-9a-fA-F]*"
+    tests.unit.modules.actions.thread_stacksize_overflow_v2
+    PROPERTIES PASS_REGULAR_EXPRESSION "\\{what\\}: " FAIL_REGULAR_EXPRESSION
+               "Stack overflow in coroutine"
   )
 endif()

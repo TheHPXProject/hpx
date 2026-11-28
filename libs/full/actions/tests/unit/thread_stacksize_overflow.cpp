@@ -25,11 +25,14 @@ void test_small_stacksize()
         hpx::get_runtime().get_config().get_stack_size(
             hpx::threads::thread_stacksize::small_));
 
-    // allocate HPX_SMALL_STACK_SIZE - HPX_THREADS_STACK_OVERHEAD memory on the stack
+    // a frame larger than any HPX thread stack, so that using it overflows
     char array[HPX_SMALL_STACK_SIZE * HPX_THREADS_STACK_OVERHEAD];
 
-    // do something to that array
+    // The array never escapes, so an optimizing compiler may drop it together
+    // with the memset and the test would return normally. Passing its address
+    // to an asm statement that clobbers memory keeps both.
     std::memset(array, '\0', sizeof(array));
+    __asm__ __volatile__("" : : "r"(array) : "memory");
 }
 HPX_DECLARE_ACTION(test_small_stacksize, test_small_stacksize_action)
 HPX_ACTION_USES_SMALL_STACK(test_small_stacksize_action)

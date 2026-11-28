@@ -103,17 +103,24 @@ namespace hpx::threads::coroutines {
         ucontext_t* uc_ctx = static_cast<ucontext_t*>(ctxptr);
         char* sigsegv_ptr = static_cast<char*>(infoptr->si_addr);
 
-        // https://www.gnu.org/software/libc/manual/html_node/Signal-Stack.html
-        //
-        char* stk_ptr = static_cast<char*>(uc_ctx->uc_stack.ss_sp);
+        // A stack overflow faults next to the stack pointer of the faulting
+        // code (a push, a call or a store into a new frame), wherever the frame
+        // ended up. uc_stack only describes the signal stack this handler runs
+        // on, and a large frame can skip past the coroutine's guard page.
+#if defined(__x86_64__)
+        auto const sp = uc_ctx->uc_mcontext.gregs[REG_RSP];
+#else
+        auto const sp = uc_ctx->uc_mcontext.gregs[REG_ESP];
+#endif
+        char* stk_ptr =
+            reinterpret_cast<char*>(static_cast<std::uintptr_t>(sp));
 
         std::ptrdiff_t addr_delta = (sigsegv_ptr > stk_ptr) ?
             (sigsegv_ptr - stk_ptr) :
             (stk_ptr - sigsegv_ptr);
 
-        // check the stack addresses, if they're < 10 apart, terminate program
-        // should filter segmentation faults caused by coroutine stack overflows
-        // from 'genuine' stack overflows
+        // faults that are not close to the stack pointer, like a null pointer
+        // dereference, are not reported as a stack overflow
         if (static_cast<size_t>(addr_delta) <
             coroutine_stackoverflow_addr_epsilon)
         {
