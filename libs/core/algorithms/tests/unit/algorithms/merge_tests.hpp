@@ -107,17 +107,21 @@ struct random_fill
     random_fill() = default;
     random_fill(std::size_t rand_base, std::size_t range)
       : gen(_gen())
-      , dist(static_cast<int>(rand_base - range / 2),
-            static_cast<int>(rand_base + range / 2))
+      , base(static_cast<unsigned int>(rand_base))
+      , dist(-static_cast<int>(range / 2), static_cast<int>(range / 2))
     {
     }
 
     int operator()()
     {
-        return dist(gen);
+        // add a random offset to rand_base modulo 2^32: rand_base +/- the
+        // range may not fit into an int, which would make the range of the
+        // distribution invalid
+        return static_cast<int>(base + static_cast<unsigned int>(dist(gen)));
     }
 
     std::mt19937 gen;
+    unsigned int base = 0;
     std::uniform_int_distribution<> dist;
 };
 
@@ -127,18 +131,23 @@ struct random_fill_tagged
     random_fill_tagged(int tag, std::size_t rand_base, std::size_t range)
       : tag(tag)
       , gen(_gen())
-      , dist(static_cast<int>(rand_base - range / 2),
-            static_cast<int>(rand_base + range / 2))
+      , base(static_cast<unsigned int>(rand_base))
+      , dist(-static_cast<int>(range / 2), static_cast<int>(range / 2))
     {
     }
 
     std::pair<int, int> operator()()
     {
-        return {dist(gen), tag};
+        // add a random offset to rand_base modulo 2^32: rand_base +/- the
+        // range may not fit into an int, which would make the range of the
+        // distribution invalid
+        return {
+            static_cast<int>(base + static_cast<unsigned int>(dist(gen))), tag};
     }
 
     int tag = 1;
     std::mt19937 gen;
+    unsigned int base = 0;
     std::uniform_int_distribution<> dist;
 };
 

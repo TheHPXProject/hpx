@@ -23,7 +23,6 @@
 #include <hpx/version.hpp>
 
 #if HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
-#include <hpx/itt_notify/detail/use_ittnotify_api.hpp>
 #include <hpx/modules/itt_notify.hpp>
 #endif
 
@@ -235,6 +234,13 @@ namespace hpx::util {
             // by default, enable networking
             "[hpx.parcel]",
             "enable = 1",
+#endif
+
+#if defined(HPX_HAVE_HIP)
+            // devices whose HIP runtime kernels are built at startup: none,
+            // current or all (see libs/core/async_cuda/src/hip_warmup.cpp)
+            "[hpx.hip]",
+            "warmup = ${HPX_HIP_WARMUP:current}",
 #endif
 
             "[hpx.stacks]",

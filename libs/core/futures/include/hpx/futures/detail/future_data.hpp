@@ -21,12 +21,14 @@
 #include <hpx/modules/synchronization.hpp>
 #include <hpx/modules/thread_support.hpp>
 #include <hpx/modules/threading_base.hpp>
+#include <hpx/modules/timing.hpp>
 #include <hpx/modules/tracing.hpp>
 #include <hpx/modules/type_support.hpp>
 
 #include <atomic>
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <exception>
 #include <memory>
 #include <mutex>
@@ -848,11 +850,16 @@ namespace hpx::lcos::detail {
                 return;
             }
 
-            // start new thread at given point in time
-            threads::set_thread_state(id.noref(), abs_time,
-                threads::thread_schedule_state::pending,
-                threads::thread_restart_state::timeout,
-                threads::thread_priority::boost, true, ec);
+            // start the new thread at the given point in time: it stays in
+            // the suspension it was created in until then, and the timeout of
+            // that suspension needs no thread of its own. Nothing else wakes
+            // the thread, so the timeout is never cancelled.
+            std::int64_t const suspension_tag =
+                threads::get_thread_id_data(id)->get_state().tag();
+            [[maybe_unused]] threads::detail::suspension_timeout const timeout =
+                threads::detail::suspension_timeout::set(
+                    hpx::chrono::steady_time_point(abs_time), id.noref(),
+                    suspension_tag, threads::thread_priority::boost, ec);
             if (ec)
             {
                 // thread scheduling failed, report error to the new future

@@ -34,6 +34,7 @@
 #include <hpx/modules/naming_base.hpp>
 #include <hpx/modules/parcelset_base.hpp>
 #include <hpx/modules/plugin_factories.hpp>
+#include <hpx/parcelset/device_conduit.hpp>
 #include <hpx/parcelset/init_parcelports.hpp>
 #include <hpx/parcelset/message_handler_fwd.hpp>
 #include <hpx/parcelset/parcelhandler.hpp>
@@ -221,7 +222,11 @@ namespace hpx::parcelset {
         LPROGRESS_;
     }
 
-    parcelhandler::~parcelhandler() = default;
+    parcelhandler::~parcelhandler()
+    {
+        // the parcelports are stopped, nothing is sent anymore
+        detail::reset_device_conduit();
+    }
 
     void parcelhandler::set_notification_policies(
         util::runtime_configuration const& cfg, threads::threadmanager* tm,
@@ -239,6 +244,9 @@ namespace hpx::parcelset {
                 std::shared_ptr<parcelport> pp(factory->create(cfg, notifier));
                 attach_parcelport(pp);
             }
+
+            // the conduit moving device memory below the parcelports
+            detail::init_device_conduit(cfg);
         }
     }
 
@@ -538,7 +546,8 @@ namespace hpx::parcelset {
     /// \brief Make sure the specified locality is not held by any connection
     ///        caches anymore
     void parcelhandler::remove_from_connection_cache(
-        naming::gid_type const& gid, endpoints_type const& endpoints)
+        naming::gid_type const& gid, endpoints_type const& endpoints,
+        bool const forced)
     {
         {
             std::lock_guard<mutex_type> l(mtx_);
@@ -573,6 +582,14 @@ namespace hpx::parcelset {
 
             remove_handler(dest);
         }
+
+        // the device conduit releases its connection to the locality
+        if (device_conduit* conduit = get_device_conduit())
+        {
+            conduit->locality_removed(
+                naming::get_locality_id_from_gid(gid), forced);
+        }
+
         agas::remove_resolved_locality(gid);
     }
 
@@ -590,6 +607,12 @@ namespace hpx::parcelset {
         if (!is_networking_enabled_)
         {
             return did_some_work;
+        }
+
+        // the device conduit moves data next to the parcelports
+        if (device_conduit* conduit = get_device_conduit())
+        {
+            did_some_work = conduit->background_work();
         }
 
         LPT_(debug).format(
@@ -1712,6 +1735,10 @@ namespace hpx::parcelset {
                 "endian_out = ${HPX_PARCEL_ENDIAN_OUT:little}");
         ini_defs.emplace_back(
             "array_optimization = ${HPX_PARCEL_ARRAY_OPTIMIZATION:1}");
+        // moves zero-copy chunks of device memory between localities, see
+        // hpx::parcelset::device_conduit
+        ini_defs.emplace_back(
+            "device_conduit = ${HPX_PARCEL_DEVICE_CONDUIT:none}");
         ini_defs.emplace_back(
             "zero_copy_optimization = ${HPX_PARCEL_ZERO_COPY_OPTIMIZATION:"
             "$[hpx.parcel.array_optimization]}");
@@ -1737,6 +1764,13 @@ namespace hpx::parcelset {
 
         for (plugins::parcelport_factory_base* f :
             parcelhandler::get_parcelport_factories())
+        {
+            f->get_plugin_info(ini_defs);
+        }
+
+        // the device conduits
+        for (plugins::device_conduit_factory_base* f :
+            detail::get_device_conduit_factories())
         {
             f->get_plugin_info(ini_defs);
         }

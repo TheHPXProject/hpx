@@ -217,18 +217,30 @@ namespace hpx {
         runtime::init();
 
         init_global_data();
-        util::reinit_construct();
 
-        LPROGRESS_;
+        // If the rest fails (for instance, the bootstrap parcelport can't
+        // start), the destructor of this class doesn't run: don't leave the
+        // global runtime pointers referring to this object.
+        hpx::detail::try_catch_exception_ptr(
+            [&] {
+                util::reinit_construct();
 
-        components::server::get_error_dispatcher().set_error_sink(
-            &runtime_distributed::default_errorsink);
+                LPROGRESS_;
 
-        // now, launch AGAS and register all nodes, launch all other components
-        initialize_agas();
+                components::server::get_error_dispatcher().set_error_sink(
+                    &runtime_distributed::default_errorsink);
 
-        applier_.initialize(
-            reinterpret_cast<std::uint64_t>(runtime_support_.get()));
+                // now, launch AGAS and register all nodes, launch all other
+                // components
+                initialize_agas();
+
+                applier_.initialize(
+                    reinterpret_cast<std::uint64_t>(runtime_support_.get()));
+            },
+            [&](std::exception_ptr e) {
+                deinit_global_data();
+                std::rethrow_exception(HPX_MOVE(e));
+            });
     }
 
 #if defined(HPX_HAVE_NETWORKING)

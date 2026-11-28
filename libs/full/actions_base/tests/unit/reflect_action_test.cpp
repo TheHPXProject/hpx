@@ -43,6 +43,43 @@ namespace app::nested {
 
 }    // namespace app::nested
 
+// HPX_DECLARE_ACTION declares the action as a struct, so the plain action
+// macros have to define one, and a macro used in between has to reach the
+// action the runtime reads its traits from.
+int declared(int x)
+{
+    return x;
+}
+
+HPX_DECLARE_ACTION(declared, declared_action)
+HPX_ACTION_USES_LARGE_STACK(declared_action)
+HPX_PLAIN_ACTION(declared, declared_action)
+
+HPX_DECLARE_DIRECT_ACTION(declared, declared_direct_action)
+HPX_ACTION_HAS_HIGH_PRIORITY(declared_direct_action)
+HPX_PLAIN_DIRECT_ACTION(declared, declared_direct_action)
+
+static_assert(hpx::actions::action_stacksize<declared_action>() ==
+    hpx::threads::thread_stacksize::large);
+static_assert(hpx::actions::action_priority<declared_direct_action>() ==
+    hpx::threads::thread_priority::high);
+static_assert(declared_direct_action::get_action_type() ==
+    hpx::actions::action_flavor::direct_action);
+
+// Remote calls count under the named action, so its registrar has to refer
+// to that type, while reflect_action<F> used directly still refers to itself.
+static_assert(std::is_same_v<
+    decltype(declared_action::invocation_count_registrar_),
+    hpx::actions::detail::register_action_invocation_count<declared_action>>);
+static_assert(std::is_same_v<
+    decltype(declared_direct_action::invocation_count_registrar_),
+    hpx::actions::detail::register_action_invocation_count<
+        declared_direct_action>>);
+static_assert(std::is_same_v<decltype(hpx::actions::reflect_action<
+                                 ^^declared>::invocation_count_registrar_),
+    hpx::actions::detail::register_action_invocation_count<
+        hpx::actions::reflect_action<^^declared>>>);
+
 int main()
 {
     // Test: action name extraction for simple namespace function

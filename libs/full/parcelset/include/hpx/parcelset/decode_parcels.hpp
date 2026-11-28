@@ -20,6 +20,7 @@
 
 #include <hpx/modules/components_base.hpp>
 #include <hpx/modules/parcelset_base.hpp>
+#include <hpx/parcelset/device_conduit.hpp>
 
 #if ASIO_HAS_BOOST_THROW_EXCEPTION != 0
 #include <boost/exception/exception.hpp>
@@ -313,11 +314,20 @@ namespace hpx::parcelset {
             archive.try_get_extra_data<
                 serialization::detail::allow_zero_copy_receive>() != nullptr;
 
+        // the parcels are scheduled once their data is complete: after the
+        // zero-copy chunks and the device chunks a conduit moves have arrived
+        bool const deferred_data =
+            allow_zero_copy_receive || archive.enable_device_transport();
+
         // protect from unhandled exceptions bubbling up
         try
         {
             try
             {
+                // the conduit receiving the device memory the sender moves
+                // through its counterpart
+                detail::attach_device_conduit_receiver(archive);
+
                 // mark start of serialization
 #if defined(HPX_HAVE_PARCELPORT_COUNTERS)
                 hpx::chrono::high_resolution_timer const timer;
@@ -331,7 +341,7 @@ namespace hpx::parcelset {
                 {
                     archive >> parcel_count;    //-V128
                 }
-                if (parcel_count > 1 || allow_zero_copy_receive)
+                if (parcel_count > 1 || deferred_data)
                 {
                     deferred_parcels.reserve(parcel_count);
                 }
@@ -384,15 +394,15 @@ namespace hpx::parcelset {
                             here, p);
                     }
 
-                    if (migrated && !allow_zero_copy_receive)
+                    if (migrated && !deferred_data)
                     {
-                        // route parcels to migrated targets, but only if we're
-                        // not zero-copy receiving
+                        // route parcels to migrated targets, but only if their
+                        // data is complete
                         agas::route(HPX_MOVE(p),
                             &parcelset::detail::parcel_route_handler,
                             threads::thread_priority::normal);
                     }
-                    else if (deferred_schedule || allow_zero_copy_receive)
+                    else if (deferred_schedule || deferred_data)
                     {
                         // store parcel if needed
                         deferred_parcels.emplace_back(HPX_MOVE(p));

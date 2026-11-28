@@ -111,6 +111,12 @@ namespace hpx::actions {
         /// Return a pointer to the message handler to be used for this action.
         virtual parcelset::policies::message_handler* get_message_handler(
             parcelset::locality const& loc) const = 0;
+
+        /// Return the GPU on which device data in the arguments of this
+        /// action should be received, given the local address of the target
+        /// object, or -1 if the target has none (see
+        /// hpx::traits::component_target).
+        virtual int get_target_device(naming::address_type lva) const = 0;
 #endif
 
         virtual void load(serialization::input_archive& ar) = 0;

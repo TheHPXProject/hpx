@@ -44,6 +44,7 @@ set(components_base_headers
     hpx/components_base/traits/component_pin_support.hpp
     hpx/components_base/traits/component_registered_elsewhere.hpp
     hpx/components_base/traits/component_supports_migration.hpp
+    hpx/components_base/traits/component_target.hpp
     hpx/components_base/traits/component_type_is_compatible.hpp
     hpx/components_base/traits/component_type_database.hpp
     hpx/components_base/traits/is_component.hpp

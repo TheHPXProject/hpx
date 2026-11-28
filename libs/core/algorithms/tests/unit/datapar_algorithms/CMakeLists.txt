@@ -52,6 +52,7 @@ if(HPX_WITH_DATAPAR)
       transform_reduce_binary_datapar
       unique_datapar
       unique_copy_datapar
+      vector_pack_traits_datapar
   )
 endif()
 

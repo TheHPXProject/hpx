@@ -63,6 +63,7 @@
 #include <string>
 #include <thread>
 #include <utility>
+#include <vector>
 
 #if defined(HPX_HAVE_LOGGING)
 namespace hpx::detail {
@@ -717,6 +718,46 @@ namespace hpx {
                      std::chrono::duration<double, std::micro>(
                          min_chunk_time_us)),
                     chunks_per_core, copy_bytes_per_ns});
+
+            // The minimal run times of single executors:
+            // hpx.task_size_chunk_size.<executor>.min_chunk_time_us, and
+            // hpx.task_size_chunk_size.<executor>.<pool size>.min_chunk_time_us
+            // for one number of worker threads. Values outside of the range
+            // above and subsections that are not a number are ignored.
+            std::vector<ex::detail::executor_min_chunk_time> executor_times;
+            auto const add_executor_time = [&](hpx::util::section const& sec,
+                                               std::string const& executor,
+                                               std::size_t const pool_size) {
+                double const us = hpx::util::get_entry_as<double>(
+                    sec, "min_chunk_time_us", -1.0);
+                if (us >= 0.0 && us <= 1e6)
+                {
+                    executor_times.push_back({executor, pool_size,
+                        std::chrono::duration_cast<std::chrono::nanoseconds>(
+                            std::chrono::duration<double, std::micro>(us))});
+                }
+            };
+
+            if (hpx::util::section const* const sec =
+                    rtcfg_.get_section("hpx.task_size_chunk_size");
+                sec != nullptr)
+            {
+                for (auto const& [executor, executor_sec] : sec->get_sections())
+                {
+                    add_executor_time(executor_sec, executor, 0);
+                    for (auto const& [size, size_sec] :
+                        executor_sec.get_sections())
+                    {
+                        std::size_t const pool_size =
+                            hpx::util::from_string<std::size_t>(size, 0);
+                        if (pool_size != 0)
+                        {
+                            add_executor_time(size_sec, executor, pool_size);
+                        }
+                    }
+                }
+            }
+            ex::detail::set_executor_min_chunk_times(HPX_MOVE(executor_times));
         }
 
 #if defined(HPX_HAVE_TRACY)
@@ -1893,6 +1934,45 @@ namespace hpx {
 
     int runtime::finalize(double /*shutdown_timeout*/)
     {
+        // Run the pre-shutdown functions and then the shutdown functions (see
+        // hpx::register_pre_shutdown_function and
+        // hpx::register_shutdown_function) on this HPX thread, before the
+        // runtime waits for its threads to finish: they may end threads that
+        // would otherwise keep it waiting (suspended threads count as busy).
+        auto call_functions = [this](std::list<shutdown_function_type>& fs) {
+            // functions may register more functions while they run
+            while (true)
+            {
+                std::list<shutdown_function_type> functions;
+                {
+                    std::lock_guard<std::mutex> l(mtx_);
+                    functions.swap(fs);
+                }
+                if (functions.empty())
+                {
+                    break;
+                }
+
+                for (shutdown_function_type& f : functions)
+                {
+                    try
+                    {
+                        f();
+                    }
+                    catch (...)
+                    {
+                        report_error(std::current_exception());
+                    }
+                }
+            }
+        };
+
+        set_state(hpx::state::pre_shutdown);
+        call_functions(pre_shutdown_functions_);
+
+        set_state(hpx::state::shutdown);
+        call_functions(shutdown_functions_);
+
         notify_finalize();
         return 0;
     }

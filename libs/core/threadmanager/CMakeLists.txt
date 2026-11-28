@@ -33,6 +33,7 @@ add_hpx_module(
     hpx_errors
     hpx_execution
     hpx_execution_base
+    hpx_functional
     hpx_futures
     hpx_io_service
     hpx_program_options

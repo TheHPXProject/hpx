@@ -69,6 +69,13 @@ namespace hpx::serialization {
     // stream (e.g. cudaFreeAsync) and doesn't come from HPX's pools: the
     // copy is made asynchronously, and only the pools make freeing wait for
     // it.
+    //
+    // With several GPUs, the data is sent from the GPU it is on and received
+    // on the GPU of the vector's memory if it has memory, else on the GPU of
+    // the parcel's destination (the target of the receiving component, see
+    // hpx::traits::component_target; results go to the GPU of the default
+    // target, see hpx::cuda::experimental::get_default_target), else on the
+    // GPU current on the receiving thread.
 
     HPX_CXX_CORE_EXPORT template <typename T, typename Alloc>
     void serialize(output_archive& ar,
@@ -137,6 +144,8 @@ namespace hpx::serialization {
 #if defined(HPX_DEBUG)
             if (!ar.is_preprocessing())
             {
+                detail::scoped_device const on_device(
+                    detail::device_of(device_data));
                 detail::warn_if_device_busy();
             }
 #endif
@@ -172,14 +181,20 @@ namespace hpx::serialization {
 
         // no host copy prepared (small data, or no preprocessing pass): copy
         // the bytes into the archive before the temporary goes away
-#if defined(HPX_DEBUG)
-        detail::warn_if_device_busy();
-#endif
-        ar << static_cast<std::uint8_t>(device_data_storage::in_archive);
         // (not a std::vector<T>, which has no data() for T = bool; not
         // value-initialized, it's overwritten)
         std::unique_ptr<T[]> host(new T[size]);
-        ::thrust::copy(v.begin(), v.end(), host.get());
+        {
+            // on the GPU of the data (nothing in here suspends, see
+            // scoped_device)
+            detail::scoped_device const on_device(
+                detail::device_of(device_data));
+#if defined(HPX_DEBUG)
+            detail::warn_if_device_busy();
+#endif
+            ::thrust::copy(v.begin(), v.end(), host.get());
+        }
+        ar << static_cast<std::uint8_t>(device_data_storage::in_archive);
         ar.save_binary(detail::fundamental_types::none, host.get(), bytes);
     }
 
@@ -202,7 +217,28 @@ namespace hpx::serialization {
                 "the elements of a device_vector can't be received from an "
                 "archive with another byte order");
         }
-        v.resize(size);
+
+        // The data goes to the GPU the vector's memory is on, if it has
+        // memory (also an empty vector with capacity, whose memory resize
+        // reuses), else to the GPU the receiving side asked for (the
+        // destination's, see receive_device), else to the current one.
+        int device = v.capacity() == 0 ?
+            -1 :
+            detail::device_of(::thrust::raw_pointer_cast(v.data()));
+        if (device < 0)
+        {
+            if (auto const* receive_device =
+                    ar.try_get_extra_data<detail::receive_device>())
+            {
+                device = receive_device->device;
+            }
+        }
+        {
+            // allocates on that GPU (nothing in here suspends, see
+            // scoped_device)
+            detail::scoped_device const on_device(device);
+            v.resize(size);
+        }
         if (size == 0)
             return;
 
@@ -212,6 +248,20 @@ namespace hpx::serialization {
 
         std::size_t const bytes = size * sizeof(T);
         T* device_data = ::thrust::raw_pointer_cast(v.data());
+
+        // A device conduit moves the data (see device_chunk_transport): it
+        // arrives in the vector's own memory, device or pinned host memory,
+        // before the parcel's action runs, whatever the parcelport can do.
+        if (storage != device_data_storage::in_archive &&
+            ar.next_chunk_from_transport())
+        {
+            ar.load_binary_chunk(detail::fundamental_types::none, device_data,
+                bytes, true,
+                hpx::thrust::detail::is_pinned_host_memory(device_data) ?
+                    chunk_memory::host :
+                    chunk_memory::device);
+            return;
+        }
 
         // Zero-copy receive: the networking layer places the data at the
         // address handed over here only after this function returns. A
@@ -270,6 +320,17 @@ namespace hpx::serialization {
             ar.load_binary_chunk(
                 detail::fundamental_types::none, host.get(), bytes, false);
         }
+        detail::scoped_device const on_device(detail::device_of(device_data));
         ::thrust::copy(host.get(), host.get() + size, v.begin());
     }
 }    // namespace hpx::serialization
+
+namespace hpx::traits {
+
+    // device_vectors hold device data: results of remote calls are received
+    // on the GPU of the default target
+    template <typename T, typename Alloc>
+    struct has_device_data<::thrust::device_vector<T, Alloc>> : std::true_type
+    {
+    };
+}    // namespace hpx::traits

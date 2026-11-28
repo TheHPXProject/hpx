@@ -8,7 +8,6 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/async_base/query_dispatch.hpp>
 #include <hpx/execution/traits/executor_traits.hpp>
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/execution_base.hpp>

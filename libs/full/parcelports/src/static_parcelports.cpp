@@ -21,12 +21,18 @@ namespace hpx::parcelset {
     void (*init_static_parcelport_factories)(
         std::vector<plugins::parcelport_factory_base*>& factories) = nullptr;
 
+    void (*init_static_device_conduit_factories)(
+        std::vector<plugins::device_conduit_factory_base*>& factories) =
+        nullptr;
+
     struct HPX_EXPORT init_parcelports
     {
         init_parcelports()
         {
             init_static_parcelport_factories =
                 init_static_parcelport_factories_impl;
+            init_static_device_conduit_factories =
+                init_static_device_conduit_factories_impl;
         }
     } init;
 

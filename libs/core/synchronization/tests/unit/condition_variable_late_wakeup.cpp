@@ -114,13 +114,26 @@ void test_timed_round(bool notify_all)
     condition_variable cv;
 
     hpx::threads::thread_id_type const waiter = hpx::threads::get_self_id();
+    std::atomic<bool> first_waiting{false};
     std::atomic<bool> second_suspended{false};
     std::atomic<bool> released{false};
 
     std::unique_lock<mutex_type> l(mtx);
     hpx::future<void> f = hpx::async([&] {
-        // Race the notification against an actual timed suspension.
-        hpx::this_thread::sleep_for(std::chrono::milliseconds(2));
+        // Race the notification against an actual timed suspension: wait
+        // until the waiter is in it. The waiter doesn't suspend anywhere else
+        // after it set first_waiting, so the first suspension seen is the
+        // timed one. The wait is bounded: the timeout may end the suspension
+        // before it is seen, which is one of the accepted results.
+        for (std::size_t k = 0; k != 100000 &&
+            (!first_waiting.load() ||
+                hpx::threads::get_thread_state(waiter).state() !=
+                    hpx::threads::thread_schedule_state::suspended);
+            ++k)
+        {
+            hpx::this_thread::yield();
+        }
+
         std::unique_lock<mutex_type> nl(mtx);
         if (notify_all)
         {
@@ -147,6 +160,7 @@ void test_timed_round(bool notify_all)
             hpx::threads::thread_restart_state::signaled);
     });
 
+    first_waiting = true;
     auto const result = cv.wait_until(
         l, std::chrono::steady_clock::now() + std::chrono::milliseconds(2));
     HPX_TEST(result == hpx::threads::thread_restart_state::signaled ||

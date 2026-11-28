@@ -136,16 +136,15 @@ namespace hpx::execution::experimental {
             constexpr bool is_unsequenced = is_unsequenced_bulk_policy_v<
                 std::decay_t<decltype(pol.__get())>>;
 
-            auto pu_mask =
-                hpx::execution::experimental::get_processing_units_mask(sched);
-
+            // the sender derives its PU mask from the workers it runs on
+            // (from the first core of the scheduler on)
             return hpx::execution::experimental::detail::
                 thread_pool_bulk_sender<Policy, std::decay_t<decltype(child)>,
                     std::decay_t<decltype(iota_shape)>,
                     std::decay_t<decltype(f)>, is_chunked, is_parallel,
                     is_unsequenced>{HPX_MOVE(sched),
                     HPX_FORWARD(decltype(child), child), HPX_MOVE(iota_shape),
-                    HPX_FORWARD(decltype(f), f), HPX_MOVE(pu_mask)};
+                    HPX_FORWARD(decltype(f), f)};
         }
 
         // transform_sender for continues_on operations.

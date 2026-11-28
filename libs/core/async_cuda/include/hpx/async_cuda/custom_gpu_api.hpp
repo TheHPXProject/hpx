@@ -32,6 +32,7 @@
 
 #define cudaDeviceProp hipDeviceProp_t
 #define cudaDeviceSynchronize hipDeviceSynchronize
+#define cudaDriverGetVersion hipDriverGetVersion
 #define cudaError_t hipError_t
 #define cudaErrorMemoryAllocation hipErrorOutOfMemory
 #define cudaErrorNotReady hipErrorNotReady
@@ -62,10 +63,12 @@
 #define cudaMemcpyHostToDevice hipMemcpyHostToDevice
 #define cudaMemcpyKind hipMemcpyKind
 #define cudaMemGetInfo hipMemGetInfo
+#define cudaMemoryTypeDevice hipMemoryTypeDevice
 #define cudaMemoryTypeHost hipMemoryTypeHost
 #define cudaMemsetAsync hipMemsetAsync
 #define cudaPointerAttributes hipPointerAttribute_t
 #define cudaPointerGetAttributes hipPointerGetAttributes
+#define cudaRuntimeGetVersion hipRuntimeGetVersion
 #define cudaSetDevice hipSetDevice
 #define cudaStream_t hipStream_t
 #define cudaStreamAddCallback hipStreamAddCallback

@@ -766,7 +766,8 @@ namespace hpx::components::server {
     /// \brief Remove the given locality from our connection cache
     void runtime_support::remove_from_connection_cache(
         [[maybe_unused]] naming::gid_type const& gid,
-        [[maybe_unused]] parcelset::endpoints_type const& eps)
+        [[maybe_unused]] parcelset::endpoints_type const& eps,
+        [[maybe_unused]] bool const forced)
     {
         runtime_distributed* rt = get_runtime_distributed_ptr();
         if (rt == nullptr)
@@ -774,7 +775,7 @@ namespace hpx::components::server {
 
 #if defined(HPX_HAVE_NETWORKING)
         // instruct our connection cache to drop all connections it is holding
-        rt->get_parcel_handler().remove_from_connection_cache(gid, eps);
+        rt->get_parcel_handler().remove_from_connection_cache(gid, eps, forced);
 #endif
     }
 
@@ -1005,12 +1006,12 @@ namespace hpx::components::server {
         }
 #endif
 
-        remove_locality_from_connection_cache(locality.get_gid(), true);
+        remove_locality_from_connection_cache(locality.get_gid(), true, true);
 
         bool const result =
             agas_client.unregister_locality(locality.get_gid(), ec);
 
-        remove_locality_from_console_connection_cache(locality.get_gid());
+        remove_locality_from_console_connection_cache(locality.get_gid(), true);
 
         return result;
     }
@@ -1162,7 +1163,8 @@ namespace hpx::components::server {
 
     void runtime_support::remove_locality_from_connection_cache(
         [[maybe_unused]] hpx::naming::gid_type const& locality,
-        [[maybe_unused]] bool const skip_current)
+        [[maybe_unused]] bool const skip_current,
+        [[maybe_unused]] bool const forced)
     {
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
 #if defined(HPX_HAVE_NETWORKING)
@@ -1190,8 +1192,8 @@ namespace hpx::components::server {
 
             indirect_packaged_task ipt;
             callbacks.emplace_back(ipt.get_future());
-            hpx::post_cb(
-                action_type(), id, HPX_MOVE(ipt), locality, rtd->endpoints());
+            hpx::post_cb(action_type(), id, HPX_MOVE(ipt), locality,
+                rtd->endpoints(), forced);
         }
 
         wait_all_ignore_disconnected_localities(callbacks);
@@ -1202,7 +1204,8 @@ namespace hpx::components::server {
     }
 
     void runtime_support::remove_locality_from_console_connection_cache(
-        [[maybe_unused]] hpx::naming::gid_type const& locality)
+        [[maybe_unused]] hpx::naming::gid_type const& locality,
+        [[maybe_unused]] bool const forced)
     {
         runtime_distributed* rtd = get_runtime_distributed_ptr();
         if (rtd == nullptr)
@@ -1214,7 +1217,7 @@ namespace hpx::components::server {
         {
             // do it locally, if possible
             rtd->get_parcel_handler().remove_from_connection_cache(
-                locality, rtd->endpoints());
+                locality, rtd->endpoints(), forced);
             return;
         }
 
@@ -1226,8 +1229,8 @@ namespace hpx::components::server {
 
         // handle console separately
         id_type const id = naming::get_id_from_locality_id(0);
-        hpx::post_cb(
-            action_type(), id, HPX_MOVE(ipt), locality, rtd->endpoints());
+        hpx::post_cb(action_type(), id, HPX_MOVE(ipt), locality,
+            rtd->endpoints(), forced);
 
         callback.wait();
 #endif

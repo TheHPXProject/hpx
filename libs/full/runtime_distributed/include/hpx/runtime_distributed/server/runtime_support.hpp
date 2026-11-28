@@ -174,8 +174,11 @@ namespace hpx::components::server {
             performance_counters::counter_info const& info);
 
         /// \brief Remove the given locality from our connection cache
-        void remove_from_connection_cache(
-            naming::gid_type const& gid, parcelset::endpoints_type const& eps);
+        ///
+        /// \param forced  Whether the locality was removed with
+        ///                hpx::force_disconnect (instead of leaving).
+        void remove_from_connection_cache(naming::gid_type const& gid,
+            parcelset::endpoints_type const& eps, bool forced);
 
         /// \brief termination detection
 #if defined(HPX_HAVE_NETWORKING)
@@ -264,16 +267,21 @@ namespace hpx::components::server {
         /// \param skip_current  If true, omits the locality identified by
         ///                      \a locality from this broadcast (that locality
         ///                      will not receive a removal request for itself).
+        /// \param forced        Whether the locality is removed with
+        ///                      hpx::force_disconnect (instead of leaving).
         static void remove_locality_from_connection_cache(
-            hpx::naming::gid_type const& locality, bool skip_current = false);
+            hpx::naming::gid_type const& locality, bool skip_current = false,
+            bool forced = false);
 
         /// \brief Remove the given locality from the console's connection
         ///        cache.
         ///
         /// \param locality  The locality to remove from the console's
         ///                  connection cache.
+        /// \param forced    Whether the locality is removed with
+        ///                  hpx::force_disconnect (instead of leaving).
         static void remove_locality_from_console_connection_cache(
-            hpx::naming::gid_type const& locality);
+            hpx::naming::gid_type const& locality, bool forced = false);
 
 #if defined(HPX_HAVE_NETWORKING)
         ///////////////////////////////////////////////////////////////////////

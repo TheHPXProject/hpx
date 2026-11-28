@@ -40,7 +40,7 @@ API.
 Main Executors in |hpx|
 =======================
 
-|hpx| provides multiple executors. Below are three of the most commonly used:
+|hpx| provides multiple executors. Below are some of the most commonly used:
 
 Parallel Executor
 -----------------
@@ -83,6 +83,116 @@ Fork-Join Executor
     std::vector<int> data(100, 1);
 
     hpx::execution::experimental::fork_join_executor exec;
+
+    hpx::for_each(
+        hpx::execution::par.on(exec),
+        data.begin(), data.end(),
+        [](int &x) {
+            x += 1;
+        }
+    );
+
+Suspending Fork-Join Executor
+-----------------------------
+
+* Does the same job as the fork-join executor, but its waiting threads spin
+  only for a short time (the spin duration, 20 microseconds by default) and
+  then suspend until the next parallel region starts or the current one has
+  finished.
+* Other work can run on the cores of an idle executor, and idle cores can go
+  to sleep.
+* Constexpr default constructible; the worker threads are created on first
+  use. Copies made on an HPX thread share the worker threads of the original.
+* The calling thread takes part in the parallel regions if it runs on one of
+  the executor's PUs; otherwise it suspends until the region has finished.
+* A region wakes at most one worker thread per index, so a loop that the
+  executor parameters (for instance ``task_size_chunk_size``) give few cores
+  and chunks wakes only that many. ``sync_execute`` runs a single task on the
+  calling thread; the parallel algorithms use it for a loop that gets one
+  core and one chunk.
+
+.. code-block:: c++
+
+    #include <hpx/execution.hpp>
+    #include <hpx/algorithm.hpp>
+
+    std::vector<int> data(100, 1);
+
+    hpx::execution::experimental::suspending_fork_join_executor exec;
+
+    hpx::for_each(
+        hpx::execution::par.on(exec),
+        data.begin(), data.end(),
+        [](int &x) {
+            x += 1;
+        }
+    );
+
+A ``suspending_fork_join_executor`` can't be used from several threads at the
+same time or from inside one of its own parallel regions (nested
+parallelism). ``shared_suspending_fork_join_executor`` can:
+
+* All ``shared_suspending_fork_join_executor`` objects with the same
+  configuration (priority, stack size, loop schedule and spin duration) share
+  one set of worker threads per thread pool. It is created when an |hpx|
+  thread of the pool uses such an executor first, and stopped when the
+  runtime starts to shut down.
+* A parallel region runs on these worker threads if they are free. If they are
+  busy, because they run a region for another thread or because the region is
+  started from inside one of their regions, the region runs through a
+  ``parallel_executor`` instead: one task for each worker thread of the pool,
+  each with a contiguous range of the indices. The same happens if the calling
+  thread is not an |hpx| thread, and once the worker threads were stopped.
+* Exceptions are reported by whichever executor ran the region: the first
+  exception from the worker threads, or an ``hpx::exception_list`` from the
+  ``parallel_executor``.
+* As with ``suspending_fork_join_executor``, asynchronous calls
+  (``bulk_async_execute``, ``async_invoke``) run the region before they
+  return a ready future.
+* Single tasks (``sync_execute``, ``async_execute``, ``then_execute``,
+  ``post``) and continuations (``bulk_then_execute``) run as a
+  ``parallel_executor`` runs them.
+* ``with_processing_units_count`` and ``with_first_core`` limit the regions
+  to the given number of worker threads, starting at the given one; the
+  other worker threads are not woken. ``with_priority`` and
+  ``with_stacksize`` select the shared worker threads with that priority or
+  stack size.
+* The properties (also ``with_hint`` and ``with_annotation``) apply as well
+  to the ``parallel_executor`` that runs the single tasks, the
+  continuations and the regions that fall back, and that a task policy uses
+  (see below). The worker threads get the priority ``bound`` if the
+  priority is ``default_`` (as it is by default), so that they stay on their
+  cores, while the tasks of the ``parallel_executor`` can be stolen.
+* A hint with ``thread_sharing_hint::do_not_combine_tasks`` says that the
+  iterations depend on each other: each iteration then runs as a task of its
+  own on the ``parallel_executor``. The algorithms that need a task for each
+  of their parts (the uninitialized algorithms, ``spmd_block``) use the
+  ``parallel_executor`` right away.
+* Copies never own worker threads, so the executor can be a ``constexpr``
+  variable. Its configuration can be serialized, for instance as the
+  executor of a policy sent to another locality.
+
+If |hpx| is configured with
+``HPX_WITH_SUSPENDING_FORK_JOIN_EXECUTOR_AS_DEFAULT=ON`` (default: ``OFF``),
+``shared_suspending_fork_join_executor`` is the executor of the parallel
+execution policies ``par`` and ``par_unseq``, instead of
+``parallel_executor``. The task policies ``par(task)`` and
+``par_unseq(task)`` keep using ``parallel_executor``: they run an algorithm
+asynchronously, which the worker threads of a fork-join executor can't do.
+For the same reason, mapping a policy with a
+``shared_suspending_fork_join_executor`` to a task policy (``to_task``, as in
+``par(task)`` or ``par.on(exec)(task)``) gives it a ``parallel_executor``.
+
+.. code-block:: c++
+
+    #include <hpx/execution.hpp>
+    #include <hpx/algorithm.hpp>
+
+    std::vector<int> data(100, 1);
+
+    // can be used by any number of threads, also from inside the loop body
+    constexpr hpx::execution::experimental::shared_suspending_fork_join_executor
+        exec;
 
     hpx::for_each(
         hpx::execution::par.on(exec),
@@ -705,6 +815,33 @@ constructor replace these defaults for one loop, the configuration entries
 ``task_size_chunk_size_sweep_test`` measures loops of different sizes with
 many pairs of these values and prints the pair that suits a machine best, in
 the form of these configuration entries.
+
+The default minimal run time suits ``parallel_executor``, which starts a task
+and a future for each chunk. An executor that starts chunks with less
+overhead can ask for a minimal run time of its own
+(``hpx::execution::experimental::get_min_chunk_time``), which replaces the
+default for its loops (a value given to the constructor still wins). The
+executors of |hpx| ask for the value configured with
+``hpx.task_size_chunk_size.<executor>.min_chunk_time_us``, or for one number
+of worker threads with
+``hpx.task_size_chunk_size.<executor>.<pool size>.min_chunk_time_us``, where
+``<executor>`` is ``parallel`` for ``parallel_executor``, ``fork_join`` for
+``fork_join_executor``, ``suspending_fork_join`` for
+``suspending_fork_join_executor`` and ``shared_suspending_fork_join`` for
+``shared_suspending_fork_join_executor``:
+
+.. code-block:: ini
+
+   [hpx.task_size_chunk_size.fork_join]
+   min_chunk_time_us = 0.5
+
+   [hpx.task_size_chunk_size.fork_join.32]
+   min_chunk_time_us = 0.8
+
+Without such an entry, the executor's loops use the default. These entries
+are not predefined, so on the command line (``--hpx:ini``) they need a ``!``
+after the key, for instance
+``--hpx:ini=hpx.task_size_chunk_size.fork_join.min_chunk_time_us!=0.5``.
 
 If |hpx| is configured with ``HPX_WITH_TASK_SIZE_DEFAULT_PARAMETERS=ON``, the
 default executor parameters (``default_parameters``, used by ``par`` and by

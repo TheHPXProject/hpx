@@ -11,9 +11,11 @@
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/execution_base.hpp>
 #include <hpx/modules/functional.hpp>
+#include <hpx/modules/logging.hpp>
 #include <hpx/modules/tracing.hpp>
 #include <hpx/threading_base/create_thread.hpp>
 #include <hpx/threading_base/detail/get_default_timer_service.hpp>
+#include <hpx/threading_base/scheduler_base.hpp>
 #include <hpx/threading_base/set_thread_state.hpp>
 #include <hpx/threading_base/set_thread_state_timed.hpp>
 #include <hpx/threading_base/thread_data.hpp>
@@ -27,6 +29,7 @@
 #endif
 #include <asio/basic_waitable_timer.hpp>
 #include <asio/error.hpp>
+#include <asio/post.hpp>
 
 #include <atomic>
 #include <chrono>
@@ -56,14 +59,92 @@ namespace hpx::threads::detail {
     };
 
     ///////////////////////////////////////////////////////////////////////////
+    /// Counts a helper thread of a background thread (see
+    /// set_thread_state_timed) as a background thread of its scheduler for
+    /// as long as the helper exists. Whoever creates the helper constructs it
+    /// before creating the thread and binds it into the helper's thread
+    /// function. The helper releases it when its function ends; if the
+    /// function never runs (creating the thread failed, or the thread is
+    /// destroyed before it ran), destroying the function releases it. A
+    /// moved-from token counts nothing, so the count is released once.
+    class background_helper_count
+    {
+    public:
+        background_helper_count() = default;
+
+        explicit background_helper_count(
+            policies::scheduler_base* scheduler) noexcept
+          : scheduler_(scheduler)
+        {
+            if (scheduler_ != nullptr)
+            {
+                scheduler_->increment_background_thread_count();
+            }
+        }
+
+        background_helper_count(background_helper_count const&) = delete;
+        background_helper_count& operator=(
+            background_helper_count const&) = delete;
+
+        background_helper_count(background_helper_count&& rhs) noexcept
+          : scheduler_(std::exchange(rhs.scheduler_, nullptr))
+        {
+        }
+
+        background_helper_count& operator=(
+            background_helper_count&& rhs) noexcept
+        {
+            if (this != &rhs)
+            {
+                release();
+                scheduler_ = std::exchange(rhs.scheduler_, nullptr);
+            }
+            return *this;
+        }
+
+        ~background_helper_count()
+        {
+            release();
+        }
+
+        [[nodiscard]] policies::scheduler_base* scheduler() const noexcept
+        {
+            return scheduler_;
+        }
+
+        void release() noexcept
+        {
+            if (scheduler_ != nullptr)
+            {
+                std::exchange(scheduler_, nullptr)
+                    ->decrement_background_thread_count();
+            }
+        }
+
+    private:
+        policies::scheduler_base* scheduler_ = nullptr;
+    };
+
+    ///////////////////////////////////////////////////////////////////////////
     /// This thread function is used by the at_timer thread below to trigger
     /// the required action.
     thread_result_type wake_timer_thread(thread_id_ref_type const& thrd,
         thread_schedule_state /*newstate*/,
         thread_restart_state /*newstate_ex*/, thread_priority /*priority*/,
         thread_id_type timer_id, std::shared_ptr<timer_state> const& state,
-        bool retry_on_active, thread_restart_state my_statex)
+        bool retry_on_active, background_helper_count& count,
+        thread_restart_state my_statex)
     {
+        // A helper of a background thread is counted as one from its creation
+        // (by at_timer) until it ends. The flag matters only when the thread
+        // yields, so it is set here.
+        if (count.scheduler() != nullptr)
+        {
+            get_self_id_data()->set_is_background();
+        }
+        auto on_exit =
+            hpx::experimental::scope_exit([&count] { count.release(); });
+
         if (HPX_UNLIKELY(!thrd))
         {
             HPX_THROW_EXCEPTION(hpx::error::null_thread_id,
@@ -99,8 +180,19 @@ namespace hpx::threads::detail {
         thread_id_ref_type const& thrd, thread_schedule_state newstate,
         thread_restart_state newstate_ex, thread_priority priority,
         std::atomic<bool>* started, bool retry_on_active,
-        std::int64_t suspension_tag)
+        std::int64_t suspension_tag, background_helper_count& count)
     {
+        // A helper of a background thread is counted as one from its creation
+        // (by set_thread_state_timed) until it ends. The flag matters only
+        // when the thread yields, so it is set here.
+        policies::scheduler_base* const background_of = count.scheduler();
+        if (background_of != nullptr)
+        {
+            get_self_id_data()->set_is_background();
+        }
+        auto on_exit =
+            hpx::experimental::scope_exit([&count] { count.release(); });
+
         if (HPX_UNLIKELY(!thrd))
         {
             HPX_THROW_EXCEPTION(hpx::error::null_thread_id,
@@ -116,7 +208,8 @@ namespace hpx::threads::detail {
 
         thread_init_data data(
             hpx::bind_front(&wake_timer_thread, thrd, newstate, newstate_ex,
-                priority, self_id.noref(), state, retry_on_active),
+                priority, self_id.noref(), state, retry_on_active,
+                background_helper_count(background_of)),
             "wake_timer", priority, thread_schedule_hint(),
             thread_stacksize::small_, thread_schedule_state::suspended, true);
 
@@ -125,6 +218,24 @@ namespace hpx::threads::detail {
         // resumes it.
         thread_id_ref_type wake_id = invalid_thread_id;
         create_thread(scheduler, data, wake_id);
+
+        // If setting up the timer below throws, nothing would ever resume the
+        // wake_timer thread: it would stay suspended (and, for a background
+        // thread, counted) forever. Let it run and end instead; it does
+        // nothing once triggered is set. (The timer, declared below, is
+        // destroyed before this runs, which cancels its handler.)
+        bool timer_set = false;
+        auto abandon_wake = hpx::experimental::scope_exit([&] {
+            if (timer_set)
+            {
+                return;
+            }
+            state->triggered.store(true);
+            error_code ec(throwmode::lightweight);    // do not throw
+            set_thread_state(wake_id.noref(), thread_schedule_state::pending,
+                thread_restart_state::abort, priority, thread_schedule_hint(),
+                retry_on_active, ec);
+        });
 
         // create timer firing in correspondence with given time
         using deadline_timer =
@@ -159,6 +270,7 @@ namespace hpx::threads::detail {
                 thread_restart_state::timeout, priority, thread_schedule_hint(),
                 retry_on_active, ec2);
         });
+        timer_set = true;
 
         if (started != nullptr)
         {
@@ -275,17 +387,119 @@ namespace hpx::threads::detail {
             newstate == thread_schedule_state::pending ||
             newstate == thread_schedule_state::pending_boost);
 
+        // The at_timer thread and the wake_timer thread it creates are helpers
+        // of the thread whose state is set. They exist for as long as the
+        // timer runs, so if that thread is a background thread of the pool
+        // (such as the thread of a scheduler's tuner waiting for its next
+        // update), they count as background threads too. Otherwise a pool
+        // with such a thread waiting on a timer is never idle: a blocking
+        // stop (threadmanager::wait) and suspending the pool wait until only
+        // background threads are left. Each helper is counted from before it
+        // is created until it ends (background_helper_count), also while it
+        // is waiting to run or suspended.
+        policies::scheduler_base* const background_of =
+            scheduler != nullptr && get_thread_id_data(thrd)->is_background() ?
+            scheduler :
+            nullptr;
+
         // this creates a new thread that creates the timer and handles the
         // requested actions
         thread_init_data data(
             hpx::bind(&at_timer, scheduler, abs_time.value(),
                 thread_id_ref_type(thrd), newstate, newstate_ex, priority,
-                started, retry_on_active, suspension_tag),
+                started, retry_on_active, suspension_tag,
+                background_helper_count(background_of)),
             "at_timer (expire at)", priority, schedulehint,
             thread_stacksize::small_, thread_schedule_state::pending, true);
 
         thread_id_ref_type newid = invalid_thread_id;
         create_thread(scheduler, data, newid, ec);    //-V601
         return newid;
+    }
+
+    ///////////////////////////////////////////////////////////////////////////
+    // The timer of a suspension_timeout. It is shared by the handle the
+    // suspended thread keeps and by the timer's handler, so that it lives until
+    // its wait has completed (fired or cancelled). All operations on the timer
+    // after async_wait run on the timer service's thread.
+    struct suspension_timeout::state
+    {
+        state(::asio::io_context& context,
+            std::chrono::steady_clock::time_point const& abs_time)
+          : timer(context, abs_time)
+        {
+        }
+
+        ::asio::basic_waitable_timer<std::chrono::steady_clock> timer;
+    };
+
+    void suspension_timeout::cancel() noexcept
+    {
+        if (!state_)
+            return;
+
+        try
+        {
+            // cancel on the timer service's thread, where the handler runs
+            auto const executor = state_->timer.get_executor();
+            ::asio::post(executor,
+                [state = HPX_MOVE(state_)]() { state->timer.cancel(); });
+        }
+        catch (...)
+        {
+            // the timeout fires at its time, after the suspension has ended,
+            // and leaves the thread alone
+            state_.reset();
+        }
+    }
+
+    suspension_timeout suspension_timeout::set(
+        hpx::chrono::steady_time_point const& abs_time,
+        thread_id_type const& thrd, std::int64_t const suspension_tag,
+        thread_priority const priority, error_code& ec)
+    {
+        suspension_timeout timeout;
+        if (HPX_UNLIKELY(!thrd))
+        {
+            HPX_THROWS_IF(ec, hpx::error::null_thread_id,
+                "threads::detail::suspension_timeout::set",
+                "null thread id encountered");
+            return timeout;
+        }
+
+        timeout.state_ = std::make_shared<state>(
+            get_default_timer_service(), abs_time.value());
+
+        // The handler runs on the timer service's thread. It keeps the thread
+        // alive (a reference to its id) until it has run, and makes it pending
+        // only while it is still in the suspension the timeout was set for: if
+        // the thread has been woken otherwise, it may wait for something else
+        // by now. If the thread hasn't suspended yet, the handler waits until
+        // it has (see set_suspended_thread_state).
+        timeout.state_->timer.async_wait(
+            [state = timeout.state_, target = thread_id_ref_type(thrd),
+                suspension_tag, priority](std::error_code const& error) {
+                if (error == ::asio::error::operation_aborted)
+                    return;
+
+                // nothing may escape into the timer service's thread
+                try
+                {
+                    set_suspended_thread_state(target.noref(), suspension_tag,
+                        thread_schedule_state::pending,
+                        thread_restart_state::timeout, priority);
+                }
+                catch (...)
+                {
+                    LTM_(error).format("suspension_timeout: waking "
+                                       "thread({}) failed",
+                        target.noref());
+                }
+            });
+
+        if (&ec != &throws)
+            ec = make_success_code();
+
+        return timeout;
     }
 }    // namespace hpx::threads::detail

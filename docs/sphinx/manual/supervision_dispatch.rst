@@ -447,8 +447,14 @@ A peer fenced by failure detection never reports a terminal event of its
 own, so no callback schedules its eviction. The failure-detection loop does
 it instead: its next sweep finds the peer's shadow already terminal and
 evicts the peer the same way, so it no longer appears in
-:hpx:func:`registry::snapshot_peers() <hpx::supervision::registry::snapshot_peers>` either. In both cases the terminal shadow is
-kept, so dispatch to the evicted peer stays fenced until it is joined again.
+:hpx:func:`registry::snapshot_peers() <hpx::supervision::registry::snapshot_peers>` either. In both cases the eviction keeps the
+terminal shadow, so dispatch to the evicted peer stays fenced. The eviction
+doesn't make the shadow immutable, though: where the shadow is shared (a
+registry that joined its own locality, or several registries on one locality,
+see below), a publication at a higher epoch can still supersede the terminal
+state and admit dispatch again. Monitoring the peer is a different matter: the
+removed observers are gone, so the registry follows the peer again only once
+the peer is joined again.
 The failure-detection loop does not wait for the eviction to unregister the
 observers on the peer's locality, since that locality may be gone.
 

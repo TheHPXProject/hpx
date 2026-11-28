@@ -75,7 +75,11 @@ set(HPX_VERSION_FULL
 )
 
 set(HPX_LIBRARY_VERSION "${HPX_VERSION}")
-set(HPX_SOVERSION ${HPX_VERSION_MAJOR})
+# HPX does not keep its ABI stable between any two releases, so the SONAME of
+# its libraries holds the full version: a binary built against one release
+# doesn't start with the libraries of another, instead of silently using a
+# mismatched ABI
+set(HPX_SOVERSION "${HPX_VERSION}")
 set(HPX_PACKAGE_NAME HPX)
 # To keep track of the hpx_root when other subprojects are declared
 set(HPX_SOURCE_DIR "${PROJECT_SOURCE_DIR}")
@@ -138,6 +142,7 @@ unset(HPX_ENABLED_MODULES CACHE)
 unset(HPX_CORE_ENABLED_MODULES CACHE)
 unset(HPX_FULL_ENABLED_MODULES CACHE)
 unset(HPX_STATIC_PARCELPORT_PLUGINS CACHE)
+unset(HPX_STATIC_DEVICE_CONDUIT_PLUGINS CACHE)
 
 # ##############################################################################
 # Set up dummy compiler flags targets
@@ -1009,6 +1014,19 @@ if(HPX_WITH_TASK_SIZE_DEFAULT_PARAMETERS)
 endif()
 
 hpx_option(
+  HPX_WITH_SUSPENDING_FORK_JOIN_EXECUTOR_AS_DEFAULT
+  BOOL
+  "Use a shared_suspending_fork_join_executor as the executor of the parallel execution policies par and par_unseq (default: OFF)"
+  OFF
+  CATEGORY "Thread Manager"
+  ADVANCED
+)
+
+if(HPX_WITH_SUSPENDING_FORK_JOIN_EXECUTOR_AS_DEFAULT)
+  hpx_add_config_define(HPX_HAVE_SUSPENDING_FORK_JOIN_EXECUTOR_AS_DEFAULT)
+endif()
+
+hpx_option(
   HPX_WITH_COROUTINE_COUNTERS BOOL
   "Enable keeping track of coroutine creation and rebind counts (default: OFF)"
   OFF
@@ -1526,6 +1544,19 @@ if(HPX_WITH_NETWORKING)
   )
   if(HPX_WITH_PARCELPORT_TCP)
     hpx_add_config_define(HPX_HAVE_PARCELPORT_TCP)
+  endif()
+
+  # device conduits move device memory between localities below the parcelports
+  # (hpx::parcelset::device_conduit)
+  hpx_option(
+    HPX_WITH_DEVICE_CONDUIT_UCX
+    BOOL
+    "Enable the UCX based device conduit (uses the UCX of the MPI library if it is UCX based; set UCX_ROOT otherwise)."
+    OFF
+    CATEGORY "Parcelport"
+  )
+  if(HPX_WITH_DEVICE_CONDUIT_UCX)
+    hpx_add_config_define(HPX_HAVE_DEVICE_CONDUIT_UCX)
   endif()
   hpx_option(
     HPX_WITH_PARCELPORT_COUNTERS BOOL
@@ -2849,6 +2880,11 @@ add_hpx_pseudo_target(core)
 # ##############################################################################
 # collect names of static parcelports
 set(HPX_STATIC_PARCELPORT_PLUGINS
+    ""
+    CACHE INTERNAL "" FORCE
+)
+# collect names of the device conduits compiled into HPX
+set(HPX_STATIC_DEVICE_CONDUIT_PLUGINS
     ""
     CACHE INTERNAL "" FORCE
 )

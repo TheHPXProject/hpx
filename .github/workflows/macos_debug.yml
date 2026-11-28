@@ -41,6 +41,7 @@ jobs:
             -DHPX_WITH_CONTRACTS=ON \
             -DHPX_WITH_CONTRACTS_MODE=ENFORCE \
             -DHPX_WITH_TASK_SIZE_DEFAULT_PARAMETERS=ON \
+            -DHPX_WITH_SUSPENDING_FORK_JOIN_EXECUTOR_AS_DEFAULT=ON \
             -DHPX_WITH_TESTS_COMMAND_LINE=--hpx:queuing=local-priority-fifo-double
       base-targets: hpx_core core components
       # macOS runners are few, keep the number of parallel jobs low

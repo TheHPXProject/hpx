@@ -23,6 +23,7 @@
 #include <iterator>
 #include <memory>
 #include <random>
+#include <utility>
 #include <vector>
 
 unsigned int seed = std::random_device{}();
@@ -96,11 +97,141 @@ void test_basic()
     }
 }
 
+void test_chunked()
+{
+    using queue_type = hpx::concurrency::detail::contiguous_index_queue<>;
+    using chunk_type = std::pair<std::uint32_t, std::uint32_t>;
+
+    {
+        // A default constructed queue gives no chunks.
+        queue_type q;
+
+        HPX_TEST(!q.pop_left_chunk(1));
+        HPX_TEST(!q.pop_right_chunk(1));
+        HPX_TEST(!q.pop_left_chunk(4));
+        HPX_TEST(!q.pop_right_chunk(4));
+    }
+
+    {
+        // A divisor of one takes all items at once.
+        queue_type q{3, 7};
+        hpx::optional<chunk_type> c = q.pop_left_chunk(1);
+        HPX_TEST(c);
+        // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
+        HPX_TEST(c.value() == chunk_type(3, 7));
+        HPX_TEST(q.empty());
+        HPX_TEST(!q.pop_left_chunk(1));
+        HPX_TEST(!q.pop_right_chunk(1));
+
+        q.reset(3, 7);
+        c = q.pop_right_chunk(1);
+        HPX_TEST(c);
+        // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
+        HPX_TEST(c.value() == chunk_type(3, 7));
+        HPX_TEST(q.empty());
+    }
+
+    {
+        // Chunks from the left are 1/divisor of the items left, at least
+        // one, and follow each other without gaps.
+        std::uint32_t const first = 10;
+        std::uint32_t const last = 110;
+        std::uint32_t const divisor = 4;
+        queue_type q{first, last};
+
+        std::uint32_t expected_first = first;
+        hpx::optional<chunk_type> c;
+        while ((c = q.pop_left_chunk(divisor)))
+        {
+            std::uint32_t const left = last - expected_first;
+            std::uint32_t const expected_size =
+                (std::max) (left / divisor, std::uint32_t(1));
+            HPX_TEST_EQ(c->first, expected_first);
+            HPX_TEST_EQ(c->second, expected_first + expected_size);
+            expected_first = c->second;
+        }
+        HPX_TEST_EQ(expected_first, last);
+        HPX_TEST(q.empty());
+    }
+
+    {
+        // Chunks from the right, the same from the other end.
+        std::uint32_t const first = 10;
+        std::uint32_t const last = 110;
+        std::uint32_t const divisor = 3;
+        queue_type q{first, last};
+
+        std::uint32_t expected_last = last;
+        hpx::optional<chunk_type> c;
+        while ((c = q.pop_right_chunk(divisor)))
+        {
+            std::uint32_t const left = expected_last - first;
+            std::uint32_t const expected_size =
+                (std::max) (left / divisor, std::uint32_t(1));
+            HPX_TEST_EQ(c->second, expected_last);
+            HPX_TEST_EQ(c->first, expected_last - expected_size);
+            expected_last = c->first;
+        }
+        HPX_TEST_EQ(expected_last, first);
+        HPX_TEST(q.empty());
+    }
+
+    {
+        // Chunked and single pops from both ends together take every item
+        // once.
+        std::uint32_t const last = 1000;
+        queue_type q{0, last};
+
+        std::vector<int> seen(last, 0);
+        for (std::size_t round = 0; !q.empty(); ++round)
+        {
+            hpx::optional<chunk_type> c;
+            switch (round % 4)
+            {
+            case 0:
+                c = q.pop_left_chunk(8);
+                break;
+            case 1:
+                c = q.pop_right_chunk(5);
+                break;
+            case 2:
+                if (auto const i = q.pop_left())
+                {
+                    c = chunk_type(*i, *i + 1);
+                }
+                break;
+            default:
+                if (auto const i = q.pop_right())
+                {
+                    c = chunk_type(*i, *i + 1);
+                }
+                break;
+            }
+
+            HPX_TEST(c);
+            if (c)
+            {
+                HPX_TEST_LT(c->first, c->second);
+                for (std::uint32_t i = c->first; i != c->second; ++i)
+                {
+                    ++seen[i];
+                }
+            }
+        }
+
+        HPX_TEST(std::all_of(
+            seen.begin(), seen.end(), [](int const n) { return n == 1; }));
+    }
+}
+
 enum class pop_mode
 {
     left,
     right,
-    random
+    random,
+    left_chunk,
+    right_chunk,
+    random_chunk
 };
 
 void test_concurrent_worker(pop_mode m, std::size_t thread_index,
@@ -111,29 +242,56 @@ void test_concurrent_worker(pop_mode m, std::size_t thread_index,
     std::mt19937 r(static_cast<unsigned int>(seed + thread_index));
     std::uniform_int_distribution<> d(0, 1);
 
-    auto pop = [&]() -> hpx::optional<std::uint32_t> {
+    using chunk_type = std::pair<std::uint32_t, std::uint32_t>;
+
+    // Chunked pops take a fraction of the items left, use a few different
+    // ones.
+    auto const divisor = static_cast<std::uint32_t>(2 + thread_index % 7);
+
+    auto single = [](hpx::optional<std::uint32_t> const& i) {
+        return i ? hpx::optional<chunk_type>(chunk_type(*i, *i + 1)) :
+                   hpx::optional<chunk_type>();
+    };
+
+    auto pop = [&]() -> hpx::optional<chunk_type> {
         switch (m)
         {
         case pop_mode::left:
-            return q.pop_left();
+            return single(q.pop_left());
         case pop_mode::right:
-            return q.pop_right();
+            return single(q.pop_right());
         case pop_mode::random:
-            return d(r) == 0 ? q.pop_left() : q.pop_right();
+            return single(d(r) == 0 ? q.pop_left() : q.pop_right());
+        case pop_mode::left_chunk:
+            return q.pop_left_chunk(divisor);
+        case pop_mode::right_chunk:
+            return q.pop_right_chunk(divisor);
+        case pop_mode::random_chunk:
+            return d(r) == 0 ? q.pop_left_chunk(divisor) :
+                               q.pop_right_chunk(divisor);
         default:
             HPX_TEST(false);
             return {};
         }
     };
 
-    // Every thread pops one index before any thread continues. This makes
-    // sure that all threads take part, even if some of them start late (for
+    auto collect = [&](chunk_type const& c) {
+        HPX_TEST_LT(c.first, c.second);
+        for (std::uint32_t i = c.first; i != c.second; ++i)
+        {
+            popped_indices.push_back(i);
+        }
+    };
+
+    // Every thread pops one index before any thread continues (a single one:
+    // a chunk might not leave enough items for the others). This makes sure
+    // that all threads take part, even if some of them start late (for
     // instance on an oversubscribed machine).
-    hpx::optional<std::uint32_t> curr = pop();
+    hpx::optional<chunk_type> curr = single(q.pop_left());
     HPX_TEST(curr);
     if (curr)
     {
-        popped_indices.push_back(curr.value());
+        collect(*curr);
     }
 
     // Make sure all threads continue roughly at the same time.
@@ -141,7 +299,7 @@ void test_concurrent_worker(pop_mode m, std::size_t thread_index,
 
     while ((curr = pop()))
     {
-        popped_indices.push_back(curr.value());
+        collect(*curr);
     }
 }
 
@@ -215,6 +373,11 @@ int hpx_main(hpx::program_options::variables_map& vm)
     test_concurrent(pop_mode::left);
     test_concurrent(pop_mode::right);
     test_concurrent(pop_mode::random);
+
+    test_chunked();
+    test_concurrent(pop_mode::left_chunk);
+    test_concurrent(pop_mode::right_chunk);
+    test_concurrent(pop_mode::random_chunk);
 
     return hpx::local::finalize();
 }

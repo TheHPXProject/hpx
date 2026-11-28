@@ -6,9 +6,10 @@
 
 // The steps de-serialization defers until zero-copy chunk data has arrived
 // (post_receive_actions), as the parcels de-serialized one after the other
-// from an archive take them: a parcel completes once its own steps and those
-// of the parcels before it have finished, since objects shared through
-// pointers are loaded only by the first parcel referring to them.
+// from an archive take them: a parcel completes once its own steps have
+// finished, and if it uses objects that parcels before it have loaded (shared
+// through pointers, loaded only by the first parcel referring to them), once
+// the steps of those parcels have finished as well.
 
 #include <hpx/config.hpp>
 #include <hpx/modules/serialization.hpp>
@@ -107,92 +108,149 @@ namespace {
 
         // the first parcel loads an object and defers completing it
         controlled_step s1;
+        actions.object_loaded(10);
         actions.add(s1.action());
         parcel p1(actions);
 
         // the second refers to the same object, it isn't loaded again
+        actions.back_reference(10);
         parcel p2(actions);
 
         // the third loads another object, completed by a step of its own
         controlled_step s3;
+        actions.object_loaded(20);
         actions.add(s3.action());
         parcel p3(actions);
+
+        // the fourth refers to the third one's object
+        actions.back_reference(20);
+        parcel p4(actions);
 
         HPX_TEST_EQ(p1.steps.actions.size(), std::size_t(1));
         HPX_TEST(p2.steps.actions.empty());
         HPX_TEST_EQ(p3.steps.actions.size(), std::size_t(1));
+        HPX_TEST(p4.steps.actions.empty());
         HPX_TEST(p2.steps.completion == p1.steps.completion);
         HPX_TEST(p3.steps.completion != p1.steps.completion);
 
         p1.start();
         p2.start();
         p3.start();
+        p4.start();
         HPX_TEST(!p1.complete);
         HPX_TEST(!p2.complete);
         HPX_TEST(!p3.complete);
+        HPX_TEST(!p4.complete);
 
-        // the third parcel's own step: it still waits for the first one
+        // the third parcel doesn't use the first one's object; the fourth
+        // waits for all steps before it
         s3.finish();
         HPX_TEST(!p1.complete);
         HPX_TEST(!p2.complete);
-        HPX_TEST(!p3.complete);
+        HPX_TEST(p3.complete);
+        HPX_TEST(!p4.complete);
 
         s1.finish();
         HPX_TEST(p1.complete);
         HPX_TEST(p2.complete);
-        HPX_TEST(p3.complete);
+        HPX_TEST(p4.complete);
 
         // waiting for completed steps calls right away
         bool called = false;
-        p3.steps.completion->when_done([&called]() { called = true; });
+        p4.steps.completion->when_done([&called]() { called = true; });
         HPX_TEST(called);
     }
 
-    void test_steps_finished_in_order()
+    // Parcels that don't use each other's objects complete independently:
+    // a later one must not wait for transfers that may depend on it.
+    void test_independent_parcels()
     {
         post_receive_actions actions;
 
         controlled_step s1;
+        actions.object_loaded(10);
         actions.add(s1.action());
         parcel p1(actions);
 
-        controlled_step s2;
-        actions.add(s2.action());
+        // no steps, no shared objects: complete right away
         parcel p2(actions);
+        HPX_TEST(!p2.steps.completion);
+
+        // an object of its own, referred to twice in the same parcel
+        controlled_step s3;
+        actions.object_loaded(30);
+        actions.back_reference(30);
+        actions.add(s3.action());
+        parcel p3(actions);
 
         p1.start();
         p2.start();
+        p3.start();
+        HPX_TEST(p2.complete);
+
+        s3.finish();
+        HPX_TEST(p3.complete);
+        HPX_TEST(!p1.complete);
 
         s1.finish();
         HPX_TEST(p1.complete);
-        HPX_TEST(!p2.complete);
-
-        s2.finish();
-        HPX_TEST(p2.complete);
     }
 
     // A failed step completes its parcel with the error, and the parcels
-    // after it (which may use the same objects) as well.
+    // after it that use the same objects as well.
     void test_failed_step()
     {
         post_receive_actions actions;
         controlled_step s1;
+        actions.object_loaded(10);
         actions.add(s1.action());
         parcel p1(actions);
+
         controlled_step s2;
+        actions.back_reference(10);
         actions.add(s2.action());
         parcel p2(actions);
 
+        controlled_step s3;
+        actions.add(s3.action());
+        parcel p3(actions);
+
         p1.start();
         p2.start();
+        p3.start();
         s2.finish();
+        s3.finish();
         HPX_TEST(!p2.complete);
+        HPX_TEST(p3.complete);
+        HPX_TEST(!p3.failed);
 
         s1.fail();
         HPX_TEST(p1.complete);
         HPX_TEST(p1.failed);
         HPX_TEST(p2.complete);
         HPX_TEST(p2.failed);
+    }
+
+    // a new message: the objects of the last one don't count
+    void test_reset()
+    {
+        post_receive_actions actions;
+        controlled_step s1;
+        actions.object_loaded(10);
+        actions.add(s1.action());
+        parcel p1(actions);
+
+        actions.reset();
+        actions.back_reference(10);
+        parcel p2(actions);
+        HPX_TEST(!p2.steps.completion);
+
+        p1.start();
+        p2.start();
+        HPX_TEST(p2.complete);
+        HPX_TEST(!p1.complete);
+        s1.finish();
+        HPX_TEST(p1.complete);
     }
 
     // All waiters run when the last step finishes, also if one throws; the
@@ -217,15 +275,99 @@ namespace {
         HPX_TEST(second_called);
         HPX_TEST(!completion->error());
     }
+
+    // transfers (e.g. receiving device memory over a device transport) run
+    // before the other steps, which may use their data (e.g. copy it from a
+    // staging buffer)
+    void test_transfers_first()
+    {
+        post_receive_actions actions;
+
+        controlled_step copy;
+        bool copy_started = false;
+        actions.add([&copy_started, action = copy.action()](
+                        post_receive_actions::done_type d) {
+            copy_started = true;
+            action(HPX_MOVE(d));
+        });
+
+        controlled_step transfer1;
+        controlled_step transfer2;
+        actions.add_transfer(transfer1.action());
+        actions.add_transfer(transfer2.action());
+        HPX_TEST(!actions.empty());
+
+        parcel p(actions);
+        HPX_TEST(actions.empty());
+        p.start();
+        HPX_TEST(!copy_started);
+
+        transfer2.finish();
+        HPX_TEST(!copy_started);
+        transfer1.finish();
+        HPX_TEST(copy_started);
+        HPX_TEST(!p.complete);
+
+        copy.finish();
+        HPX_TEST(p.complete);
+    }
+
+    // a parcel with transfers only
+    void test_transfers_only()
+    {
+        post_receive_actions actions;
+
+        controlled_step transfer;
+        actions.add_transfer(transfer.action());
+
+        parcel p(actions);
+        p.start();
+        HPX_TEST(!p.complete);
+        transfer.finish();
+        HPX_TEST(p.complete);
+    }
+
+    // a failed transfer skips the other steps and fails the parcel
+    void test_failed_transfer()
+    {
+        post_receive_actions actions;
+
+        controlled_step copy;
+        bool copy_started = false;
+        actions.add([&copy_started, action = copy.action()](
+                        post_receive_actions::done_type d) {
+            copy_started = true;
+            action(HPX_MOVE(d));
+        });
+
+        controlled_step transfer1;
+        controlled_step transfer2;
+        actions.add_transfer(transfer1.action());
+        actions.add_transfer(transfer2.action());
+
+        parcel p(actions);
+        p.start();
+
+        transfer1.fail();
+        HPX_TEST(!p.complete);
+        transfer2.finish();
+        HPX_TEST(!copy_started);
+        HPX_TEST(p.complete);
+        HPX_TEST(p.failed);
+    }
 }    // namespace
 
 int main()
 {
     test_no_steps();
     test_shared_steps();
-    test_steps_finished_in_order();
+    test_independent_parcels();
     test_failed_step();
+    test_reset();
     test_throwing_waiter();
+    test_transfers_first();
+    test_transfers_only();
+    test_failed_transfer();
 
     return hpx::util::report_errors();
 }

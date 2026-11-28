@@ -359,13 +359,12 @@ namespace hpx::segmented {
     }
 
     HPX_CXX_EXPORT template <typename ExPolicy, typename SegIter, typename T>
-        requires(hpx::is_execution_policy_v<ExPolicy> &&
-            hpx::traits::is_iterator_v<SegIter> &&
-            hpx::traits::is_segmented_iterator_v<SegIter>)
+        requires(
+            hpx::execution_policy<ExPolicy> && hpx::segmented_iterator<SegIter>)
     hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
         typename std::iterator_traits<SegIter>::difference_type>
-    hpx_invoke(hpx::count_t, ExPolicy&& policy, SegIter first, SegIter last,
-        T const& value)
+    hpx_invoke(
+        hpx::count_t, ExPolicy&& policy, SegIter first, SegIter last, T value)
     {
         static_assert((std::forward_iterator<SegIter>),
             "Requires at least forward iterator.");
@@ -411,9 +410,8 @@ namespace hpx::segmented {
     }
 
     HPX_CXX_EXPORT template <typename ExPolicy, typename SegIter, typename F>
-        requires(hpx::is_execution_policy_v<ExPolicy> &&
-            hpx::traits::is_iterator_v<SegIter> &&
-            hpx::traits::is_segmented_iterator_v<SegIter>)
+        requires(
+            hpx::execution_policy<ExPolicy> && hpx::segmented_iterator<SegIter>)
     hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
         typename std::iterator_traits<SegIter>::difference_type>
     hpx_invoke(

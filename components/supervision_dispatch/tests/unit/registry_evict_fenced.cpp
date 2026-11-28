@@ -25,6 +25,12 @@
 // state before the lifecycle observer runs at all.
 // testing::set_lifecycle_observer_hook_for_testing() holds the observer in
 // that window, before it announces a mirroring.
+//
+// A registry::leave() waits for the mirrorings in flight for the entry it
+// found, like a terminal eviction does. It must still remove that entry once
+// they finish, and only that entry, not one the peer joined again with in the
+// meantime. testing::set_evict_peer_wait_hook_for_testing() holds a leave
+// right after it woke up, before it looks at the entry again.
 
 #include <hpx/config.hpp>
 
@@ -59,10 +65,27 @@ namespace {
             .get();
     }
 
+    // registry::leave() is fire-and-forget, the returned future becomes ready
+    // once it is done
+    hpx::future<void> leave_async(hpx::supervision::registry const& r,
+        hpx::id_type const& peer_locality, std::uint64_t const join_epoch)
+    {
+        return hpx::async<hpx::supervision::server::registry::leave_action>(
+            r.get_id(), peer_locality, join_epoch);
+    }
+
     std::vector<hpx::supervision::server::peer_snapshot> snapshot(
         hpx::supervision::registry const& r)
     {
         return r.snapshot_peers(hpx::launch::sync);
+    }
+
+    // The join_epoch of the registry's only entry.
+    std::uint64_t join_epoch_of(hpx::supervision::registry const& r)
+    {
+        auto const peers = snapshot(r);
+        HPX_TEST_EQ(peers.size(), static_cast<std::size_t>(1));
+        return peers.empty() ? 0 : peers.front().join_epoch;
     }
 
     hpx::supervision::lifecycle_state local_state(
@@ -216,6 +239,17 @@ namespace {
         hold_first_evict_peer()
           : hold_first_call(
                 &hpx::supervision::testing::set_evict_peer_hook_for_testing)
+        {
+        }
+    };
+
+    // Holds the first registry::evict_peer() call that wakes up from waiting
+    // for the mirrorings in flight, before it looks at the peer's entry again.
+    struct hold_first_evict_peer_wait : hold_first_call
+    {
+        hold_first_evict_peer_wait()
+          : hold_first_call(&hpx::supervision::testing::
+                    set_evict_peer_wait_hook_for_testing)
         {
         }
     };
@@ -637,6 +671,135 @@ void test_queued_terminal_eviction_during_evict_fenced_keeps_newer_epoch()
     wait_until_evicted(r);
 }
 
+// An evict_fenced() call for an entry that was evicted already leaves the
+// entry the peer joined again with alone, even though that one is fenced too,
+// so only the generation check stops it. A call for the new entry's
+// generation evicts it.
+void test_stale_generation_eviction_keeps_rejoined_entry()
+{
+    hpx::id_type const here = hpx::find_here();
+    hpx::supervision::registry const r(here);
+
+    joined const peer = join(r, here);
+    fence(here, peer.epoch);
+    evict_fenced_sync(r, here, peer.generation);
+    HPX_TEST(snapshot(r).empty());
+
+    joined const rejoined = join(r, here);
+    HPX_TEST_NEQ(rejoined.generation, peer.generation);
+    fence(here, rejoined.epoch);
+
+    evict_fenced_sync(r, here, peer.generation);
+    auto const peers = snapshot(r);
+    HPX_TEST_EQ(peers.size(), static_cast<std::size_t>(1));
+    if (!peers.empty())
+    {
+        HPX_TEST_EQ(peers.front().generation, rejoined.generation);
+    }
+
+    evict_fenced_sync(r, here, rejoined.generation);
+    HPX_TEST(snapshot(r).empty());
+
+    auto const state = local_state(here);
+    HPX_TEST(state.last_event == hpx::supervision::event::failed);
+    HPX_TEST_EQ(state.epoch, rejoined.epoch);
+}
+
+// A leave() finds the peer's entry while a newer epoch is being mirrored for
+// it, and waits for that mirroring, which moves the entry's join_epoch
+// forward. The leave still removes the entry it found, as fan_out_join()
+// relies on to retract a join that timed out.
+void test_waiting_leave_removes_entry_after_epoch_moves_on()
+{
+    hpx::id_type const here = hpx::find_here();
+    hpx::supervision::registry const r(here);
+
+    joined const peer = join(r, here);
+    std::uint64_t const epoch = peer.epoch;
+    std::uint64_t const join_epoch = join_epoch_of(r);
+    HPX_TEST_EQ(join_epoch, epoch);
+
+    hold_first_mirror hold_mirror;
+    hpx::future<void> published = hpx::async(
+        [&] { publish(here, hpx::supervision::event::started, epoch + 1); });
+    hold_mirror.wait_until_held();
+
+    std::size_t const waiting = hpx::supervision::testing::
+        evict_peers_waiting_for_mirrors_for_testing();
+    hpx::future<void> left = leave_async(r, here, join_epoch);
+    HPX_TEST(wait_for([&] {
+        return hpx::supervision::testing::
+                   evict_peers_waiting_for_mirrors_for_testing() > waiting;
+    }));
+
+    hold_mirror.release();
+    published.get();
+    left.get();
+
+    HPX_TEST(snapshot(r).empty());
+}
+
+// A leave() waiting for a mirroring is bound to the entry it found. That
+// entry is removed and the peer joins again at the same join_epoch before
+// the leave looks again: the leave leaves the new entry alone, and its
+// lifecycle observer stays registered.
+void test_waiting_leave_keeps_rejoined_entry()
+{
+    hpx::id_type const here = hpx::find_here();
+    hpx::supervision::registry const r(here);
+
+    // A graceful leave forgets the peer's local state, so the joins below
+    // start from the same epoch.
+    join(r, here);
+    leave_async(r, here, join_epoch_of(r)).get();
+    HPX_TEST(snapshot(r).empty());
+
+    joined const peer = join(r, here);
+    std::uint64_t const join_epoch = join_epoch_of(r);
+
+    // A mirroring within the entry's epoch, join_epoch stays where it is.
+    hold_first_mirror hold_mirror;
+    hpx::future<void> published = hpx::async(
+        [&] { publish(here, hpx::supervision::event::running, peer.epoch); });
+    hold_mirror.wait_until_held();
+
+    hold_first_evict_peer_wait hold_wait;
+    std::size_t const waiting = hpx::supervision::testing::
+        evict_peers_waiting_for_mirrors_for_testing();
+    hpx::future<void> left = leave_async(r, here, join_epoch);
+    HPX_TEST(wait_for([&] {
+        return hpx::supervision::testing::
+                   evict_peers_waiting_for_mirrors_for_testing() > waiting;
+    }));
+
+    hold_mirror.release();
+    published.get();
+    hold_wait.wait_until_held();
+
+    // Another leave removes the entry, and the peer joins again.
+    leave_async(r, here, join_epoch).get();
+    HPX_TEST(snapshot(r).empty());
+
+    joined const rejoined = join(r, here);
+    HPX_TEST_NEQ(rejoined.generation, peer.generation);
+    HPX_TEST_EQ(join_epoch_of(r), join_epoch);
+
+    hold_wait.release();
+    left.get();
+
+    auto const peers = snapshot(r);
+    HPX_TEST_EQ(peers.size(), static_cast<std::size_t>(1));
+    if (!peers.empty())
+    {
+        HPX_TEST_EQ(peers.front().generation, rejoined.generation);
+    }
+
+    // The lifecycle observer is still registered.
+    publish(here, hpx::supervision::event::running, rejoined.epoch);
+    publish(here, hpx::supervision::event::completed, rejoined.epoch);
+    wait_until_evicted(r);
+}
+
 int main()
 {
     test_newer_lifecycle_between_check_and_removal_wins();
@@ -647,6 +810,9 @@ int main()
     test_terminal_eviction_waits_for_newer_mirror();
     test_self_join_publication_before_observer_runs_wins();
     test_queued_terminal_eviction_during_evict_fenced_keeps_newer_epoch();
+    test_stale_generation_eviction_keeps_rejoined_entry();
+    test_waiting_leave_removes_entry_after_epoch_moves_on();
+    test_waiting_leave_keeps_rejoined_entry();
 
     return hpx::util::report_errors();
 }

@@ -6,6 +6,7 @@
 
 #include <hpx/config.hpp>
 #include <hpx/assert.hpp>
+#include <hpx/modules/errors.hpp>
 #include <hpx/modules/execution_base.hpp>
 
 #include <hpx/threading_base/detail/idle_callback.hpp>
@@ -100,12 +101,6 @@ namespace hpx::threads::policies {
       , thread_queue_init_(thread_queue_init)
       , parent_pool_(nullptr)
       , background_thread_count_(0)
-      , polling_function_mpi_(&null_polling_function)
-      , polling_function_cuda_(&null_polling_function)
-      , polling_function_sycl_(&null_polling_function)
-      , polling_work_count_function_mpi_(&null_polling_work_count_function)
-      , polling_work_count_function_cuda_(&null_polling_work_count_function)
-      , polling_work_count_function_sycl_(&null_polling_work_count_function)
     {
         for (std::size_t i = 0; i != num_threads; ++i)
         {
@@ -768,9 +763,14 @@ namespace hpx::threads::policies {
     {
         // The creations and the workers are counted in the same atomic, so
         // either this comes first and the last worker to leave waits for it,
-        // or the last worker has left before and this gives up
+        // or the last worker has left before and this gives up. Acquire:
+        // each worker saw its state stopping before its decrement (a
+        // release), and the decrements form one release sequence, so if this
+        // reads the count the last worker left, the check below sees the
+        // states stopping as well. A relaxed increment would allow it to see
+        // an earlier state and create a thread that no worker runs.
         std::uint64_t const before = workers_in_loop_.fetch_add(
-            outside_creation_unit, std::memory_order_relaxed);
+            outside_creation_unit, std::memory_order_acq_rel);
         if ((before & workers_in_loop_mask) == 0 &&
             has_reached_state(hpx::state::stopping))
         {
@@ -889,99 +889,100 @@ namespace hpx::threads::policies {
         return thread_queue_init_.small_stacksize_;
     }
 
-    void scheduler_base::set_mpi_polling_functions(
-        polling_function_ptr mpi_func,
-        polling_work_count_function_ptr mpi_work_count_func)
+    void scheduler_base::add_polling_function(detail::polling_function const* f)
     {
-        polling_function_mpi_.store(mpi_func, std::memory_order_relaxed);
-        polling_work_count_function_mpi_.store(
-            mpi_work_count_func, std::memory_order_relaxed);
+        HPX_ASSERT(f != nullptr && f->poll != nullptr);
+
+        std::lock_guard<std::mutex> l(polling_mtx_);
+        auto& registry = polling_.data_;
+        std::uint32_t const active =
+            registry.active.load(std::memory_order_relaxed);
+
+        std::size_t free_id = max_polling_functions;
+        for (std::size_t id = 0; id != max_polling_functions; ++id)
+        {
+            if ((active & (std::uint32_t(1) << id)) == 0)
+            {
+                if (free_id == max_polling_functions)
+                    free_id = id;
+            }
+            else if (registry.functions[id].load(std::memory_order_relaxed) ==
+                f)
+            {
+                return;    // registered already
+            }
+        }
+
+        if (free_id == max_polling_functions)
+        {
+            HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
+                "scheduler_base::add_polling_function",
+                "no more than {} polling functions can be registered",
+                max_polling_functions);
+        }
+
+        // a worker that sees the bit before the function skips it
+        registry.functions[free_id].store(f, std::memory_order_release);
+        registry.active.fetch_or(
+            std::uint32_t(1) << free_id, std::memory_order_relaxed);
     }
 
-    void scheduler_base::clear_mpi_polling_function()
+    void scheduler_base::remove_polling_function(
+        detail::polling_function const* f)
     {
-        polling_function_mpi_.store(
-            &null_polling_function, std::memory_order_relaxed);
-        polling_work_count_function_mpi_.store(
-            &null_polling_work_count_function, std::memory_order_relaxed);
+        std::lock_guard<std::mutex> l(polling_mtx_);
+        auto& registry = polling_.data_;
+        std::uint32_t const active =
+            registry.active.load(std::memory_order_relaxed);
+        for (std::size_t id = 0; id != max_polling_functions; ++id)
+        {
+            std::uint32_t const bit = std::uint32_t(1) << id;
+            if ((active & bit) != 0 &&
+                registry.functions[id].load(std::memory_order_relaxed) == f)
+            {
+                registry.active.fetch_and(~bit, std::memory_order_relaxed);
+                registry.functions[id].store(
+                    nullptr, std::memory_order_release);
+                return;
+            }
+        }
     }
 
-    void scheduler_base::set_cuda_polling_functions(
-        polling_function_ptr cuda_func,
-        polling_work_count_function_ptr cuda_work_count_func)
-    {
-        polling_function_cuda_.store(cuda_func, std::memory_order_relaxed);
-        polling_work_count_function_cuda_.store(
-            cuda_work_count_func, std::memory_order_relaxed);
-    }
-
-    void scheduler_base::clear_cuda_polling_function()
-    {
-        polling_function_cuda_.store(
-            &null_polling_function, std::memory_order_relaxed);
-        polling_work_count_function_cuda_.store(
-            &null_polling_work_count_function, std::memory_order_relaxed);
-    }
-
-    void scheduler_base::set_sycl_polling_functions(
-        polling_function_ptr sycl_func,
-        polling_work_count_function_ptr sycl_work_count_func)
-    {
-        polling_function_sycl_.store(sycl_func, std::memory_order_relaxed);
-        polling_work_count_function_sycl_.store(
-            sycl_work_count_func, std::memory_order_relaxed);
-    }
-
-    void scheduler_base::clear_sycl_polling_function()
-    {
-        polling_function_sycl_.store(
-            &null_polling_function, std::memory_order_relaxed);
-        polling_work_count_function_sycl_.store(
-            &null_polling_work_count_function, std::memory_order_relaxed);
-    }
-
-    detail::polling_status scheduler_base::custom_polling_function() const
+    detail::polling_status scheduler_base::call_polling_functions(
+        std::uint32_t active) const
     {
         detail::polling_status status = detail::polling_status::idle;
-#if defined(HPX_HAVE_MODULE_ASYNC_MPI)
-        if ((*polling_function_mpi_.load(std::memory_order_relaxed))() ==
-            detail::polling_status::busy)
+        while (active != 0)
         {
-            status = detail::polling_status::busy;
+            auto const id = static_cast<std::size_t>(std::countr_zero(active));
+            active &= active - 1;
+
+            detail::polling_function const* f =
+                polling_.data_.functions[id].load(std::memory_order_acquire);
+            if (f != nullptr &&
+                f->poll(f->context) == detail::polling_status::busy)
+            {
+                status = detail::polling_status::busy;
+            }
         }
-#endif
-#if defined(HPX_HAVE_MODULE_ASYNC_CUDA)
-        if ((*polling_function_cuda_.load(std::memory_order_relaxed))() ==
-            detail::polling_status::busy)
-        {
-            status = detail::polling_status::busy;
-        }
-#endif
-#if defined(HPX_HAVE_MODULE_ASYNC_SYCL)
-        if ((*polling_function_sycl_.load(std::memory_order_relaxed))() ==
-            detail::polling_status::busy)
-        {
-            status = detail::polling_status::busy;
-        }
-#endif
         return status;
     }
 
-    std::size_t scheduler_base::get_polling_work_count() const
+    std::size_t scheduler_base::count_polling_work(std::uint32_t active) const
     {
         std::size_t work_count = 0;
-#if defined(HPX_HAVE_MODULE_ASYNC_MPI)
-        work_count +=
-            polling_work_count_function_mpi_.load(std::memory_order_relaxed)();
-#endif
-#if defined(HPX_HAVE_MODULE_ASYNC_CUDA)
-        work_count +=
-            polling_work_count_function_cuda_.load(std::memory_order_relaxed)();
-#endif
-#if defined(HPX_HAVE_MODULE_ASYNC_SYCL)
-        work_count +=
-            polling_work_count_function_sycl_.load(std::memory_order_relaxed)();
-#endif
+        while (active != 0)
+        {
+            auto const id = static_cast<std::size_t>(std::countr_zero(active));
+            active &= active - 1;
+
+            detail::polling_function const* f =
+                polling_.data_.functions[id].load(std::memory_order_acquire);
+            if (f != nullptr && f->work_count != nullptr)
+            {
+                work_count += f->work_count(f->context);
+            }
+        }
         return work_count;
     }
 

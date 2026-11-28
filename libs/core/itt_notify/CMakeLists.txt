@@ -36,6 +36,7 @@ add_hpx_module(
   MACRO_HEADERS ${itt_notify_macro_headers}
   COMPAT_HEADERS ${itt_notify_compat_headers}
   DEPENDENCIES ${itt_notify_optional_dependencies}
+  ADD_TO_GLOBAL_HEADER hpx/itt_notify/detail/use_ittnotify_api.hpp
   MODULE_DEPENDENCIES hpx_config
   CMAKE_SUBDIRS examples tests
 )

@@ -200,9 +200,8 @@ namespace hpx::segmented {
     }
 
     HPX_CXX_EXPORT template <typename ExPolicy, typename SegIter, typename F>
-        requires(hpx::is_execution_policy_v<ExPolicy> &&
-            hpx::traits::is_iterator_v<SegIter> &&
-            hpx::traits::is_segmented_iterator_v<SegIter>)
+        requires(
+            hpx::execution_policy<ExPolicy> && hpx::segmented_iterator<SegIter>)
     hpx::parallel::util::detail::algorithm_result_t<ExPolicy, SegIter>
     hpx_invoke(
         hpx::for_each_t, ExPolicy&& policy, SegIter first, SegIter last, F&& f)
@@ -255,9 +254,8 @@ namespace hpx::segmented {
 
     HPX_CXX_EXPORT template <typename ExPolicy, typename SegIter, typename Size,
         typename F>
-        requires(hpx::is_execution_policy_v<ExPolicy> &&
-            hpx::traits::is_iterator_v<SegIter> &&
-            hpx::traits::is_segmented_iterator_v<SegIter>)
+        requires(
+            hpx::execution_policy<ExPolicy> && hpx::segmented_iterator<SegIter>)
     hpx::parallel::util::detail::algorithm_result_t<ExPolicy, SegIter>
     hpx_invoke(
         hpx::for_each_n_t, ExPolicy&& policy, SegIter first, Size count, F&& f)

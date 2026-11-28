@@ -359,9 +359,8 @@ namespace hpx::segmented {
 
     HPX_CXX_EXPORT template <typename ExPolicy, typename SegIter,
         typename Pred = hpx::parallel::detail::less>
-        requires(hpx::is_execution_policy_v<ExPolicy> &&
-            hpx::traits::is_iterator_v<SegIter> &&
-            hpx::traits::is_segmented_iterator_v<SegIter>)
+        requires(
+            hpx::execution_policy<ExPolicy> && hpx::segmented_iterator<SegIter>)
     hpx::parallel::util::detail::algorithm_result_t<ExPolicy, bool> hpx_invoke(
         hpx::is_sorted_t, ExPolicy&& policy, SegIter first, SegIter last,
         Pred&& pred = Pred())

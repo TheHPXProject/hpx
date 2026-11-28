@@ -7,12 +7,12 @@
 #include <hpx/config.hpp>
 
 #include <hpx/assert.hpp>
-#include <hpx/errors/try_catch_exception_ptr.hpp>
 #include <hpx/executors/parallel_scheduler.hpp>
 #include <hpx/executors/parallel_scheduler_backend.hpp>
 #include <hpx/executors/thread_pool_scheduler.hpp>
 #include <hpx/executors/thread_pool_scheduler_bulk.hpp>
-#include <hpx/threading_base/thread_pool_base.hpp>
+#include <hpx/modules/errors.hpp>
+#include <hpx/modules/threading_base.hpp>
 
 #include <algorithm>
 #include <atomic>

@@ -105,6 +105,11 @@ default has to be specified. Therefore ``$[section.key]`` refers to the property
 ``section.key``. If the property ``section.key`` is not set or empty, the overall
 expression will evaluate to an empty string.
 
+To write a literal ``${`` or ``$[`` in a property value, double the ``$``:
+``$${FOO}`` reads as ``${FOO}`` and ``$$[section.key]`` as ``$[section.key]``,
+and neither is expanded. Any other ``$``, including a ``$$`` that is not
+followed by ``{`` or ``[``, is taken as it is.
+
 .. note::
 
    Any property ``$[section.key:default]`` is evaluated whenever it is queried
@@ -443,6 +448,34 @@ The ``hpx.tracing`` configuration section
        the next task creation. Only present on Tracy builds
        (``HPX_WITH_TRACY=ON``).
 
+The ``hpx.hip`` configuration section
+.....................................
+
+.. code-block:: ini
+
+   [hpx.hip]
+   warmup = ${HPX_HIP_WARMUP:current}
+
+.. _ini_hpx_hip:
+
+.. list-table::
+
+   * * Property
+     * Description
+   * * ``hpx.hip.warmup``
+     * The devices whose internal HIP runtime kernels are built when the
+       runtime starts, before ``hpx_main`` runs: ``none``, ``current`` (the
+       default: the device current on the runtime's threads, normally device
+       ``0``) or ``all`` (all visible devices). The HIP runtime builds these
+       kernels on the thread that first uses a device (a kernel launch, a
+       copy, a memset), which needs more stack than |hpx| threads have by
+       default (``hpx.stacks.small_size``); without the warm-up, a task that
+       is the first to use a device crashes with a stack overflow. The
+       warm-up runs as a pre-startup function on the thread that later runs
+       ``hpx_main``, which has a large stack (``hpx.stacks.large_size``), and
+       takes about two seconds per device. Only present when |hpx| was built
+       with HIP.
+
 The ``hpx.threadpools`` configuration section
 .............................................
 
@@ -514,6 +547,45 @@ their defaults the scheduler decides like the local priority scheduler (see
    * * ``hpx.scheduler_policy.free_pass_after_wake``
      * If ``1``, a worker thread woken up by new work may steal once without
        the early minima (see :ref:`thread_scheduler_pending_steal`).
+
+The ``hpx.idle_tuning`` configuration section
+..............................................
+
+The entries of this section give the idle settings of a thread pool by its
+scheduler, the scheduler's tuner and the pool's number of worker threads, for
+instance values measured for a machine. A pool takes the entries of
+``hpx.idle_tuning.<scheduler>.<tuner>.<number of workers>``, else those of
+``hpx.idle_tuning.<scheduler>.<tuner>``, else ``hpx.max_idle_backoff_time``
+and ``hpx.min_idle_backoff_time``. The scheduler is named as
+:option:`--hpx:queuing` names it; the tuner is ``hpx.scheduler_tuner`` for the
+``local-priority-tuned-fifo`` scheduler and ``none`` for all others. The
+section is empty by default, so that every pool uses the plain settings. Values
+that are not a number or are negative are ignored. The entries are usually
+given in a configuration file (:option:`--hpx:config`); on the command line
+they are new entries and need the ``!`` that forces one, for instance
+``--hpx:ini=hpx.idle_tuning.local-priority-fifo.none.min_idle_backoff_time!=60``.
+
+.. code-block:: ini
+
+   [hpx.idle_tuning.local-priority-fifo.none]
+   max_idle_backoff_time = 1000
+   min_idle_backoff_time = 50
+
+   [hpx.idle_tuning.local-priority-fifo.none.32]
+   min_idle_backoff_time = 60
+
+.. _ini_hpx_idle_tuning:
+
+.. list-table::
+
+   * * Property
+     * Description
+   * * ``hpx.idle_tuning.<scheduler>.<tuner>[.<number of workers>].max_idle_backoff_time``
+     * The value of this property replaces ``hpx.max_idle_backoff_time`` for the
+       pools it applies to.
+   * * ``hpx.idle_tuning.<scheduler>.<tuner>[.<number of workers>].min_idle_backoff_time``
+     * The value of this property replaces ``hpx.min_idle_backoff_time`` for the
+       pools it applies to.
 
 The ``hpx.thread_queue`` configuration section
 ..............................................
@@ -656,6 +728,18 @@ default, which stands for the defaults compiled into |hpx|.
        move trivially copyable elements without calling a function derive the
        task size of a chunk from it. The default is ``16``, about the rate for
        data that is not in the caches.
+   * * ``hpx.task_size_chunk_size.<executor>.min_chunk_time_us``
+     * The value of this property defines the minimal run time of a chunk, in
+       microseconds, for the loops of one executor, in place of
+       ``hpx.task_size_chunk_size.min_chunk_time_us``. ``<executor>`` is
+       ``parallel`` for ``parallel_executor``, ``fork_join`` for
+       ``fork_join_executor``, ``suspending_fork_join`` for
+       ``suspending_fork_join_executor`` and ``shared_suspending_fork_join``
+       for ``shared_suspending_fork_join_executor``. Not set by default.
+   * * ``hpx.task_size_chunk_size.<executor>.<pool size>.min_chunk_time_us``
+     * The value of this property defines the minimal run time of a chunk, in
+       microseconds, for the loops of one executor that runs on ``<pool size>``
+       worker threads, in place of the entry above. Not set by default.
 
 The ``hpx.components`` configuration section
 ............................................
@@ -804,8 +888,9 @@ The ``hpx.parcel`` configuration section
      * This property defines whether a parcelport that sends parcels
        immediately (MPI, LCI or LCW with ``sendimm=1`` in its section)
        encodes a :term:`parcel` in one pass, without the preprocessing pass,
-       if the destination can take the parcel now and the parcel has no
-       serialization filter.
+       if the destination can take the parcel now, no device conduit
+       (``hpx.parcel.device_conduit``) reaches the destination, and the
+       parcel has no serialization filter.
        A parcel with a value that needs the preprocessing pass (a managed
        ``id_type``, a future or ``task_group`` that is not ready) stops that
        encode and takes the usual path; the work of the stopped encode is

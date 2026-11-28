@@ -841,22 +841,86 @@ namespace hpx::util {
     }
 
     ///////////////////////////////////////////////////////////////////////////////
+    // A '$' directly followed by '{' or '[' starts an expansion; written as "$${"
+    // or "$$[" it stands for a literal "${" or "$[" instead. Any other "$$" has
+    // no special meaning. While expanding, an escape is skipped and left as it
+    // is; the doubled '$' is removed only when the expansion is complete (see
+    // the string returning expand below), so that a value inserted from a
+    // referenced entry is never expanded a second time.
+    namespace {
+
+        // whether value[p] starts an escape ("$${" or "$$[")
+        bool is_escape(std::string const& value, std::string::size_type p)
+        {
+            return p + 2 < value.size() && value[p] == '$' &&
+                value[p + 1] == '$' &&
+                (value[p + 2] == '{' || value[p + 2] == '[');
+        }
+
+        // the text with every '$' that is followed by '{' or '[' doubled, so
+        // that the expansion leaves it as it is
+        std::string escape_expansions(std::string const& text)
+        {
+            std::string result;
+            result.reserve(text.size());
+            for (std::string::size_type i = 0; i != text.size(); ++i)
+            {
+                if (text[i] == '$' && i + 1 < text.size() &&
+                    (text[i + 1] == '{' || text[i + 1] == '['))
+                {
+                    result += '$';
+                }
+                result += text[i];
+            }
+            return result;
+        }
+
+        // remove the doubled '$' of every escape after position begin
+        void unescape_expansions(
+            std::string& value, std::string::size_type begin)
+        {
+            std::string::size_type p = value.find_first_of('$', begin + 1);
+            while (p != std::string::npos)
+            {
+                if (is_escape(value, p))
+                {
+                    // "$${" -> "${": continue after the brace
+                    value.erase(p, 1);
+                    p = value.find_first_of('$', p + 2);
+                }
+                else
+                {
+                    p = value.find_first_of('$', p + 1);
+                }
+            }
+        }
+    }    // namespace
+
     void section::expand(std::unique_lock<mutex_type>& l, std::string& value,
         std::string::size_type begin) const
     {
         std::string::size_type p = value.find_first_of('$', begin + 1);
         while (p != std::string::npos && value.size() - 1 != p)
         {
+            if (is_escape(value, p))
+            {
+                // a literal "${" or "$[", left for unescape_expansions
+                p = value.find_first_of('$', p + 2);
+                continue;
+            }
             if ('[' == value[p + 1])
-                expand_bracket(l, value, p);
+                p = expand_bracket(l, value, p);
             else if ('{' == value[p + 1])
                 expand_brace(l, value, p);
             p = value.find_first_of('$', p + 1);
         }
     }
 
-    void section::expand_bracket(std::unique_lock<mutex_type>& l,
-        std::string& value, std::string::size_type begin) const
+    // Returns the position after which the expansion continues: the last
+    // character of the inserted value, which is not looked at again.
+    std::string::size_type section::expand_bracket(
+        std::unique_lock<mutex_type>& l, std::string& value,
+        std::string::size_type begin) const
     {
         // expand all keys embedded inside this key
         expand(l, value, begin);
@@ -867,18 +931,19 @@ namespace hpx::util {
         {
             std::string to_expand = value.substr(begin + 2, end - begin - 2);
             std::string::size_type const colon = find_next(":", to_expand);
-            if (colon == std::string::npos)
-            {
-                value = detail::replace_substr(value, begin, end - begin + 1,
-                    root_->get_entry(l, to_expand, std::string()));
-            }
-            else
-            {
-                value = detail::replace_substr(value, begin, end - begin + 1,
-                    root_->get_entry(l, to_expand.substr(0, colon),
-                        to_expand.substr(colon + 1)));
-            }
+
+            // the entry's value is fully expanded; escaped again, so that
+            // its literal "${" and "$[" survive the final unescaping
+            std::string const inserted =
+                escape_expansions(colon == std::string::npos ?
+                        root_->get_entry(l, to_expand, std::string()) :
+                        root_->get_entry(l, to_expand.substr(0, colon),
+                            to_expand.substr(colon + 1)));
+            value =
+                detail::replace_substr(value, begin, end - begin + 1, inserted);
+            return inserted.empty() ? begin : begin + inserted.size() - 1;
         }
+        return begin;
     }
 
     void section::expand_brace(std::unique_lock<mutex_type>& l,
@@ -913,10 +978,20 @@ namespace hpx::util {
         std::unique_lock<mutex_type>& l, std::string value) const
     {
         expand(l, value, static_cast<std::string::size_type>(-1));
+        unescape_expansions(value, static_cast<std::string::size_type>(-1));
         return value;
     }
 
+    void section::expand(std::string& str, std::string::size_type len) const
+    {
+        std::unique_lock<mutex_type> l(mtx_);
+        expand(l, str, len);
+        unescape_expansions(str, len);
+    }
+
     ///////////////////////////////////////////////////////////////////////////////
+    // The expansion of add_entry: only the given key, so that a value can refer
+    // to the entry's previous value; the result is stored, so its escapes stay.
     void section::expand_only(std::unique_lock<mutex_type>& l,
         std::string& value, std::string::size_type begin,
         std::string const& expand_this) const
@@ -924,17 +999,24 @@ namespace hpx::util {
         std::string::size_type p = value.find_first_of('$', begin + 1);
         while (p != std::string::npos && value.size() - 1 != p)
         {
+            if (is_escape(value, p))
+            {
+                p = value.find_first_of('$', p + 2);
+                continue;
+            }
             if ('[' == value[p + 1])
-                expand_bracket_only(l, value, p, expand_this);
+                p = expand_bracket_only(l, value, p, expand_this);
             else if ('{' == value[p + 1])
                 expand_brace_only(l, value, p, expand_this);
             p = value.find_first_of('$', p + 1);
         }
     }
 
-    void section::expand_bracket_only(std::unique_lock<mutex_type>& l,
-        std::string& value, std::string::size_type begin,
-        std::string const& expand_this) const
+    // Returns the position after which the expansion continues (see
+    // expand_bracket).
+    std::string::size_type section::expand_bracket_only(
+        std::unique_lock<mutex_type>& l, std::string& value,
+        std::string::size_type begin, std::string const& expand_this) const
     {
         // expand all keys embedded inside this key
         expand_only(l, value, begin, expand_this);
@@ -945,22 +1027,22 @@ namespace hpx::util {
         {
             std::string to_expand = value.substr(begin + 2, end - begin - 2);
             std::string::size_type const colon = find_next(":", to_expand);
-            if (colon == std::string::npos)
+            if (colon == std::string::npos ?
+                    to_expand == expand_this :
+                    to_expand.substr(0, colon) == expand_this)
             {
-                if (to_expand == expand_this)
-                {
-                    value =
-                        detail::replace_substr(value, begin, end - begin + 1,
-                            root_->get_entry(l, to_expand, std::string()));
-                }
-            }
-            else if (to_expand.substr(0, colon) == expand_this)
-            {
-                value = detail::replace_substr(value, begin, end - begin + 1,
-                    root_->get_entry(l, to_expand.substr(0, colon),
-                        to_expand.substr(colon + 1)));
+                // stored as it is, so escaped again (see expand_bracket)
+                std::string const inserted =
+                    escape_expansions(colon == std::string::npos ?
+                            root_->get_entry(l, to_expand, std::string()) :
+                            root_->get_entry(l, to_expand.substr(0, colon),
+                                to_expand.substr(colon + 1)));
+                value = detail::replace_substr(
+                    value, begin, end - begin + 1, inserted);
+                return inserted.empty() ? begin : begin + inserted.size() - 1;
             }
         }
+        return begin;
     }
 
     void section::expand_brace_only(std::unique_lock<mutex_type>& l,

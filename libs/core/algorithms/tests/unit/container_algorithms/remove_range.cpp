@@ -57,17 +57,21 @@ struct random_fill
 {
     random_fill(std::size_t rand_base, std::size_t range)
       : gen(std::rand())
-      , dist(static_cast<int>(rand_base - range / 2),
-            static_cast<int>(rand_base + range / 2))
+      , base(static_cast<unsigned int>(rand_base))
+      , dist(-static_cast<int>(range / 2), static_cast<int>(range / 2))
     {
     }
 
     int operator()()
     {
-        return dist(gen);
+        // add a random offset to rand_base modulo 2^32: rand_base +/- the
+        // range may not fit into an int, which would make the range of the
+        // distribution invalid
+        return static_cast<int>(base + static_cast<unsigned int>(dist(gen)));
     }
 
     std::mt19937 gen;
+    unsigned int base = 0;
     std::uniform_int_distribution<> dist;
 };
 
@@ -316,6 +320,73 @@ void test_remove()
     test_remove<user_defined_type>();
 }
 
+////////////////////////////////////////////////////////////////////////////
+// The projection may yield a type other than the element type. The value
+// then applies to what the projection yields, as in std::ranges::remove.
+struct projected_item
+{
+    int id;
+    double weight;
+};
+
+std::vector<projected_item> make_projected_items()
+{
+    return {{1, 1.0}, {2, 2.0}, {3, 3.0}, {2, 4.0}, {5, 5.0}};
+}
+
+void test_remove_projection()
+{
+    {
+        std::vector<projected_item> c = make_projected_items();
+        auto result =
+            hpx::ranges::remove(c.begin(), c.end(), 2, &projected_item::id);
+        HPX_TEST(result.begin() == c.begin() + 3);
+        HPX_TEST(result.end() == c.end());
+        HPX_TEST_EQ(c[0].id, 1);
+        HPX_TEST_EQ(c[1].id, 3);
+        HPX_TEST_EQ(c[2].id, 5);
+    }
+    {
+        std::vector<projected_item> c = make_projected_items();
+        auto result = hpx::ranges::remove(c, 2, &projected_item::id);
+        HPX_TEST(result.begin() == c.begin() + 3);
+        HPX_TEST(result.end() == c.end());
+        HPX_TEST_EQ(c[0].id, 1);
+        HPX_TEST_EQ(c[1].id, 3);
+        HPX_TEST_EQ(c[2].id, 5);
+    }
+    {
+        std::vector<projected_item> c = make_projected_items();
+        auto result = hpx::ranges::remove(
+            hpx::execution::seq, c.begin(), c.end(), 2, &projected_item::id);
+        HPX_TEST(result.begin() == c.begin() + 3);
+        HPX_TEST(result.end() == c.end());
+        HPX_TEST_EQ(c[0].id, 1);
+        HPX_TEST_EQ(c[1].id, 3);
+        HPX_TEST_EQ(c[2].id, 5);
+    }
+    {
+        std::vector<projected_item> c = make_projected_items();
+        auto result = hpx::ranges::remove(
+            hpx::execution::par, c.begin(), c.end(), 2, &projected_item::id);
+        HPX_TEST(result.begin() == c.begin() + 3);
+        HPX_TEST(result.end() == c.end());
+        HPX_TEST_EQ(c[0].id, 1);
+        HPX_TEST_EQ(c[1].id, 3);
+        HPX_TEST_EQ(c[2].id, 5);
+    }
+    {
+        std::vector<projected_item> c = make_projected_items();
+        auto result =
+            hpx::ranges::remove(hpx::execution::par, c, 2, &projected_item::id);
+        HPX_TEST(result.begin() == c.begin() + 3);
+        HPX_TEST(result.end() == c.end());
+        HPX_TEST_EQ(c[0].id, 1);
+        HPX_TEST_EQ(c[1].id, 3);
+        HPX_TEST_EQ(c[2].id, 5);
+    }
+}
+
 int hpx_main(hpx::program_options::variables_map& vm)
 {
     unsigned int seed = (unsigned int) std::time(nullptr);
@@ -324,8 +395,10 @@ int hpx_main(hpx::program_options::variables_map& vm)
 
     std::cout << "using seed: " << seed << std::endl;
     std::srand(seed);
+    g.seed(seed);
 
     test_remove();
+    test_remove_projection();
     return hpx::local::finalize();
 }
 

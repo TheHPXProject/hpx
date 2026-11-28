@@ -211,11 +211,9 @@ namespace hpx ::segmented {
 
     HPX_CXX_EXPORT template <typename ExPolicy, typename InIterB,
         typename InIterE, typename T, typename F>
-        requires(hpx::is_execution_policy_v<ExPolicy> &&
-            hpx::traits::is_iterator_v<InIterB> &&
-            hpx::traits::is_segmented_iterator_v<InIterB> &&
-            hpx::traits::is_iterator_v<InIterE> &&
-            hpx::traits::is_segmented_iterator_v<InIterE>)
+        requires(hpx::execution_policy<ExPolicy> &&
+            hpx::segmented_iterator<InIterB> &&
+            hpx::segmented_iterator<InIterE>)
     parallel::util::detail::algorithm_result_t<ExPolicy, T> hpx_invoke(
         hpx::reduce_t, ExPolicy&& policy, InIterB first, InIterE last, T init,
         F&& f)

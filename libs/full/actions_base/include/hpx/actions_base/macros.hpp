@@ -527,12 +527,13 @@
     /**/
 
 #if defined(HPX_HAVE_CXX26_REFLECTION)
-/// When C++26 reflection is available, HPX_DEFINE_PLAIN_ACTION_2 uses
-/// reflect_action<^^func> instead of make_action_t. This eliminates the
-/// need for HPX_REGISTER_ACTION while keeping the same user-facing syntax.
+/// With C++26 reflection the action derives from reflect_action<^^func>. It
+/// is a struct, as HPX_DECLARE_ACTION declares it, and is passed as Derived,
+/// so that macros like HPX_ACTION_USES_LARGE_STACK apply to it.
 #define HPX_DEFINE_PLAIN_ACTION_3(Prefix, func, name)                          \
-    Prefix using name = ::hpx::actions::reflect_action<^^func>;                \
-    /**/
+    Prefix struct name : ::hpx::actions::reflect_action<^^func, name>          \
+    {                                                                          \
+    } /**/
 #elif defined(__NVCC__) || defined(__CUDACC__)
 #define HPX_DEFINE_PLAIN_ACTION_3(Prefix, func, name)                          \
     Prefix struct name                                                         \
@@ -561,8 +562,9 @@
 
 #if defined(HPX_HAVE_CXX26_REFLECTION)
 #define HPX_DEFINE_PLAIN_DIRECT_ACTION_3(Prefix, func, name)                   \
-    Prefix using name = ::hpx::actions::reflect_direct_action<^^func>;         \
-    /**/
+    Prefix struct name : ::hpx::actions::reflect_direct_action<^^func, name>   \
+    {                                                                          \
+    } /**/
 #else
 #define HPX_DEFINE_PLAIN_DIRECT_ACTION_3(Prefix, func, name)                   \
     Prefix struct name                                                         \
