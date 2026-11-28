@@ -57,20 +57,31 @@
 namespace detail = hpx::serialization::detail;
 
 ///////////////////////////////////////////////////////////////////////////////
-// the GPU of this locality
+// the GPU of this locality (set by use_own_gpu: one of the GPUs it sees that
+// no other locality on its node uses)
+int& own_gpu()
+{
+    static int gpu = 0;
+    return gpu;
+}
+
 int device()
 {
-    int count = 0;
-    HPX_TEST_EQ(cudaGetDeviceCount(&count), cudaSuccess);
-    return count == 0 ? 0 : static_cast<int>(hpx::get_locality_id()) % count;
+    return own_gpu();
 }
 
 // the GPU of the device memory at 'p', -1 if it isn't device memory
 int gpu_of(void const* p)
 {
     cudaPointerAttributes attributes{};
+#if defined(HPX_HAVE_HIP) && HIP_VERSION_MAJOR < 6
+    // HIP before ROCm 6 names the field memoryType
+    auto const& type = attributes.memoryType;
+#else
+    auto const& type = attributes.type;
+#endif
     if (cudaPointerGetAttributes(&attributes, p) != cudaSuccess ||
-        attributes.type != cudaMemoryTypeDevice)
+        type != cudaMemoryTypeDevice)
     {
         (void) cudaGetLastError();
         return -1;
@@ -110,8 +121,28 @@ cudaStream_t allocation_stream(int const gpu)
 }
 #endif
 
-// the node of this locality and its number of GPUs
-std::pair<std::string, int> node_info()
+#if !defined(HPX_HAVE_HIP)
+// a non-blocking stream for copies to 'gpu' (the GPU is current)
+cudaStream_t copy_stream(int const gpu)
+{
+    static std::mutex mtx;
+    static std::map<int, cudaStream_t> streams;
+
+    std::lock_guard<std::mutex> l(mtx);
+    cudaStream_t& s = streams[gpu];
+    if (s == nullptr)
+    {
+        HPX_TEST_EQ(
+            cudaStreamCreateWithFlags(&s, cudaStreamNonBlocking), cudaSuccess);
+    }
+    return s;
+}
+#endif
+
+// the node of this locality and the PCI bus ids of the GPUs it sees (in the
+// order of their numbers here): localities on a node may see the same GPUs or
+// different ones (CUDA_VISIBLE_DEVICES set per locality)
+std::pair<std::string, std::vector<std::string>> node_info()
 {
     std::string host = "unknown";
 #if !defined(HPX_WINDOWS)
@@ -124,18 +155,35 @@ std::pair<std::string, int> node_info()
     int count = 0;
     if (cudaGetDeviceCount(&count) != cudaSuccess)
     {
+        (void) cudaGetLastError();
         count = 0;
     }
-    return {host, count};
+    std::vector<std::string> gpus;
+    for (int gpu = 0; gpu != count; ++gpu)
+    {
+        char bus_id[64] = {};
+#if defined(HPX_HAVE_HIP)
+        // not among the names custom_gpu_api.hpp maps
+        HPX_TEST_EQ(
+            hipDeviceGetPCIBusId(bus_id, sizeof(bus_id), gpu), hipSuccess);
+#else
+        HPX_TEST_EQ(
+            cudaDeviceGetPCIBusId(bus_id, sizeof(bus_id), gpu), cudaSuccess);
+#endif
+        gpus.emplace_back(bus_id);
+    }
+    return {host, gpus};
 }
 HPX_PLAIN_ACTION(node_info)
 
-// results of remote calls are received on the GPU of the default target:
-// this locality's GPU (localities on one node must not share one)
-void use_own_gpu()
+// this locality's GPU, for its buffers and for the results of remote calls
+// (received on the GPU of the default target; localities on one node must
+// not share one)
+void use_own_gpu(int const gpu)
 {
+    own_gpu() = gpu;
     hpx::cuda::experimental::get_default_target() =
-        hpx::cuda::experimental::target(device());
+        hpx::cuda::experimental::target(gpu);
 }
 HPX_PLAIN_ACTION(use_own_gpu)
 
@@ -191,9 +239,24 @@ struct device_buffer
         device_buffer b(host.size(), gpu);
         if (!host.empty())
         {
+#if defined(HPX_HAVE_HIP)
+            // synchronous: waiting for a stream may wait for an RCCL kernel
+            // queued before it (see the module's documentation)
             cudaError_t const e = cudaMemcpy(
                 b.data.get(), host.data(), host.size(), cudaMemcpyHostToDevice);
             HPX_TEST_MSG(e == cudaSuccess, cudaGetErrorString(e));
+#else
+            // on a stream of its own, waited for: from pageable memory
+            // cudaMemcpy may return before the data is on the GPU, and the
+            // conduit reads it on its own stream (no device-wide wait, which
+            // would wait for the conduit's work too)
+            cudaStream_t const stream = copy_stream(gpu);
+            cudaError_t e = cudaMemcpyAsync(b.data.get(), host.data(),
+                host.size(), cudaMemcpyHostToDevice, stream);
+            HPX_TEST_MSG(e == cudaSuccess, cudaGetErrorString(e));
+            e = cudaStreamSynchronize(stream);
+            HPX_TEST_MSG(e == cudaSuccess, cudaGetErrorString(e));
+#endif
         }
         return b;
     }
@@ -451,40 +514,79 @@ int hpx_main()
     }
     HPX_TEST_EQ(conduit->name(), std::string("nccl"));
 
-    // a GPU for each locality; the GPUs of each locality for the test of
-    // several GPUs per locality (at most two each, the first ones of its
-    // share of the node's GPUs)
+    // a GPU for each locality, one no other locality on its node uses, and
+    // the GPUs of each locality for the test of several GPUs per locality
+    // (at most two each, the first ones of its share of the node's GPUs;
+    // only where the localities of a node see the same GPUs)
     std::map<hpx::id_type, int> first_gpus;
     int per_locality = 2;
     {
-        std::map<std::string, std::pair<int, int>> nodes;
+        std::map<std::string,
+            std::vector<std::pair<hpx::id_type, std::vector<std::string>>>>
+            nodes;
         for (hpx::id_type const& id : hpx::find_all_localities())
         {
-            auto const [host, count] = node_info_action()(id);
-            auto& [localities, gpus] = nodes[host];
-            first_gpus[id] = localities;    // its index on the node, for now
-            ++localities;
-            gpus = count;
+            auto [host, gpus] = node_info_action()(id);
+            nodes[host].emplace_back(id, HPX_MOVE(gpus));
         }
-        for (auto const& [host, n] : nodes)
+        for (auto const& [host, localities] : nodes)
         {
-            if (n.second < n.first)
+            bool const same_gpus = std::all_of(
+                localities.begin(), localities.end(), [&](auto const& l) {
+                    return l.second == localities.front().second;
+                });
+            int const n = static_cast<int>(localities.size());
+            if (same_gpus)
             {
-                std::cout << "skipped: node " << host << " has " << n.second
-                          << " GPUs for " << n.first << " localities\n";
-                return hpx::finalize();
+                int const count =
+                    static_cast<int>(localities.front().second.size());
+                if (count < n)
+                {
+                    std::cout << "skipped: node " << host << " has " << count
+                              << " GPUs for " << n << " localities\n";
+                    return hpx::finalize();
+                }
+                per_locality = (std::min) (per_locality, count / n);
+                for (int i = 0; i != n; ++i)
+                {
+                    first_gpus[localities[i].first] = i;    // for now
+                }
+                continue;
             }
-            per_locality = (std::min) (per_locality, n.second / n.first);
+
+            // each sees GPUs of its own: the first one not taken yet (by its
+            // PCI bus id); one GPU per locality
+            per_locality = 1;
+            std::vector<std::string> taken;
+            for (auto const& [id, gpus] : localities)
+            {
+                auto const free = std::find_if(
+                    gpus.begin(), gpus.end(), [&](std::string const& gpu) {
+                        return std::find(taken.begin(), taken.end(), gpu) ==
+                            taken.end();
+                    });
+                if (free == gpus.end())
+                {
+                    std::cout << "skipped: no GPU of its own for a locality "
+                                 "on node "
+                              << host << "\n";
+                    return hpx::finalize();
+                }
+                taken.push_back(*free);
+                first_gpus[id] = -1 - static_cast<int>(free - gpus.begin());
+            }
         }
+        // the shared GPUs' indices on their node into GPU numbers (the
+        // others are stored as -1 - number)
         for (auto& [id, first] : first_gpus)
         {
-            first *= per_locality;
+            first = first < 0 ? -1 - first : first * per_locality;
         }
     }
 
-    for (hpx::id_type const& id : hpx::find_all_localities())
+    for (auto const& [id, first] : first_gpus)
     {
-        use_own_gpu_action()(id);
+        use_own_gpu_action()(id, first);
     }
 
     std::vector<hpx::id_type> const remotes = hpx::find_remote_localities();
