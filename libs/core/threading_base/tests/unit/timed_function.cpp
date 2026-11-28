@@ -95,6 +95,19 @@ namespace {
         check_timed(hpx::timed_task(&add_one, std::chrono::hours(24 * 200)),
             task_size::large, (picoseconds::max) ().count());
 
+        // narrower representations: compared without wrapping the range of
+        // picoseconds into them
+        check_timed(hpx::timed_task(&add_one,
+                        std::chrono::duration<std::int32_t, std::pico>(250)),
+            task_size::nano, 250);
+        check_timed(
+            hpx::timed_task(&add_one,
+                std::chrono::duration<std::int32_t, std::milli>(1000000000)),
+            task_size::large, std::int64_t(1000000000) * 1000000000);
+        check_timed(hpx::timed_task(&add_one,
+                        std::chrono::duration<std::uint32_t, std::nano>(30)),
+            task_size::nano, 30000);
+
         // functions that say nothing finer than their size
         auto const lambda = [](int i) { return i; };
         HPX_TEST_EQ(get_task_time<decltype(lambda)>::call(lambda).count(),

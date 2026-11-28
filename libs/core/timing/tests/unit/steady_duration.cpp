@@ -68,12 +68,32 @@ namespace {
         HPX_TEST(long_wait.value() == std::chrono::hours(24 * 200));
         HPX_TEST(long_wait.as_picoseconds() == (picoseconds::max) ());
     }
+
+    void test_saturating_product()
+    {
+        using hpx::chrono::detail::saturating_product;
+
+        HPX_TEST_EQ(saturating_product(picoseconds(250), 4).count(),
+            std::int64_t(1000));
+        HPX_TEST_EQ(
+            saturating_product(picoseconds(250), 0).count(), std::int64_t(0));
+
+        // beyond the range of picoseconds, also for counts that don't fit
+        // in std::int64_t
+        HPX_TEST(saturating_product(picoseconds(2), std::uint64_t(1) << 62) ==
+            (picoseconds::max) ());
+        HPX_TEST(saturating_product(picoseconds(2), std::uint64_t(1) << 63) ==
+            (picoseconds::max) ());
+        HPX_TEST(saturating_product(picoseconds(1), ~std::uint64_t(0)) ==
+            (picoseconds::max) ());
+    }
 }    // namespace
 
 int main()
 {
     test_below_a_tick();
     test_long_durations();
+    test_saturating_product();
 
     return hpx::util::report_errors();
 }

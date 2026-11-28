@@ -148,14 +148,18 @@ namespace hpx::threads {
                     task_size::unknown, hpx::chrono::picoseconds(0)}};
         }
 
-        // compared in the given unit: converting a longer time to
-        // picoseconds would overflow
+        // compared in the given unit, with a representation that holds
+        // both: converting a longer time to picoseconds would overflow, and
+        // converting the largest number of picoseconds to a narrower
+        // representation (std::int32_t) would wrap
+        using wide = std::chrono::duration<
+            std::common_type_t<Rep, hpx::chrono::picoseconds::rep>, Period>;
         hpx::chrono::picoseconds ps = (hpx::chrono::picoseconds::max) ();
         if constexpr (std::ratio_less_v<Period, std::pico>)
         {
             ps = std::chrono::duration_cast<hpx::chrono::picoseconds>(time);
         }
-        else if (time <= std::chrono::duration_cast<input>(
+        else if (time <= std::chrono::duration_cast<wide>(
                              (hpx::chrono::picoseconds::max) ()))
         {
             ps = std::chrono::duration_cast<hpx::chrono::picoseconds>(time);
