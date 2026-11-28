@@ -20,14 +20,183 @@
 
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <cstddef>
 #include <mutex>
+#include <string>
+#include <thread>
 
 using mutex_type = hpx::spinlock;
 using condition_variable = hpx::lcos::local::detail::condition_variable;
 
 std::size_t stray_wakeups = 0;
 
+struct wait_observer
+{
+    void entered_suspend()
+    {
+        {
+            std::lock_guard<std::mutex> lock(mtx);
+            ++suspend_entries;
+        }
+        cv.notify_all();
+    }
+
+    void wait_returned()
+    {
+        {
+            std::lock_guard<std::mutex> lock(mtx);
+            returned = true;
+        }
+        cv.notify_all();
+    }
+
+    bool wait_for_second_suspend(std::chrono::seconds timeout)
+    {
+        std::unique_lock<std::mutex> lock(mtx);
+        cv.wait_for(
+            lock, timeout, [&] { return suspend_entries >= 2 || returned; });
+        return suspend_entries >= 2;
+    }
+
+    bool has_returned()
+    {
+        std::lock_guard<std::mutex> lock(mtx);
+        return returned;
+    }
+
+    std::mutex mtx;
+    std::condition_variable cv;
+    std::size_t suspend_entries = 0;
+    bool returned = false;
+};
+
+struct observing_agent final : hpx::execution_base::agent_base
+{
+    observing_agent(
+        hpx::execution_base::agent_ref delegate, wait_observer& observer)
+      : delegate_(delegate)
+      , observer_(observer)
+    {
+    }
+
+    std::string description() const override
+    {
+        return delegate_.ref().description();
+    }
+
+    hpx::execution_base::context_base const& context() const noexcept override
+    {
+        return delegate_.ref().context();
+    }
+
+    void yield(char const* desc) override
+    {
+        delegate_.ref().yield(desc);
+    }
+
+    bool yield_k(std::size_t k, char const* desc) override
+    {
+        return delegate_.ref().yield_k(k, desc);
+    }
+
+    void suspend(char const* desc) override
+    {
+        observer_.entered_suspend();
+        delegate_.ref().suspend(desc);
+    }
+
+    void resume(
+        hpx::threads::thread_priority priority, char const* desc) override
+    {
+        delegate_.ref().resume(priority, desc);
+    }
+
+    void abort(char const* desc) override
+    {
+        delegate_.ref().abort(desc);
+    }
+
+    hpx::threads::thread_restart_state sleep_for(
+        hpx::chrono::steady_duration const& duration,
+        hpx::move_only_function<bool()>&& wait_cond, char const* desc) override
+    {
+        return delegate_.ref().sleep_for(duration, HPX_MOVE(wait_cond), desc);
+    }
+
+    hpx::threads::thread_restart_state sleep_until(
+        hpx::chrono::steady_time_point const& deadline,
+        hpx::move_only_function<bool()>&& wait_cond, char const* desc) override
+    {
+        return delegate_.ref().sleep_until(deadline, HPX_MOVE(wait_cond), desc);
+    }
+
+private:
+    hpx::execution_base::agent_ref delegate_;
+    wait_observer& observer_;
+};
+
+// A wakeup left by an earlier wait must not complete a later untimed wait on
+// the same non-HPX thread. The later wait has to suspend again until its own
+// queue entry is notified.
+void test_std_thread_stale_wakeup()
+{
+    mutex_type mtx;
+    condition_variable cv;
+    wait_observer observer;
+    bool cancelled = false;
+
+    std::thread waiter([&] {
+        observing_agent agent(
+            hpx::execution_base::this_thread::agent(), observer);
+        hpx::execution_base::this_thread::reset_agent reset(agent);
+
+        // Simulate a late resume belonging to an earlier wait. This records a
+        // wakeup in the underlying default_agent before the condition-variable
+        // wait below has parked.
+        hpx::execution_base::this_thread::agent().resume();
+
+        auto result = hpx::threads::thread_restart_state::signaled;
+        bool waited = false;
+        {
+            std::unique_lock<mutex_type> lock(mtx);
+
+            // If the bounded observer wait expired before this thread queued
+            // its entry, do not enter a wait that can no longer be notified.
+            if (!cancelled)
+            {
+                waited = true;
+                result = cv.wait(lock);
+            }
+        }
+
+        if (waited)
+        {
+            HPX_TEST_EQ(result, hpx::threads::thread_restart_state::signaled);
+        }
+        observer.wait_returned();
+    });
+
+    // The first suspend consumes the stale wakeup. A correct wait sees that
+    // its own queue entry is still active and suspends a second time. The old
+    // single-attempt implementation returns timeout instead.
+    bool const suspended_again =
+        observer.wait_for_second_suspend(std::chrono::seconds(10));
+
+    HPX_TEST(suspended_again);
+    HPX_TEST(!observer.has_returned());
+
+    // If the waiter has not queued yet, cancellation prevents it from
+    // entering the wait later. Otherwise, notify its existing queue entry.
+    {
+        std::unique_lock<mutex_type> lock(mtx);
+        cancelled = !suspended_again;
+        cv.notify_one(HPX_MOVE(lock));
+    }
+
+    waiter.join();
+    HPX_TEST(observer.has_returned());
+}
 void test_round(bool notify_all)
 {
     mutex_type mtx;
@@ -183,6 +352,8 @@ void test_timed_round(bool notify_all)
 
 int hpx_main()
 {
+    test_std_thread_stale_wakeup();
+
     for (std::size_t i = 0; i != 200; ++i)
     {
         test_round(false);
