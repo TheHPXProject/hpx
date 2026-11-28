@@ -15,7 +15,9 @@ add_hpx_executable(
 )
 
 target_include_directories(hpx_tune PRIVATE ${PROJECT_BINARY_DIR})
-target_link_libraries(hpx_tune PRIVATE hpx_core)
+# the full library (the areas start the runtime with hpx/init.hpp), without
+# wrapping main (NOLIBS): the tool's own process doesn't start the runtime
+target_link_libraries(hpx_tune PRIVATE HPX::hpx)
 
 add_hpx_pseudo_dependencies(tools.tuners hpx_tune)
 
