@@ -224,6 +224,15 @@ void test_task_size_chunk_size()
         HPX_TEST_EQ(transformed, 10000);
     }
 
+    // a minimal chunk time beyond the range of picoseconds (about 106 days)
+    // is taken as the largest number of them
+    {
+        task_size_chunk_size const long_chunks(std::chrono::hours(24 * 200), 8);
+        HPX_TEST_EQ(long_chunks.processing_units_count(exec, 100ns, 1000), 1u);
+        HPX_TEST_EQ(
+            long_chunks.get_chunk_size(exec, 100ns, available, 1000), 1000u);
+    }
+
     // by default, a core needs 8 chunks of 2.5 us: 100 iterations of 100 ns
     // are one chunk on one core
     {

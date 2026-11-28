@@ -126,9 +126,7 @@ namespace hpx::execution::experimental {
             // count, which could overflow
             auto const [min_chunk_time, chunks_per_core] = get_values(exec);
             std::size_t const iterations_per_core = scaled_quotient(
-                std::chrono::duration_cast<hpx::chrono::picoseconds>(
-                    min_chunk_time)
-                    .count(),
+                to_picoseconds(min_chunk_time).count(),
                 static_cast<ps_rep>(chunks_per_core), per_iteration.count());
             std::size_t const cores =
                 iterations_per_core == 0 ? count : count / iterations_per_core;
@@ -163,9 +161,7 @@ namespace hpx::execution::experimental {
             // iterations that run for at least min_chunk_time, rounding up
             // (without adding to the times, which can be the largest number
             // of picoseconds)
-            auto const min_time =
-                std::chrono::duration_cast<hpx::chrono::picoseconds>(
-                    min_chunk_time);
+            auto const min_time = to_picoseconds(min_chunk_time);
             auto const min_iterations =
                 static_cast<std::size_t>(min_time / per_iteration) +
                 (min_time % per_iteration != hpx::chrono::picoseconds(0) ? 1 :
@@ -180,6 +176,14 @@ namespace hpx::execution::experimental {
         using duration = hpx::chrono::steady_clock::duration;
         using rep = duration::rep;
         using ps_rep = hpx::chrono::picoseconds::rep;
+
+        // the minimal run time of a chunk in picoseconds, saturated at the
+        // largest number of them (about 106 days)
+        static constexpr hpx::chrono::picoseconds to_picoseconds(
+            duration const& time) noexcept
+        {
+            return hpx::chrono::steady_duration(time).as_picoseconds();
+        }
 
         // total * factor / part, rounded down, for a total and a factor of at
         // least zero and a positive part, without forming total * factor,
