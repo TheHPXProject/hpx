@@ -15,6 +15,8 @@
 #include <hpx/modules/serialization.hpp>
 #include <hpx/modules/testing.hpp>
 
+#include <hpx/serialization/shared_ptr.hpp>
+
 #include <cstddef>
 #include <exception>
 #include <functional>
@@ -357,6 +359,85 @@ namespace {
     }
 }    // namespace
 
+namespace {
+
+    // An object loaded through a tracked pointer by a load() that registers
+    // the parcel's first step only after it: a later parcel referring to the
+    // object still waits for that step.
+    struct child
+    {
+        int value = 0;
+
+        template <typename Archive>
+        void serialize(Archive& ar, unsigned)
+        {
+            ar & value;
+        }
+    };
+
+    std::shared_ptr<controlled_step> parent_step;
+
+    struct parent
+    {
+        std::shared_ptr<child> c;
+
+        template <typename Archive>
+        void save(Archive& ar, unsigned) const
+        {
+            ar << c;
+        }
+
+        template <typename Archive>
+        void load(Archive& ar, unsigned)
+        {
+            // the child is loaded before the archive has any step
+            ar >> c;
+            ar.template get_extra_data<post_receive_actions>().add(
+                parent_step->action());
+        }
+
+        HPX_SERIALIZATION_SPLIT_MEMBER()
+    };
+
+    void test_tracked_object_before_first_step()
+    {
+        auto const shared = std::make_shared<child>(child{42});
+        std::vector<char> buffer;
+        {
+            hpx::serialization::output_archive oar(buffer);
+            parent const p{shared};
+            oar << p;
+            oar << shared;    // a back-reference to the parent's child
+        }
+
+        parent_step = std::make_shared<controlled_step>();
+        hpx::serialization::input_archive iar(buffer, buffer.size());
+
+        // the first parcel: the parent with its child
+        parent p;
+        iar >> p;
+        auto* actions = iar.try_get_extra_data<post_receive_actions>();
+        HPX_TEST(actions != nullptr);
+        if (actions == nullptr)
+        {
+            return;
+        }
+        auto const first = actions->take_parcel_steps();
+        HPX_TEST_EQ(first.actions.size(), std::size_t(1));
+
+        // the second parcel refers to the child: it waits for the first
+        // parcel's step
+        std::shared_ptr<child> c;
+        iar >> c;
+        HPX_TEST(c == p.c);
+        auto const second = actions->take_parcel_steps();
+        HPX_TEST(second.actions.empty());
+        HPX_TEST(second.completion != nullptr);
+        HPX_TEST(second.completion == first.completion);
+        parent_step.reset();
+    }
+}    // namespace
+
 int main()
 {
     test_no_steps();
@@ -368,6 +449,7 @@ int main()
     test_transfers_first();
     test_transfers_only();
     test_failed_transfer();
+    test_tracked_object_before_first_step();
 
     return hpx::util::report_errors();
 }
