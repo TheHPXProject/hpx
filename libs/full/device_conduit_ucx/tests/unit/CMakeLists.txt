@@ -45,6 +45,20 @@ if(HPX_WITH_DEVICE_CONDUIT_UCX
     tests.unit.modules.device_conduit_ucx.locality_removed
     locality_removed_worker
   )
+
+  # the workers' endpoints with peer error handling as those to other nodes (by
+  # default the conduit fails the sends to a removed worker itself)
+  add_hpx_unit_test(
+    "modules.device_conduit_ucx" locality_removed_same_node_peer
+    ${locality_removed_PARAMETERS}
+    --hpx:ini=hpx.parcel.conduit.ucx.same_node_error_handling=peer
+    EXECUTABLE locality_removed
+    PSEUDO_DEPS_NAME locality_removed
+  )
+  add_hpx_pseudo_dependencies(
+    tests.unit.modules.device_conduit_ucx.locality_removed_same_node_peer
+    locality_removed_worker
+  )
 endif()
 
 # host chunks through the conduit, over every parcelport the test runs with

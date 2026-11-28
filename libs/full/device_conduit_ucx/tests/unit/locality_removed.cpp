@@ -14,7 +14,10 @@
 //  - by killing the worker, then hpx::force_disconnect.
 //
 // The conduit is told (device_conduit::locality_removed) and closes its
-// endpoint to the locality. A failed device send to a removed locality must
+// endpoint to the locality. The workers run on the test's node: their
+// endpoints have no peer error handling unless
+// hpx.parcel.conduit.ucx.same_node_error_handling is 'peer' (the test runs
+// both ways), and the conduit fails the sends to a removed worker itself. A failed device send to a removed locality must
 // not stop the application, and the calls with device data in flight must
 // not report wrong data (HPX doesn't guarantee that they finish). Large host
 // data (hpx.parcel.conduit_host_chunks) goes through the conduit too.
@@ -278,6 +281,9 @@ int hpx_main(hpx::program_options::variables_map& vm)
         "--hpx:ini=hpx.parcel.conduit.ucx.error_handling=" +
             hpx::get_config_entry(
                 "hpx.parcel.conduit.ucx.error_handling", "peer"),
+        "--hpx:ini=hpx.parcel.conduit.ucx.same_node_error_handling=" +
+            hpx::get_config_entry(
+                "hpx.parcel.conduit.ucx.same_node_error_handling", "none"),
         "--hpx:ini=hpx.parcel.conduit_host_chunks=1",
         "--hpx:ini=hpx.parcel.conduit_host_threshold=65536",
         "--hpx:ini=hpx.parcel.bootstrap=tcp",

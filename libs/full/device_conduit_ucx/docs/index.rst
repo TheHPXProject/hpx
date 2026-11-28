@@ -60,6 +60,22 @@ endpoints at shutdown waits for the peers. Use ``none`` only where no locality
 leaves before the others (no localities connecting and disconnecting
 dynamically).
 
+UCX does not use shared memory for endpoints with peer error handling, so
+with ``peer`` the transfers between localities on the same node would go
+through the network adapter's loopback. The configuration entry
+``hpx.parcel.conduit.ucx.same_node_error_handling`` (or
+``HPX_PARCEL_CONDUIT_UCX_SAME_NODE_ERROR_HANDLING``) therefore sets the error
+handling of the endpoints to localities on the same node (as
+``hpx::parcelset::this_node_identity`` tells) where ``error_handling`` is
+``peer``, the same on all localities. With ``none`` (the default), UCX uses
+shared memory for them, and the conduit itself fails the sends in flight to a
+locality on the same node that was removed: right away if it was
+disconnected (``hpx::force_disconnect``), after a second if it left on its own
+and they have not finished by then. UCX may still read the data of such a send
+afterwards. A locality on the same node that fails without being removed
+still hangs the sends to it, and closing its endpoint at shutdown waits for it
+for a second. With ``peer``, these endpoints behave as all others.
+
 The conduit also moves host memory: with ``hpx.parcel.conduit_host_chunks=1``
 (the default; per parcelport: ``hpx.parcel.<parcelport>.conduit_host_chunks``,
 ``0`` turns it off) it moves the

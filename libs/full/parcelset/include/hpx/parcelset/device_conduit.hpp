@@ -51,7 +51,9 @@ namespace hpx::parcelset {
     ///    reused (the message's objects are kept alive until then), with
     ///    the error if the data couldn't be sent: the parcel has left
     ///    already, so the error is reported, and the send doesn't count in
-    ///    the statistics
+    ///    the statistics (or taking a further std::shared_ptr<void>, which
+    ///    keeps the message's objects alive: a conduit that fails a send
+    ///    while the network may still read its memory keeps it until then)
     ///  - void recv_impl(
     ///        serialization::detail::device_chunk_descriptor const& d,
     ///        void* p, std::size_t size,
@@ -250,57 +252,68 @@ namespace hpx::parcelset {
                 b.in_flight_.fetch_add(1, std::memory_order_relaxed);
                 try
                 {
-                    conduit_.send_impl(locality_id_, d, p, size,
-                        [&b, locality_id = locality_id_, size, once,
-                            keep_alive = keep_alive_](
-                            std::exception_ptr error) mutable {
-                            if (once->exchange(true))
-                            {
-                                return;
-                            }
-                            auto const finished =
-                                hpx::experimental::scope_exit([&b] {
-                                    b.in_flight_.fetch_sub(
-                                        1, std::memory_order_release);
-                                });
+                    auto sent = [&b, locality_id = locality_id_, size, once,
+                                    keep_alive = keep_alive_](
+                                    std::exception_ptr error) mutable {
+                        if (once->exchange(true))
+                        {
+                            return;
+                        }
+                        auto const finished =
+                            hpx::experimental::scope_exit([&b] {
+                                b.in_flight_.fetch_sub(
+                                    1, std::memory_order_release);
+                            });
 
-                            // the parcel referring to the data has left
-                            keep_alive.reset();
-                            if (error)
+                        // the parcel referring to the data has left
+                        keep_alive.reset();
+                        if (error)
+                        {
+                            if (b.draining_.load(std::memory_order_acquire))
                             {
-                                if (b.draining_.load(std::memory_order_acquire))
-                                {
-                                    LPT_(warning).format(
-                                        "device conduit: a send failed during "
-                                        "shutdown: {}",
-                                        hpx::get_error_what(error));
-                                }
-                                else if (parcelset::locality_was_disconnected(
-                                             locality_id) ||
-                                    hpx::tolerate_node_faults())
-                                {
-                                    // like parcels to it (the destination
-                                    // has left, was disconnected, or failed
-                                    // while node faults are tolerated)
-                                    LPT_(warning).format(
-                                        "device conduit: a send to locality "
-                                        "{} failed: {}",
-                                        locality_id,
-                                        hpx::get_error_what(error));
-                                }
-                                else
-                                {
-                                    hpx::report_error(HPX_MOVE(error));
-                                }
+                                LPT_(warning).format(
+                                    "device conduit: a send failed during "
+                                    "shutdown: {}",
+                                    hpx::get_error_what(error));
+                            }
+                            else if (parcelset::locality_was_disconnected(
+                                         locality_id) ||
+                                hpx::tolerate_node_faults())
+                            {
+                                // like parcels to it (the destination
+                                // has left, was disconnected, or failed
+                                // while node faults are tolerated)
+                                LPT_(warning).format(
+                                    "device conduit: a send to locality "
+                                    "{} failed: {}",
+                                    locality_id, hpx::get_error_what(error));
                             }
                             else
                             {
-                                b.chunks_sent_.fetch_add(
-                                    1, std::memory_order_relaxed);
-                                b.bytes_sent_.fetch_add(
-                                    size, std::memory_order_relaxed);
+                                hpx::report_error(HPX_MOVE(error));
                             }
-                        });
+                        }
+                        else
+                        {
+                            b.chunks_sent_.fetch_add(
+                                1, std::memory_order_relaxed);
+                            b.bytes_sent_.fetch_add(
+                                size, std::memory_order_relaxed);
+                        }
+                    };
+                    if constexpr (requires {
+                                      conduit_.send_impl(locality_id_, d, p,
+                                          size, HPX_MOVE(sent), keep_alive_);
+                                  })
+                    {
+                        conduit_.send_impl(locality_id_, d, p, size,
+                            HPX_MOVE(sent), keep_alive_);
+                    }
+                    else
+                    {
+                        conduit_.send_impl(
+                            locality_id_, d, p, size, HPX_MOVE(sent));
+                    }
                 }
                 catch (...)
                 {
