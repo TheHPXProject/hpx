@@ -9,8 +9,8 @@
 // weeded out without recursing per character, and what comes before a '#'
 // is kept.
 
-#include <hpx/init.hpp>
 #include <hpx/modules/ini.hpp>
+#include <hpx/modules/init_runtime_local.hpp>
 #include <hpx/modules/testing.hpp>
 
 #include <cstddef>
