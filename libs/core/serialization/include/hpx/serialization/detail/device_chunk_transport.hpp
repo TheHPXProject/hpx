@@ -19,11 +19,13 @@ namespace hpx::serialization::detail {
 
     // What an archive stores in place of a chunk of device memory that a
     // transport moves (see device_chunk_transport); the transport defines
-    // the meaning of the two values (e.g. the sending locality and a tag).
+    // the meaning of the values (e.g. the sending locality and a tag, and
+    // in 'extra' what else the receiver needs, such as the sending GPU).
     HPX_CXX_CORE_EXPORT struct device_chunk_descriptor
     {
         std::uint64_t source = 0;
         std::uint64_t tag = 0;
+        std::uint64_t extra = 0;
     };
 
     // Moves the data of zero-copy chunks of device memory between the two

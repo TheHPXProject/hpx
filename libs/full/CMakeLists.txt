@@ -23,6 +23,7 @@ set(_hpx_full_modules
     components
     components_base
     compute
+    device_conduit_nccl
     device_conduit_ucx
     distribution_policies
     execution_distributed
