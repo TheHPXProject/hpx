@@ -5,7 +5,7 @@
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 # the parcel layer needs networking
-if(NOT HPX_WITH_DISTRIBUTED_RUNTIME OR NOT HPX_WITH_NETWORKING)
+if(NOT HPX_WITH_NETWORKING)
   return()
 endif()
 

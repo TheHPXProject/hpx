@@ -25,12 +25,12 @@ add_hpx_executable(
 )
 
 target_include_directories(hpx_tune PRIVATE ${PROJECT_BINARY_DIR})
-target_link_libraries(hpx_tune PRIVATE hpx_core)
-# the parcel area runs children of two localities (the full runtime, without
-# wrapping main: the tool's own process doesn't start the runtime)
-if(HPX_WITH_DISTRIBUTED_RUNTIME AND HPX_WITH_NETWORKING)
+# the full library (the areas start the runtime with hpx/init.hpp, the parcel
+# area runs children of two localities), without wrapping main (NOLIBS): the
+# tool's own process doesn't start the runtime
+target_link_libraries(hpx_tune PRIVATE HPX::hpx)
+if(HPX_WITH_NETWORKING)
   target_sources(hpx_tune PRIVATE parcel_area.cpp parcel_area.hpp)
-  target_link_libraries(hpx_tune PRIVATE HPX::hpx)
   # where hpxrun.py is: with multi-configuration generators the tool is in
   # <build>/<config>/bin, hpxrun.py in <build>/bin
   target_compile_definitions(

@@ -6,7 +6,7 @@
 
 # The smoke test of the parcel area: runs the tool for TCP on this node (its two
 # localities started by hpxrun.py), tests.unit.tools.tuners.hpx_tune_parcel
-if(HPX_WITH_DISTRIBUTED_RUNTIME AND HPX_WITH_NETWORKING)
+if(HPX_WITH_NETWORKING)
   add_hpx_executable(
     hpx_tune_parcel_test INTERNAL_FLAGS
     SOURCES parcel_area.cpp
