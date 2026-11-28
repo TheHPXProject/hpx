@@ -12,6 +12,7 @@ endif()
 
 set(tests
     device_conduit
+    fast_path_fallback
     optimistic_archive
     put_parcels
     receive_device
@@ -27,6 +28,7 @@ if(HPX_WITH_THRUST AND (HPX_WITH_CUDA OR HPX_WITH_HIP))
 endif()
 
 set(device_conduit_PARAMETERS LOCALITIES 2)
+set(fast_path_fallback_PARAMETERS LOCALITIES 2)
 set(put_parcels_PARAMETERS LOCALITIES 2)
 set(receive_device_PARAMETERS LOCALITIES 2)
 set(set_parcel_write_handler_PARAMETERS LOCALITIES 2)
@@ -121,3 +123,26 @@ if(HPX_WITH_DEVICE_CONDUIT_UCX)
     ARGS --hpx:ini=hpx.parcel.device_conduit=ucx
   )
 endif()
+
+# run fast_path_fallback with the fast path on (only parcelports that send
+# immediately use it)
+add_hpx_unit_test(
+  "modules.parcelset" fast_path_fallback_enabled
+  EXECUTABLE fast_path_fallback
+  PSEUDO_DEPS_NAME fast_path_fallback ${fast_path_fallback_PARAMETERS}
+  PARCELPORTS mpi lci lcw
+  RUN_SERIAL
+  ARGS --hpx:ini=hpx.parcel.fast_path!=1 --hpx:ini=hpx.parcel.mpi.sendimm!=1
+       --fast-path
+)
+
+# run device_conduit with the fast path on: its parcels must still move their
+# device memory through the conduit
+add_hpx_unit_test(
+  "modules.parcelset" device_conduit_fast_path
+  EXECUTABLE device_conduit
+  PSEUDO_DEPS_NAME device_conduit ${device_conduit_PARAMETERS}
+  PARCELPORTS mpi lci lcw
+  RUN_SERIAL
+  ARGS --hpx:ini=hpx.parcel.fast_path!=1 --hpx:ini=hpx.parcel.mpi.sendimm!=1
+)

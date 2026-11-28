@@ -1747,6 +1747,7 @@ namespace hpx::parcelset {
                               "$[hpx.parcel.zero_copy_optimization]}");
         ini_defs.emplace_back(
             "async_serialization = ${HPX_PARCEL_ASYNC_SERIALIZATION:1}");
+        ini_defs.emplace_back("fast_path = ${HPX_PARCEL_FAST_PATH:0}");
 #if defined(HPX_HAVE_PARCEL_COALESCING)
         ini_defs.emplace_back(
             "message_handlers = ${HPX_PARCEL_MESSAGE_HANDLERS:1}");
