@@ -833,12 +833,15 @@ default, each byte read and written, so copying a double takes half a
 nanosecond): copying and moving trivially copyable elements, ``fill``,
 ``iota``, ``swap_ranges`` and ``reverse`` on builtin elements, and the builtin
 arithmetic function objects (``std::plus``, ``std::minus``,
-``std::multiplies``, ``std::negate`` and the bitwise ones) called with builtin
-elements, counting the elements an algorithm reads and, for ``transform`` and
-``adjacent_difference``, the element it writes: adding two doubles into a
-third takes three quarters of a nanosecond. Consecutive loops over the same
-data are then sized alike. Comparisons, logical operations, ``std::divides``
-and ``std::modulus`` stay nano.
+``std::multiplies``, ``std::negate`` and the bitwise ones) and comparisons
+(``std::less``, ``std::equal_to`` and the like, also those of ``std::ranges``
+and ``hpx::ranges``) called with builtin elements, counting the elements an
+algorithm reads and, for ``transform``, ``adjacent_difference`` and
+``merge``, the element it writes: adding two doubles into a third takes three
+quarters of a nanosecond, comparing two chars an eighth of the time of
+comparing two doubles. ``minmax_element`` compares 1.5 times per element and
+gets 1.5 times the bytes. Consecutive loops over the same data are then sized
+alike. Logical operations, ``std::divides`` and ``std::modulus`` stay nano.
 
 By default, ``task_size_chunk_size`` makes chunks of at least 2.5
 microseconds and gives each core 8 of them. Values given to its
