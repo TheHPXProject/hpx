@@ -24,6 +24,12 @@ using task_size_checks::check_only_size;
 // 100 iterations of a nano comparison is small and 100 small chunks make a
 // medium task.
 //
+// A builtin comparison on builtin elements (the default ones, std::less<> and
+// the like) has the run time of the bytes the iteration reads instead (see
+// hpx::traits::is_memory_bound_builtin_operation): an int is 4 bytes, 0.125 ns
+// at the default 16 bytes per nanosecond (two ints 0.25 ns), so 10000
+// iterations make a small task.
+//
 // The sizes are counted when the scheduler creates a thread (see
 // task_size_checks.hpp). The task policy makes the algorithms asynchronous,
 // they return a future: with a synchronous policy, the executor would run the
@@ -40,12 +46,12 @@ void test_multi_call_sizes()
 
     // min_element, max_element, minmax_element compare two elements
     check_only_size([&] { hpx::min_element(by_100, v.begin(), v.end()).get(); },
-        task_size::medium);
+        task_size::small_);
     check_only_size([&] { hpx::max_element(by_100, v.begin(), v.end()).get(); },
-        task_size::medium);
+        task_size::small_);
     check_only_size(
         [&] { hpx::minmax_element(by_100, v.begin(), v.end()).get(); },
-        task_size::medium);
+        task_size::small_);
 
     // lexicographical_compare compares two elements in both orders
     check_only_size(
@@ -54,7 +60,7 @@ void test_multi_call_sizes()
                 by_100, v.begin(), v.end(), v.begin(), v.end())
                 .get();
         },
-        task_size::medium);
+        task_size::small_);
 
     // find_end and search: most positions don't match the first element of
     // the sequence
@@ -64,14 +70,14 @@ void test_multi_call_sizes()
                 by_100, v.begin(), v.end(), needle.begin(), needle.end())
                 .get();
         },
-        task_size::medium);
+        task_size::small_);
     check_only_size(
         [&] {
             hpx::search(
                 by_100, v.begin(), v.end(), needle.begin(), needle.end())
                 .get();
         },
-        task_size::medium);
+        task_size::small_);
 
     // find_first_of compares an element with each element of the second
     // range, search_n with count elements: with 100 of them an iteration is
