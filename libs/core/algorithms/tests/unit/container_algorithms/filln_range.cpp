@@ -90,10 +90,62 @@ void test_fill_n()
     test_fill_n_async(par(task), IteratorTag());
 }
 
+// With a policy the value may be list-initialized, as for count and contains.
+void test_fill_n_list_initialized()
+{
+    using namespace hpx::execution;
+
+    auto expect_filled = [](std::vector<int> const& c, std::size_t n) {
+        HPX_TEST_EQ(c.size(), std::size_t(10));
+        for (std::size_t i = 0; i < c.size(); ++i)
+            HPX_TEST_EQ(c[i], i < n ? 7 : 0);
+    };
+
+    {
+        std::vector<int> c(10, 0);
+        auto it = hpx::ranges::fill_n(seq, c.begin(), 4, {7});
+        HPX_TEST(it == c.begin() + 4);
+        expect_filled(c, 4);
+    }
+    {
+        std::vector<int> c(10, 0);
+        auto it = hpx::ranges::fill_n(par, c.begin(), 10, {7});
+        HPX_TEST(it == c.end());
+        expect_filled(c, 10);
+    }
+    {
+        std::vector<int> c(10, 0);
+        auto f = hpx::ranges::fill_n(par(task), c.begin(), 6, {7});
+        HPX_TEST(f.get() == c.begin() + 6);
+        expect_filled(c, 6);
+    }
+
+    // the overloads that take a range
+    {
+        std::vector<int> c(10, 0);
+        auto it = hpx::ranges::fill_n(seq, c, {7});
+        HPX_TEST(it == c.end());
+        expect_filled(c, 10);
+    }
+    {
+        std::vector<int> c(10, 0);
+        auto it = hpx::ranges::fill_n(par, c, {7});
+        HPX_TEST(it == c.end());
+        expect_filled(c, 10);
+    }
+    {
+        std::vector<int> c(10, 0);
+        auto f = hpx::ranges::fill_n(par(task), c, {7});
+        HPX_TEST(f.get() == c.end());
+        expect_filled(c, 10);
+    }
+}
+
 void fill_test()
 {
     test_fill_n<std::random_access_iterator_tag>();
     test_fill_n<std::forward_iterator_tag>();
+    test_fill_n_list_initialized();
 }
 
 ////////////////////////////////////////////////////////////////////////////

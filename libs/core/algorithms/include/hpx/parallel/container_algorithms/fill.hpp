@@ -380,6 +380,41 @@ namespace hpx::ranges {
             return hpx::parallel::detail::fill<Iter>().call(
                 hpx::execution::seq, first, last, value);
         }
+
+        using base_type = hpx::detail::tag_dispatch<fill_t,
+            hpx::detail::tag_parallel_algorithm<fill_t>>;
+        using base_type::operator();
+
+        /// \brief Supports list-initialized values in policy iterator calls.
+        template <typename ExPolicy, typename Iter, typename Sent,
+            typename T = std::iter_value_t<Iter>>
+            requires(hpx::is_execution_policy_v<ExPolicy> &&
+                std::forward_iterator<Iter> && std::sentinel_for<Sent, Iter> &&
+                requires(ExPolicy&& policy, Iter first, Sent last, T&& value) {
+                    invoke_default(HPX_FORWARD(ExPolicy, policy), first, last,
+                        HPX_FORWARD(T, value));
+                })
+        decltype(auto) operator()(
+            ExPolicy&& policy, Iter first, Sent last, T&& value) const
+        {
+            return base_type::operator()(HPX_FORWARD(ExPolicy, policy), first,
+                last, HPX_FORWARD(T, value));
+        }
+
+        /// \brief Supports list-initialized values in policy range calls.
+        template <typename ExPolicy, typename Rng,
+            typename T = std::iter_value_t<std::ranges::iterator_t<Rng>>>
+            requires(hpx::is_execution_policy_v<ExPolicy> &&
+                std::ranges::forward_range<Rng> &&
+                requires(ExPolicy&& policy, Rng&& rng, T&& value) {
+                    invoke_default(HPX_FORWARD(ExPolicy, policy),
+                        HPX_FORWARD(Rng, rng), HPX_FORWARD(T, value));
+                })
+        decltype(auto) operator()(ExPolicy&& policy, Rng&& rng, T&& value) const
+        {
+            return base_type::operator()(HPX_FORWARD(ExPolicy, policy),
+                HPX_FORWARD(Rng, rng), HPX_FORWARD(T, value));
+        }
     } fill{};
 
     ///////////////////////////////////////////////////////////////////////////
@@ -491,6 +526,42 @@ namespace hpx::ranges {
             return hpx::parallel::detail::fill_n<FwdIter>().call(
                 hpx::execution::seq, first, static_cast<std::size_t>(count),
                 value);
+        }
+
+        using base_type = hpx::detail::tag_dispatch<fill_n_t,
+            hpx::detail::tag_parallel_algorithm<fill_n_t>>;
+        using base_type::operator();
+
+        /// \brief Supports list-initialized values in policy iterator calls.
+        template <typename ExPolicy, typename FwdIter, typename Size,
+            typename T = std::iter_value_t<FwdIter>>
+            requires(hpx::is_execution_policy_v<ExPolicy> &&
+                std::forward_iterator<FwdIter> && std::is_integral_v<Size> &&
+                requires(
+                    ExPolicy&& policy, FwdIter first, Size count, T&& value) {
+                    invoke_default(HPX_FORWARD(ExPolicy, policy), first, count,
+                        HPX_FORWARD(T, value));
+                })
+        decltype(auto) operator()(
+            ExPolicy&& policy, FwdIter first, Size count, T&& value) const
+        {
+            return base_type::operator()(HPX_FORWARD(ExPolicy, policy), first,
+                count, HPX_FORWARD(T, value));
+        }
+
+        /// \brief Supports list-initialized values in policy range calls.
+        template <typename ExPolicy, typename Rng,
+            typename T = std::iter_value_t<std::ranges::iterator_t<Rng>>>
+            requires(hpx::is_execution_policy_v<ExPolicy> &&
+                std::ranges::forward_range<Rng> &&
+                requires(ExPolicy&& policy, Rng&& rng, T&& value) {
+                    invoke_default(HPX_FORWARD(ExPolicy, policy),
+                        HPX_FORWARD(Rng, rng), HPX_FORWARD(T, value));
+                })
+        decltype(auto) operator()(ExPolicy&& policy, Rng&& rng, T&& value) const
+        {
+            return base_type::operator()(HPX_FORWARD(ExPolicy, policy),
+                HPX_FORWARD(Rng, rng), HPX_FORWARD(T, value));
         }
     } fill_n{};
 }    // namespace hpx::ranges
