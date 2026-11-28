@@ -44,6 +44,7 @@
 #define cudaEventRecord hipEventRecord
 #define cudaEventSynchronize hipEventSynchronize
 #define cudaFree hipFree
+#define cudaFreeAsync hipFreeAsync
 #define cudaFreeHost hipHostFree
 #define cudaGetDevice hipGetDevice
 #define cudaGetDeviceCount hipGetDeviceCount
@@ -54,6 +55,7 @@
 #define cudaLaunchDevice hipLaunchDevice
 #define cudaLaunchKernel hipLaunchKernel
 #define cudaMalloc hipMalloc
+#define cudaMallocAsync hipMallocAsync
 #define cudaMallocHost hipHostMalloc
 #define cudaMemcpy hipMemcpy
 #define cudaMemcpyAsync hipMemcpyAsync

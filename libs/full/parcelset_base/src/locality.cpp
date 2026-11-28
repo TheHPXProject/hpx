@@ -15,19 +15,88 @@
 #include <hpx/parcelset_base/locality.hpp>
 #include <hpx/parcelset_base/locality_interface.hpp>
 
+#include <cstddef>
+#include <cstdint>
+#include <fstream>
 #include <string>
+#include <string_view>
 #include <utility>
+
+#if defined(HPX_WINDOWS)
+#include <windows.h>
+#else
+#include <unistd.h>
+#endif
 
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx::parcelset {
 
+    namespace {
+
+        // FNV-1a: the same value in every process, unlike std::hash
+        std::uint64_t fnv1a(std::uint64_t h, std::string_view const text)
+        {
+            for (char const c : text)
+            {
+                h ^= static_cast<unsigned char>(c);
+                h *= 0x100000001b3ULL;
+            }
+            return h;
+        }
+
+        std::string host_name()
+        {
+#if defined(HPX_WINDOWS)
+            char name[MAX_COMPUTERNAME_LENGTH + 1] = {};
+            DWORD size = sizeof(name);
+            if (GetComputerNameA(name, &size))
+                return std::string(name, size);
+            return {};
+#else
+            char name[256] = {};
+            if (gethostname(name, sizeof(name) - 1) == 0)
+                return name;
+            return {};
+#endif
+        }
+
+        // the kernel's boot id tells virtual machines with the same host
+        // name apart; all processes on one kernel share it, also those in
+        // different containers (which then count as one node if they have
+        // the same host name, as they can share memory)
+        std::string boot_id()
+        {
+#if defined(HPX_WINDOWS)
+            return {};
+#else
+            std::ifstream in("/proc/sys/kernel/random/boot_id");
+            std::string id;
+            std::getline(in, id);
+            return id;
+#endif
+        }
+    }    // namespace
+
+    std::uint64_t this_node_identity()
+    {
+        static std::uint64_t const identity = [] {
+            std::uint64_t h = fnv1a(0xcbf29ce484222325ULL, host_name());
+            h = fnv1a(h, "/");
+            h = fnv1a(h, boot_id());
+            return h == 0 ? 1 : h;
+        }();
+        return identity;
+    }
+
     locality::locality(locality const& other)
       : impl_(other.impl_ ? other.impl_->clone() : nullptr)
+      , capabilities_(other.capabilities_)
     {
     }
 
     locality::locality(locality&& other) noexcept
       : impl_(other.impl_ ? other.impl_->move() : nullptr)
+      , capabilities_(HPX_MOVE(other.capabilities_))
     {
     }
 
@@ -43,6 +112,7 @@ namespace hpx::parcelset {
             {
                 impl_.reset();
             }
+            capabilities_ = other.capabilities_;
         }
         return *this;
     }
@@ -59,6 +129,7 @@ namespace hpx::parcelset {
             {
                 impl_.reset();
             }
+            capabilities_ = HPX_MOVE(other.capabilities_);
         }
         return *this;
     }
@@ -117,6 +188,7 @@ namespace hpx::parcelset {
         }
 
         impl_->save(ar);
+        ar << capabilities_;
 #else
         HPX_THROW_EXCEPTION(hpx::error::invalid_status, "locality::save",
             "this shouldn't be called if networking is disabled");
@@ -137,6 +209,7 @@ namespace hpx::parcelset {
         impl_ = HPX_MOVE(create_locality(t).impl_);
         impl_->load(ar);
         HPX_ASSERT(impl_->valid());
+        ar >> capabilities_;
 #else
         HPX_THROW_EXCEPTION(hpx::error::invalid_status, "locality::load",
             "this shouldn't be called if networking is disabled");

@@ -10,6 +10,7 @@
 #if defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_DEVICE_CONDUIT_UCX)
 #include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/async_distributed.hpp>
+#include <hpx/modules/async_local.hpp>
 #include <hpx/modules/config_registry.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/format.hpp>
@@ -31,13 +32,16 @@
 #include <cuda_runtime_api.h>
 #endif
 
+#include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <exception>
 #include <functional>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <utility>
@@ -62,6 +66,23 @@ namespace hpx::parcelset { namespace {
 }}    // namespace hpx::parcelset
 
 namespace hpx::parcelset::device_conduits {
+
+    namespace detail {
+
+        // the completion of a send (the 'user_data' of the UCX request),
+        // and for a tracked send (see ucx_conduit::tracked_sends_) its
+        // endpoint
+        struct send_state
+        {
+            hpx::move_only_function<void(std::exception_ptr)> sent;
+            ucx_conduit* conduit = nullptr;
+            std::uint32_t locality_id = 0;
+            std::uint64_t generation = 0;
+            bool tracked = false;
+            // the data of a tracked send, kept until UCX has finished it
+            std::shared_ptr<void> keep_alive;
+        };
+    }    // namespace detail
 
     namespace {
 
@@ -124,14 +145,7 @@ namespace hpx::parcelset::device_conduits {
                         std::to_string(d.source)));
         }
 
-        // the completion of a send or receive (the 'user_data' of the UCX
-        // request)
-        struct send_state
-        {
-            hpx::move_only_function<void(std::exception_ptr)> sent;
-            ucx_conduit* conduit = nullptr;
-        };
-
+        // the completion of a receive (the 'user_data' of the UCX request)
         struct recv_state
         {
             std::function<void(std::exception_ptr)> done;
@@ -143,11 +157,20 @@ namespace hpx::parcelset::device_conduits {
         {
             // done with UCX before the completion: once all sends have
             // completed, the conduit may be destroyed
-            auto* state = static_cast<send_state*>(user_data);
-            auto sent = HPX_MOVE(state->sent);
+            auto* state = static_cast<detail::send_state*>(user_data);
             ucx_conduit* conduit = state->conduit;
-            delete state;
             ucp_request_free(request);
+            if (state->tracked && !conduit->untrack_send(state))
+            {
+                // the conduit has failed it already (its locality was
+                // removed): release its data, outside of UCX (as the
+                // completion would)
+                conduit->defer([keep_alive = HPX_MOVE(state->keep_alive)] {});
+                delete state;
+                return;
+            }
+            auto sent = HPX_MOVE(state->sent);
+            delete state;
 
             // a failed send is reported (its parcel has left already); run
             // outside of UCX (see ucx_conduit::defer)
@@ -242,10 +265,30 @@ namespace hpx::parcelset::device_conduits {
         }
     }    // namespace
 
-    // the worker address of this locality (for the endpoints of the others)
-    std::vector<char> ucx_conduit_worker_address()
+    namespace detail {
+
+        // what the endpoints of the others to this locality are created
+        // from: the node it runs on (this_node_identity) and the address of
+        // its worker
+        struct ucx_worker_info
+        {
+            std::uint64_t node = 0;
+            std::vector<char> address;
+
+            template <typename Archive>
+            void serialize(Archive& ar, unsigned)
+            {
+                // clang-format off
+                ar & node & address;
+                // clang-format on
+            }
+        };
+    }    // namespace detail
+
+    // the worker of this locality (for the endpoints of the others)
+    detail::ucx_worker_info ucx_conduit_worker_address()
     {
-        return this_conduit()->worker_address();
+        return {this_node_identity(), this_conduit()->worker_address()};
     }
 }    // namespace hpx::parcelset::device_conduits
 
@@ -270,6 +313,13 @@ namespace hpx::parcelset::device_conduits {
         // leaving with transfers in flight may hang the others
         ini.emplace_back(
             "error_handling = ${HPX_PARCEL_CONDUIT_UCX_ERROR_HANDLING:peer}");
+        // with error_handling 'peer', the error handling of the endpoints to
+        // localities on the same node: UCX doesn't use shared memory for
+        // endpoints with peer error handling, 'none' lets it (the conduit
+        // fails the sends to a removed locality itself)
+        ini.emplace_back("same_node_error_handling = "
+                         "${HPX_PARCEL_CONDUIT_UCX_SAME_NODE_ERROR_HANDLING:"
+                         "none}");
     }
 
     ucx_conduit::ucx_conduit(util::runtime_configuration const& cfg)
@@ -289,6 +339,19 @@ namespace hpx::parcelset::device_conduits {
             HPX_THROW_EXCEPTION(hpx::error::bad_parameter, conduit_ctor,
                 "hpx.parcel.conduit.ucx.error_handling must be 'peer' or "
                 "'none', not '{}'",
+                error_handling);
+        }
+        if (std::string const error_handling = cfg.get_entry(
+                "hpx.parcel.conduit.ucx.same_node_error_handling", "none");
+            error_handling == "peer")
+        {
+            same_node_peer_errors_ = true;
+        }
+        else if (error_handling != "none")
+        {
+            HPX_THROW_EXCEPTION(hpx::error::bad_parameter, conduit_ctor,
+                "hpx.parcel.conduit.ucx.same_node_error_handling must be "
+                "'peer' or 'none', not '{}'",
                 error_handling);
         }
 
@@ -372,22 +435,27 @@ namespace hpx::parcelset::device_conduits {
         // peers may have shut down already: close the endpoints without
         // flushing them (UCX allows this only for endpoints created with
         // UCP_ERR_HANDLING_MODE_PEER). Without peer error handling, flush
-        // them: this waits for the peers to acknowledge what is in flight.
-        // (Endpoints of removed localities still closing are in closing_.)
+        // them: this waits for the peers to acknowledge the close, for at
+        // most a second (a peer that is gone doesn't). (Endpoints of removed
+        // localities still closing are in closing_.)
         for (auto& [locality_id, entry] : endpoints_)
         {
             auto const& ep = entry.ep;
             HPX_ASSERT(ep.is_ready());
             if (ep.is_ready() && !ep.has_exception())
             {
-                close_endpoint(ep.get(), locality_id, peer_errors_);
+                connection const& c = ep.get();
+                close_endpoint(c.ep, locality_id, c.peer_errors);
             }
         }
+        auto const deadline =
+            std::chrono::steady_clock::now() + std::chrono::seconds(1);
         for (ucs_status_ptr_t const request : closing_)
         {
             ucs_status_t status;
-            while (
-                (status = ucp_request_check_status(request)) == UCS_INPROGRESS)
+            while ((status = ucp_request_check_status(request)) ==
+                    UCS_INPROGRESS &&
+                std::chrono::steady_clock::now() < deadline)
             {
                 ucp_worker_progress(worker_);
             }
@@ -395,8 +463,10 @@ namespace hpx::parcelset::device_conduits {
             {
                 LPT_(warning).format(
                     "ucx_conduit: closing an endpoint failed: {}",
-                    ucs_status_string(status));
+                    status == UCS_INPROGRESS ? "the peer didn't respond" :
+                                               ucs_status_string(status));
             }
+            // (released by UCX once done, the worker is destroyed below)
             ucp_request_free(request);
         }
         closing_.clear();
@@ -405,8 +475,158 @@ namespace hpx::parcelset::device_conduits {
         // what closing the endpoints has completed
         run_completions();
 
+        // (the sends the conduit has failed and UCX hasn't finished may
+        // complete when the worker is destroyed, releasing their data;
+        // otherwise their data isn't released)
         ucp_worker_destroy(worker_);
+        run_completions();
         ucp_cleanup(context_);
+    }
+
+    ///////////////////////////////////////////////////////////////////////////
+    namespace {
+
+        // the flush checking that the conduit reaches a locality
+        struct host_check_state
+        {
+            ucx_conduit* conduit = nullptr;
+            std::uint32_t locality_id = 0;
+        };
+
+        void host_check_callback(
+            void* request, ucs_status_t const status, void* user_data)
+        {
+            auto* state = static_cast<host_check_state*>(user_data);
+            ucx_conduit* conduit = state->conduit;
+            std::uint32_t const locality_id = state->locality_id;
+            delete state;
+            ucp_request_free(request);
+
+            conduit->defer([conduit, locality_id, status]() {
+                if (status != UCS_OK)
+                {
+                    LPT_(warning).format(
+                        "ucx_conduit: host chunks to locality {} go through "
+                        "the parcelport: the conduit doesn't reach it ({})",
+                        locality_id, ucs_status_string(status));
+                }
+                conduit->host_check_done(locality_id, status == UCS_OK);
+            });
+        }
+    }    // namespace
+
+    bool ucx_conduit::host_chunks_ready_impl(
+        std::uint32_t const locality_id) noexcept
+    {
+        std::lock_guard<std::mutex> l(host_checks_mtx_);
+        auto const it = host_checks_.find(locality_id);
+        return it != host_checks_.end() && it->second == host_reach::reachable;
+    }
+
+    void ucx_conduit::prepare_host_chunks_impl(
+        std::uint32_t const locality_id) noexcept
+    {
+        {
+            std::lock_guard<std::mutex> l(host_checks_mtx_);
+            if (host_checks_.contains(locality_id))
+            {
+                return;    // checked or being checked
+            }
+
+            // the endpoint is created by an action: not before the runtime
+            // runs
+            if (!hpx::is_running())
+            {
+                return;
+            }
+            try
+            {
+                host_checks_.emplace(locality_id, host_reach::checking);
+            }
+            catch (...)
+            {
+                return;    // asked again with the next host chunk
+            }
+        }
+
+        // check it (the first time a message to it has a host chunk, so the
+        // locality runs): host chunks go through the parcelport meanwhile
+        try
+        {
+            hpx::post([this, locality_id] { check_host_reach(locality_id); });
+        }
+        catch (...)
+        {
+            host_check_done(locality_id, false);
+        }
+    }
+
+    void ucx_conduit::check_host_reach(std::uint32_t const locality_id)
+    {
+        ucp_ep* ep = nullptr;
+        std::uint64_t generation = 0;
+        try
+        {
+            endpoint_entry const entry = endpoint(locality_id);
+            generation = entry.generation;
+            ep = entry.ep.get().ep;
+        }
+        catch (...)
+        {
+            LPT_(warning).format(
+                "ucx_conduit: host chunks to locality {} go through the "
+                "parcelport: the conduit doesn't reach it ({})",
+                locality_id, hpx::get_error_what(std::current_exception()));
+            host_check_done(locality_id, false);
+            return;
+        }
+
+        // a flush finishes once the endpoint is connected (or fails if the
+        // peer can't be reached)
+        auto* state = new host_check_state{this, locality_id};
+        ucp_request_param_t param;
+        std::memset(&param, 0, sizeof(param));
+        param.op_attr_mask =
+            UCP_OP_ATTR_FIELD_CALLBACK | UCP_OP_ATTR_FIELD_USER_DATA;
+        param.cb.send = &host_check_callback;
+        param.user_data = state;
+
+        // the endpoint is valid while it is in endpoints_ (see start_send)
+        bool removed = true;
+        ucs_status_ptr_t request = nullptr;
+        {
+            std::lock_guard<hpx::spinlock> l(endpoints_mtx_);
+            if (auto const it = endpoints_.find(locality_id);
+                it != endpoints_.end() && it->second.generation == generation)
+            {
+                removed = false;
+                request = ucp_ep_flush_nbx(ep, &param);
+            }
+        }
+
+        if (removed || UCS_PTR_IS_ERR(request))
+        {
+            delete state;
+            host_check_done(locality_id, false);
+        }
+        else if (request == nullptr)
+        {
+            // flushed right away, the callback isn't called
+            delete state;
+            host_check_done(locality_id, true);
+        }
+    }
+
+    void ucx_conduit::host_check_done(
+        std::uint32_t const locality_id, bool const reachable) noexcept
+    {
+        std::lock_guard<std::mutex> l(host_checks_mtx_);
+        if (auto const it = host_checks_.find(locality_id);
+            it != host_checks_.end() && it->second == host_reach::checking)
+        {
+            it->second =
+                reachable ? host_reach::reachable : host_reach::unreachable;
+        }
     }
 
     void ucx_conduit::defer(hpx::move_only_function<void()> completion)
@@ -443,9 +663,9 @@ namespace hpx::parcelset::device_conduits {
         // the first message to this locality: fetch the address of its
         // worker (on an HPX thread, not in the serialization of a parcel)
         std::uint64_t const generation = ++generation_;
-        hpx::shared_future<ucp_ep*> ep =
-            hpx::async([this, locality_id, generation]() -> ucp_ep* {
-                std::vector<char> const address =
+        hpx::shared_future<connection> ep =
+            hpx::async([this, locality_id, generation]() -> connection {
+                detail::ucx_worker_info const info =
                     hpx::async(ucx_conduit_worker_address_action(),
                         naming::get_id_from_locality_id(locality_id))
                         .get();
@@ -457,10 +677,19 @@ namespace hpx::parcelset::device_conduits {
                 // can be closed without flushing it (at shutdown). UCX then
                 // doesn't use its pipelined staging protocol for device
                 // memory, which makes transfers without GPUDirect RDMA
-                // several times slower (hpx.parcel.conduit.ucx.error_handling)
+                // several times slower (hpx.parcel.conduit.ucx.error_handling),
+                // and no shared memory to a locality on the same node: those
+                // endpoints have none (the localities agree on it, both see
+                // the same node), unless
+                // hpx.parcel.conduit.ucx.same_node_error_handling is 'peer'
+                bool const same_node =
+                    info.node != 0 && info.node == this_node_identity();
+                connection c;
+                c.peer_errors =
+                    peer_errors_ && (!same_node || same_node_peer_errors_);
                 params.field_mask = UCP_EP_PARAM_FIELD_REMOTE_ADDRESS |
                     UCP_EP_PARAM_FIELD_ERR_HANDLING_MODE;
-                if (peer_errors_)
+                if (c.peer_errors)
                 {
                     params.field_mask |= UCP_EP_PARAM_FIELD_ERR_HANDLER;
                     params.err_mode = UCP_ERR_HANDLING_MODE_PEER;
@@ -473,10 +702,9 @@ namespace hpx::parcelset::device_conduits {
                     params.err_mode = UCP_ERR_HANDLING_MODE_NONE;
                 }
                 params.address =
-                    reinterpret_cast<ucp_address_t const*>(address.data());
+                    reinterpret_cast<ucp_address_t const*>(info.address.data());
 
-                ucp_ep_h ep = nullptr;
-                check_status(ucp_ep_create(worker_, &params, &ep),
+                check_status(ucp_ep_create(worker_, &params, &c.ep),
                     "ucp_ep_create", conduit_endpoint);
 
                 // the locality may have been removed while connecting: its
@@ -493,9 +721,9 @@ namespace hpx::parcelset::device_conduits {
                 }
                 if (!removed)
                 {
-                    return ep;
+                    return c;
                 }
-                close_endpoint(ep, locality_id, false);
+                close_endpoint(c.ep, locality_id, false);
                 HPX_THROW_EXCEPTION(hpx::error::network_error, conduit_endpoint,
                     "locality {} was removed while connecting to it",
                     locality_id);
@@ -534,14 +762,14 @@ namespace hpx::parcelset::device_conduits {
     void ucx_conduit::locality_removed_impl(
         std::uint32_t const locality_id, bool const forced) noexcept
     {
-        // once the endpoint is out of endpoints_, sends that haven't
-        // started fail (start_send). The ones in flight finish before the
-        // endpoint is closed (a locality leaving still needs them), or fail
-        // if the locality is gone (with peer error handling). A locality
-        // disconnected with hpx::force_disconnect doesn't need them, and may
-        // be gone: they are cancelled (with peer error handling).
-        bool const force = forced && peer_errors_;
-        hpx::shared_future<ucp_ep*> ep;
+        // a locality connecting later with the same id is checked again
+        {
+            std::lock_guard<std::mutex> l(host_checks_mtx_);
+            host_checks_.erase(locality_id);
+        }
+
+        hpx::shared_future<connection> ep;
+        std::uint64_t generation = 0;
         {
             std::lock_guard<hpx::spinlock> l(endpoints_mtx_);
             auto const it = endpoints_.find(locality_id);
@@ -550,13 +778,14 @@ namespace hpx::parcelset::device_conduits {
                 return;
             }
             ep = HPX_MOVE(it->second.ep);
+            generation = it->second.generation;
             endpoints_.erase(it);
         }
         if (ep.is_ready())
         {
             if (!ep.has_exception())
             {
-                close_endpoint(ep.get(), locality_id, force);
+                release_endpoint(ep.get(), locality_id, generation, forced);
             }
             return;
         }
@@ -567,11 +796,12 @@ namespace hpx::parcelset::device_conduits {
         try
         {
             hpx::future<void> const closing =
-                ep.then([this, locality_id, force](
-                            hpx::shared_future<ucp_ep*>&& f) noexcept {
+                ep.then([this, locality_id, generation, forced](
+                            hpx::shared_future<connection>&& f) noexcept {
                     if (!f.has_exception())
                     {
-                        close_endpoint(f.get(), locality_id, force);
+                        release_endpoint(
+                            f.get(), locality_id, generation, forced);
                     }
                 });
             HPX_UNUSED(closing);
@@ -582,6 +812,133 @@ namespace hpx::parcelset::device_conduits {
                                  "locality {} can't be closed: {}",
                 locality_id, hpx::get_error_what(std::current_exception()));
         }
+    }
+
+    void ucx_conduit::release_endpoint(connection const c,
+        std::uint32_t const locality_id, std::uint64_t const generation,
+        bool const forced) noexcept
+    {
+        // once the endpoint is out of endpoints_, sends that haven't
+        // started fail (start_send). The ones in flight finish before the
+        // endpoint is closed (a locality leaving still needs them), or fail
+        // if the locality is gone (with peer error handling). A locality
+        // disconnected with hpx::force_disconnect doesn't need them, and may
+        // be gone: they are cancelled (with peer error handling).
+        //
+        // Without peer error handling where hpx.parcel.conduit.ucx.
+        // error_handling is 'peer' (a locality on the same node), UCX
+        // neither fails nor cancels them: the conduit fails them (UCX may
+        // still read their data: the send keeps it until UCX has finished
+        // it, see send_callback), for a locality disconnected right away,
+        // for one that left after a second (its sends to a locality still
+        // there have finished by then). The endpoint is flushed: if its
+        // locality is gone, it stays in closing_ until the conduit is
+        // destroyed.
+        if (peer_errors_ && !c.peer_errors)
+        {
+            bool queued = false;
+            if (!forced)
+            {
+                std::lock_guard<std::mutex> l(tracked_mtx_);
+                try
+                {
+                    leaving_.push_back({locality_id, generation,
+                        std::chrono::steady_clock::now() +
+                            std::chrono::seconds(1)});
+                    has_leaving_.store(true, std::memory_order_release);
+                    queued = true;
+                }
+                catch (...)    // NOLINT(bugprone-empty-catch)
+                {
+                    // fails them now
+                }
+            }
+            if (!queued)
+            {
+                fail_tracked_sends(locality_id, generation);
+            }
+        }
+        close_endpoint(c.ep, locality_id, forced && c.peer_errors);
+    }
+
+    void ucx_conduit::fail_tracked_sends(std::uint32_t const locality_id,
+        std::uint64_t const generation) noexcept
+    {
+        std::vector<hpx::move_only_function<void(std::exception_ptr)>> failed;
+        {
+            std::lock_guard<std::mutex> l(tracked_mtx_);
+            for (auto it = tracked_sends_.begin(); it != tracked_sends_.end();)
+            {
+                detail::send_state* state = *it;
+                if (state->locality_id != locality_id ||
+                    state->generation != generation)
+                {
+                    ++it;
+                    continue;
+                }
+                // the state stays with UCX's request (send_callback
+                // releases it)
+                try
+                {
+                    failed.push_back(HPX_MOVE(state->sent));
+                }
+                catch (...)
+                {
+                    ++it;
+                    continue;    // finishes when UCX completes it
+                }
+                it = tracked_sends_.erase(it);
+            }
+        }
+        if (failed.empty())
+        {
+            return;
+        }
+
+        LPT_(warning).format("ucx_conduit: {} sends to the removed locality "
+                             "{} on this node are failed",
+            failed.size(), locality_id);
+        for (auto& sent : failed)
+        {
+            defer([sent = HPX_MOVE(sent), locality_id]() mutable {
+                sent(std::make_exception_ptr(
+                    hpx::exception(hpx::error::network_error,
+                        std::string(conduit_send) + ": locality " +
+                            std::to_string(locality_id) + " was removed")));
+            });
+        }
+    }
+
+    void ucx_conduit::expire_tracked_sends() noexcept
+    {
+        std::vector<leaving> expired;
+        {
+            std::lock_guard<std::mutex> l(tracked_mtx_);
+            auto const now = std::chrono::steady_clock::now();
+            auto const it =
+                std::stable_partition(leaving_.begin(), leaving_.end(),
+                    [now](leaving const& e) { return e.deadline > now; });
+            try
+            {
+                expired.assign(it, leaving_.end());
+            }
+            catch (...)
+            {
+                return;    // tried again with the next progress
+            }
+            leaving_.erase(it, leaving_.end());
+            has_leaving_.store(!leaving_.empty(), std::memory_order_release);
+        }
+        for (leaving const& e : expired)
+        {
+            fail_tracked_sends(e.locality_id, e.generation);
+        }
+    }
+
+    bool ucx_conduit::untrack_send(detail::send_state* state) noexcept
+    {
+        std::lock_guard<std::mutex> l(tracked_mtx_);
+        return tracked_sends_.erase(state) != 0;
     }
 
     void ucx_conduit::note_device(void const* p) noexcept
@@ -595,13 +952,19 @@ namespace hpx::parcelset::device_conduits {
     }
 
     void ucx_conduit::start_send(std::uint32_t const locality_id,
-        std::uint64_t const generation, ucp_ep* ep, std::uint64_t const tag,
-        void const* p, std::size_t const size,
-        hpx::move_only_function<void(std::exception_ptr)> sent)
+        std::uint64_t const generation, connection const c,
+        std::uint64_t const tag, void const* p, std::size_t const size,
+        hpx::move_only_function<void(std::exception_ptr)> sent,
+        std::shared_ptr<void> keep_alive)
     {
         note_device(p);
 
-        auto* state = new send_state{HPX_MOVE(sent), this};
+        // the conduit fails the sends to a removed locality UCX doesn't
+        // (see release_endpoint)
+        bool const tracked = peer_errors_ && !c.peer_errors;
+        auto* state = new detail::send_state{HPX_MOVE(sent), this, locality_id,
+            generation, tracked,
+            tracked ? HPX_MOVE(keep_alive) : std::shared_ptr<void>()};
 
         ucp_request_param_t param;
         std::memset(&param, 0, sizeof(param));
@@ -613,7 +976,10 @@ namespace hpx::parcelset::device_conduits {
         param.user_data = state;
 
         // an endpoint is closed only after it was removed from endpoints_
-        // (with endpoints_mtx_ held): it is valid while it is still there
+        // (with endpoints_mtx_ held): it is valid while it is still there. A
+        // tracked send is tracked before it starts (UCX may complete it on
+        // another thread right away), so before its locality's sends are
+        // failed.
         bool removed = true;
         ucs_status_ptr_t request = nullptr;
         {
@@ -622,8 +988,31 @@ namespace hpx::parcelset::device_conduits {
                 it != endpoints_.end() && it->second.generation == generation)
             {
                 removed = false;
-                request = ucp_tag_send_nbx(ep, p, size, tag, &param);
+                if (tracked)
+                {
+                    std::lock_guard<std::mutex> ll(tracked_mtx_);
+                    try
+                    {
+                        tracked_sends_.insert(state);
+                    }
+                    catch (...)
+                    {
+                        state->tracked = false;    // as UCX does it
+                    }
+                }
+                request = ucp_tag_send_nbx(c.ep, p, size, tag, &param);
             }
+        }
+
+        // finished right away (the callback isn't called): no longer
+        // tracked, unless its locality was removed since and the conduit
+        // has failed it already
+        if (!removed && state->tracked &&
+            (request == nullptr || UCS_PTR_IS_ERR(request)) &&
+            !untrack_send(state))
+        {
+            delete state;
+            return;
         }
 
         if (removed)
@@ -651,7 +1040,8 @@ namespace hpx::parcelset::device_conduits {
     void ucx_conduit::send_impl(std::uint32_t const locality_id,
         serialization::detail::device_chunk_descriptor const& d, void const* p,
         std::size_t const size,
-        hpx::move_only_function<void(std::exception_ptr)> sent)
+        hpx::move_only_function<void(std::exception_ptr)> sent,
+        std::shared_ptr<void> keep_alive)
     {
         if (std::exception_ptr error = check_source(d, conduit_send))
         {
@@ -671,15 +1061,15 @@ namespace hpx::parcelset::device_conduits {
                 return;
             }
             start_send(locality_id, generation, ep.get(), tag, p, size,
-                HPX_MOVE(sent));
+                HPX_MOVE(sent), HPX_MOVE(keep_alive));
             return;
         }
 
         // send once connected (the future of the continuation isn't needed)
-        hpx::future<void> const sending =
-            ep.then([this, locality_id, generation = generation, tag, p, size,
-                        sent = HPX_MOVE(sent)](
-                        hpx::shared_future<ucp_ep*>&& f) mutable {
+        hpx::future<void> const sending = ep.then(
+            [this, locality_id, generation = generation, tag, p, size,
+                sent = HPX_MOVE(sent), keep_alive = HPX_MOVE(keep_alive)](
+                hpx::shared_future<connection>&& f) mutable {
                 if (f.has_exception())
                 {
                     // the data can't be sent, release the message anyway
@@ -687,7 +1077,7 @@ namespace hpx::parcelset::device_conduits {
                     return;
                 }
                 start_send(locality_id, generation, f.get(), tag, p, size,
-                    HPX_MOVE(sent));
+                    HPX_MOVE(sent), HPX_MOVE(keep_alive));
             });
         HPX_UNUSED(sending);
     }
@@ -771,6 +1161,13 @@ namespace hpx::parcelset::device_conduits {
             ucp_request_free(request);
             return true;
         });
+        ll.unlock();
+
+        // the sends to localities that left a while ago
+        if (has_leaving_.load(std::memory_order_acquire))
+        {
+            expire_tracked_sends();
+        }
         return did_work;
     }
 }    // namespace hpx::parcelset::device_conduits
