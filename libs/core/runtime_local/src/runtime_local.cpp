@@ -45,6 +45,7 @@
 #include <hpx/runtime_local/thread_mapper.hpp>
 #include <hpx/version.hpp>
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -56,6 +57,8 @@
 #include <functional>
 #include <iomanip>
 #include <iostream>
+#include <iterator>
+#include <limits>
 #include <list>
 #include <memory>
 #include <mutex>
@@ -719,6 +722,43 @@ namespace hpx {
                          min_chunk_time_us)),
                     chunks_per_core, copy_bytes_per_ns});
 
+            // The rates per cache level, for data that fits a core's share
+            // of a level (the cache above the first processing unit, divided
+            // by the cores that share it) and for data in memory; a level
+            // without a configured rate takes copy_bytes_per_ns. Without any
+            // of these entries, copy_bytes_per_ns is the only rate.
+            auto const level_rate = [&](char const* key) {
+                std::size_t const rate =
+                    hpx::util::get_entry_as<std::size_t>(rtcfg_, key, 0);
+                return rate > 4096 ? std::size_t(0) : rate;
+            };
+            std::size_t const level_rates[] = {
+                level_rate("hpx.task_size_chunk_size.copy_bytes_per_ns_l1"),
+                level_rate("hpx.task_size_chunk_size.copy_bytes_per_ns_l2"),
+                level_rate("hpx.task_size_chunk_size.copy_bytes_per_ns_l3")};
+            std::size_t const memory_rate =
+                level_rate("hpx.task_size_chunk_size.copy_bytes_per_ns_memory");
+
+            std::vector<ex::detail::memory_rate> rates;
+            if (memory_rate != 0 ||
+                std::any_of(std::begin(level_rates), std::end(level_rates),
+                    [](std::size_t const r) { return r != 0; }))
+            {
+                auto const& topo = threads::get_topology();
+                for (int level = 1; level <= 3; ++level)
+                {
+                    threads::cache_info const info =
+                        topo.get_cache_info(0, level);
+                    if (info.size == 0 || info.cores == 0)
+                        continue;
+                    std::size_t const rate = level_rates[level - 1];
+                    rates.push_back({info.size / info.cores,
+                        rate != 0 ? rate : copy_bytes_per_ns});
+                }
+                rates.push_back({(std::numeric_limits<std::size_t>::max)(),
+                    memory_rate != 0 ? memory_rate : copy_bytes_per_ns});
+            }
+            ex::detail::set_memory_rates(rates);
             // The minimal run times of single executors:
             // hpx.task_size_chunk_size.<executor>.min_chunk_time_us, and
             // hpx.task_size_chunk_size.<executor>.<pool size>.min_chunk_time_us

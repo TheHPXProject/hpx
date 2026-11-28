@@ -843,6 +843,15 @@ comparing two doubles. ``minmax_element`` compares 1.5 times per element and
 gets 1.5 times the bytes. Consecutive loops over the same data are then sized
 alike. Logical operations, ``std::divides`` and ``std::modulus`` stay nano.
 
+How fast a core moves data depends on where the data is. With the entries
+``copy_bytes_per_ns_l1`` to ``copy_bytes_per_ns_memory`` of
+``hpx.task_size_chunk_size`` (see :ref:`ini_hpx_task_size_chunk_size`),
+``task_size_chunk_size`` takes the rate from the loop's footprint: the whole
+loop's data on one core decides whether the loop runs on more than one core,
+and each core's share of the data, compared with its share of each cache
+(``hpx::threads::topology::get_cache_info``), how fast it runs there. A time
+given with ``hpx::timed_task`` is used as it is.
+
 By default, ``task_size_chunk_size`` makes chunks of at least 2.5
 microseconds and gives each core 8 of them. Values given to its
 constructor replace these defaults for one loop, the configuration entries

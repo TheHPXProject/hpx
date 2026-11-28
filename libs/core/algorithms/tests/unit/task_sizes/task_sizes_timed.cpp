@@ -25,12 +25,15 @@
 #include <hpx/init.hpp>
 #include <hpx/modules/testing.hpp>
 #include <hpx/modules/timing.hpp>
+#include <hpx/modules/topology.hpp>
 
 #include <algorithm>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <limits>
+#include <string>
 #include <type_traits>
 #include <vector>
 
@@ -171,6 +174,72 @@ namespace {
         };
     }
 
+    // The rates by footprint per core (step 3): the runtime builds them
+    // from hpx.task_size_chunk_size.copy_bytes_per_ns_l1 to _memory, set
+    // below for data in memory only; with a rate of 64 bytes per ns for
+    // footprints of up to 1 MB per core, copying 4000 doubles (64 KB) takes
+    // 0.125 ns per element and stays on one core, where it takes two at the
+    // default rate.
+    void test_memory_rates()
+    {
+        namespace exd = hpx::execution::experimental::detail;
+        constexpr std::size_t any_footprint =
+            (std::numeric_limits<std::size_t>::max)();
+
+        // from the configuration: data in memory at 8 bytes per ns, the
+        // caches' shares (where the topology has caches) at
+        // copy_bytes_per_ns (16)
+        HPX_TEST_EQ(exd::get_copy_bytes_per_ns(any_footprint), std::size_t(8));
+        if (hpx::threads::get_topology().get_cache_info(0, 1).size != 0)
+        {
+            HPX_TEST_EQ(exd::get_copy_bytes_per_ns(1), std::size_t(16));
+        }
+
+        exd::set_memory_rates(
+            {{std::size_t(1) << 20, 64}, {any_footprint, 16}});
+        HPX_TEST_EQ(exd::get_copy_bytes_per_ns(1000), std::size_t(64));
+        HPX_TEST_EQ(exd::get_copy_bytes_per_ns(2 << 20), std::size_t(16));
+
+        std::vector<double> a(count, 1.0), c(count, 0.0);
+        auto const copy = [&](auto& policy) {
+            hpx::copy(policy, a.begin(), a.end(), c.begin());
+        };
+        check_split(copy, 1, count);
+
+        // A copy whose share per core fits a fast level although the whole
+        // loop doesn't: 100000 doubles (1.6 MB) on one core at 8 bytes per
+        // ns (1 ns per element) need 100 cores of 1000 (1 us), each core's
+        // share at 4096 bytes per ns (2 ps per element) only one. The loop
+        // must not run on one core with the fast time: its time is that of
+        // the whole footprint on the cores it runs on (all available).
+        exd::set_memory_rates(
+            {{std::size_t(1) << 20, 4096}, {any_footprint, 8}});
+        {
+            constexpr std::size_t large = 100000;
+            std::vector<double> src(large, 1.0), dst(large, 0.0);
+            recorded result;
+            auto policy =
+                hpx::execution::par.with(recording_parameters(&result));
+            hpx::copy(policy, src.begin(), src.end(), dst.begin());
+            HPX_TEST(src == dst);
+
+            std::size_t const available = (std::max) (std::size_t(1),
+                hpx::execution::experimental::processing_units_count(
+                    hpx::execution::parallel_executor()));
+            HPX_TEST_EQ(result.cores, available);
+            HPX_TEST_EQ(result.chunk_size,
+                available <= 1 ?
+                    large :
+                    (std::max) ((large + available - 1) / available,
+                        std::size_t(1000)));
+        }
+
+        // without rates, copy_bytes_per_ns for every footprint
+        exd::set_memory_rates({});
+        HPX_TEST_EQ(exd::get_copy_bytes_per_ns(1000), std::size_t(16));
+        check_split(copy, 2, 2000);
+    }
+
     int hpx_main(int, char**)
     {
         // a nano body: 4000 iterations of 1 ns, 4 cores of 1000
@@ -213,6 +282,7 @@ namespace {
             1, count);
 
         test_byte_rates();
+        test_memory_rates();
 
         return hpx::local::finalize();
     }
@@ -220,6 +290,9 @@ namespace {
 
 int main(int argc, char* argv[])
 {
-    HPX_TEST_EQ(hpx::local::init(hpx_main, argc, argv), 0);
+    // a rate for data in memory (see test_memory_rates)
+    hpx::local::init_params params;
+    params.cfg = {"hpx.task_size_chunk_size.copy_bytes_per_ns_memory=8"};
+    HPX_TEST_EQ(hpx::local::init(hpx_main, argc, argv, params), 0);
     return hpx::util::report_errors();
 }

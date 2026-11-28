@@ -80,13 +80,62 @@ namespace hpx::execution::experimental {
         // from the task size of the loop body.
         using uses_task_size = std::true_type;
 
-        // The run time of one iteration as given by the loop body: its time
-        // if it gives one (see hpx::timed_task), else the time its size
-        // stands for; f is not invoked. null_duration if neither is known.
+        // The run time of one iteration as given by the loop body: from the
+        // bytes it reads and writes if it gives them (the library's
+        // operations on builtin elements) at the rate for the loop's
+        // footprint per core, else its time if it gives one (see
+        // hpx::timed_task), else the time its size stands for; f is not
+        // invoked. null_duration if none is known. Not noexcept: the
+        // executor's processing_units_count throws if the runtime isn't
+        // running.
         template <typename Executor, typename F>
-        static hpx::chrono::steady_duration measure_iteration(
-            Executor&&, F&& f, std::size_t) noexcept
+        hpx::chrono::steady_duration measure_iteration(
+            Executor&& exec, F&& f, std::size_t const count) const
         {
+            if (std::size_t const bytes =
+                    hpx::traits::get_task_bytes<std::decay_t<F>>::call(f);
+                bytes != 0 && count != 0)
+            {
+                // the time of an element if each core touches the given
+                // footprint
+                auto const time_for = [bytes](std::size_t const footprint) {
+                    std::size_t const rate =
+                        detail::get_copy_bytes_per_ns(footprint);
+                    return hpx::chrono::picoseconds(
+                        static_cast<hpx::chrono::picoseconds::rep>(
+                            (bytes * 1000 + rate) / (2 * rate)));
+                };
+
+                // the whole loop on one core decides whether it runs on more
+                // than one, each core's share of it how fast it runs there
+                hpx::chrono::picoseconds time = time_for(count * bytes);
+                std::size_t cores = processing_units_count(exec, time, count);
+                if (cores > 1)
+                {
+                    time = time_for(count * bytes / cores);
+                }
+
+                // The algorithm gives the loop the cores this time gives
+                // (processing_units_count). A faster time gives fewer cores,
+                // each with a larger share, which may not fit the level the
+                // time was taken for: take the time of the larger share until
+                // the cores don't drop any more. The loop then runs on at
+                // least the cores its time was taken for, so the time is
+                // never too short. The cores drop on every round, so this
+                // ends.
+                while (cores > 1)
+                {
+                    std::size_t const next =
+                        processing_units_count(exec, time, count);
+                    if (next >= cores)
+                    {
+                        break;
+                    }
+                    cores = next;
+                    time = time_for(count * bytes / cores);
+                }
+                return time;
+            }
             if (auto const time =
                     hpx::traits::get_task_time<std::decay_t<F>>::call(f);
                 time.count() > 0)

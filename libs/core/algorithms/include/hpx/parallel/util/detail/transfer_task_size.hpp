@@ -53,7 +53,7 @@ namespace hpx::parallel::util::detail {
                 std::size_t(1));
         hpx::chrono::picoseconds const time(
             static_cast<std::int64_t>((bytes * 1000 + rate) / (2 * rate)));
-        return {hpx::threads::task_size_of_duration(time), time};
+        return {hpx::threads::task_size_of_duration(time), time, bytes};
     }
 
     // The size of an operation that reads and writes each element of the
