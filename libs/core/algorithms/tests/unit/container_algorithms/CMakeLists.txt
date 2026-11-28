@@ -103,6 +103,7 @@ set(tests
     search_n_range
     set_difference_range
     set_intersection_range
+    set_operations_sentinel_range
     set_symmetric_difference_range
     set_union_range
     shift_left_range
