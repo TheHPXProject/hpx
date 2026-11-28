@@ -116,6 +116,14 @@ namespace hpx::threads::detail {
 
         void get_idle_core_mask(mask_type&) const override;
 
+        [[nodiscard]] double get_fast_idle_cap_time() const noexcept override
+        {
+            return fast_idle_cap_time_;
+        }
+
+        [[nodiscard]] fast_idle_runs get_fast_idle_runs(
+            std::size_t num_thread) const override;
+
         std::int64_t get_background_thread_count() const override
         {
             return sched_->Scheduler::get_background_thread_count();
@@ -393,6 +401,10 @@ namespace hpx::threads::detail {
 
             std::int64_t idle_loop_counts_;
             std::int64_t busy_loop_counts_;
+
+            // the runs of fast idle rounds measured (see fast_idle_runs)
+            std::int64_t fast_idle_runs_;
+            std::int64_t fast_idle_run_time_;
 
             // scheduler utilization data
             bool tasks_active_;

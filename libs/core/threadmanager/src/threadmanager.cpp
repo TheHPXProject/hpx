@@ -162,28 +162,37 @@ namespace hpx::threads {
             return value;
         }
 
-        // The thread queue's parameters of one pool: the idle settings from
-        // the idle tuning table, hpx.idle_tuning.<scheduler>.<tuner> and
-        // hpx.idle_tuning.<scheduler>.<tuner>.<number of workers>, where
-        // the tuner is hpx.scheduler_tuner for the tuned scheduler and
-        // "none" for all others, if the table has entries for the pool.
-        policies::thread_queue_init_parameters idle_tuned_parameters(
-            util::runtime_configuration const& cfg,
-            policies::thread_queue_init_parameters parameters,
-            resource::scheduling_policy const policy,
-            std::size_t const num_threads)
+        // The name of a pool's section of the idle tuning table,
+        // hpx.idle_tuning.<scheduler>.<tuner>, where the tuner is
+        // hpx.scheduler_tuner for the tuned scheduler and "none" for all
+        // others; empty for a scheduler that has no name there.
+        std::string idle_tuning_table(util::runtime_configuration const& cfg,
+            resource::scheduling_policy const policy)
         {
             char const* scheduler = queuing_name(policy);
             if (scheduler == nullptr)
-                return parameters;
+                return {};
 
             std::string const tuner = policy ==
                     resource::scheduling_policy::local_priority_tuned_fifo ?
                 hpx::util::get_entry_as<std::string>(
                     cfg, "hpx.scheduler_tuner", "static") :
                 std::string("none");
-            std::string const table =
-                std::string("hpx.idle_tuning.") + scheduler + "." + tuner;
+            return std::string("hpx.idle_tuning.") + scheduler + "." + tuner;
+        }
+
+        // The thread queue's parameters of one pool: the idle settings from
+        // the idle tuning table (idle_tuning_table, and the section of the
+        // pool's number of workers), if the table has entries for the pool.
+        policies::thread_queue_init_parameters idle_tuned_parameters(
+            util::runtime_configuration const& cfg,
+            policies::thread_queue_init_parameters parameters,
+            resource::scheduling_policy const policy,
+            std::size_t const num_threads)
+        {
+            std::string const table = idle_tuning_table(cfg, policy);
+            if (table.empty())
+                return parameters;
 
             parameters.max_idle_backoff_time_ =
                 idle_tuned_value(cfg, table, num_threads,
@@ -192,6 +201,20 @@ namespace hpx::threads {
                 idle_tuned_value(cfg, table, num_threads,
                     "min_idle_backoff_time", parameters.min_idle_backoff_time_);
             return parameters;
+        }
+
+        // The cap of the fast idle rounds of one pool
+        // (hpx.fast_idle_cap_time) from the idle tuning table, as the other
+        // idle settings; negative values count as none.
+        double idle_tuned_cap_time(util::runtime_configuration const& cfg,
+            double const cap_time, resource::scheduling_policy const policy,
+            std::size_t const num_threads)
+        {
+            std::string const table = idle_tuning_table(cfg, policy);
+            if (table.empty())
+                return cap_time;
+            return idle_tuned_value(
+                cfg, table, num_threads, "fast_idle_cap_time", cap_time);
         }
     }    // namespace
 
@@ -1056,7 +1079,8 @@ namespace hpx::threads {
                 rp.get_affinity_data(), overall_background_work,
                 pool_max_background_threads, max_idle_loop_count,
                 max_busy_loop_count);
-            thread_pool_init.fast_idle_cap_time_ = fast_idle_cap_time;
+            thread_pool_init.fast_idle_cap_time_ = idle_tuned_cap_time(
+                rtcfg_, fast_idle_cap_time, sched_type, num_threads_in_pool);
 
             policies::thread_queue_init_parameters const thread_queue_init =
                 idle_tuned_parameters(

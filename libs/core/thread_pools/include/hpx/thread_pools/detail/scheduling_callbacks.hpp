@@ -49,5 +49,10 @@ namespace hpx::threads::detail {
         // hpx.fast_idle_cap_time: the cap of the fast idle rounds before a
         // backoff step, in microseconds; 0 for none
         double const fast_idle_cap_time_;
+        // where the budget of the fast idle rounds counts the runs it
+        // measured and their total time in nanoseconds (the worker's
+        // counter data; none if null)
+        std::int64_t* fast_idle_runs_ = nullptr;
+        std::int64_t* fast_idle_run_time_ = nullptr;
     };
 }    // namespace hpx::threads::detail

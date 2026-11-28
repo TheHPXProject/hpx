@@ -128,20 +128,22 @@ namespace hpx::threads::detail {
         // loop holds none of it.
         template <typename Outer>
         HPX_NOINLINE static std::int64_t step(Outer& outer,
-            std::int64_t max_idle_loop_count, double cap_us,
-            std::int64_t idle_loop_count, std::int64_t busy_loop_count)
+            scheduling_callbacks const& params, std::int64_t idle_loop_count,
+            std::int64_t busy_loop_count)
         {
             static thread_local fast_idle_budget budget;
-            return budget.step_impl(outer, max_idle_loop_count, cap_us,
-                idle_loop_count, busy_loop_count);
+            return budget.step_impl(
+                outer, params, idle_loop_count, busy_loop_count);
         }
 
     private:
         template <typename Outer>
-        std::int64_t step_impl(Outer& outer, std::int64_t max_idle_loop_count,
-            double cap_us, std::int64_t idle_loop_count,
-            std::int64_t busy_loop_count)
+        std::int64_t step_impl(Outer& outer, scheduling_callbacks const& params,
+            std::int64_t idle_loop_count, std::int64_t busy_loop_count)
         {
+            std::int64_t const max_idle_loop_count =
+                params.max_idle_loop_count_;
+            double const cap_us = params.fast_idle_cap_time_;
             if (max_idle_loop_count != max_idle_loop_count_ ||
                 cap_us != cap_us_)
             {
@@ -153,7 +155,7 @@ namespace hpx::threads::detail {
             }
             else if (timed_ && busy_loop_count == busy_loop_count_)
             {
-                measure(idle_loop_count);
+                measure(idle_loop_count, params);
             }
             timed_ = false;
 
@@ -168,14 +170,24 @@ namespace hpx::threads::detail {
             return start_;
         }
 
-        void measure(std::int64_t idle_loop_count) noexcept
+        void measure(std::int64_t idle_loop_count,
+            scheduling_callbacks const& params) noexcept
         {
-            double const us = std::chrono::duration<double, std::micro>(
-                clock::now() - start_time_)
-                                  .count();
-            if (us <= 0.0)
+            auto const ns =
+                std::chrono::duration_cast<std::chrono::nanoseconds>(
+                    clock::now() - start_time_)
+                    .count();
+            if (ns <= 0)
             {
                 return;
+            }
+            double const us = static_cast<double>(ns) / 1000.0;
+
+            // the worker's counters of the measured runs
+            if (params.fast_idle_runs_ != nullptr)
+            {
+                ++*params.fast_idle_runs_;
+                *params.fast_idle_run_time_ += static_cast<std::int64_t>(ns);
             }
 
             // the rate over the last run of rounds
@@ -215,9 +227,8 @@ namespace hpx::threads::detail {
             scheduler.has_scheduler_mode(
                 policies::scheduler_mode::fast_idle_mode, num_thread))
         {
-            return fast_idle_budget::step(params.outer_,
-                params.max_idle_loop_count_, params.fast_idle_cap_time_,
-                idle_loop_count, busy_loop_count);
+            return fast_idle_budget::step(
+                params.outer_, params, idle_loop_count, busy_loop_count);
         }
         return params.outer_() ? 0 : -1;
     }

@@ -554,6 +554,9 @@ namespace hpx::threads::detail {
                     nullptr, nullptr, max_background_threads_,
                     max_idle_loop_count_, max_busy_loop_count_,
                     fast_idle_cap_time_);
+                callbacks.fast_idle_runs_ = &counter_data.fast_idle_runs_;
+                callbacks.fast_idle_run_time_ =
+                    &counter_data.fast_idle_run_time_;
 
                 if (get_scheduler()->has_scheduler_mode(
                         policies::scheduler_mode::do_background_work,
@@ -1916,6 +1919,24 @@ namespace hpx::threads::detail {
                 &scheduling_counter_data::idle_loop_counts_);
         }
         return counter_data_[num].idle_loop_counts_;
+    }
+
+    template <typename Scheduler>
+    fast_idle_runs scheduled_thread_pool<Scheduler>::get_fast_idle_runs(
+        std::size_t num_thread) const
+    {
+        if (num_thread == static_cast<std::size_t>(-1))
+        {
+            return fast_idle_runs{
+                accumulate_projected(counter_data_.begin(), counter_data_.end(),
+                    static_cast<std::int64_t>(0),
+                    &scheduling_counter_data::fast_idle_runs_),
+                accumulate_projected(counter_data_.begin(), counter_data_.end(),
+                    static_cast<std::int64_t>(0),
+                    &scheduling_counter_data::fast_idle_run_time_)};
+        }
+        return fast_idle_runs{counter_data_[num_thread].fast_idle_runs_,
+            counter_data_[num_thread].fast_idle_run_time_};
     }
 
     template <typename Scheduler>

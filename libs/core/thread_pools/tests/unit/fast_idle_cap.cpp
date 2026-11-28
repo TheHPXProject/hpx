@@ -7,12 +7,14 @@
 // hpx.fast_idle_cap_time: in fast idle mode, with the cap set, idle workers
 // poll for a limited time before each backoff step. With a cap small enough
 // to cut every run of rounds short, the workers still have to pick up every
-// burst of tasks after an idle gap, in fast idle mode and in normal mode, and
-// the setting has to reach the configuration.
+// burst of tasks after an idle gap, in fast idle mode and in normal mode; the
+// setting has to reach the configuration and the pool, and the workers have
+// to count the runs of rounds they measured.
 
 #include <hpx/execution.hpp>
 #include <hpx/future.hpp>
 #include <hpx/init.hpp>
+#include <hpx/modules/resource_partitioner.hpp>
 #include <hpx/modules/runtime_local.hpp>
 #include <hpx/modules/testing.hpp>
 #include <hpx/thread.hpp>
@@ -20,6 +22,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -55,6 +58,15 @@ namespace {
         hpx::threads::add_scheduler_mode(
             hpx::threads::policies::scheduler_mode::fast_idle_mode);
         run_bursts();
+
+        // the pool's cap, and the runs of rounds its workers measured
+        auto& pool = hpx::resource::get_thread_pool("default");
+        HPX_TEST_EQ(pool.get_fast_idle_cap_time(), 2.0);
+        hpx::threads::fast_idle_runs const runs =
+            pool.get_fast_idle_runs(static_cast<std::size_t>(-1));
+        HPX_TEST_LT(std::int64_t(0), runs.count);
+        HPX_TEST_LT(std::int64_t(0), runs.time_ns);
+
         hpx::threads::remove_scheduler_mode(
             hpx::threads::policies::scheduler_mode::fast_idle_mode);
 

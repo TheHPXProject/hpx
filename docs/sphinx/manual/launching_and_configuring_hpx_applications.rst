@@ -571,8 +571,9 @@ The entries of this section give the idle settings of a thread pool by its
 scheduler, the scheduler's tuner and the pool's number of worker threads, for
 instance values measured for a machine. A pool takes the entries of
 ``hpx.idle_tuning.<scheduler>.<tuner>.<number of workers>``, else those of
-``hpx.idle_tuning.<scheduler>.<tuner>``, else ``hpx.max_idle_backoff_time``
-and ``hpx.min_idle_backoff_time``. The scheduler is named as
+``hpx.idle_tuning.<scheduler>.<tuner>``, else ``hpx.max_idle_backoff_time``,
+``hpx.min_idle_backoff_time`` and ``hpx.fast_idle_cap_time``, setting by
+setting. The scheduler is named as
 :option:`--hpx:queuing` names it; the tuner is ``hpx.scheduler_tuner`` for the
 ``local-priority-tuned-fifo`` scheduler and ``none`` for all others. The
 section is empty by default, so that every pool uses the plain settings. Values
@@ -601,6 +602,9 @@ they are new entries and need the ``!`` that forces one, for instance
        pools it applies to.
    * * ``hpx.idle_tuning.<scheduler>.<tuner>[.<number of workers>].min_idle_backoff_time``
      * The value of this property replaces ``hpx.min_idle_backoff_time`` for the
+       pools it applies to.
+   * * ``hpx.idle_tuning.<scheduler>.<tuner>[.<number of workers>].fast_idle_cap_time``
+     * The value of this property replaces ``hpx.fast_idle_cap_time`` for the
        pools it applies to.
 
 The ``hpx.thread_queue`` configuration section

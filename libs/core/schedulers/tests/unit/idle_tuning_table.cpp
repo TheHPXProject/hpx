@@ -7,12 +7,12 @@
 // The idle settings of a pool from the idle tuning table: a pool takes the
 // entries of hpx.idle_tuning.<scheduler>.<tuner>.<number of workers>, else
 // those of hpx.idle_tuning.<scheduler>.<tuner>, else the plain
-// hpx.min_idle_backoff_time and hpx.max_idle_backoff_time, setting by
-// setting; an invalid entry counts as missing. The runtime starts twice with
-// the same table, its default pool (of the tuned scheduler, whose settings
-// can be read back) once of two workers and once of one; the other worker
-// threads, if there are more, go to a second pool. It needs two worker
-// threads.
+// hpx.min_idle_backoff_time, hpx.max_idle_backoff_time and
+// hpx.fast_idle_cap_time, setting by setting; an invalid entry counts as
+// missing. The runtime starts twice with the same table, its default pool (of
+// the tuned scheduler, whose settings can be read back) once of two workers
+// and once of one; the other worker threads, if there are more, go to a
+// second pool. It needs two worker threads.
 
 #include <hpx/config.hpp>
 #include <hpx/init.hpp>
@@ -57,6 +57,10 @@ namespace {
         // invalid, so the one of the row for any size
         HPX_TEST_EQ(pool_setting("hpx.max_idle_backoff_time"), 700.0f);
         HPX_TEST_EQ(pool_setting("hpx.min_idle_backoff_time"), 20.0f);
+        // the cap of the fast idle rounds from the row of its size
+        HPX_TEST_EQ(
+            hpx::resource::get_thread_pool("default").get_fast_idle_cap_time(),
+            1000.0);
         return hpx::local::finalize();
     }
 
@@ -68,6 +72,10 @@ namespace {
         // step, so the plain value
         HPX_TEST_EQ(pool_setting("hpx.min_idle_backoff_time"), 20.0f);
         HPX_TEST_EQ(pool_setting("hpx.max_idle_backoff_time"), 900.0f);
+        // no cap in the row for any size: the plain value
+        HPX_TEST_EQ(
+            hpx::resource::get_thread_pool("default").get_fast_idle_cap_time(),
+            1500.0);
         return hpx::local::finalize();
     }
 
@@ -83,11 +91,13 @@ namespace {
             "hpx.scheduler_tuner=static",
             "hpx.min_idle_backoff_time=50",
             "hpx.max_idle_backoff_time=900",
+            "hpx.fast_idle_cap_time=1500",
             // for pools of any size
             row + ".min_idle_backoff_time!=20",
             // for pools of two workers, the spin is ignored
             row + ".2.max_idle_backoff_time!=700",
             row + ".2.min_idle_backoff_time!=-5",
+            row + ".2.fast_idle_cap_time!=1000",
             // another scheduler's and another tuner's rows don't apply
             table + "local-priority-fifo.none.min_idle_backoff_time!=7",
             table + "local-priority-tuned-fifo.none.min_idle_backoff_time!=8",

@@ -59,6 +59,18 @@ namespace hpx::threads {
     };
     /// \endcond
 
+    /// The runs of fast idle rounds a worker thread measured: how many, and
+    /// their total time in nanoseconds. A run is the rounds of the scheduling
+    /// loop between two idle backoff steps without a thread run in between.
+    /// They are measured in fast idle mode while hpx.fast_idle_cap_time is
+    /// set only; a cap larger than any run (for instance 1e9) measures them
+    /// without cutting any.
+    HPX_CXX_CORE_EXPORT struct fast_idle_runs
+    {
+        std::int64_t count = 0;
+        std::int64_t time_ns = 0;
+    };
+
     HPX_CXX_CORE_EXPORT struct thread_pool_init_parameters
     {
         std::string const& name_;
@@ -422,6 +434,23 @@ namespace hpx::threads {
         virtual std::int64_t get_background_thread_count() const
         {
             return 0;
+        }
+
+        /// The cap of this pool's fast idle rounds before a backoff step, in
+        /// microseconds (hpx.fast_idle_cap_time, or the pool's entry of the
+        /// idle tuning table); 0 for none.
+        [[nodiscard]] virtual double get_fast_idle_cap_time() const noexcept
+        {
+            return 0.0;
+        }
+
+        /// The runs of fast idle rounds the given worker thread of this pool
+        /// measured since it started (fast_idle_runs); all worker threads
+        /// together for std::size_t(-1).
+        [[nodiscard]] virtual fast_idle_runs get_fast_idle_runs(
+            std::size_t /*num_thread*/) const
+        {
+            return {};
         }
 
         std::int64_t get_thread_count_unknown(
