@@ -97,7 +97,7 @@ add_hpx_module(
   SOURCES ${thread_support_sources}
   HEADERS ${thread_support_headers}
   COMPAT_HEADERS ${thread_support_compat_headers}
-  MODULE_DEPENDENCIES hpx_assertion hpx_config hpx_concepts hpx_tracing
-                      hpx_type_support
+  MODULE_DEPENDENCIES hpx_assertion hpx_config hpx_concepts hpx_timing
+                      hpx_tracing hpx_type_support
   CMAKE_SUBDIRS examples tests
 )

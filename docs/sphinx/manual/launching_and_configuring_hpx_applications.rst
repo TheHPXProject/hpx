@@ -724,10 +724,12 @@ default, which stands for the defaults compiled into |hpx|.
        for load balancing, from ``1`` up to ``1024``. The default is ``8``.
    * * ``hpx.task_size_chunk_size.copy_bytes_per_ns``
      * The value of this property defines the number of bytes a core copies in
-       a nanosecond, from ``1`` up to ``4096``. The algorithms that copy or
-       move trivially copyable elements without calling a function derive the
-       task size of a chunk from it. The default is ``16``, about the rate for
-       data that is not in the caches.
+       a nanosecond, from ``1`` up to ``4096``, each byte read and written. The
+       algorithms that copy, move, fill, swap or reverse builtin elements, and
+       those that call a builtin arithmetic function object or comparison
+       (``std::plus``, ``std::less`` and the like) on them, derive the run time of an iteration from it, from
+       the bytes the iteration reads and writes (see :ref:`task_sizes`). The
+       default is ``16``, about the rate for data that is not in the caches.
    * * ``hpx.task_size_chunk_size.<executor>.min_chunk_time_us``
      * The value of this property defines the minimal run time of a chunk, in
        microseconds, for the loops of one executor, in place of

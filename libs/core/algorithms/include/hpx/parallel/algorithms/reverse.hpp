@@ -255,7 +255,7 @@ namespace hpx::parallel {
                                         std::ranges::iter_swap(
                                             first + i, last2 - 1 - i);
                                     },
-                                    util::detail::element_operation_size<
+                                    util::detail::element_access_size<4,
                                         BidirIter>()),
                                 hpx::identity_v),
                         [last2](auto) -> BidirIter { return last2; });
@@ -279,7 +279,7 @@ namespace hpx::parallel {
                                     using hpx::get;
                                     std::ranges::swap(get<0>(t), get<1>(t));
                                 },
-                                util::detail::element_operation_size<
+                                util::detail::element_access_size<4,
                                     BidirIter>()),
                             hpx::identity_v),
                         [last2](auto) -> BidirIter { return last2; });

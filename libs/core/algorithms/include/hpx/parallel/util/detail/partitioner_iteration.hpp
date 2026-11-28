@@ -10,6 +10,7 @@
 #include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/iterator_support.hpp>
+#include <hpx/modules/timing.hpp>
 #include <hpx/modules/tracing.hpp>
 #include <hpx/modules/type_support.hpp>
 
@@ -124,7 +125,9 @@ namespace hpx::parallel::util::detail {
 }    // namespace hpx::parallel::util::detail
 
 // A call of the wrapper runs a chunk of loop iterations, so its size is derived
-// from the size of the loop body.
+// from the size of the loop body: from its run time if it gives one (see
+// hpx::timed_task), the size the chunk's time falls into, else from the
+// number of its calls (see bulk_task_size).
 template <typename Result, typename F, hpx::threads::task_size Size>
 struct hpx::traits::get_task_size<
     hpx::parallel::util::detail::partitioner_iteration<Result, F>, Size>
@@ -134,6 +137,13 @@ struct hpx::traits::get_task_size<
         hpx::parallel::util::detail::partitioner_iteration<Result, F> const&
             f) noexcept
     {
+        if (auto const time = get_task_time<std::decay_t<F>>::call(f.f_);
+            time.count() > 0)
+        {
+            return threads::task_size_of_duration(
+                hpx::chrono::detail::saturating_product(
+                    time, static_cast<std::uint64_t>(f.iterations_)));
+        }
         threads::task_size const size = threads::bulk_task_size(
             get_task_size<std::decay_t<F>>::call(f.f_), f.iterations_);
         return size == threads::task_size::unknown ? Size : size;

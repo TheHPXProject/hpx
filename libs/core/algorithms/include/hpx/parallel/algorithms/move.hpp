@@ -193,8 +193,7 @@ namespace hpx::parallel {
                         hpx::threads::detail::with_task_size(move_iteration(),
                             util::detail::get_transfer_task_size<
                                 move_category_t<FwdIter1, FwdIter2>, FwdIter1,
-                                FwdIter2>()
-                                .size),
+                                FwdIter2>()),
                         [](zip_iterator&& last) -> zip_iterator {
                             return HPX_MOVE(last);
                         }));
@@ -269,9 +268,9 @@ namespace hpx {
     } move{};
 }    // namespace hpx
 
-// A call of the loop body of move moves as many elements in the time of its
-// size as util::move_n does, with any policy: move_n has no datapar loop (see
-// get_transfer_task_size).
+// A call of the loop body of move moves one element in the time of its size,
+// with any policy, for the elements whose move has no run time of its own
+// (see get_transfer_task_size): move_n has no datapar loop.
 template <typename ExPolicy, typename InIter, typename OutIter>
 struct hpx::parallel::util::detail::elements_per_call<ExPolicy,
     hpx::util::zip_iterator<InIter, OutIter>,
@@ -281,10 +280,7 @@ struct hpx::parallel::util::detail::elements_per_call<ExPolicy,
         hpx::parallel::detail::move_iteration const&,
         hpx::threads::task_size) noexcept
     {
-        return get_transfer_task_size<
-            hpx::parallel::detail::move_category_t<InIter, OutIter>, InIter,
-            OutIter>()
-            .elements;
+        return 1;
     }
 };
 

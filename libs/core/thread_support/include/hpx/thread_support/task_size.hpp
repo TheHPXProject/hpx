@@ -7,6 +7,7 @@
 #pragma once
 
 #include <hpx/config.hpp>
+#include <hpx/modules/timing.hpp>
 
 #include <chrono>
 #include <cstddef>
@@ -125,6 +126,45 @@ namespace hpx::threads {
             return task_size::unknown;
         return first < second ? second : first;
     }
+
+    /// The size of a function together with the run time of one of its
+    /// calls, for a function whose run time is known more precisely than its
+    /// size (see hpx::timed_task). time is zero if the function says nothing
+    /// finer than its size.
+    HPX_CXX_CORE_EXPORT struct task_size_and_time
+    {
+        task_size size = task_size::unknown;
+        hpx::chrono::picoseconds time = hpx::chrono::picoseconds(0);
+
+        // where only the size is needed
+        constexpr operator task_size() const noexcept
+        {
+            return size;
+        }
+    };
+
+    /// The size of a function whose calls each run for about \p time: the
+    /// largest size whose run time it reaches, as for bulk_task_size, and
+    /// nano below a nanosecond (a call of 0.25 ns or of 30 ns is a nano call,
+    /// one of 100 ns a small one). A time of zero or less has no size.
+    HPX_CXX_CORE_EXPORT [[nodiscard]] constexpr task_size task_size_of_duration(
+        hpx::chrono::picoseconds const time) noexcept
+    {
+        if (time.count() <= 0)
+        {
+            return task_size::unknown;
+        }
+        task_size result = task_size::nano;
+        for (task_size const size :
+            {task_size::small_, task_size::medium, task_size::large})
+        {
+            if (time >= hpx::chrono::picoseconds(task_size_duration(size)))
+            {
+                result = size;
+            }
+        }
+        return result;
+    }
 }    // namespace hpx::threads
 
 namespace hpx {
@@ -134,6 +174,8 @@ namespace hpx {
     HPX_CXX_CORE_EXPORT using threads::task_size_duration;
     HPX_CXX_CORE_EXPORT using threads::bulk_task_size;
     HPX_CXX_CORE_EXPORT using threads::combined_task_size;
+    HPX_CXX_CORE_EXPORT using threads::task_size_and_time;
+    HPX_CXX_CORE_EXPORT using threads::task_size_of_duration;
 }    // namespace hpx
 
 namespace hpx::traits {
@@ -261,6 +303,29 @@ namespace hpx::traits {
     inline constexpr threads::task_size get_task_size_v =
         get_task_size<F, Size>::value;
 
+    // The run time of one call of F, for a function whose run time was given
+    // as a time (see hpx::timed_task), zero for a function that says nothing
+    // finer than its size. For a loop body it is the time of one element of
+    // the loop, whatever the execution policy. Wrappers forward it as they
+    // forward get_task_size. task_size_chunk_size chunks a loop by it (see
+    // measure_iteration).
+    HPX_CXX_CORE_EXPORT template <typename F, typename Enable = void>
+    struct get_task_time
+    {
+        [[nodiscard]] static constexpr hpx::chrono::picoseconds call(
+            F const&) noexcept
+        {
+            return hpx::chrono::picoseconds(0);
+        }
+    };
+
+    // A qualified function has the time of the unqualified one.
+    template <typename F>
+        requires(!std::is_same_v<F, std::remove_cvref_t<F>>)
+    struct get_task_time<F> : get_task_time<std::remove_cvref_t<F>>
+    {
+    };
+
 #if defined(HPX_HAVE_CXX26_REFLECTION) &&                                      \
     defined(HPX_HAVE_CXX26_REFLECTION_ANNOTATIONS)
     namespace detail {
@@ -386,6 +451,19 @@ namespace hpx::traits {
     // The function objects of the standard library: std::op<> is the
     // transparent one, std::op<T> a typed one (std::op<> is std::op<void>,
     // which is not builtin).
+    // Function objects of a builtin operation that costs about what moving
+    // its operands between memory and the core costs on builtin operands:
+    // arithmetic (but division, which takes longer than its operands take to
+    // load), bitwise operations and comparisons. An algorithm gives them the
+    // run time of the bytes it reads and writes for an element (see
+    // hpx::parallel::detail::task_size_of_iteration), so that the size of an
+    // iteration follows the type of its elements. Logical operations are not
+    // among them: they work on bool, whatever the elements are.
+    HPX_CXX_CORE_EXPORT template <typename F>
+    struct is_memory_bound_builtin_operation : std::false_type
+    {
+    };
+
 #define HPX_TASK_SIZE_BUILTIN_OPERATION(op)                                    \
     template <>                                                                \
     struct is_transparent_builtin_operation<std::op<>> : std::true_type        \
@@ -420,10 +498,44 @@ namespace hpx::traits {
 
 #undef HPX_TASK_SIZE_BUILTIN_OPERATION
 
+#define HPX_TASK_SIZE_MEMORY_BOUND_OPERATION(op)                               \
+    template <>                                                                \
+    struct is_memory_bound_builtin_operation<std::op<>> : std::true_type       \
+    {                                                                          \
+    };                                                                         \
+                                                                               \
+    template <typename T>                                                      \
+    struct is_memory_bound_builtin_operation<std::op<T>>                       \
+      : std::bool_constant<detail::builtin_operand<T>>                         \
+    {                                                                          \
+    } /**/
+
+    HPX_TASK_SIZE_MEMORY_BOUND_OPERATION(plus);
+    HPX_TASK_SIZE_MEMORY_BOUND_OPERATION(minus);
+    HPX_TASK_SIZE_MEMORY_BOUND_OPERATION(multiplies);
+    HPX_TASK_SIZE_MEMORY_BOUND_OPERATION(negate);
+    HPX_TASK_SIZE_MEMORY_BOUND_OPERATION(bit_and);
+    HPX_TASK_SIZE_MEMORY_BOUND_OPERATION(bit_or);
+    HPX_TASK_SIZE_MEMORY_BOUND_OPERATION(bit_xor);
+    HPX_TASK_SIZE_MEMORY_BOUND_OPERATION(bit_not);
+    HPX_TASK_SIZE_MEMORY_BOUND_OPERATION(equal_to);
+    HPX_TASK_SIZE_MEMORY_BOUND_OPERATION(not_equal_to);
+    HPX_TASK_SIZE_MEMORY_BOUND_OPERATION(less);
+    HPX_TASK_SIZE_MEMORY_BOUND_OPERATION(greater);
+    HPX_TASK_SIZE_MEMORY_BOUND_OPERATION(less_equal);
+    HPX_TASK_SIZE_MEMORY_BOUND_OPERATION(greater_equal);
+
+#undef HPX_TASK_SIZE_MEMORY_BOUND_OPERATION
+
     // std::ranges has transparent comparisons only.
 #define HPX_TASK_SIZE_BUILTIN_RANGES_OPERATION(op)                             \
     template <>                                                                \
     struct is_transparent_builtin_operation<std::ranges::op> : std::true_type  \
+    {                                                                          \
+    };                                                                         \
+                                                                               \
+    template <>                                                                \
+    struct is_memory_bound_builtin_operation<std::ranges::op> : std::true_type \
     {                                                                          \
     } /**/
 

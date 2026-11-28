@@ -22,6 +22,8 @@
 #include <algorithm>
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
+#include <limits>
 #include <type_traits>
 #include <utility>
 
@@ -78,12 +80,19 @@ namespace hpx::execution::experimental {
         // from the task size of the loop body.
         using uses_task_size = std::true_type;
 
-        // The run time of one iteration as given by the size of the loop body,
-        // f is not invoked. null_duration if the size is not known.
+        // The run time of one iteration as given by the loop body: its time
+        // if it gives one (see hpx::timed_task), else the time its size
+        // stands for; f is not invoked. null_duration if neither is known.
         template <typename Executor, typename F>
         static hpx::chrono::steady_duration measure_iteration(
             Executor&&, F&& f, std::size_t) noexcept
         {
+            if (auto const time =
+                    hpx::traits::get_task_time<std::decay_t<F>>::call(f);
+                time.count() > 0)
+            {
+                return time;
+            }
             auto const size =
                 hpx::traits::get_task_size<std::decay_t<F>>::call(f);
             if (size == hpx::threads::task_size::unknown)
@@ -109,15 +118,16 @@ namespace hpx::execution::experimental {
             {
                 return available_pus;
             }
-            auto const per_iteration = iteration_duration.value();
+            // in picoseconds: an iteration may run for less than a
+            // nanosecond
+            auto const per_iteration = iteration_duration.as_picoseconds();
 
             // the iterations one core needs, computed without multiplying by
             // count, which could overflow
             auto const [min_chunk_time, chunks_per_core] = get_values(exec);
-            auto const per_core =
-                min_chunk_time * static_cast<rep>(chunks_per_core);
-            auto const iterations_per_core =
-                static_cast<std::size_t>(per_core / per_iteration);
+            std::size_t const iterations_per_core = scaled_quotient(
+                to_picoseconds(min_chunk_time).count(),
+                static_cast<ps_rep>(chunks_per_core), per_iteration.count());
             std::size_t const cores =
                 iterations_per_core == 0 ? count : count / iterations_per_core;
             return std::clamp(cores, std::size_t(1),
@@ -134,7 +144,7 @@ namespace hpx::execution::experimental {
             {
                 return 0;    // use the default
             }
-            auto const per_iteration = iteration_duration.value();
+            auto const per_iteration = iteration_duration.as_picoseconds();
 
             // a single core runs the whole loop as one chunk, on the calling
             // thread
@@ -149,8 +159,13 @@ namespace hpx::execution::experimental {
             std::size_t const balanced = (count + num_chunks - 1) / num_chunks;
 
             // iterations that run for at least min_chunk_time, rounding up
-            auto const min_iterations = static_cast<std::size_t>(
-                (min_chunk_time + per_iteration - duration(1)) / per_iteration);
+            // (without adding to the times, which can be the largest number
+            // of picoseconds)
+            auto const min_time = to_picoseconds(min_chunk_time);
+            auto const min_iterations =
+                static_cast<std::size_t>(min_time / per_iteration) +
+                (min_time % per_iteration != hpx::chrono::picoseconds(0) ? 1 :
+                                                                           0);
 
             return (std::min) (count, (std::max) (balanced, min_iterations));
         }
@@ -160,6 +175,55 @@ namespace hpx::execution::experimental {
         /// \cond NOINTERNAL
         using duration = hpx::chrono::steady_clock::duration;
         using rep = duration::rep;
+        using ps_rep = hpx::chrono::picoseconds::rep;
+
+        // the minimal run time of a chunk in picoseconds, saturated at the
+        // largest number of them (about 106 days)
+        static constexpr hpx::chrono::picoseconds to_picoseconds(
+            duration const& time) noexcept
+        {
+            return hpx::chrono::steady_duration(time).as_picoseconds();
+        }
+
+        // total * factor / part, rounded down, for a total and a factor of at
+        // least zero and a positive part, without forming total * factor,
+        // which can exceed the range of picoseconds (a minimal chunk time of
+        // hours and 1024 chunks per core); saturated at the largest
+        // std::size_t
+        static constexpr std::size_t scaled_quotient(
+            ps_rep const total, ps_rep const factor, ps_rep const part) noexcept
+        {
+            constexpr ps_rep max = (std::numeric_limits<ps_rep>::max)();
+            if (part <= 0)
+            {
+                return (std::numeric_limits<std::size_t>::max)();
+            }
+            ps_rep const quotient = total / part;
+            ps_rep const remainder = total % part;
+            if (factor != 0 && quotient > max / factor)
+            {
+                return (std::numeric_limits<std::size_t>::max)();
+            }
+            // remainder < part, so remainder * factor / part < factor
+            ps_rep const extra = remainder <= max / (factor == 0 ? 1 : factor) ?
+                remainder * factor / part :
+                static_cast<ps_rep>(static_cast<long double>(remainder) *
+                    static_cast<long double>(factor) /
+                    static_cast<long double>(part));
+            // the sum fits in 64 unsigned bits (quotient * factor and extra
+            // are at most the largest ps_rep), but not always in ps_rep
+            std::uint64_t const result =
+                static_cast<std::uint64_t>(quotient * factor) +
+                static_cast<std::uint64_t>(extra);
+            if constexpr (sizeof(std::size_t) < sizeof(std::uint64_t))
+            {
+                if (result > (std::numeric_limits<std::size_t>::max)())
+                {
+                    return (std::numeric_limits<std::size_t>::max)();
+                }
+            }
+            return static_cast<std::size_t>(result);
+        }
 
         // The minimal run time of a chunk and the number of chunks per core,
         // for the ones that were not given the executor's minimal run time

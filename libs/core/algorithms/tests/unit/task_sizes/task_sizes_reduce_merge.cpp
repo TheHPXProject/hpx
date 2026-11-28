@@ -104,23 +104,25 @@ void test_algorithm_sizes()
         },
         task_size::unknown);
 
-    // Builtin operations on builtin types are nano without being given a
-    // size: as for the nano reduction above, 100 chunks of 100 iterations
-    // make a medium task.
+    // Builtin arithmetic operations on builtin types have the run time of the
+    // bytes they read and write, at copy_bytes_per_ns (16 by default: a
+    // nanosecond for 32 bytes): reducing an int reads 4 bytes (0.125 ns),
+    // multiplying two ints reads 8 (0.25 ns), so 100 chunks of 100 iterations
+    // make a small task, not a medium one as for the nano reduction above.
     auto const by_100 =
         policy.with(hpx::execution::experimental::static_chunk_size(100));
     check_only_size(
         [&] {
             hpx::reduce(by_100, w.begin(), w.end(), 0, std::plus<>()).get();
         },
-        task_size::medium);
+        task_size::small_);
     check_only_size(
         [&] {
             hpx::transform_reduce(by_100, w.begin(), w.end(), w.begin(), 0,
                 std::plus<>(), std::multiplies<>())
                 .get();
         },
-        task_size::medium);
+        task_size::small_);
 
     // the 16 iterations of a merge with a builtin comparison, given or not,
     // make a nano task
@@ -169,20 +171,20 @@ void test_algorithm_sizes()
                 by_100, w.begin(), w.end(), out.begin(), std::negate<>())
                 .get();
         },
-        task_size::medium);
+        task_size::small_);
     check_only_size(
         [&] {
             hpx::transform(by_100, w.begin(), w.end(), w.begin(), out.begin(),
                 std::plus<>())
                 .get();
         },
-        task_size::medium);
+        task_size::small_);
     check_only_size(
         [&] {
             hpx::ranges::transform(by_100, w, w, out.begin(), std::plus<>())
                 .get();
         },
-        task_size::medium);
+        task_size::small_);
     check_only_size(
         [&] {
             hpx::ranges::transform(

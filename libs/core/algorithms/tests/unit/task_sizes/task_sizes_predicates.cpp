@@ -10,6 +10,7 @@
 #include <hpx/modules/testing.hpp>
 
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <string>
 #include <vector>
@@ -23,6 +24,12 @@ using task_size_checks::check_only_size;
 // element have the size of the predicate called with an element. The only
 // worker runs all chunks in one task: a chunk of 100 iterations of a nano
 // predicate is small and 100 small chunks make a medium task.
+//
+// A builtin comparison on builtin elements (the default ones, std::less<> and
+// the like) has the run time of the bytes the iteration reads instead (see
+// hpx::traits::is_memory_bound_builtin_operation): an int is 4 bytes, 0.125 ns
+// at the default 16 bytes per nanosecond (two ints 0.25 ns), so 10000
+// iterations make a small task.
 //
 // The sizes are counted when the scheduler creates a thread (see
 // task_size_checks.hpp). The task policy makes the algorithms asynchronous,
@@ -52,14 +59,14 @@ void test_predicate_sizes()
 
     // count compares with equal_to, count_if calls the predicate
     check_only_size([&] { hpx::count(by_100, v.begin(), v.end(), 2).get(); },
-        task_size::medium);
+        task_size::small_);
     check_only_size(
         [&] { hpx::count_if(by_100, v.begin(), v.end(), is_zero).get(); },
         task_size::medium);
 
     // the find family
     check_only_size([&] { hpx::find(by_100, v.begin(), v.end(), 2).get(); },
-        task_size::medium);
+        task_size::small_);
     check_only_size(
         [&] { hpx::find_if(by_100, v.begin(), v.end(), is_zero).get(); },
         task_size::medium);
@@ -68,7 +75,7 @@ void test_predicate_sizes()
         task_size::medium);
     check_only_size(
         [&] { hpx::find_last(by_100, v.begin(), v.end(), 2).get(); },
-        task_size::medium);
+        task_size::small_);
     check_only_size(
         [&] { hpx::find_last_if(by_100, v.begin(), v.end(), is_zero).get(); },
         task_size::medium);
@@ -76,43 +83,71 @@ void test_predicate_sizes()
     // equal and mismatch, with and without the end of the second range
     check_only_size(
         [&] { hpx::equal(by_100, v.begin(), v.end(), v.begin()).get(); },
-        task_size::medium);
+        task_size::small_);
     check_only_size(
         [&] {
             hpx::equal(by_100, v.begin(), v.end(), v.begin(), v.end()).get();
         },
-        task_size::medium);
+        task_size::small_);
     check_only_size(
         [&] { hpx::mismatch(by_100, v.begin(), v.end(), v.begin()).get(); },
-        task_size::medium);
+        task_size::small_);
     check_only_size(
         [&] {
             hpx::mismatch(by_100, v.begin(), v.end(), v.begin(), v.end()).get();
         },
-        task_size::medium);
+        task_size::small_);
 
-    // adjacent_find, adjacent_difference
+    // the run time of a builtin comparison follows the type of the elements:
+    // comparing two chars reads 2 bytes (63 ps), a chunk of 1000 of them is
+    // nano and 100 such chunks make a small task; comparing two std::int64_t
+    // reads 16 (0.5 ns), a chunk of 1000 is small and 100 of them make a
+    // medium task
+    {
+        auto const by_1000 =
+            hpx::execution::par(hpx::execution::task)
+                .with(hpx::execution::experimental::static_chunk_size(1000));
+        std::vector<char> const chars(100000, 'a');
+        std::vector<std::int64_t> const longs(100000, 1);
+        check_only_size(
+            [&] {
+                hpx::equal(by_1000, chars.begin(), chars.end(), chars.begin())
+                    .get();
+            },
+            task_size::small_);
+        check_only_size(
+            [&] {
+                hpx::equal(by_1000, longs.begin(), longs.end(), longs.begin())
+                    .get();
+            },
+            task_size::medium);
+    }
+
+    // adjacent_find, adjacent_difference; adjacent_difference subtracts with
+    // std::minus, a builtin arithmetic operation, which has the run time of
+    // the bytes it reads and writes: an int read and one written (0.25 ns), so
+    // 100 chunks of 100 make a small task
     check_only_size(
         [&] { hpx::adjacent_find(by_100, v.begin(), v.end()).get(); },
-        task_size::medium);
+        task_size::small_);
     check_only_size(
         [&] {
             hpx::adjacent_difference(by_100, v.begin(), v.end(), out.begin())
                 .get();
         },
-        task_size::medium);
+        task_size::small_);
 
     // is_sorted, is_heap, is_partitioned
     check_only_size([&] { hpx::is_sorted(by_100, v.begin(), v.end()).get(); },
-        task_size::medium);
+        task_size::small_);
     check_only_size(
         [&] { hpx::is_sorted_until(by_100, v.begin(), v.end()).get(); },
-        task_size::medium);
+        task_size::small_);
     check_only_size([&] { hpx::is_heap(by_100, v.begin(), v.end()).get(); },
-        task_size::medium);
+        task_size::small_);
     check_only_size(
         [&] { hpx::is_heap_until(by_100, v.begin(), v.end()).get(); },
-        task_size::medium);
+        task_size::small_);
     check_only_size(
         [&] { hpx::is_partitioned(by_100, v.begin(), v.end(), is_zero).get(); },
         task_size::medium);
@@ -123,7 +158,7 @@ void test_predicate_sizes()
             out = v;
             hpx::remove(by_100, out.begin(), out.end(), 2).get();
         },
-        task_size::medium);
+        task_size::small_);
     check_only_size(
         [&] {
             out = v;
@@ -137,7 +172,7 @@ void test_predicate_sizes()
             out = v;
             hpx::replace(by_100, out.begin(), out.end(), 2, 3).get();
         },
-        task_size::medium);
+        task_size::small_);
     check_only_size(
         [&] {
             out = v;
@@ -149,7 +184,7 @@ void test_predicate_sizes()
             hpx::replace_copy(by_100, v.begin(), v.end(), out.begin(), 2, 3)
                 .get();
         },
-        task_size::medium);
+        task_size::small_);
     check_only_size(
         [&] {
             hpx::replace_copy_if(

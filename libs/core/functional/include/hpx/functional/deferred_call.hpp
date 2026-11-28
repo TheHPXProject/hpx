@@ -134,6 +134,12 @@ namespace hpx::util {
                 return traits::get_task_size<F, Size>::call(_f);
             }
 
+            [[nodiscard]] constexpr hpx::chrono::picoseconds get_task_time()
+                const noexcept
+            {
+                return traits::get_task_time<F>::call(_f);
+            }
+
         private:
             F _f;
             util::member_pack_for<Ts...> _args;
@@ -217,6 +223,16 @@ namespace hpx::traits {
             util::detail::deferred<F, Ts...> const& f) noexcept
         {
             return f.template get_task_size<Size>();
+        }
+    };
+
+    template <typename F, typename... Ts>
+    struct get_task_time<util::detail::deferred<F, Ts...>>
+    {
+        [[nodiscard]] static constexpr hpx::chrono::picoseconds call(
+            util::detail::deferred<F, Ts...> const& f) noexcept
+        {
+            return f.get_task_time();
         }
     };
 }    // namespace hpx::traits

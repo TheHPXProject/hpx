@@ -17,8 +17,10 @@
 #pragma once
 
 #include <hpx/config.hpp>
+#include <hpx/timing/durations.hpp>
 
 #include <chrono>
+#include <cstdint>
 
 namespace hpx::chrono {
 
@@ -60,27 +62,70 @@ namespace hpx::chrono {
     public:
         constexpr steady_duration() noexcept
           : _rel_time(0)
+          , _below_ps(0)
         {
         }
 
         /*implicit*/ constexpr steady_duration(
             value_type const& rel_time) noexcept
           : _rel_time(rel_time)
+          , _below_ps(0)
         {
         }
 
+        // A duration that isn't a whole number of clock ticks is rounded up
+        // (value), and the part of the last tick it doesn't fill is kept, in
+        // picoseconds, so that as_picoseconds gives the duration itself. This
+        // is done for durations below an hour, the longest a run time of a
+        // loop iteration needs; longer ones are only rounded up.
         template <typename Rep, typename Period>
         /*implicit*/ constexpr steady_duration(
             std::chrono::duration<Rep, Period> const& rel_time) noexcept
           : _rel_time(std::chrono::duration_cast<value_type>(rel_time))
+          , _below_ps(0)
         {
+            // duration_cast rounds toward zero: up for negative durations,
+            // down for positive ones, which are rounded up here
             if (_rel_time < rel_time)
+            {
                 ++_rel_time;
+            }
+            if (_rel_time > rel_time && _rel_time < std::chrono::hours(1) &&
+                _rel_time > -std::chrono::hours(1))
+            {
+                auto const below =
+                    std::chrono::duration_cast<picoseconds>(_rel_time) -
+                    std::chrono::duration_cast<picoseconds>(rel_time);
+                if (below.count() > 0 && below < value_type(1))
+                {
+                    _below_ps = static_cast<std::uint16_t>(below.count());
+                }
+            }
         }
 
         [[nodiscard]] constexpr value_type const& value() const noexcept
         {
             return _rel_time;
+        }
+
+        /// The duration in picoseconds, also below a clock tick: a duration
+        /// given in picoseconds (or as a fraction of a tick) is returned as
+        /// it was given. Saturates at the largest number of picoseconds, about
+        /// 106 days.
+        [[nodiscard]] constexpr picoseconds as_picoseconds() const noexcept
+        {
+            constexpr auto limit =
+                std::chrono::duration_cast<value_type>((picoseconds::max) ());
+            if (_rel_time >= limit)
+            {
+                return (picoseconds::max) ();
+            }
+            if (_rel_time <= -limit)
+            {
+                return (picoseconds::min) ();
+            }
+            return std::chrono::duration_cast<picoseconds>(_rel_time) -
+                picoseconds(_below_ps);
         }
 
         [[nodiscard]] steady_clock::time_point from_now() const noexcept
@@ -97,6 +142,10 @@ namespace hpx::chrono {
 
     private:
         value_type _rel_time;
+
+        // the part of the last tick of _rel_time the duration doesn't fill,
+        // in picoseconds (see as_picoseconds)
+        std::uint16_t _below_ps;
     };
 
     HPX_CXX_CORE_EXPORT inline constexpr steady_duration null_duration{};
