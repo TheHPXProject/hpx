@@ -10,6 +10,7 @@
 #if defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_DEVICE_CONDUIT_UCX)
 #include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/async_distributed.hpp>
+#include <hpx/modules/async_local.hpp>
 #include <hpx/modules/config_registry.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/format.hpp>
@@ -409,6 +410,152 @@ namespace hpx::parcelset::device_conduits {
         ucp_cleanup(context_);
     }
 
+    ///////////////////////////////////////////////////////////////////////////
+    namespace {
+
+        // the flush checking that the conduit reaches a locality
+        struct host_check_state
+        {
+            ucx_conduit* conduit = nullptr;
+            std::uint32_t locality_id = 0;
+        };
+
+        void host_check_callback(
+            void* request, ucs_status_t const status, void* user_data)
+        {
+            auto* state = static_cast<host_check_state*>(user_data);
+            ucx_conduit* conduit = state->conduit;
+            std::uint32_t const locality_id = state->locality_id;
+            delete state;
+            ucp_request_free(request);
+
+            conduit->defer([conduit, locality_id, status]() {
+                if (status != UCS_OK)
+                {
+                    LPT_(warning).format(
+                        "ucx_conduit: host chunks to locality {} go through "
+                        "the parcelport: the conduit doesn't reach it ({})",
+                        locality_id, ucs_status_string(status));
+                }
+                conduit->host_check_done(locality_id, status == UCS_OK);
+            });
+        }
+    }    // namespace
+
+    bool ucx_conduit::host_chunks_ready_impl(
+        std::uint32_t const locality_id) noexcept
+    {
+        std::lock_guard<std::mutex> l(host_checks_mtx_);
+        auto const it = host_checks_.find(locality_id);
+        return it != host_checks_.end() && it->second == host_reach::reachable;
+    }
+
+    void ucx_conduit::prepare_host_chunks_impl(
+        std::uint32_t const locality_id) noexcept
+    {
+        {
+            std::lock_guard<std::mutex> l(host_checks_mtx_);
+            if (host_checks_.contains(locality_id))
+            {
+                return;    // checked or being checked
+            }
+
+            // the endpoint is created by an action: not before the runtime
+            // runs
+            if (!hpx::is_running())
+            {
+                return;
+            }
+            try
+            {
+                host_checks_.emplace(locality_id, host_reach::checking);
+            }
+            catch (...)
+            {
+                return;    // asked again with the next host chunk
+            }
+        }
+
+        // check it (the first time a message to it has a host chunk, so the
+        // locality runs): host chunks go through the parcelport meanwhile
+        try
+        {
+            hpx::post([this, locality_id] { check_host_reach(locality_id); });
+        }
+        catch (...)
+        {
+            host_check_done(locality_id, false);
+        }
+    }
+
+    void ucx_conduit::check_host_reach(std::uint32_t const locality_id)
+    {
+        ucp_ep* ep = nullptr;
+        std::uint64_t generation = 0;
+        try
+        {
+            endpoint_entry const entry = endpoint(locality_id);
+            generation = entry.generation;
+            ep = entry.ep.get();
+        }
+        catch (...)
+        {
+            LPT_(warning).format(
+                "ucx_conduit: host chunks to locality {} go through the "
+                "parcelport: the conduit doesn't reach it ({})",
+                locality_id, hpx::get_error_what(std::current_exception()));
+            host_check_done(locality_id, false);
+            return;
+        }
+
+        // a flush finishes once the endpoint is connected (or fails if the
+        // peer can't be reached)
+        auto* state = new host_check_state{this, locality_id};
+        ucp_request_param_t param;
+        std::memset(&param, 0, sizeof(param));
+        param.op_attr_mask =
+            UCP_OP_ATTR_FIELD_CALLBACK | UCP_OP_ATTR_FIELD_USER_DATA;
+        param.cb.send = &host_check_callback;
+        param.user_data = state;
+
+        // the endpoint is valid while it is in endpoints_ (see start_send)
+        bool removed = true;
+        ucs_status_ptr_t request = nullptr;
+        {
+            std::lock_guard<hpx::spinlock> l(endpoints_mtx_);
+            if (auto const it = endpoints_.find(locality_id);
+                it != endpoints_.end() && it->second.generation == generation)
+            {
+                removed = false;
+                request = ucp_ep_flush_nbx(ep, &param);
+            }
+        }
+
+        if (removed || UCS_PTR_IS_ERR(request))
+        {
+            delete state;
+            host_check_done(locality_id, false);
+        }
+        else if (request == nullptr)
+        {
+            // flushed right away, the callback isn't called
+            delete state;
+            host_check_done(locality_id, true);
+        }
+    }
+
+    void ucx_conduit::host_check_done(
+        std::uint32_t const locality_id, bool const reachable) noexcept
+    {
+        std::lock_guard<std::mutex> l(host_checks_mtx_);
+        if (auto const it = host_checks_.find(locality_id);
+            it != host_checks_.end() && it->second == host_reach::checking)
+        {
+            it->second =
+                reachable ? host_reach::reachable : host_reach::unreachable;
+        }
+    }
+
     void ucx_conduit::defer(hpx::move_only_function<void()> completion)
     {
         std::lock_guard<std::mutex> l(completions_mtx_);
@@ -541,6 +688,13 @@ namespace hpx::parcelset::device_conduits {
         // disconnected with hpx::force_disconnect doesn't need them, and may
         // be gone: they are cancelled (with peer error handling).
         bool const force = forced && peer_errors_;
+
+        // a locality connecting later with the same id is checked again
+        {
+            std::lock_guard<std::mutex> l(host_checks_mtx_);
+            host_checks_.erase(locality_id);
+        }
+
         hpx::shared_future<ucp_ep*> ep;
         {
             std::lock_guard<hpx::spinlock> l(endpoints_mtx_);

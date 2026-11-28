@@ -12,6 +12,7 @@
 #include <hpx/config.hpp>
 #include <hpx/assert.hpp>
 #include <hpx/serialization/detail/allow_zero_copy_receive.hpp>
+#include <hpx/serialization/serialization_chunk.hpp>
 #include <hpx/serialization/serialization_fwd.hpp>
 #include <hpx/serialization/serialize.hpp>
 #include <hpx/serialization/traits/is_bitwise_serializable.hpp>
@@ -80,15 +81,18 @@ namespace hpx::serialization {
                         ar.template try_get_extra_data<
                             detail::allow_zero_copy_receive>() != nullptr;
 
+                    // an array doesn't use its elements while it is loaded:
+                    // a device transport may deliver them afterwards
                     ar.load_binary_chunk(
                         detail::array_of_fundamental_type_v<element_type>, m_t,
-                        m_element_count * sizeof(T), allow_zero_copy_receive);
+                        m_element_count * sizeof(T), allow_zero_copy_receive,
+                        chunk_memory::host, true);
                 }
                 else
                 {
                     ar.save_binary_chunk(
                         detail::array_of_fundamental_type_v<element_type>, m_t,
-                        m_element_count * sizeof(T));
+                        m_element_count * sizeof(T), chunk_memory::host, true);
                 }
             }
             else

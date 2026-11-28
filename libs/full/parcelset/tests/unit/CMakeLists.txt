@@ -118,6 +118,9 @@ if(HPX_WITH_DEVICE_CONDUIT_UCX)
     EXECUTABLE device_conduit
     PSEUDO_DEPS_NAME device_conduit ${device_conduit_PARAMETERS}
     RUN_SERIAL
+    # the test counts the chunks of device memory: host chunks stay with the
+    # parcelport
     ARGS --hpx:ini=hpx.parcel.device_conduit=ucx
+         --hpx:ini=hpx.parcel.conduit_host_chunks=0
   )
 endif()

@@ -19,11 +19,13 @@ namespace hpx::serialization::detail {
 
     // What an archive stores in place of a chunk of device memory that a
     // transport moves (see device_chunk_transport); the transport defines
-    // the meaning of the two values (e.g. the sending locality and a tag).
+    // the meaning of the values (e.g. the sending locality and a tag, and
+    // in 'extra' what else the receiver needs, such as the sending GPU).
     HPX_CXX_CORE_EXPORT struct device_chunk_descriptor
     {
         std::uint64_t source = 0;
         std::uint64_t tag = 0;
+        std::uint64_t extra = 0;
     };
 
     // Moves the data of zero-copy chunks of device memory between the two
@@ -51,6 +53,13 @@ namespace hpx::serialization::detail {
         [[nodiscard]] virtual device_chunk_descriptor send(
             void const* p, std::size_t size) = 0;
 
+        // Sending side: the archive has a chunk of host memory the transport
+        // would move if it were ready to for the destination
+        // (archive_flags::host_transport_pending); called once per archive.
+        // The transport may get ready (e.g. check that it reaches the
+        // destination), the chunk goes with the archive meanwhile.
+        virtual void host_chunk_waiting() {}
+
         // Receiving side: receives the data described by 'descriptor' into
         // 'size' bytes of memory at 'p' and calls 'done' once it has arrived
         // (with the error if it failed). It is started as one of the steps of
@@ -60,6 +69,19 @@ namespace hpx::serialization::detail {
         virtual void recv(device_chunk_descriptor const& descriptor, void* p,
             std::size_t size, std::function<void(std::exception_ptr)> done) = 0;
     };
+
+    // The smallest chunk of host memory a transport moves in archives with
+    // archive_flags::enable_host_transport (for objects that allow it, see
+    // output_archive::save_binary_chunk): one value for destinations on the
+    // sender's node (archive_flags::host_transport_same_node) and one for
+    // the others, the same in all archives of a process with the same flags
+    // (the preprocessing pass and the serialization of a parcel get the same
+    // flags, so they decide alike). Set by the parcel layer at startup; by
+    // default no host chunk is moved.
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT std::size_t host_transport_threshold(
+        bool same_node) noexcept;
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void set_host_transport_threshold(
+        bool same_node, std::size_t threshold) noexcept;
 
     // The transport of an archive (extra data); none if 'transport' is
     // empty.

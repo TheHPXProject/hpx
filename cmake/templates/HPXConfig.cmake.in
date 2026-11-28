@@ -80,6 +80,19 @@ if(HPX_WITH_NETWORKING AND HPX_WITH_DEVICE_CONDUIT_UCX)
   hpx_setup_ucx()
 endif()
 
+# NCCL or RCCL (device conduit)
+if(HPX_WITH_NETWORKING AND HPX_WITH_DEVICE_CONDUIT_NCCL)
+  # the roots HPX was built with, unless the consumer supplies its own
+  if(NOT NCCL_ROOT AND NOT DEFINED ENV{NCCL_ROOT})
+    set(NCCL_ROOT "@NCCL_ROOT@")
+  endif()
+  if(NOT RCCL_ROOT AND NOT DEFINED ENV{RCCL_ROOT})
+    set(RCCL_ROOT "@RCCL_ROOT@")
+  endif()
+  include(HPX_SetupNCCL)
+  hpx_setup_nccl()
+endif()
+
 # LCW
 if(HPX_WITH_NETWORKING AND HPX_WITH_PARCELPORT_LCW)
   if(HPX_WITH_FETCH_LCW)

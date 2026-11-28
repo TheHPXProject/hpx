@@ -16,6 +16,7 @@
 #include <hpx/performance_counters/manage_counter_type.hpp>
 #include <hpx/performance_counters/parcelhandler_counter_types.hpp>
 
+#include <atomic>
 #include <cstdint>
 #include <string>
 
@@ -674,6 +675,105 @@ namespace hpx::performance_counters {
                 connection_cache_types, std::size(connection_cache_types));
         }
     }    // namespace
+
+    ///////////////////////////////////////////////////////////////////////////
+    // the statistics of the device conduit
+    namespace {
+
+        // one entry of hpx::parcelset::device_conduit_statistics, counted
+        // from the last reset (a reset applies to all counters of the entry,
+        // as with the parcelport counters)
+        template <std::uint64_t parcelset::device_conduit_statistics::* Entry>
+        std::int64_t device_conduit_statistic(bool const reset)
+        {
+            static std::atomic<std::uint64_t> at_reset = 0;
+
+            parcelset::device_conduit const* conduit =
+                parcelset::get_device_conduit();
+            std::uint64_t const value =
+                conduit != nullptr ? conduit->statistics().*Entry : 0;
+            std::uint64_t const start =
+                reset ? at_reset.exchange(value) : at_reset.load();
+            return static_cast<std::int64_t>(value - start);
+        }
+
+        void register_device_conduit_counter_types(
+            std::string const& conduit_name)
+        {
+            using placeholders::_1;
+            using placeholders::_2;
+
+            using statistics = parcelset::device_conduit_statistics;
+
+            hpx::function<std::int64_t(bool)> chunks_sent(
+                &device_conduit_statistic<&statistics::chunks_sent>);
+            hpx::function<std::int64_t(bool)> chunks_received(
+                &device_conduit_statistic<&statistics::chunks_received>);
+            hpx::function<std::int64_t(bool)> bytes_sent(
+                &device_conduit_statistic<&statistics::bytes_sent>);
+            hpx::function<std::int64_t(bool)> bytes_received(
+                &device_conduit_statistic<&statistics::bytes_received>);
+
+            performance_counters::generic_counter_type_data const
+                counter_types[] = {
+                    {hpx::util::format(
+                         "/device_conduit/count/{}/sent", conduit_name),
+                        performance_counters::counter_type::
+                            monotonically_increasing,
+                        hpx::util::format(
+                            "returns the number of chunks the {} device "
+                            "conduit has sent (device memory, and host memory "
+                            "where it moves it, see "
+                            "hpx.parcel.conduit_host_chunks)",
+                            conduit_name),
+                        HPX_PERFORMANCE_COUNTER_V1,
+                        hpx::bind(
+                            &performance_counters::locality_raw_counter_creator,
+                            _1, HPX_MOVE(chunks_sent), _2),
+                        &performance_counters::locality_counter_discoverer, ""},
+                    {hpx::util::format(
+                         "/device_conduit/count/{}/received", conduit_name),
+                        performance_counters::counter_type::
+                            monotonically_increasing,
+                        hpx::util::format("returns the number of chunks the {} "
+                                          "device conduit has received",
+                            conduit_name),
+                        HPX_PERFORMANCE_COUNTER_V1,
+                        hpx::bind(
+                            &performance_counters::locality_raw_counter_creator,
+                            _1, HPX_MOVE(chunks_received), _2),
+                        &performance_counters::locality_counter_discoverer, ""},
+                    {hpx::util::format(
+                         "/device_conduit/data/{}/sent", conduit_name),
+                        performance_counters::counter_type::
+                            monotonically_increasing,
+                        hpx::util::format("returns the number of bytes the {} "
+                                          "device conduit has sent",
+                            conduit_name),
+                        HPX_PERFORMANCE_COUNTER_V1,
+                        hpx::bind(
+                            &performance_counters::locality_raw_counter_creator,
+                            _1, HPX_MOVE(bytes_sent), _2),
+                        &performance_counters::locality_counter_discoverer,
+                        "bytes"},
+                    {hpx::util::format(
+                         "/device_conduit/data/{}/received", conduit_name),
+                        performance_counters::counter_type::
+                            monotonically_increasing,
+                        hpx::util::format("returns the number of bytes the {} "
+                                          "device conduit has received",
+                            conduit_name),
+                        HPX_PERFORMANCE_COUNTER_V1,
+                        hpx::bind(
+                            &performance_counters::locality_raw_counter_creator,
+                            _1, HPX_MOVE(bytes_received), _2),
+                        &performance_counters::locality_counter_discoverer,
+                        "bytes"}};
+
+            performance_counters::install_counter_types(
+                counter_types, std::size(counter_types));
+        }
+    }    // namespace
 #endif
 
     ///////////////////////////////////////////////////////////////////////////
@@ -684,6 +784,14 @@ namespace hpx::performance_counters {
         if (!ph.is_networking_enabled())
         {
             return;
+        }
+
+        // the conduit is created with the parcelports, before this runs; a
+        // locality uses one conduit at a time, its counters carry its name
+        if (parcelset::device_conduit const* conduit =
+                parcelset::get_device_conduit())
+        {
+            register_device_conduit_counter_types(conduit->name());
         }
 
         // register connection specific counters

@@ -1559,6 +1559,21 @@ if(HPX_WITH_NETWORKING)
     hpx_add_config_define(HPX_HAVE_DEVICE_CONDUIT_UCX)
   endif()
   hpx_option(
+    HPX_WITH_DEVICE_CONDUIT_NCCL
+    BOOL
+    "Enable the NCCL based device conduit (NCCL with CUDA, RCCL with HIP; set NCCL_ROOT or RCCL_ROOT if they aren't found)."
+    OFF
+    CATEGORY "Parcelport"
+  )
+  if(HPX_WITH_DEVICE_CONDUIT_NCCL)
+    if(NOT (HPX_WITH_CUDA OR HPX_WITH_HIP))
+      hpx_error(
+        "HPX_WITH_DEVICE_CONDUIT_NCCL=ON requires HPX_WITH_CUDA=ON or HPX_WITH_HIP=ON"
+      )
+    endif()
+    hpx_add_config_define(HPX_HAVE_DEVICE_CONDUIT_NCCL)
+  endif()
+  hpx_option(
     HPX_WITH_PARCELPORT_COUNTERS BOOL
     "Enable performance counters reporting parcelport statistics." OFF
     CATEGORY "Parcelport"
