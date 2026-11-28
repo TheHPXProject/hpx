@@ -529,23 +529,30 @@ namespace hpx::local::detail {
     ///////////////////////////////////////////////////////////////////////////
     bool command_line_handling::handle_arguments(util::manage_config& cfgmap,
         hpx::program_options::variables_map& vm,
-        std::vector<std::string>& ini_config)
+        std::vector<std::string>& ini_config, bool const handle_ini_options)
     {
-#if !defined(HPX_HAVE_DISTRIBUTED_RUNTIME)
-        bool const debug_clp = vm.count("hpx:debug-clp");
-
-        // fill logging default
-        enable_logging_settings(vm, ini_config);
-
-        // handle command line arguments after logging defaults
-        if (vm.count("hpx:ini"))
+        // The command line handling of the distributed runtime adds the
+        // logging settings and the --hpx:ini options itself, after its own
+        // settings; a local runtime (hpx::local::init) adds them here, also
+        // when HPX is built with the distributed runtime. Without them the
+        // settings of a --hpx:config file would win over --hpx:ini, as the
+        // file is read again whenever the configuration is reconfigured.
+        bool const debug_clp = handle_ini_options && vm.count("hpx:debug-clp");
+        if (handle_ini_options)
         {
-            std::vector<std::string> cfg =
-                vm["hpx:ini"].as<std::vector<std::string>>();
-            std::copy(cfg.begin(), cfg.end(), std::back_inserter(ini_config));
-            cfgmap.add(cfg);
+            // fill logging default
+            enable_logging_settings(vm, ini_config);
+
+            // handle command line arguments after logging defaults
+            if (vm.count("hpx:ini"))
+            {
+                std::vector<std::string> cfg =
+                    vm["hpx:ini"].as<std::vector<std::string>>();
+                std::copy(
+                    cfg.begin(), cfg.end(), std::back_inserter(ini_config));
+                cfgmap.add(cfg);
+            }
         }
-#endif
 
         use_process_mask_ =
             (cfgmap.get_value<int>("hpx.use_process_mask", 0) > 0) ||
@@ -670,12 +677,10 @@ namespace hpx::local::detail {
         // handle high-priority threads
         handle_high_priority_threads(vm, ini_config);
 
-#if !defined(HPX_HAVE_DISTRIBUTED_RUNTIME)
         if (debug_clp)
         {
             print_config(ini_config);
         }
-#endif
 
         return true;
     }

@@ -56,9 +56,13 @@ namespace hpx::local::detail {
         void check_pu_offset() const;
         void check_pu_step() const;
 
+        // handle_ini_options: add the logging settings and the --hpx:ini
+        // options to ini_config (false for a caller that adds them itself,
+        // the command line handling of the distributed runtime)
         bool handle_arguments(util::manage_config& cfgmap,
             hpx::program_options::variables_map& vm,
-            std::vector<std::string>& ini_config);
+            std::vector<std::string>& ini_config,
+            bool handle_ini_options = true);
 
         static void enable_logging_settings(
             hpx::program_options::variables_map& vm,

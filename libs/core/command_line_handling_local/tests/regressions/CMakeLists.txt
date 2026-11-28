@@ -4,7 +4,9 @@
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-set(tests ignore_aliases_local queuing_options_7743)
+set(tests ignore_aliases_local ini_options_over_config_file
+          queuing_options_7743
+)
 
 set(ignore_aliases_local_PARAMETERS "-wobble=1")
 
