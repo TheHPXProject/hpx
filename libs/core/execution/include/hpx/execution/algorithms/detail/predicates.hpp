@@ -422,7 +422,9 @@ namespace hpx::parallel::detail {
     };
 }    // namespace hpx::parallel::detail
 
-// The operations above run for about a nanosecond on builtin types.
+// The operations above run for about a nanosecond on builtin types. All but
+// division cost about the bytes of their operands (see
+// hpx::traits::is_memory_bound_builtin_operation).
 #define HPX_TASK_SIZE_BUILTIN_OPERATION(op)                                    \
     template <>                                                                \
     struct hpx::traits::is_transparent_builtin_operation<                      \
@@ -443,6 +445,25 @@ HPX_TASK_SIZE_BUILTIN_OPERATION(divides);
 
 #undef HPX_TASK_SIZE_BUILTIN_OPERATION
 
+#define HPX_TASK_SIZE_MEMORY_BOUND_OPERATION(op)                               \
+    template <>                                                                \
+    struct hpx::traits::is_memory_bound_builtin_operation<                     \
+        ::hpx::parallel::detail::op> : std::true_type                          \
+    {                                                                          \
+    } /**/
+
+HPX_TASK_SIZE_MEMORY_BOUND_OPERATION(equal_to);
+HPX_TASK_SIZE_MEMORY_BOUND_OPERATION(not_equal_to);
+HPX_TASK_SIZE_MEMORY_BOUND_OPERATION(less);
+HPX_TASK_SIZE_MEMORY_BOUND_OPERATION(greater);
+HPX_TASK_SIZE_MEMORY_BOUND_OPERATION(greater_equal);
+HPX_TASK_SIZE_MEMORY_BOUND_OPERATION(less_equal);
+HPX_TASK_SIZE_MEMORY_BOUND_OPERATION(plus);
+HPX_TASK_SIZE_MEMORY_BOUND_OPERATION(minus);
+HPX_TASK_SIZE_MEMORY_BOUND_OPERATION(multiplies);
+
+#undef HPX_TASK_SIZE_MEMORY_BOUND_OPERATION
+
 // min_of and max_of name the type of their operands.
 template <typename T>
 struct hpx::traits::is_typed_builtin_operation<hpx::parallel::detail::min_of<T>>
@@ -453,6 +474,29 @@ struct hpx::traits::is_typed_builtin_operation<hpx::parallel::detail::min_of<T>>
 template <typename T>
 struct hpx::traits::is_typed_builtin_operation<hpx::parallel::detail::max_of<T>>
   : std::bool_constant<hpx::traits::detail::builtin_operand<T>>
+{
+};
+
+// min_of and max_of compare, compare_to compares with its value: on builtin
+// types they cost about the bytes of their operands.
+template <typename T>
+struct hpx::traits::is_memory_bound_builtin_operation<
+    hpx::parallel::detail::min_of<T>>
+  : std::bool_constant<hpx::traits::detail::builtin_operand<T>>
+{
+};
+
+template <typename T>
+struct hpx::traits::is_memory_bound_builtin_operation<
+    hpx::parallel::detail::max_of<T>>
+  : std::bool_constant<hpx::traits::detail::builtin_operand<T>>
+{
+};
+
+template <typename Value>
+struct hpx::traits::is_memory_bound_builtin_operation<
+    hpx::parallel::detail::compare_to<Value>>
+  : std::bool_constant<hpx::traits::detail::builtin_operand<Value>>
 {
 };
 

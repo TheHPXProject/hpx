@@ -15,6 +15,7 @@
 
 #include <cstddef>
 #include <iterator>
+#include <ratio>
 #include <type_traits>
 
 namespace hpx::parallel::detail {
@@ -69,14 +70,17 @@ namespace hpx::parallel::detail {
     // The size of an iteration that dereferences the iterators its, calls f
     // with arguments of the types Args and, unless OutIter is void, writes
     // the result to an element of OutIter, as task_size_of_iteration
-    // describes. A builtin arithmetic operation on builtin elements (see
-    // traits::is_arithmetic_builtin_operation) costs about what its bytes
-    // cost to read and write: the iteration gets the run time of the
-    // elements of its and of the element it writes (see memory_task_size).
-    HPX_CXX_CORE_EXPORT template <typename OutIter, typename... Args,
-        typename F, typename... Iters>
-    [[nodiscard]] hpx::threads::task_size_and_time
-    task_size_of_iteration_writing(F const& f, Iters const&... its) noexcept
+    // describes. A builtin arithmetic operation or comparison on builtin
+    // elements (see traits::is_memory_bound_builtin_operation) costs about
+    // what its bytes cost to read and write: the iteration gets the run time
+    // of the elements of its and of the element it writes (see
+    // memory_task_size),
+    // times Weight (a std::ratio) for an iteration that calls f more or less
+    // than once per element.
+    HPX_CXX_CORE_EXPORT template <typename OutIter, typename Weight,
+        typename... Args, typename F, typename... Iters>
+    [[nodiscard]] hpx::threads::task_size_and_time task_size_of_iteration_with(
+        F const& f, Iters const&... its) noexcept
     {
         hpx::threads::task_size_and_time const call =
             task_size_of_call<Args...>(f);
@@ -93,7 +97,7 @@ namespace hpx::parallel::detail {
             return call;
         }
 
-        if constexpr (hpx::traits::is_arithmetic_builtin_operation<
+        if constexpr (hpx::traits::is_memory_bound_builtin_operation<
                           std::decay_t<F>>::value &&
             sizeof...(Iters) != 0 &&
             ((task_size_element_bytes<Iters> != 0) && ...) &&
@@ -101,12 +105,24 @@ namespace hpx::parallel::detail {
         {
             if (size != hpx::threads::task_size::unknown)
             {
-                return util::detail::memory_task_size(
+                constexpr std::size_t bytes =
                     (task_size_element_bytes<Iters> + ...) +
-                    task_size_element_bytes<OutIter>);
+                    task_size_element_bytes<OutIter>;
+                return util::detail::memory_task_size(
+                    (bytes * Weight::num + Weight::den - 1) / Weight::den);
             }
         }
         return {size, hpx::chrono::picoseconds(0)};
+    }
+
+    // The size of an iteration that calls f once per element.
+    HPX_CXX_CORE_EXPORT template <typename OutIter, typename... Args,
+        typename F, typename... Iters>
+    [[nodiscard]] hpx::threads::task_size_and_time
+    task_size_of_iteration_writing(F const& f, Iters const&... its) noexcept
+    {
+        return task_size_of_iteration_with<OutIter, std::ratio<1>, Args...>(
+            f, its...);
     }
 
     // The size of an iteration that dereferences the iterators its and calls

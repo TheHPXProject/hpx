@@ -492,15 +492,16 @@ namespace hpx::traits {
     // The function objects of the standard library: std::op<> is the
     // transparent one, std::op<T> a typed one (std::op<> is std::op<void>,
     // which is not builtin).
-    // Function objects of a builtin arithmetic operation. On builtin operands
-    // they cost about what moving their operands between memory and the core
-    // costs, so an algorithm gives them the run time of the bytes it reads
-    // and writes for an element (see hpx::parallel::detail::
-    // task_size_of_iteration). Comparisons and logical operations are not
-    // among them: in sort, merge or a search they steer the work, and
-    // division takes longer than its operands take to load.
+    // Function objects of a builtin operation that costs about what moving
+    // its operands between memory and the core costs on builtin operands:
+    // arithmetic (but division, which takes longer than its operands take to
+    // load), bitwise operations and comparisons. An algorithm gives them the
+    // run time of the bytes it reads and writes for an element (see
+    // hpx::parallel::detail::task_size_of_iteration), so that the size of an
+    // iteration follows the type of its elements. Logical operations are not
+    // among them: they work on bool, whatever the elements are.
     HPX_CXX_CORE_EXPORT template <typename F>
-    struct is_arithmetic_builtin_operation : std::false_type
+    struct is_memory_bound_builtin_operation : std::false_type
     {
     };
 
@@ -538,33 +539,44 @@ namespace hpx::traits {
 
 #undef HPX_TASK_SIZE_BUILTIN_OPERATION
 
-#define HPX_TASK_SIZE_ARITHMETIC_OPERATION(op)                                 \
+#define HPX_TASK_SIZE_MEMORY_BOUND_OPERATION(op)                               \
     template <>                                                                \
-    struct is_arithmetic_builtin_operation<std::op<>> : std::true_type         \
+    struct is_memory_bound_builtin_operation<std::op<>> : std::true_type       \
     {                                                                          \
     };                                                                         \
                                                                                \
     template <typename T>                                                      \
-    struct is_arithmetic_builtin_operation<std::op<T>>                         \
+    struct is_memory_bound_builtin_operation<std::op<T>>                       \
       : std::bool_constant<detail::builtin_operand<T>>                         \
     {                                                                          \
     } /**/
 
-    HPX_TASK_SIZE_ARITHMETIC_OPERATION(plus);
-    HPX_TASK_SIZE_ARITHMETIC_OPERATION(minus);
-    HPX_TASK_SIZE_ARITHMETIC_OPERATION(multiplies);
-    HPX_TASK_SIZE_ARITHMETIC_OPERATION(negate);
-    HPX_TASK_SIZE_ARITHMETIC_OPERATION(bit_and);
-    HPX_TASK_SIZE_ARITHMETIC_OPERATION(bit_or);
-    HPX_TASK_SIZE_ARITHMETIC_OPERATION(bit_xor);
-    HPX_TASK_SIZE_ARITHMETIC_OPERATION(bit_not);
+    HPX_TASK_SIZE_MEMORY_BOUND_OPERATION(plus);
+    HPX_TASK_SIZE_MEMORY_BOUND_OPERATION(minus);
+    HPX_TASK_SIZE_MEMORY_BOUND_OPERATION(multiplies);
+    HPX_TASK_SIZE_MEMORY_BOUND_OPERATION(negate);
+    HPX_TASK_SIZE_MEMORY_BOUND_OPERATION(bit_and);
+    HPX_TASK_SIZE_MEMORY_BOUND_OPERATION(bit_or);
+    HPX_TASK_SIZE_MEMORY_BOUND_OPERATION(bit_xor);
+    HPX_TASK_SIZE_MEMORY_BOUND_OPERATION(bit_not);
+    HPX_TASK_SIZE_MEMORY_BOUND_OPERATION(equal_to);
+    HPX_TASK_SIZE_MEMORY_BOUND_OPERATION(not_equal_to);
+    HPX_TASK_SIZE_MEMORY_BOUND_OPERATION(less);
+    HPX_TASK_SIZE_MEMORY_BOUND_OPERATION(greater);
+    HPX_TASK_SIZE_MEMORY_BOUND_OPERATION(less_equal);
+    HPX_TASK_SIZE_MEMORY_BOUND_OPERATION(greater_equal);
 
-#undef HPX_TASK_SIZE_ARITHMETIC_OPERATION
+#undef HPX_TASK_SIZE_MEMORY_BOUND_OPERATION
 
     // std::ranges has transparent comparisons only.
 #define HPX_TASK_SIZE_BUILTIN_RANGES_OPERATION(op)                             \
     template <>                                                                \
     struct is_transparent_builtin_operation<std::ranges::op> : std::true_type  \
+    {                                                                          \
+    };                                                                         \
+                                                                               \
+    template <>                                                                \
+    struct is_memory_bound_builtin_operation<std::ranges::op> : std::true_type \
     {                                                                          \
     } /**/
 

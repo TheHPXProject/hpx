@@ -385,6 +385,7 @@ namespace hpx {
 #include <algorithm>
 #include <cstddef>
 #include <iterator>
+#include <ratio>
 #include <type_traits>
 #include <utility>
 
@@ -1342,10 +1343,12 @@ namespace hpx::parallel {
                 // an iteration has the size of the comparison of two elements
                 // (minmax_element makes 1.5 per element: it compares two
                 // elements with each other, then the smaller one with the
-                // minimum and the larger one with the maximum)
-                auto const size =
-                    task_size_of_iteration<task_size_argument_t<FwdIter, Proj>,
-                        task_size_argument_t<FwdIter, Proj>>(f, first);
+                // minimum and the larger one with the maximum), a builtin
+                // comparison on builtin elements 1.5 times the run time of the
+                // bytes of an element
+                auto const size = task_size_of_iteration_with<void,
+                    std::ratio<3, 2>, task_size_argument_t<FwdIter, Proj>,
+                    task_size_argument_t<FwdIter, Proj>>(f, first);
                 auto f1 = [f, proj, policy](FwdIter it, std::size_t part_count)
                     -> minmax_element_result<FwdIter> {
                     return sequential_minmax_element(
