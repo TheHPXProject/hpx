@@ -146,4 +146,21 @@ namespace hpx::traits {
             return size != threads::task_size::unknown ? size : Size;
         }
     };
+
+    // the stack size of the function stored in it, known at run time only
+    template <typename Sig, bool Serializable,
+        threads::thread_stacksize Default>
+    struct get_stack_size<hpx::function<Sig, Serializable>, Default>
+    {
+        static constexpr threads::thread_stacksize value = Default;
+
+        [[nodiscard]] static threads::thread_stacksize call(
+            hpx::function<Sig, Serializable> const& f) noexcept
+        {
+            auto const stack_size = f.get_stack_size();
+            return stack_size != threads::thread_stacksize::unknown ?
+                stack_size :
+                Default;
+        }
+    };
 }    // namespace hpx::traits
