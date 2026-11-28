@@ -20,7 +20,8 @@ staging through host memory where neither is available, and several network
 ports at once where a node has them.
 
 Enable it with ``HPX_WITH_DEVICE_CONDUIT_NCCL=ON`` (it requires
-``HPX_WITH_CUDA=ON`` or ``HPX_WITH_HIP=ON``) and select it at runtime with
+``HPX_WITH_NETWORKING=ON`` and ``HPX_WITH_CUDA=ON`` or ``HPX_WITH_HIP=ON``;
+NCCL or RCCL 2.14 or newer) and select it at runtime with
 ``hpx.parcel.device_conduit=nccl``. It finds NCCL through ``NCCL_ROOT`` (or
 the environment variables ``NCCL_ROOT`` and ``NCCL_HOME``) and RCCL through
 ``RCCL_ROOT`` or the ROCm installation. NCCL reads its own configuration from
@@ -74,13 +75,26 @@ once, such as the pooled allocator of ``hpx::thrust`` (the default for
 ``thrust::device_vector`` sent in parcels), or stream-ordered allocation
 (``cudaMallocAsync`` and ``cudaFreeAsync``).
 
+The conduit reads sent data on a stream of its own, which nothing orders after
+the application's streams: before data is sent, its allocation and the writes
+to it must have completed (wait for the stream that produced it or for an
+event recorded on it; a device-wide wait is not needed), and the memory must
+stay allocated until the transfer has completed (the parcel's data is kept
+alive by the parcel until then).
+
 With HIP the rule is broader: HIP runs the streams of a GPU on a few in-order
 hardware queues (``GPU_MAX_HW_QUEUES``), and RCCL creates several streams of
 its own, so waiting for any stream may wait for an RCCL kernel queued before
 it on the same hardware queue. This includes stream-ordered allocation
 followed by ``hipStreamSynchronize``, and the work ``hipFreeAsync`` queues.
 Allocate the device memory of transfers once and reuse it (``hipMalloc`` does
-not wait for the GPU), and synchronize only the streams whose work is needed.
+not wait for the GPU). Reusing memory avoids the waits of allocating and
+freeing, but does not make waiting for a stream safe: work on a stream can
+still be queued behind an RCCL kernel, and if the waiting thread has to make
+progress before the other locality can post its part of that transfer, the
+wait deadlocks. Finish the preparation that needs a blocking wait before
+transfers that may overlap with it start, or wait on a thread whose progress
+the transfers don't depend on.
 
 See the :ref:`API reference <modules_device_conduit_nccl_api>` of this module
 for more details.
