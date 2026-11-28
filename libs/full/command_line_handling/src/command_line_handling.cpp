@@ -376,8 +376,9 @@ namespace hpx::util {
         hpx::program_options::variables_map& vm,
         std::vector<std::string>& ini_config, std::size_t& node, bool initial)
     {
-        // handle local options
-        base_type::handle_arguments(cfgmap, vm, ini_config);
+        // handle local options; the logging settings and --hpx:ini are added
+        // below, after the settings of the distributed runtime
+        base_type::handle_arguments(cfgmap, vm, ini_config, false);
 
         // verify that no networking options were used if networking was
         // disabled
