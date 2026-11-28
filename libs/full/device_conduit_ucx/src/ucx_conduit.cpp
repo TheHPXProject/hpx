@@ -848,7 +848,7 @@ namespace hpx::parcelset::device_conduits {
                     has_leaving_.store(true, std::memory_order_release);
                     queued = true;
                 }
-                catch (...)
+                catch (...)    // NOLINT(bugprone-empty-catch)
                 {
                     // fails them now
                 }
