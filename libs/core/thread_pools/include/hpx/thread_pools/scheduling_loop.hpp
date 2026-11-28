@@ -20,6 +20,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -76,6 +77,150 @@ namespace hpx::threads::detail {
         }
     };
 #endif
+
+    ///////////////////////////////////////////////////////////////////////////
+    // In fast idle mode each empty round of the scheduling loop adds
+    // max_idle_loop_count / 1024 to idle_loop_count, so that a backoff step
+    // comes after about 1024 rounds. A round reads the queues of the other
+    // workers and gets slower when many of them are awake; a fixed count of
+    // rounds then keeps a worker awake longer, so more workers are still awake
+    // at the next burst of work and the rounds stay slow (two stable states,
+    // one with most workers awake). With hpx.fast_idle_cap_time (T_cap, in
+    // microseconds) set, fast_idle_budget caps the count by time: before a
+    // step a worker runs min(1024, T_cap x r) rounds, r its rate of rounds
+    // over its last run of rounds. T_cap belongs above the time the rounds
+    // before a step take when few workers are awake and below the time they
+    // take when most are: where 1024 rounds take less than T_cap this is the
+    // count, where the rounds are slow they stop at about T_cap, so that the
+    // state with most workers awake doesn't hold. Those times depend on the
+    // machine and the pool size, so the setting has no default (0: the
+    // count). The budget sets where idle_loop_count starts after a step, so
+    // the rounds themselves stay as they are. The rate is measured on each
+    // run of rounds that starts after a step and ends in the next one, with
+    // one clock read before and one after the step, none in the rounds. All
+    // of it runs out of line, in step(), entered in fast idle mode with a cap
+    // set only, so that the loop's code is unchanged in normal mode, where
+    // the worker that creates threads is sensitive to the loop's code.
+    class fast_idle_budget
+    {
+        using clock = std::chrono::steady_clock;
+
+        static constexpr double rounds_per_step = 1024.0;
+        static constexpr double min_rounds_per_step = 8.0;
+
+    public:
+        // The number of rounds before a step for a worker running rate
+        // rounds per microsecond under a cap of cap_us microseconds: the
+        // count (1024) if the rounds are fast enough, fewer if not, at least
+        // 8.
+        [[nodiscard]] static constexpr double rounds_before_step(
+            double const cap_us, double const rate) noexcept
+        {
+            return (std::clamp) (cap_us * rate, min_rounds_per_step,
+                rounds_per_step);
+        }
+
+        // A backoff step in fast idle mode: measure the run of rounds before
+        // it (if it started after the previous step and no thread was run
+        // since, busy_loop_count unchanged), take the step (outer), and start
+        // the next run. Returns where idle_loop_count starts, or -1 if no step
+        // was taken. The state is per worker thread, so that the scheduling
+        // loop holds none of it.
+        template <typename Outer>
+        HPX_NOINLINE static std::int64_t step(Outer& outer,
+            std::int64_t max_idle_loop_count, double cap_us,
+            std::int64_t idle_loop_count, std::int64_t busy_loop_count)
+        {
+            static thread_local fast_idle_budget budget;
+            return budget.step_impl(outer, max_idle_loop_count, cap_us,
+                idle_loop_count, busy_loop_count);
+        }
+
+    private:
+        template <typename Outer>
+        std::int64_t step_impl(Outer& outer, std::int64_t max_idle_loop_count,
+            double cap_us, std::int64_t idle_loop_count,
+            std::int64_t busy_loop_count)
+        {
+            if (max_idle_loop_count != max_idle_loop_count_ ||
+                cap_us != cap_us_)
+            {
+                // first use, or a pool with other settings on this thread
+                *this = fast_idle_budget();
+                max_idle_loop_count_ = max_idle_loop_count;
+                per_round_ = max_idle_loop_count / 1024 + 1;
+                cap_us_ = cap_us;
+            }
+            else if (timed_ && busy_loop_count == busy_loop_count_)
+            {
+                measure(idle_loop_count);
+            }
+            timed_ = false;
+
+            if (!outer())
+            {
+                return -1;
+            }
+
+            start_time_ = clock::now();
+            busy_loop_count_ = busy_loop_count;
+            timed_ = true;
+            return start_;
+        }
+
+        void measure(std::int64_t idle_loop_count) noexcept
+        {
+            double const us = std::chrono::duration<double, std::micro>(
+                clock::now() - start_time_)
+                                  .count();
+            if (us <= 0.0)
+            {
+                return;
+            }
+
+            // the rate over the last run of rounds
+            double const rate = static_cast<double>(idle_loop_count - start_) /
+                static_cast<double>(per_round_) / us;
+            double const rounds = rounds_before_step(cap_us_, rate);
+            start_ = (std::max) (max_idle_loop_count_ -
+                    static_cast<std::int64_t>(
+                        rounds * static_cast<double>(per_round_)),
+                static_cast<std::int64_t>(0));
+        }
+
+        std::int64_t max_idle_loop_count_ = -1;
+        std::int64_t per_round_ = 1;
+        std::int64_t start_ = 0;
+        std::int64_t busy_loop_count_ = 0;
+        clock::time_point start_time_{};
+        double cap_us_ = 0.0;
+        bool timed_ = false;
+    };
+
+    // The idle callback (params.outer_) after a run of empty rounds: returns
+    // where idle_loop_count starts after it, or -1 if it didn't take a step.
+    // In fast idle mode with hpx.fast_idle_cap_time set, through the budget.
+    // Out of line, so that the scheduling loop's code stays as small as
+    // before the budget.
+    template <typename SchedulingPolicy>
+    HPX_NOINLINE std::int64_t call_outer(scheduling_callbacks& params,
+        SchedulingPolicy& scheduler, std::size_t num_thread, bool may_exit,
+        std::int64_t idle_loop_count, std::int64_t busy_loop_count)
+    {
+        if (params.outer_.empty())
+        {
+            return -1;
+        }
+        if (!may_exit && params.fast_idle_cap_time_ > 0.0 &&
+            scheduler.has_scheduler_mode(
+                policies::scheduler_mode::fast_idle_mode, num_thread))
+        {
+            return fast_idle_budget::step(params.outer_,
+                params.max_idle_loop_count_, params.fast_idle_cap_time_,
+                idle_loop_count, busy_loop_count);
+        }
+        return params.outer_() ? 0 : -1;
+    }
 
     ///////////////////////////////////////////////////////////////////////////
     template <typename SchedulingPolicy>
@@ -622,10 +767,14 @@ namespace hpx::threads::detail {
             }
             else if (idle_loop_count > params.max_idle_loop_count_)
             {
-                // call back into invoking context
-                if (!params.outer_.empty() && params.outer_())
+                // call back into invoking context (out of line, in fast idle
+                // mode through the budget, which chooses where the count of
+                // the next run of rounds starts)
+                if (std::int64_t const start = call_outer(params, scheduler,
+                        num_thread, may_exit, idle_loop_count, busy_loop_count);
+                    start >= 0)
                 {
-                    idle_loop_count = 0;
+                    idle_loop_count = start;
                     context_storage = hpx::execution_base::this_thread::detail::
                         get_agent_storage();
                 }

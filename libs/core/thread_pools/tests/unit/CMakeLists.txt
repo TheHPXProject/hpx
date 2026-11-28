@@ -4,7 +4,9 @@
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-set(tests bound_thread_yield create_background_thread stop_background_thread)
+set(tests bound_thread_yield create_background_thread fast_idle_cap
+          stop_background_thread
+)
 
 set(bound_thread_yield_PARAMETERS THREADS_PER_LOCALITY 4)
 

@@ -188,6 +188,7 @@ The |hpx| configuration section
    max_background_threads = ${HPX_MAX_BACKGROUND_THREADS:$[hpx.os_threads]}
    max_idle_loop_count = ${HPX_MAX_IDLE_LOOP_COUNT:<hpx_idle_loop_count_max>}
    max_busy_loop_count = ${HPX_MAX_BUSY_LOOP_COUNT:<hpx_busy_loop_count_max>}
+   fast_idle_cap_time = ${HPX_FAST_IDLE_CAP_TIME:0}
    max_idle_backoff_time = ${HPX_MAX_IDLE_BACKOFF_TIME:<hpx_idle_backoff_time_max>}
    min_idle_backoff_time = ${HPX_MIN_IDLE_BACKOFF_TIME:<hpx_idle_backoff_time_min>}
    idle_backoff_steal_check_interval = ${HPX_IDLE_BACKOFF_STEAL_CHECK_INTERVAL:<hpx_idle_backoff_steal_check_interval>}
@@ -301,6 +302,21 @@ The |hpx| configuration section
        before it does background work in between, see
        :ref:`thread_scheduler_background_work`. By default this is defined by
        the preprocessor constant ``HPX_BUSY_LOOP_COUNT_MAX`` (``2000``).
+   * * ``hpx.fast_idle_cap_time``
+     * This setting caps, in fast idle mode, the time (in microseconds) an
+       idle worker thread keeps polling the queues before its next idle
+       backoff step. Without it a worker polls for a fixed number of rounds
+       (``hpx.max_idle_loop_count / 1024`` per empty round, about 1024
+       rounds); a round gets slower when many worker threads are awake, so
+       on some machines the workers can stay in a state where most of them
+       keep polling. With the cap set, a worker measures its rate of rounds
+       (one clock read before and one after each backoff step, none while
+       polling) and polls for at most this time: fewer rounds if they are
+       slow, the full count if they are fast. A useful value lies above the
+       time the rounds before a step take with few workers awake and below
+       the time they take with most awake; it depends on the machine and
+       the size of the pool. ``0``, the default, disables the cap. See
+       :ref:`thread_scheduler_idle_backoff`.
    * * ``hpx.max_idle_backoff_time``
      * This setting defines the maximum time (in microseconds) for a worker
        thread to sleep after being idle for ``hpx.max_idle_loop_count``

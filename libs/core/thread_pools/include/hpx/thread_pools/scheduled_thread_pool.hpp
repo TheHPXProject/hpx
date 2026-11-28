@@ -409,6 +409,7 @@ namespace hpx::threads::detail {
         std::int64_t max_idle_loop_count_;
         std::int64_t max_busy_loop_count_;
         std::size_t shutdown_check_count_;
+        double fast_idle_cap_time_;
     };
 }    // namespace hpx::threads::detail
 

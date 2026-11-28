@@ -233,7 +233,8 @@ Idle backoff
 ============
 
 Settings: ``hpx.max_idle_loop_count``, ``hpx.max_idle_backoff_time``,
-``hpx.min_idle_backoff_time``, ``hpx.idle_backoff_steal_check_interval``.
+``hpx.min_idle_backoff_time``, ``hpx.idle_backoff_steal_check_interval``,
+``hpx.fast_idle_cap_time``.
 
 After ``hpx.max_idle_loop_count`` (200000) consecutive empty iterations, a
 worker thread sleeps until new work arrives for it, but at most for
@@ -243,6 +244,19 @@ since it last found work or was woken up by new work, and never longer than
 counting empty iterations from zero again. This requires
 ``HPX_WITH_THREAD_MANAGER_IDLE_BACKOFF=ON`` (the default) and the
 ``enable_idle_backoff`` scheduler mode (on by default).
+
+In fast idle mode every empty iteration counts as ``hpx.max_idle_loop_count /
+1024``, so a worker thread goes to sleep after about 1024 of them. Each
+iteration looks at the queues of other worker threads and takes longer when
+many of them are awake; on some machines this keeps the worker threads in a
+state where most of them stay awake, polling slowly. ``hpx.fast_idle_cap_time``
+(in microseconds, 0 by default: no cap) caps the time a worker thread polls
+before it goes to sleep: it measures its rate of iterations over its last run
+of them (one clock read before and one after each sleep, none in between) and
+runs fewer iterations if they are slow, at least 8. A useful value lies above
+the time the iterations before a sleep take with few worker threads awake and
+below the time they take with most of them awake; it depends on the machine
+and the size of the pool.
 
 Periods shorter than ``hpx.min_idle_backoff_time`` (50 microseconds) are spent
 spinning instead of sleeping: a timed wait lasts at least as long as the

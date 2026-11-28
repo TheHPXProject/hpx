@@ -74,6 +74,10 @@ namespace hpx::threads {
         std::int64_t max_idle_loop_count_;
         std::int64_t max_busy_loop_count_;
         std::size_t shutdown_check_count_;
+        // hpx.fast_idle_cap_time: the cap of the fast idle rounds before a
+        // backoff step, in microseconds; 0 for none (set by the thread
+        // manager after construction)
+        double fast_idle_cap_time_ = 0.0;
 
         thread_pool_init_parameters(std::string const& name, std::size_t index,
             policies::scheduler_mode mode, std::size_t num_threads,
