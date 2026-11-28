@@ -261,7 +261,8 @@ public:
 
     void deallocate(pointer p, size_type n) noexcept
     {
-        HPX_TEST_EQ(p == pointer_ && n, size_);
+        HPX_TEST(p == pointer_);
+        HPX_TEST_EQ(n, size_);
     }
 
 private:
