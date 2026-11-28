@@ -233,7 +233,7 @@ namespace hpx::lcos::local::detail {
 
             // remove item from queue before error handling
             front->ctx_.reset();
-            front->was_reset_.store(true, std::memory_order_relaxed);
+            front->was_reset_.store(true, std::memory_order_release);
 
             queue_.pop_front();
 
@@ -315,7 +315,7 @@ namespace hpx::lcos::local::detail {
 
                 // remove item from queue before error handling
                 front->ctx_.reset();
-                front->was_reset_.store(true, std::memory_order_relaxed);
+                front->was_reset_.store(true, std::memory_order_release);
 
                 queue.pop_front();
 
@@ -377,15 +377,21 @@ namespace hpx::lcos::local::detail {
 
         reset_queue_entry r(f, lock);
         {
-            // suspend this thread
+            // Suspend until this wait's own queue entry has been removed. A
+            // non-HPX thread may consume a wakeup left by an earlier wait;
+            // that wakeup must not complete this wait while its entry is still
+            // queued.
             unlock_guard<std::unique_lock<mutex_type>> ul(lock);
 
-            // also if suspending throws (interruption, abort), before the
-            // lock is taken again
+            // Also if suspending throws (interruption or abort), publish that
+            // this waiter has left before the lock is taken again.
             auto set_left = hpx::experimental::scope_exit(
                 [&f] { f.left_.store(true, std::memory_order_release); });
 
-            this_ctx.suspend(description);
+            do
+            {
+                this_ctx.suspend(description);
+            } while (!f.was_reset_.load(std::memory_order_acquire));
         }
 
         // abort_all() only resumes this thread, report the abort now that the
@@ -442,7 +448,7 @@ namespace hpx::lcos::local::detail {
             result = this_ctx.sleep_until(
                 abs_time.value(),
                 [&, pred = HPX_MOVE(wait_cond)]() {
-                    if (f.was_reset_.load(std::memory_order_relaxed))
+                    if (f.was_reset_.load(std::memory_order_acquire))
                         return true;
                     return pred();
                 },
@@ -485,8 +491,8 @@ namespace hpx::lcos::local::detail {
 
             // remove item from queue before error handling
             front->ctx_.reset();
-            front->was_reset_.store(true, std::memory_order_relaxed);
             front->was_aborted_.store(true, std::memory_order_relaxed);
+            front->was_reset_.store(true, std::memory_order_release);
 
             queue.pop_front();
 
