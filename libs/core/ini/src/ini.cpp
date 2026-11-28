@@ -19,7 +19,6 @@
 #include <iostream>
 #include <list>
 #include <mutex>
-#include <regex>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -44,7 +43,6 @@ namespace hpx::util {
 
     ///////////////////////////////////////////////////////////////////////////////
     // example ini line: line # comment
-    inline constexpr char const pattern_comment[] = "^([^#]*)(#.*)$";
     ///////////////////////////////////////////////////////////////////////////////
 
     namespace detail {
@@ -203,8 +201,6 @@ namespace hpx::util {
         int linenum = 0;
         section* current = this;
 
-        std::regex regex_comment(pattern_comment, std::regex_constants::icase);
-
         auto const end = lines.end();
         for (auto it = lines.begin(); it != end; ++it)
         {
@@ -217,15 +213,15 @@ namespace hpx::util {
             if (line.empty())
                 continue;
 
-            // weed out comments
+            // weed out comments: everything from the first '#' on (a regular
+            // expression for this recurses once per character in libstdc++,
+            // which overflows the stack of an HPX thread on a long line)
             if (weed_out_comments)
             {
-                std::smatch what_comment;
-                if (std::regex_match(line, what_comment, regex_comment))
+                if (std::string::size_type const comment = line.find('#');
+                    comment != std::string::npos)
                 {
-                    HPX_ASSERT(3 == what_comment.size());
-
-                    line = detail::trim_whitespace(what_comment[1]);
+                    line = detail::trim_whitespace(line.substr(0, comment));
                     if (line.empty())
                         continue;
                 }
