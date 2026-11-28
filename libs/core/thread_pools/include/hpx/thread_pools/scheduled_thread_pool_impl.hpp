@@ -84,6 +84,7 @@ namespace hpx::threads::detail {
       , max_idle_loop_count_(init.max_idle_loop_count_)
       , max_busy_loop_count_(init.max_busy_loop_count_)
       , shutdown_check_count_(init.shutdown_check_count_)
+      , fast_idle_cap_time_(init.fast_idle_cap_time_)
     {
         sched_->set_parent_pool(this);
         sched_->set_max_idle_loop_count(max_idle_loop_count_);
@@ -551,7 +552,8 @@ namespace hpx::threads::detail {
                     util::deferred_call(    //-V107
                         &Scheduler::idle_callback, sched_.get(), thread_num),
                     nullptr, nullptr, max_background_threads_,
-                    max_idle_loop_count_, max_busy_loop_count_);
+                    max_idle_loop_count_, max_busy_loop_count_,
+                    fast_idle_cap_time_);
 
                 if (get_scheduler()->has_scheduler_mode(
                         policies::scheduler_mode::do_background_work,

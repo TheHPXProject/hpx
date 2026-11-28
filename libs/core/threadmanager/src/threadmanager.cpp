@@ -31,6 +31,7 @@
 #include <hpx/modules/type_support.hpp>
 #include <hpx/modules/util.hpp>
 
+#include <algorithm>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -936,6 +937,12 @@ namespace hpx::threads {
         std::int64_t const max_busy_loop_count =
             hpx::util::get_entry_as<std::int64_t>(
                 rtcfg_, "hpx.max_busy_loop_count", HPX_BUSY_LOOP_COUNT_MAX);
+        // the cap of the fast idle rounds before a backoff step, in
+        // microseconds; 0 (the default), a negative value or one that isn't
+        // a number: no cap
+        double const fast_idle_cap_time = (std::max) (0.0,
+            hpx::util::get_entry_as<double>(
+                rtcfg_, "hpx.fast_idle_cap_time", 0.0));
 
         std::size_t const numa_sensitive = hpx::util::get_entry_as<std::size_t>(
             rtcfg_, "hpx.numa_sensitive", 1);
@@ -1049,6 +1056,7 @@ namespace hpx::threads {
                 rp.get_affinity_data(), overall_background_work,
                 pool_max_background_threads, max_idle_loop_count,
                 max_busy_loop_count);
+            thread_pool_init.fast_idle_cap_time_ = fast_idle_cap_time;
 
             policies::thread_queue_init_parameters const thread_queue_init =
                 idle_tuned_parameters(

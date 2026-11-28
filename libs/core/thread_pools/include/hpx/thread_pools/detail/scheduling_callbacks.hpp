@@ -28,13 +28,15 @@ namespace hpx::threads::detail {
             std::size_t max_background_threads =
                 (std::numeric_limits<std::size_t>::max)(),
             std::int64_t max_idle_loop_count = HPX_IDLE_LOOP_COUNT_MAX,
-            std::int64_t max_busy_loop_count = HPX_BUSY_LOOP_COUNT_MAX)
+            std::int64_t max_busy_loop_count = HPX_BUSY_LOOP_COUNT_MAX,
+            double fast_idle_cap_time = 0.0)
           : outer_(HPX_MOVE(outer))
           , inner_(HPX_MOVE(inner))
           , background_(HPX_MOVE(background))
           , max_background_threads_(max_background_threads)
           , max_idle_loop_count_(max_idle_loop_count)
           , max_busy_loop_count_(max_busy_loop_count)
+          , fast_idle_cap_time_(fast_idle_cap_time)
         {
         }
 
@@ -44,5 +46,8 @@ namespace hpx::threads::detail {
         std::size_t const max_background_threads_;
         std::int64_t const max_idle_loop_count_;
         std::int64_t const max_busy_loop_count_;
+        // hpx.fast_idle_cap_time: the cap of the fast idle rounds before a
+        // backoff step, in microseconds; 0 for none
+        double const fast_idle_cap_time_;
     };
 }    // namespace hpx::threads::detail
