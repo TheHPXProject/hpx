@@ -28,6 +28,7 @@ set(benchmarks
     foreach_report
     foreach_scaling
     task_size_chunk_size_sweep
+    task_size_single_loop
     transform_reduce_scaling
 )
 
@@ -116,6 +117,11 @@ set(benchmark_nth_element_parallel_perftest_PARAMETERS THREADS_PER_LOCALITY 4)
 set(task_size_chunk_size_sweep_PARAMETERS
     THREADS_PER_LOCALITY 4 ARGS --max_work_us=100 --time_per_case_ms=0
     --min_reps=1
+)
+
+set(task_size_single_loop_PARAMETERS
+    THREADS_PER_LOCALITY 4 ARGS --elements=16384 --placements=warm,foreign
+    --time_per_case_ms=0 --min_reps=1 --max_reps=1
 )
 
 foreach(benchmark ${benchmarks})
