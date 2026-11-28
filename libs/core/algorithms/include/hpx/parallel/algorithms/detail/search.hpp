@@ -29,6 +29,7 @@
 
 #include <cstddef>
 #include <iterator>
+#include <optional>
 #include <type_traits>
 #include <utility>
 
@@ -295,8 +296,6 @@ namespace hpx::parallel::detail {
     HPX_CXX_CORE_EXPORT template <typename FwdIter, typename Sent>
     struct search_n final : public algorithm<search_n<FwdIter, Sent>, FwdIter>
     {
-        static constexpr bool uses_legacy_futures = true;
-
         constexpr search_n() noexcept
           : algorithm<search_n, FwdIter>("search_n")
         {
@@ -371,33 +370,92 @@ namespace hpx::parallel::detail {
         }
         template <typename ExPolicy, typename Size, typename T, typename Pred,
             typename Proj>
-        static util::detail::algorithm_result_t<ExPolicy, FwdIter> parallel(
-            ExPolicy&& orgpolicy, FwdIter first, Sent last, Size count,
-            T const& value, Pred&& pred, Proj&& proj)
+        static decltype(auto) parallel(ExPolicy&& orgpolicy, FwdIter first,
+            Sent last, Size count, T const& value, Pred&& pred, Proj&& proj)
+        {
+            if constexpr (hpx::execution_policy_has_scheduler_executor_v<
+                              ExPolicy>)
+            {
+                namespace ex = hpx::execution::experimental;
+                using base_type = algorithm<search_n<FwdIter, Sent>, FwdIter>;
+                auto sched = orgpolicy.executor().sched();
+                using exception_policy_type = decltype(ex::to_task(
+                    orgpolicy.on(ex::scheduler_executor(sched))));
+                auto deferred = ex::let_value(ex::just(),
+                    [policy = HPX_FORWARD(ExPolicy, orgpolicy), first, last,
+                        count, value = value, pred = HPX_FORWARD(Pred, pred),
+                        proj = HPX_FORWARD(Proj, proj)]() mutable {
+                        return parallel_impl(HPX_MOVE(policy), first, last,
+                            count, value, HPX_MOVE(pred), HPX_MOVE(proj));
+                    });
+                auto handled = ex::let_error(HPX_MOVE(deferred),
+                    typename base_type::template sender_algorithm_error_handler<
+                        exception_policy_type>{});
+                return ex::continues_on(HPX_MOVE(handled), HPX_MOVE(sched));
+            }
+            else
+            {
+                return parallel_impl(HPX_FORWARD(ExPolicy, orgpolicy), first,
+                    last, count, value, HPX_FORWARD(Pred, pred),
+                    HPX_FORWARD(Proj, proj));
+            }
+        }
+
+        template <typename ExPolicy, typename Size, typename T, typename Pred,
+            typename Proj>
+        static decltype(auto) parallel_impl(ExPolicy&& orgpolicy, FwdIter first,
+            Sent last, Size count, T const& value, Pred&& pred, Proj&& proj)
         {
             using result_type =
                 util::detail::algorithm_result<ExPolicy, FwdIter>;
             using difference_type =
                 typename std::iterator_traits<FwdIter>::difference_type;
+            constexpr bool has_scheduler_executor =
+                hpx::execution_policy_has_scheduler_executor_v<ExPolicy>;
 
-            if (count <= 0)
-                return result_type::get(HPX_MOVE(first));
-
-            if (first == last)
-                return result_type::get(HPX_MOVE(first));
-
-            difference_type n = hpx::parallel::detail::distance(first, last);
-            if (static_cast<difference_type>(count) > n)
+            if constexpr (!has_scheduler_executor)
             {
-                return result_type::get(
-                    hpx::parallel::detail::advance_to_sentinel(first, last));
+                if (count <= 0)
+                    return result_type::get(HPX_MOVE(first));
+
+                if (first == last)
+                    return result_type::get(HPX_MOVE(first));
+            }
+
+            difference_type n = 0;
+            if (count > 0 && first != last)
+                n = hpx::parallel::detail::distance(first, last);
+
+            if constexpr (!has_scheduler_executor)
+            {
+                if (static_cast<difference_type>(count) > n)
+                {
+                    return result_type::get(
+                        hpx::parallel::detail::advance_to_sentinel(
+                            first, last));
+                }
             }
 
             // Number of valid starting positions
-            difference_type max_start =
+            difference_type max_start = count <= 0 || first == last ||
+                    static_cast<difference_type>(count) > n ?
+                0 :
                 n - static_cast<difference_type>(count) + 1;
 
-            auto value_proj = proj(value);
+            using projected_type = std::decay_t<decltype(proj(value))>;
+            auto value_proj = [&] {
+                if constexpr (has_scheduler_executor)
+                {
+                    std::optional<projected_type> projected;
+                    if (max_start != 0)
+                        projected.emplace(proj(value));
+                    return projected;
+                }
+                else
+                {
+                    return proj(value);
+                }
+            }();
 
             decltype(auto) policy =
                 hpx::execution::experimental::adapt_placement_mode(
@@ -413,21 +471,33 @@ namespace hpx::parallel::detail {
             // an iteration compares up to count elements with the value
             auto const size = hpx::threads::bulk_task_size(
                 task_size_of_iteration<task_size_argument_t<FwdIter, Proj>,
-                    decltype(value_proj) const&>(pred, first),
-                static_cast<std::size_t>(count));
+                    projected_type const&>(pred, first),
+                max_start == 0 ? 0 : static_cast<std::size_t>(count));
             auto f1 = [max_start, count, value_proj,
                           pred = HPX_FORWARD(Pred, pred),
                           proj = HPX_FORWARD(Proj, proj),
                           tok](FwdIter it, std::size_t part_size,
                           std::size_t base_idx) mutable -> void {
-                sequential_search_n_t<policy_type>{}(it, base_idx, part_size,
-                    static_cast<std::ptrdiff_t>(max_start), count, value_proj,
-                    tok, pred, proj);
+                if constexpr (has_scheduler_executor)
+                {
+                    sequential_search_n_t<policy_type>{}(it, base_idx,
+                        part_size, static_cast<std::ptrdiff_t>(max_start),
+                        count, *value_proj, tok, pred, proj);
+                }
+                else
+                {
+                    sequential_search_n_t<policy_type>{}(it, base_idx,
+                        part_size, static_cast<std::ptrdiff_t>(max_start),
+                        count, value_proj, tok, pred, proj);
+                }
             };
 
-            auto f2 = [first, last, max_start, tok](
+            auto f2 = [first, last, count, max_start, tok](
                           auto&&... data) mutable -> FwdIter {
                 util::detail::clear_container(data...);
+
+                if (count <= 0)
+                    return HPX_MOVE(first);
 
                 difference_type idx = tok.get_data();
                 if (idx == max_start)
