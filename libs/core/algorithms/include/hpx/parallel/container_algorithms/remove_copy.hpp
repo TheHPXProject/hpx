@@ -822,7 +822,7 @@ namespace hpx::ranges {
         template <typename ExPolicy, typename I, typename Sent, typename O,
             typename Proj = hpx::identity,
             typename T = std::remove_cvref_t<
-                std::invoke_result_t<Proj&, std::iter_value_t<I>&>>>
+                std::invoke_result_t<Proj&, std::iter_reference_t<I>>>>
             requires(hpx::is_execution_policy_v<ExPolicy> &&
                 std::forward_iterator<I> && std::sentinel_for<Sent, I> &&
                 requires(ExPolicy&& policy, I first, Sent last, O dest,
@@ -841,7 +841,7 @@ namespace hpx::ranges {
         template <typename ExPolicy, typename Rng, typename O,
             typename Proj = hpx::identity,
             typename T = std::remove_cvref_t<std::invoke_result_t<Proj&,
-                std::iter_value_t<std::ranges::iterator_t<Rng>>&>>>
+                std::ranges::range_reference_t<Rng>>>>
             requires(hpx::is_execution_policy_v<ExPolicy> &&
                 std::ranges::forward_range<Rng> &&
                 requires(ExPolicy&& policy, Rng&& rng, O dest, T&& value,

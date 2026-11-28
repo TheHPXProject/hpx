@@ -564,6 +564,31 @@ void test_remove_copy_list_initialized()
         auto res = f.get();
         HPX_TEST(res.out == dest.begin() + 3);
     }
+    {
+        // a const range yields const references: the projection that only
+        // takes those must be the one the default for T looks at
+        struct const_only_proj
+        {
+            int operator()(projected_element const& e) const
+            {
+                return e.key;
+            }
+            int operator()(projected_element&) const = delete;
+        };
+
+        std::vector<projected_element> const c{{1, 0}, {2, 1}, {3, 2}, {2, 3}};
+        std::vector<projected_element> dest(c.size());
+        auto res = hpx::ranges::remove_copy(
+            par, c, dest.begin(), {2}, const_only_proj{});
+        HPX_TEST(res.out == dest.begin() + 2);
+        HPX_TEST(dest[0].tag == 0 && dest[1].tag == 2);
+
+        std::vector<projected_element> dest2(c.size());
+        auto res2 = hpx::ranges::remove_copy(
+            par, c.begin(), c.end(), dest2.begin(), {2}, const_only_proj{});
+        HPX_TEST(res2.out == dest2.begin() + 2);
+        HPX_TEST(dest2[0].tag == 0 && dest2[1].tag == 2);
+    }
 }
 
 int hpx_main(hpx::program_options::variables_map& vm)
