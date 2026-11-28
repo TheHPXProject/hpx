@@ -18,6 +18,12 @@
 #include <thread>
 #include <vector>
 
+#if defined(HPX_WINDOWS)
+#include <windows.h>
+#elif defined(__linux__)
+#include <sys/prctl.h>
+#endif
+
 // These measurements describe the machine and the operating system, not
 // HPX's runtime, so they use the threads and the condition variable of the
 // standard library on purpose: the scheduler's timed waits are those of
@@ -201,5 +207,34 @@ namespace hpx::tuning {
             result.spinning_us = summarize(HPX_MOVE(latency));
         }
         return result;
+    }
+
+    double timer_resolution_us() noexcept
+    {
+#if defined(HPX_WINDOWS)
+        // NtQueryTimerResolution(&coarsest, &finest, &current), in units of
+        // 100 ns; ntdll has no import library in the SDK by default
+        using query_function = LONG(NTAPI*)(PULONG, PULONG, PULONG);
+        HMODULE const ntdll = ::GetModuleHandleW(L"ntdll.dll");
+        if (ntdll == nullptr)
+            return 0.0;
+        auto const query =
+            reinterpret_cast<query_function>(reinterpret_cast<void*>(
+                ::GetProcAddress(ntdll, "NtQueryTimerResolution")));
+        if (query == nullptr)
+            return 0.0;
+        ULONG coarsest = 0, finest = 0, current = 0;
+        if (query(&coarsest, &finest, &current) != 0)
+            return 0.0;
+        return static_cast<double>(current) / 10.0;
+#elif defined(__linux__)
+        // the slack in nanoseconds is the return value
+        int const slack = ::prctl(PR_GET_TIMERSLACK, 0, 0, 0, 0);
+        if (slack < 0)
+            return 0.0;
+        return static_cast<double>(slack) / 1000.0;
+#else
+        return 0.0;
+#endif
     }
 }    // namespace hpx::tuning

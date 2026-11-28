@@ -188,8 +188,10 @@ namespace {
             area_reports.emplace_back(a.name, tuning::json_object(members));
         }
 
-        // after the checks, which may have added their areas' entries
-        std::vector<std::string> const differences =
+        // after the checks, which may have added their areas' entries; a
+        // file without a fingerprint has nothing to compare with
+        std::vector<std::string> const differences = profile.entries.empty() ?
+            std::vector<std::string>{} :
             profile_mismatches(profile, context.fingerprint);
         for (std::string const& difference : differences)
             std::cout << "fingerprint: differs: " << difference << "\n";

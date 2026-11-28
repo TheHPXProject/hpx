@@ -105,6 +105,28 @@ void test_windows_timer_tick()
     // the reason records the wake cost
     HPX_TEST(find(s, "hpx.min_idle_backoff_time").reason.find("108.4") !=
         std::string::npos);
+    // no timer resolution known: the reason names none
+    HPX_TEST(
+        find(s, "hpx.max_idle_backoff_time").reason.find("timer resolution") ==
+        std::string::npos);
+}
+
+// the timer resolution the waits were measured under is named in the
+// longest step's reason, and changes no value
+void test_timer_resolution_in_reason()
+{
+    tuning::idle_measurements m;
+    m.timed_waits = waits(15821.5);
+    m.wake.asleep_us = at(110.2);
+    m.wake.spinning_us = at(1.8);
+    m.timer_resolution_us = 15625.0;
+
+    auto const s = tuning::derive_idle_settings(m);
+    HPX_TEST_EQ(
+        find(s, "hpx.max_idle_backoff_time").value, std::string("16000"));
+    HPX_TEST(find(s, "hpx.max_idle_backoff_time")
+                 .reason.find("under a timer resolution of 15625.0 us") !=
+        std::string::npos);
 }
 
 // a shortest sleep of exactly the default longest step is not a coarse
@@ -150,6 +172,7 @@ int main()
     test_linux_like();
     test_windows_like();
     test_windows_timer_tick();
+    test_timer_resolution_in_reason();
     test_sleep_at_longest_step();
     test_expensive_wake();
     test_no_measurements();

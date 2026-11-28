@@ -10,17 +10,21 @@
 // written by hand have to hold; a child given another value than the file
 // says (--check-ini) has to fail, so that the check is known to be able to
 // fail. The check compares with the file, not with the machine, so the test
-// holds on any machine.
+// holds on any machine. Each step prints its result, and the end lists the
+// steps that failed.
 //
 // HPX_TUNE_EXECUTABLE and HPX_TUNE_TEST_DIRECTORY are set by CMake.
 
 #include <hpx/modules/testing.hpp>
 
+#include <algorithm>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
 #include <iterator>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace {
 
@@ -62,26 +66,58 @@ namespace {
     {
         return run_tool("--idle --check " + in_quotes(file) + more);
     }
+
+    // the result of each step, printed when it is known and again at the
+    // end, so that the output of the one test shows which steps failed
+    class step_results
+    {
+    public:
+        void add(std::string const& name, bool const passed)
+        {
+            std::cout << (passed ? "step passed: " : "step FAILED: ") << name
+                      << std::endl;
+            HPX_TEST_MSG(passed, name);
+            results_.emplace_back(name, passed);
+        }
+
+        void summarize() const
+        {
+            auto const passed = std::count_if(results_.begin(), results_.end(),
+                [](auto const& result) { return result.second; });
+            std::cout << passed << " of " << results_.size() << " steps passed"
+                      << std::endl;
+            for (auto const& [name, ok] : results_)
+            {
+                if (!ok)
+                    std::cout << "  FAILED: " << name << std::endl;
+            }
+        }
+
+    private:
+        std::vector<std::pair<std::string, bool>> results_;
+    };
 }    // namespace
 
 int main()
 {
+    step_results steps;
+
     // 1: the tool's own file, two configurations, rows for pools of any size
     std::string const any_size = directory + "/idle_e2e_any_size.ini";
-    HPX_TEST_EQ(run_tool("--idle --repeats 3 --configuration "
-                         "local-priority-fifo --configuration "
-                         "local-priority-tuned-fifo:static --output " +
-                    in_quotes(any_size)),
-        0);
-    HPX_TEST_EQ(check(any_size), 0);
+    steps.add("1: the tool's own file, written",
+        run_tool("--idle --repeats 3 --configuration "
+                 "local-priority-fifo --configuration "
+                 "local-priority-tuned-fifo:static --output " +
+            in_quotes(any_size)) == 0);
+    steps.add("1: the tool's own file, checked", check(any_size) == 0);
 
     // 2: the tool's file with rows of one pool size only: the pool of that
     // size gets its row, the other the plain settings
     std::string const by_size = directory + "/idle_e2e_by_size.ini";
-    HPX_TEST_EQ(run_tool("--idle --repeats 3 --pool-size 1 --output " +
-                    in_quotes(by_size)),
-        0);
-    HPX_TEST_EQ(check(by_size), 0);
+    steps.add("2: rows of one pool size, written",
+        run_tool("--idle --repeats 3 --pool-size 1 --output " +
+            in_quotes(by_size)) == 0);
+    steps.add("2: rows of one pool size, checked", check(by_size) == 0);
 
     // 3: written by hand, setting by setting: the longest step only in the
     // row for any size, the spin only in the row of one worker
@@ -92,7 +128,7 @@ int main()
         "\n"
         "[hpx.idle_tuning.local-priority-fifo.none.1]\n"
         "min_idle_backoff_time = 70\n");
-    HPX_TEST_EQ(check(partial), 0);
+    steps.add("3: setting by setting, checked", check(partial) == 0);
 
     // 4: written by hand, invalid values: ignored by the runtime and by the
     // check alike
@@ -101,19 +137,21 @@ int main()
         "[hpx.idle_tuning.local-priority-fifo.none]\n"
         "max_idle_backoff_time = -5\n"
         "min_idle_backoff_time = many\n");
-    HPX_TEST_EQ(check(invalid), 0);
+    steps.add("4: invalid values, checked", check(invalid) == 0);
 
     // 5: the children run with another longest step than the file's row
     // says: the check has to fail, on that value (not because a child
     // couldn't start)
     std::string const report = directory + "/idle_e2e_must_fail.json";
-    HPX_TEST_NEQ(check(any_size,
-                     " --check-ini=hpx.idle_tuning.local-priority-fifo.none."
-                     "max_idle_backoff_time=12345 --report " +
-                         in_quotes(report)),
-        0);
-    HPX_TEST(read_file(report).find("max_idle_backoff_time 12345, the row "
-                                    "for any size says") != std::string::npos);
+    steps.add("5: another value than the file says, the check fails",
+        check(any_size,
+            " --check-ini=hpx.idle_tuning.local-priority-fifo.none."
+            "max_idle_backoff_time=12345 --report " +
+                in_quotes(report)) != 0);
+    steps.add("5: the failure names the value",
+        read_file(report).find("max_idle_backoff_time 12345, the row "
+                               "for any size says") != std::string::npos);
 
+    steps.summarize();
     return hpx::util::report_errors();
 }

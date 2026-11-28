@@ -24,6 +24,10 @@ namespace hpx::tuning {
     {
         std::vector<timed_wait> timed_waits;
         wake_cost wake;
+        /// timer_resolution_us() when the timed waits were measured, 0 if
+        /// not known; only named in the reasons, as it explains the shortest
+        /// sleep
+        double timer_resolution_us = 0.0;
     };
 
     /// HPX's defaults the rules start from and compare with.
@@ -63,6 +67,9 @@ namespace hpx::tuning {
     ///   notification wakes a sleeping worker after about the wake cost, so
     ///   the shortest sleep only says how long an idle worker stays asleep,
     ///   and spinning that long would keep every idle worker busy.
+    ///
+    /// The reason of hpx.max_idle_backoff_time names the timer resolution
+    /// the waits were measured under, if it is known.
     ///
     /// Without measurements a setting keeps its default and says so.
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT std::vector<tuned_setting>

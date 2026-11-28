@@ -53,6 +53,10 @@ namespace hpx_tune {
             return configuration{text.substr(0, colon), text.substr(colon + 1)};
         }
 
+        // the fingerprint's entry of the timer resolution the idle settings
+        // were measured under
+        char const* const timer_resolution_key = "idle_timer_resolution_us";
+
         // a measurement with about three significant digits: 15626, 55.2,
         // 1.31
         std::string number(double const value)
@@ -78,6 +82,7 @@ namespace hpx_tune {
             std::vector<std::size_t> const& pool_sizes,
             tuning::summary const& clock, tuning::summary const& spin,
             tuning::idle_measurements const& measured,
+            double const timer_resolution_after_us,
             std::vector<tuning::tuned_setting> const& settings)
         {
             std::vector<std::string> tuned_for;
@@ -116,6 +121,14 @@ namespace hpx_tune {
                 {"clock_read_ns", tuning::to_json(clock)},
                 {"spin_rate_rounds_per_us", tuning::to_json(spin)},
                 {"timed_waits", tuning::json_array(timed_waits)},
+                // 0: not known on this system
+                {"timer_resolution_us",
+                    tuning::json_object({
+                        {"before",
+                            tuning::json_number(measured.timer_resolution_us)},
+                        {"after",
+                            tuning::json_number(timer_resolution_after_us)},
+                    })},
                 {"wake_up",
                     tuning::json_object({
                         {"asleep_us", tuning::to_json(measured.wake.asleep_us)},
@@ -180,8 +193,26 @@ namespace hpx_tune {
         tuning::summary const clock = tuning::measure_clock_read(options);
         tuning::summary const spin = tuning::measure_spin_rate(options);
         tuning::idle_measurements measured;
+        measured.timer_resolution_us = tuning::timer_resolution_us();
         measured.timed_waits = tuning::measure_timed_waits(1024.0, options);
         measured.wake = tuning::measure_wake_cost(options);
+        double const timer_resolution_after_us = tuning::timer_resolution_us();
+
+        // the timer the waits were measured under, for information: it
+        // changes with the other processes (Windows), so --check reports a
+        // different one and never fails on it
+        if (measured.timer_resolution_us > 0.0)
+        {
+            context.fingerprint.add(
+                timer_resolution_key, number(measured.timer_resolution_us));
+        }
+        if (timer_resolution_after_us != measured.timer_resolution_us)
+        {
+            std::cout << "idle: the timer resolution changed during the "
+                         "measurements, from "
+                      << number(measured.timer_resolution_us) << " to "
+                      << number(timer_resolution_after_us) << " us\n";
+        }
 
         if (verbose)
         {
@@ -229,8 +260,8 @@ namespace hpx_tune {
         return area_result{tuning::to_sections(rows),
             {"idle: clock read " + describe(clock, "ns"),
                 "idle: spin rate " + describe(spin, "rounds/us")},
-            report(
-                configurations, pool_sizes, clock, spin, measured, settings)};
+            report(configurations, pool_sizes, clock, spin, measured,
+                timer_resolution_after_us, settings)};
     }
 }    // namespace hpx_tune
 
@@ -522,6 +553,17 @@ namespace hpx_tune {
     verify_result verify_idle(verify_context const& context)
     {
         verify_result result;
+
+        // the timer resolution now, so that the driver reports it if it
+        // differs from the one the file was measured under; it changes with
+        // the other processes, so it is never a failure
+        double const timer_resolution = tuning::timer_resolution_us();
+        if (timer_resolution > 0.0)
+        {
+            context.context.fingerprint.add(
+                timer_resolution_key, number(timer_resolution));
+        }
+
 #if !defined(HPX_HAVE_THREAD_MANAGER_IDLE_BACKOFF)
         result.lines.push_back(
             "this HPX has no idle backoff (HPX_WITH_THREAD_MANAGER_IDLE_BACKOFF"

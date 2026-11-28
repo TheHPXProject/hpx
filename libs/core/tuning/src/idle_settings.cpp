@@ -71,6 +71,12 @@ namespace hpx::tuning {
         {
             max_reason = hpx::util::format("shortest sleep {:.1f} us", sleep);
         }
+        if (have_sleep && measured.timer_resolution_us > 0.0)
+        {
+            max_reason +=
+                hpx::util::format(", under a timer resolution of {:.1f} us",
+                    measured.timer_resolution_us);
+        }
         settings.push_back(tuned_setting{"hpx.max_idle_backoff_time",
             microseconds(max_backoff), HPX_MOVE(max_reason),
             max_backoff == options.default_max_backoff_us});

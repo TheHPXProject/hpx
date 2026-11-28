@@ -68,4 +68,12 @@ namespace hpx::tuning {
     /// Measure wake_cost with two threads of the operating system.
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT wake_cost measure_wake_cost(
         microbenchmark_options const& options = {});
+
+    /// The timer a timed wait waits for, in microseconds, as it is now; 0 if
+    /// it isn't known. Windows: the system timer resolution
+    /// (NtQueryTimerResolution), the finest that any process asked for, so
+    /// it changes with the other processes (between about 1 and 15.6 ms).
+    /// Linux: the calling thread's timer slack (prctl(PR_GET_TIMERSLACK),
+    /// 50 us unless changed). Other systems: 0.
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT double timer_resolution_us() noexcept;
 }    // namespace hpx::tuning
