@@ -96,5 +96,33 @@ wait deadlocks. Finish the preparation that needs a blocking wait before
 transfers that may overlap with it start, or wait on a thread whose progress
 the transfers don't depend on.
 
+NCCL requires the processes to launch the operations of all communicators
+that share a GPU in one consistent order; otherwise a kernel can wait for a
+kernel of its peer that cannot start because its GPU is busy with a kernel of
+another communicator, which waits as well (see "Using multiple NCCL
+communicators concurrently" in NCCL's documentation; NCCL 2.26 adds an
+ordering by the order of the launches in each process, which does not make
+the order consistent between processes). The conduit has two communicators
+per pair of GPUs (one per direction), and each receiver orders its own
+rounds, so this order is not guaranteed. A GPU normally runs the conduit's
+kernels of different communicators side by side; the risk grows with the
+number of peers per GPU (two communicators for each remote GPU), with MPS or
+other limits on a GPU's resources, and with application kernels occupying a
+GPU while transfers are in flight. The UCX conduit does not have this
+limitation.
+
+The conduit reports a round that has been in flight for longer than
+``hpx.parcel.conduit.nccl.stall_timeout`` seconds (default 30, 0 turns the
+check off) as a warning in the parcel log: the round, its peer and GPUs, and
+the other rounds in flight on the same GPU in the order the process launched
+them. Comparing the reports of the two localities shows whether they
+launched the rounds of two communicators in different orders. With
+``hpx.parcel.conduit.nccl.stall_action=fail`` (default ``report``), the
+stalled channel also fails: its communicator is aborted, which releases
+NCCL's kernels, and its transfers fail with an error naming the probable
+cause, instead of waiting forever (with RCCL the abort waits for the call of
+the channel's thread to return). A stall can also come from a peer that is
+slow or has stopped, which the report cannot tell apart.
+
 See the :ref:`API reference <modules_device_conduit_nccl_api>` of this module
 for more details.
