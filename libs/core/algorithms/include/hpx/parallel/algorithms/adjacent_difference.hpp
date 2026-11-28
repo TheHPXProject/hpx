@@ -325,7 +325,9 @@ namespace hpx::parallel {
                 }
 
                 // an iteration has the size of the operation called with two
-                // adjacent elements
+                // adjacent elements; its bytes are those of one element read
+                // and one written: the other element it reads is the one the
+                // previous iteration read, so only first is passed
                 auto const size = task_size_of_iteration_writing<FwdIter2,
                     task_size_argument_t<FwdIter1>,
                     task_size_argument_t<FwdIter1>>(op, first);

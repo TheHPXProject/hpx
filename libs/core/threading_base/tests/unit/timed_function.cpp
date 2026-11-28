@@ -88,6 +88,12 @@ namespace {
         // no time, no size
         check_timed(hpx::timed_task(&add_one, std::chrono::nanoseconds(0)),
             task_size::unknown, 0);
+        check_timed(hpx::timed_task(&add_one, std::chrono::hours(-1)),
+            task_size::unknown, 0);
+
+        // beyond the range of picoseconds (about 106 days): saturated
+        check_timed(hpx::timed_task(&add_one, std::chrono::hours(24 * 200)),
+            task_size::large, (picoseconds::max) ().count());
 
         // functions that say nothing finer than their size
         auto const lambda = [](int i) { return i; };

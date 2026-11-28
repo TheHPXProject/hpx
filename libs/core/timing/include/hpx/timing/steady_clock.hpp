@@ -84,18 +84,21 @@ namespace hpx::chrono {
           : _rel_time(std::chrono::duration_cast<value_type>(rel_time))
           , _below_ps(0)
         {
+            // duration_cast rounds toward zero: up for negative durations,
+            // down for positive ones, which are rounded up here
             if (_rel_time < rel_time)
             {
                 ++_rel_time;
-                if (_rel_time < std::chrono::hours(1))
+            }
+            if (_rel_time > rel_time && _rel_time < std::chrono::hours(1) &&
+                _rel_time > -std::chrono::hours(1))
+            {
+                auto const below =
+                    std::chrono::duration_cast<picoseconds>(_rel_time) -
+                    std::chrono::duration_cast<picoseconds>(rel_time);
+                if (below.count() > 0 && below < value_type(1))
                 {
-                    auto const below =
-                        std::chrono::duration_cast<picoseconds>(_rel_time) -
-                        std::chrono::duration_cast<picoseconds>(rel_time);
-                    if (below.count() > 0 && below < value_type(1))
-                    {
-                        _below_ps = static_cast<std::uint16_t>(below.count());
-                    }
+                    _below_ps = static_cast<std::uint16_t>(below.count());
                 }
             }
         }
