@@ -37,6 +37,11 @@ namespace {
         check_duration(std::chrono::duration<double, std::nano>(0.75),
             nanoseconds(1), 750);
 
+        // negative durations: rounded toward zero (up), the given duration
+        // kept
+        check_duration(picoseconds(-250), nanoseconds(0), -250);
+        check_duration(picoseconds(-1500), nanoseconds(-1), -1500);
+
         // whole ticks
         check_duration(picoseconds(1000), nanoseconds(1), 1000);
         check_duration(nanoseconds(5), nanoseconds(5), 5000);

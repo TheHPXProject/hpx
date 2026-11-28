@@ -10,6 +10,7 @@
 #include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/iterator_support.hpp>
+#include <hpx/modules/timing.hpp>
 #include <hpx/modules/tracing.hpp>
 #include <hpx/modules/type_support.hpp>
 
@@ -139,8 +140,9 @@ struct hpx::traits::get_task_size<
         if (auto const time = get_task_time<std::decay_t<F>>::call(f.f_);
             time.count() > 0)
         {
-            return threads::task_size_of_duration(time *
-                static_cast<hpx::chrono::picoseconds::rep>(f.iterations_));
+            return threads::task_size_of_duration(
+                hpx::chrono::detail::saturating_product(time,
+                    static_cast<hpx::chrono::picoseconds::rep>(f.iterations_)));
         }
         threads::task_size const size = threads::bulk_task_size(
             get_task_size<std::decay_t<F>>::call(f.f_), f.iterations_);

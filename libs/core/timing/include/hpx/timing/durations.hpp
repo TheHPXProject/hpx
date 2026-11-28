@@ -23,4 +23,24 @@ namespace hpx::chrono {
     /// the ratio (std::pico) but no alias for it.
     HPX_CXX_CORE_EXPORT using picoseconds =
         std::chrono::duration<std::int64_t, std::pico>;
+
+    /// \cond NOINTERNAL
+    namespace detail {
+
+        // time * count for a positive time and count, saturated at the
+        // largest number of picoseconds (about 106 days) instead of
+        // overflowing; time * count as it is for all others.
+        HPX_CXX_CORE_EXPORT [[nodiscard]] constexpr picoseconds
+        saturating_product(
+            picoseconds const time, std::int64_t const count) noexcept
+        {
+            if (time.count() > 0 && count > 0 &&
+                time.count() > (picoseconds::max) ().count() / count)
+            {
+                return (picoseconds::max) ();
+            }
+            return time * count;
+        }
+    }    // namespace detail
+    /// \endcond
 }    // namespace hpx::chrono
