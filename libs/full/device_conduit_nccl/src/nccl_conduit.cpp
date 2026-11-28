@@ -50,11 +50,24 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <system_error>
 #include <thread>
 #include <utility>
 #include <vector>
 
 namespace hpx::parcelset::device_conduits {
+
+    // completions of operations whose buffers a call of a released channel's
+    // thread may still use (RCCL): called by the conduit's background work
+    // once the call has returned (not on that thread, which isn't one of
+    // HPX's)
+    struct nccl_conduit::deferred
+    {
+        std::atomic<bool> returned{false};
+        std::vector<hpx::move_only_function<void(std::exception_ptr)>>
+            completions;
+        std::exception_ptr error;
+    };
 
     namespace {
 
@@ -106,8 +119,13 @@ namespace hpx::parcelset::device_conduits {
                 (void) cudaGetLastError();
                 return -1;
             }
-            return attributes.type == cudaMemoryTypeDevice ? attributes.device :
-                                                             -1;
+#if defined(HPX_HAVE_HIP) && HIP_VERSION_MAJOR < 6
+            // HIP before ROCm 6 names the field memoryType
+            auto const type = attributes.memoryType;
+#else
+            auto const type = attributes.type;
+#endif
+            return type == cudaMemoryTypeDevice ? attributes.device : -1;
         }
 
         // makes 'device' current on this OS thread, restores the previous
@@ -217,6 +235,9 @@ namespace hpx::parcelset::device_conduits {
                 // handed back by release
                 cudaStream_t stream = nullptr;
                 int device = -1;
+
+                // marked once the last call has returned (see release)
+                std::shared_ptr<nccl_conduit::deferred> deferred;
             };
 
         public:
@@ -226,7 +247,7 @@ namespace hpx::parcelset::device_conduits {
 
             ~blocking_calls()
             {
-                release(nullptr, nullptr, -1);
+                (void) release(nullptr, nullptr, -1);
             }
 
             // runs 'task' on the thread (no other one is running); the task
@@ -275,13 +296,21 @@ namespace hpx::parcelset::device_conduits {
 
             // stops the thread: it aborts 'comm' and destroys 'stream' (and
             // a communicator an initialization still running creates) once
-            // its current call has returned, which may wait for the peer
-            void release(
-                ncclComm_t const comm, cudaStream_t const stream, int device)
+            // its current call has returned, which may wait for the peer;
+            // false if no thread runs (it couldn't be created): the caller
+            // keeps 'comm' and 'stream' and releases them itself
+            [[nodiscard]] bool release(ncclComm_t const comm,
+                cudaStream_t const stream, int device,
+                std::shared_ptr<nccl_conduit::deferred> deferred = nullptr)
             {
                 if (!thread_.joinable())
                 {
-                    return;
+                    if (deferred != nullptr)
+                    {
+                        deferred->returned.store(
+                            true, std::memory_order_release);
+                    }
+                    return false;
                 }
                 {
                     std::lock_guard<std::mutex> l(state_->mtx);
@@ -291,6 +320,7 @@ namespace hpx::parcelset::device_conduits {
                     }
                     state_->stream = stream;
                     state_->device = device;
+                    state_->deferred = HPX_MOVE(deferred);
                     state_->stop = true;
                 }
                 state_->cv.notify_one();
@@ -302,6 +332,7 @@ namespace hpx::parcelset::device_conduits {
                 {
                     thread_.join();
                 }
+                return true;
             }
 
         private:
@@ -348,6 +379,12 @@ namespace hpx::parcelset::device_conduits {
                     (void) cudaStreamDestroy(s->stream);
                     s->stream = nullptr;
                 }
+                if (s->deferred != nullptr)
+                {
+                    s->deferred->returned.store(
+                        true, std::memory_order_release);
+                    s->deferred.reset();
+                }
             }
 
             std::shared_ptr<state> state_ = std::make_shared<state>();
@@ -380,10 +417,82 @@ namespace hpx::parcelset::device_conduits {
     {
         this_conduit()->round_ready(receiver, HPX_MOVE(round));
     }
+
+    // the receiver 'receiver' won't ask for the chunks 'tags'
+    void nccl_conduit_chunks_dropped(std::uint32_t const receiver,
+        std::vector<std::uint64_t> const& tags, std::string const& why)
+    {
+        this_conduit()->chunks_dropped(receiver, tags, why);
+    }
 }    // namespace hpx::parcelset::device_conduits
 
 HPX_PLAIN_ACTION(hpx::parcelset::device_conduits::nccl_conduit_round_ready,
     nccl_conduit_round_ready_action)
+HPX_PLAIN_ACTION(hpx::parcelset::device_conduits::nccl_conduit_chunks_dropped,
+    nccl_conduit_chunks_dropped_action)
+
+namespace hpx::parcelset::device_conduits {
+
+    // sending the conduit's own parcels
+    namespace {
+
+        // runs 'f' (which sends a parcel) on an HPX thread: the conduit's
+        // background work may run on an OS thread
+        template <typename F>
+        void on_hpx_thread(F&& f)
+        {
+            if (threads::get_self_ptr() != nullptr)
+            {
+                f();
+            }
+            else
+            {
+                hpx::post(HPX_FORWARD(F, f));
+            }
+        }
+
+        // tells the sender 'peer' that the chunks 'tags' won't be asked for
+        // (called without locks held: this sends a parcel); if that fails
+        // too, the sender's chunks stay held until the locality is removed
+        void tell_dropped(std::uint32_t const peer,
+            std::vector<std::uint64_t> tags,
+            std::exception_ptr const& error) noexcept
+        {
+            if (tags.empty())
+            {
+                return;
+            }
+            try
+            {
+                hpx::id_type const dest = naming::get_id_from_locality_id(peer);
+                std::uint32_t const here = hpx::get_locality_id();
+                std::string why = hpx::get_error_what(error);
+                on_hpx_thread([peer, dest, here, tags = HPX_MOVE(tags),
+                                  why = HPX_MOVE(why)]() mutable {
+                    try
+                    {
+                        hpx::post(nccl_conduit_chunks_dropped_action(), dest,
+                            here, HPX_MOVE(tags), HPX_MOVE(why));
+                    }
+                    catch (...)
+                    {
+                        LPT_(warning).format("nccl_conduit: couldn't tell "
+                                             "locality {} about chunks not "
+                                             "received: {}",
+                            peer,
+                            hpx::get_error_what(std::current_exception()));
+                    }
+                });
+            }
+            catch (...)
+            {
+                LPT_(warning).format("nccl_conduit: couldn't tell locality "
+                                     "{} about chunks not received: {}",
+                    peer, hpx::get_error_what(std::current_exception()));
+            }
+        }
+    }    // namespace
+}    // namespace hpx::parcelset::device_conduits
 
 namespace hpx::parcelset::device_conduits {
 
@@ -445,16 +554,20 @@ namespace hpx::parcelset::device_conduits {
         std::vector<completion_type> take_completions();
 
         // aborts the communicator, destroys the stream (with comm_mtx held)
-        void release_nccl() noexcept
+        void release_nccl(
+            std::shared_ptr<nccl_conduit::deferred> deferred = nullptr) noexcept
         {
 #if defined(HPX_HAVE_HIP)
             // RCCL: a call of the channel's thread may still use them (and
             // wait for the peer), so they can't be released here as NCCL's
             // non-blocking communicator is (ncclCommAbort stops what is in
-            // progress); the thread releases them when the call has returned
-            calls.release(comm, stream, device);
-            comm = nullptr;
-            stream = nullptr;
+            // progress); the thread releases them when the call has returned,
+            // and marks 'deferred' then
+            if (calls.release(comm, stream, device, HPX_MOVE(deferred)))
+            {
+                comm = nullptr;
+                stream = nullptr;
+            }
             initializing = false;
 #endif
             device_guard const g(device);
@@ -707,10 +820,14 @@ namespace hpx::parcelset::device_conduits {
         auto it = outboxes_.find(locality_id);
         if (it == outboxes_.end())
         {
-            it =
-                outboxes_
-                    .emplace(locality_id, std::make_shared<outbox>(locality_id))
-                    .first;
+            auto box = std::make_shared<outbox>(locality_id);
+            if (auto const d = disconnected_.find(locality_id);
+                d != disconnected_.end())
+            {
+                // no one will ask for its chunks
+                box->error = d->second;
+            }
+            it = outboxes_.emplace(locality_id, HPX_MOVE(box)).first;
         }
         return it->second;
     }
@@ -766,11 +883,12 @@ namespace hpx::parcelset::device_conduits {
         int const device = device_of(p);
         if (device < 0)
         {
-            // the receiver will ask for the chunk; the error stops the
-            // runtime (the parcel has left)
-            sent(make_error(conduit_send,
+            // thrown, so that the parcel fails while it is serialized: its
+            // descriptor is never written, and the receiver never waits for
+            // a chunk this side can't send (with node faults tolerated the
+            // error passed to 'sent' would only be logged)
+            std::rethrow_exception(make_error(conduit_send,
                 "the NCCL device conduit moves device memory only"));
-            return;
         }
 
         // the receiver uses the channel from this GPU
@@ -830,6 +948,8 @@ namespace hpx::parcelset::device_conduits {
         }
         if (error)
         {
+            // the sender holds the chunk until it is asked for it
+            tell_dropped(static_cast<std::uint32_t>(d.source), {d.tag}, error);
             done(HPX_MOVE(error));
             return;
         }
@@ -890,23 +1010,146 @@ namespace hpx::parcelset::device_conduits {
     namespace {
 
         // fails the channel (with mtx not held, comm_mtx held): returns the
-        // completions to call with the error
-        std::vector<completion_type> fail_channel(
-            nccl_conduit::channel& c, std::exception_ptr const& error)
+        // completions to call with the error; 'not_asked_for' gets the tags
+        // of the receives the sender wasn't asked for yet (receiving), for
+        // tell_dropped
+        std::vector<completion_type> fail_channel(nccl_conduit::channel& c,
+            std::exception_ptr const& error,
+            std::vector<std::uint64_t>* not_asked_for = nullptr,
+            std::shared_ptr<nccl_conduit::deferred>* deferred = nullptr)
         {
             std::vector<completion_type> completions;
+            std::shared_ptr<nccl_conduit::deferred> later;
             {
                 std::lock_guard<hpx::spinlock> l(c.mtx);
                 if (!c.error)
                 {
                     c.error = error;
                 }
+#if defined(HPX_HAVE_HIP)
+                // a group the channel's thread is still issuing uses the
+                // buffers of the rounds in flight: their completions wait
+                // for it to return
+                if (deferred != nullptr && !c.in_flight.empty() &&
+                    c.calls.result() == ncclInProgress)
+                {
+                    later = std::make_shared<nccl_conduit::deferred>();
+                    later->error = error;
+                    for (auto& r : c.in_flight)
+                    {
+                        for (auto& op : r.operations)
+                        {
+                            if (op.done)
+                            {
+                                later->completions.push_back(HPX_MOVE(op.done));
+                                op.done = nullptr;
+                            }
+                        }
+                    }
+                    *deferred = later;
+                }
+#else
+                (void) deferred;
+#endif
+                if (not_asked_for != nullptr && !c.sending)
+                {
+                    for (auto const& op : c.pending)
+                    {
+                        not_asked_for->push_back(op.tag);
+                    }
+                }
                 completions = c.take_completions();
             }
-            c.release_nccl();
+            c.release_nccl(HPX_MOVE(later));
             return completions;
         }
     }    // namespace
+
+    void nccl_conduit::round_not_sent(channel_key const& key,
+        std::vector<std::uint64_t> tags, std::exception_ptr const& error)
+    {
+        std::shared_ptr<channel> c;
+        {
+            std::lock_guard<hpx::spinlock> l(channels_mtx_);
+            if (auto const it = receivers_.find(key); it != receivers_.end())
+            {
+                c = it->second;
+            }
+            else
+            {
+                for (auto const& r : removed_)
+                {
+                    if (!r->sending && r->peer == std::get<0>(key) &&
+                        r->device == std::get<1>(key) &&
+                        r->remote_device == std::get<2>(key))
+                    {
+                        c = r;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (c != nullptr)
+        {
+            std::vector<completion_type> failed;
+            {
+                std::shared_ptr<deferred> later;
+                {
+                    std::lock_guard<hpx::spinlock> cl(c->comm_mtx);
+                    failed = fail_channel(*c, error, &tags, &later);
+                }
+                keep_deferred(HPX_MOVE(later));
+            }
+            for (auto& done : failed)
+            {
+                done(error);
+            }
+        }
+
+        // the sender may still be reachable another way (the request was
+        // lost, not the locality)
+        tell_dropped(std::get<0>(key), HPX_MOVE(tags), error);
+    }
+
+    void nccl_conduit::chunks_dropped(std::uint32_t const receiver,
+        std::vector<std::uint64_t> const& tags, std::string const& why)
+    {
+        // the chunks are in the outbox of the receiver (or of the receiver
+        // that has left)
+        std::vector<std::shared_ptr<outbox>> boxes;
+        {
+            std::lock_guard<hpx::spinlock> l(channels_mtx_);
+            if (auto const it = outboxes_.find(receiver); it != outboxes_.end())
+            {
+                boxes.push_back(it->second);
+            }
+            for (auto const& box : removed_outboxes_)
+            {
+                if (box->peer == receiver)
+                {
+                    boxes.push_back(box);
+                }
+            }
+        }
+
+        std::exception_ptr const error = make_error(conduit_round,
+            "locality " + std::to_string(receiver) +
+                " won't receive the chunk: " + why);
+        std::vector<completion_type> failed;
+        for (auto const& box : boxes)
+        {
+            std::lock_guard<hpx::spinlock> lb(box->mtx);
+            for (auto& done : box->take(&tags))
+            {
+                failed.push_back(HPX_MOVE(done));
+            }
+        }
+        for (auto& done : failed)
+        {
+            done(error);
+        }
+    }
 
     bool nccl_conduit::progress(channel& c)
     {
@@ -1028,19 +1271,48 @@ namespace hpx::parcelset::device_conduits {
                 hpx::id_type const dest =
                     naming::get_id_from_locality_id(c.peer);
                 std::uint32_t const here = hpx::get_locality_id();
-                if (threads::get_self_ptr() != nullptr)
-                {
-                    hpx::post(nccl_conduit_round_ready_action(), dest, here,
-                        HPX_MOVE(r));
-                }
-                else
-                {
-                    // the background work of an OS thread
-                    hpx::post([dest, here, r = HPX_MOVE(r)]() mutable {
-                        hpx::post(nccl_conduit_round_ready_action(), dest, here,
-                            HPX_MOVE(r));
-                    });
-                }
+                channel_key const key{c.peer, c.device, c.remote_device};
+                std::vector<std::uint64_t> tags = r.tags;
+
+                // a request that can't be sent fails the channel: nothing
+                // else would end the wait for its receives (with node
+                // faults tolerated the default handler only logs a write
+                // error). The conduit is looked up when that happens (it is
+                // gone once the runtime has reset it).
+                auto not_sent = [key](std::vector<std::uint64_t> tags,
+                                    std::exception_ptr const& e) {
+                    device_conduit* const conduit = get_device_conduit();
+                    if (conduit != nullptr &&
+                        conduit->name() == nccl_conduit::name_impl())
+                    {
+                        static_cast<nccl_conduit*>(conduit)->round_not_sent(
+                            key, HPX_MOVE(tags), e);
+                    }
+                };
+                on_hpx_thread([dest, here, not_sent, r = HPX_MOVE(r),
+                                  tags = HPX_MOVE(tags)]() mutable {
+                    try
+                    {
+                        hpx::post_cb(
+                            nccl_conduit_round_ready_action(), dest,
+                            [not_sent, tags](std::error_code const& ec,
+                                parcelset::parcel const&) mutable {
+                                if (ec)
+                                {
+                                    not_sent(HPX_MOVE(tags),
+                                        make_error(conduit_progress,
+                                            "the request for a round "
+                                            "couldn't be sent: " +
+                                                ec.message()));
+                                }
+                            },
+                            here, HPX_MOVE(r));
+                    }
+                    catch (...)
+                    {
+                        not_sent(HPX_MOVE(tags), std::current_exception());
+                    }
+                });
             }
             catch (...)
             {
@@ -1374,9 +1646,11 @@ namespace hpx::parcelset::device_conduits {
             }
         }
 
+        std::vector<std::uint64_t> not_asked_for;
+        std::shared_ptr<deferred> later;
         if (error)
         {
-            auto rest = fail_channel(c, error);
+            auto rest = fail_channel(c, error, &not_asked_for, &later);
             for (auto& done : rest)
             {
                 failed.push_back(HPX_MOVE(done));
@@ -1384,6 +1658,14 @@ namespace hpx::parcelset::device_conduits {
             did_work = true;
         }
         cl.unlock();
+        keep_deferred(HPX_MOVE(later));
+
+        // the sender holds the chunks of the receives it wasn't asked for
+        // (a failure before or with the first round included)
+        if (error)
+        {
+            tell_dropped(c.peer, HPX_MOVE(not_asked_for), error);
+        }
 
         for (auto& done : completions)
         {
@@ -1394,6 +1676,15 @@ namespace hpx::parcelset::device_conduits {
             done(error);
         }
         return did_work;
+    }
+
+    void nccl_conduit::keep_deferred(std::shared_ptr<deferred> d)
+    {
+        if (d != nullptr)
+        {
+            std::lock_guard<hpx::spinlock> l(channels_mtx_);
+            deferred_.push_back(HPX_MOVE(d));
+        }
     }
 
     bool nccl_conduit::background_work_impl()
@@ -1444,6 +1735,17 @@ namespace hpx::parcelset::device_conduits {
                 {
                     return false;
                 }
+                // a sending channel stays while chunks are held for the
+                // peer: a later round asks for them on this channel (its
+                // round numbers), a new one would wait for round 0
+                if (c->box != nullptr)
+                {
+                    std::lock_guard<hpx::spinlock> lb(c->box->mtx);
+                    if (!c->box->held.empty())
+                    {
+                        return false;
+                    }
+                }
                 idle.push_back(c);
                 return true;
             });
@@ -1461,10 +1763,29 @@ namespace hpx::parcelset::device_conduits {
                     empty.push_back(box);
                     return true;
                 });
+            // and the completions whose call has returned
+            std::vector<std::shared_ptr<deferred>> returned;
+            std::erase_if(deferred_, [&](std::shared_ptr<deferred> const& d) {
+                if (!d->returned.load(std::memory_order_acquire))
+                {
+                    return false;
+                }
+                returned.push_back(d);
+                return true;
+            });
             l.unlock();
 
+            for (auto const& d : returned)
+            {
+                for (auto& done : d->completions)
+                {
+                    done(d->error);
+                }
+            }
+
             // the last references (destroyed without locks held)
-            did_work = !idle.empty() || !empty.empty() || did_work;
+            did_work = !idle.empty() || !empty.empty() || !returned.empty() ||
+                did_work;
         }
         return did_work;
     }
@@ -1477,8 +1798,17 @@ namespace hpx::parcelset::device_conduits {
         // for, unless it was disconnected
         std::vector<std::shared_ptr<channel>> channels;
         std::shared_ptr<outbox> box;
+        std::exception_ptr const disconnected = forced ?
+            make_error(conduit_progress,
+                "locality " + std::to_string(locality_id) +
+                    " was disconnected") :
+            std::exception_ptr();
         {
             std::lock_guard<hpx::spinlock> l(channels_mtx_);
+            if (forced)
+            {
+                disconnected_.insert_or_assign(locality_id, disconnected);
+            }
             for (auto* map : {&senders_, &receivers_})
             {
                 // all pairs of GPUs
@@ -1516,9 +1846,7 @@ namespace hpx::parcelset::device_conduits {
         // the chunks not asked for yet fail too
         if (box != nullptr)
         {
-            std::exception_ptr const error = make_error(conduit_progress,
-                "locality " + std::to_string(locality_id) +
-                    " was disconnected");
+            std::exception_ptr const& error = disconnected;
             std::vector<completion_type> completions;
             {
                 std::lock_guard<hpx::spinlock> lb(box->mtx);
@@ -1536,10 +1864,12 @@ namespace hpx::parcelset::device_conduits {
                 "locality " + std::to_string(locality_id) +
                     " was disconnected");
             std::vector<completion_type> completions;
+            std::shared_ptr<deferred> later;
             {
                 std::lock_guard<hpx::spinlock> cl(c->comm_mtx);
-                completions = fail_channel(*c, error);
+                completions = fail_channel(*c, error, nullptr, &later);
             }
+            keep_deferred(HPX_MOVE(later));
             for (auto& done : completions)
             {
                 done(error);

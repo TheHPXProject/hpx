@@ -116,8 +116,15 @@ namespace hpx::parcelset::device_conduits {
         /// locality sent it (what the action calls).
         void round_ready(std::uint32_t receiver, nccl_conduit_round round);
 
+        /// The receiver 'receiver' won't ask for the chunks 'tags' this
+        /// locality sent it (its channel failed, or its request for them
+        /// couldn't be sent): they fail with 'why' (what the action calls).
+        void chunks_dropped(std::uint32_t receiver,
+            std::vector<std::uint64_t> const& tags, std::string const& why);
+
         struct channel;
         struct outbox;
+        struct deferred;
 
     private:
         // a channel: the other locality, the GPU here, the GPU there
@@ -138,6 +145,11 @@ namespace hpx::parcelset::device_conduits {
         // makes progress on one channel, returns whether it did anything
         bool progress(channel& c);
 
+        // the request for a round of the receiving channel 'key' couldn't be
+        // sent: fails the channel, tells the sender about the chunks 'tags'
+        void round_not_sent(channel_key const& key,
+            std::vector<std::uint64_t> tags, std::exception_ptr const& error);
+
         hpx::spinlock channels_mtx_;
         std::map<channel_key, std::shared_ptr<channel>> senders_;
         std::map<channel_key, std::shared_ptr<channel>> receivers_;
@@ -147,6 +159,18 @@ namespace hpx::parcelset::device_conduits {
         // idle
         std::vector<std::shared_ptr<channel>> removed_;
         std::vector<std::shared_ptr<outbox>> removed_outboxes_;
+
+        // the localities disconnected (removed by force), with the error
+        // their sends fail with: a send that arrives after the removal gets
+        // a new outbox, which fails it instead of holding the chunk
+        std::map<std::uint32_t, std::exception_ptr> disconnected_;
+
+        // completions waiting for a call of a failed channel's thread to
+        // return (RCCL), run by the background work
+        std::vector<std::shared_ptr<deferred>> deferred_;
+
+        // keeps 'd' until its call has returned (nullptr: nothing to keep)
+        void keep_deferred(std::shared_ptr<deferred> d);
     };
 }    // namespace hpx::parcelset::device_conduits
 
