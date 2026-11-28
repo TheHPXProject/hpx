@@ -26,6 +26,27 @@ jobs:
       container: stellargroup/build_env:19
       base-targets: hpx_core core components
       shards: 25
+      # UCX for the UCX device conduit, which the tests use by default (the
+      # TCP parcelport sends host chunks of 8 KiB and more through it). The
+      # image (Ubuntu 20.04) has UCX 1.8 without headers (for Open MPI), older
+      # than the conduit needs: unpack a UCX release into its own prefix and
+      # load it from there.
+      setup: |
+        ucx_version=1.23.0
+        ucx_package=ucx-${ucx_version}-ubuntu20.04-mofed5-cuda12-x86_64.tar.bz2
+        mkdir -p /tmp/ucx && cd /tmp/ucx
+        curl -fsSL -o ucx.tar.bz2 \
+          "https://github.com/openucx/ucx/releases/download/v${ucx_version}/${ucx_package}"
+        echo "deaee327d804b2c846f503b3457a33c66e105d31a49a199e2d53009a7ebbcc93  ucx.tar.bz2" | \
+          sha256sum --check --status
+        tar -xjf ucx.tar.bz2
+        dpkg -x ucx-${ucx_version}.deb root
+        rm -rf /opt/ucx && mv root/usr /opt/ucx
+        sed -i 's|^prefix *=.*|prefix = /opt/ucx|' /opt/ucx/lib/pkgconfig/*.pc
+        cd / && rm -rf /tmp/ucx
+        echo "UCX_ROOT=/opt/ucx" >> "$GITHUB_ENV"
+        echo "LD_LIBRARY_PATH=/opt/ucx/lib" >> "$GITHUB_ENV"
+        echo "HPX_PARCEL_CONDUIT_HOST_THRESHOLD=8192" >> "$GITHUB_ENV"
       configure: |
         mkdir -p "$GITHUB_WORKSPACE/build"
         cd "$GITHUB_WORKSPACE/build"
@@ -74,7 +95,9 @@ jobs:
           -DHPX_WITH_TESTS_MAX_THREADS_PER_LOCALITY=2 \
           -DHPX_WITH_SUPERVISION=On \
           -DHPX_WITH_DATAPAR=On \
-          -DHPX_WITH_DATAPAR_BACKEND=EMULATE
+          -DHPX_WITH_DATAPAR_BACKEND=EMULATE \
+          -DHPX_WITH_DEVICE_CONDUIT_UCX=On \
+          -DHPX_WITH_PARCELPORT_COUNTERS=On
 
           # Disable logging for now as otherwise we run out of diskspace on the
           # github runner instance

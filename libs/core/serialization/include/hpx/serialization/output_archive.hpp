@@ -412,9 +412,16 @@ namespace hpx::serialization {
         /// \param memory  Whether \a address refers to device memory: the
         ///                chunk is marked (see
         ///                serialization_chunk::is_device_memory).
+        /// \param may_arrive_later Whether the receiving object accepts the
+        ///                data after its de-serialization, also where the
+        ///                receiver doesn't use zero-copy receive (it loads the
+        ///                chunk with the same argument): a device transport
+        ///                may then move a large chunk of host memory (see
+        ///                archive_flags::enable_host_transport).
         void save_binary_chunk(detail::fundamental_types t, void const* address,
             std::size_t const count,
-            chunk_memory const memory = chunk_memory::host)
+            chunk_memory const memory = chunk_memory::host,
+            bool const may_arrive_later = false)
         {
             if (HPX_UNLIKELY(count == 0))
                 return;
@@ -425,7 +432,8 @@ namespace hpx::serialization {
             }
 
             if (HPX_UNLIKELY(enable_device_transport()) &&
-                save_with_device_transport(address, count, memory))
+                save_with_device_transport(
+                    address, count, memory, may_arrive_later))
             {
                 return;
             }
@@ -449,11 +457,26 @@ namespace hpx::serialization {
         // holds the transport's descriptor instead of the chunk, 0 for a
         // chunk as usual. Returns whether the transport moves the data.
         bool save_with_device_transport(void const* address,
-            std::size_t const count, chunk_memory const memory)
+            std::size_t const count, chunk_memory const memory,
+            bool const may_arrive_later)
         {
             auto const* transport =
                 try_get_extra_data<detail::device_transport>();
-            bool const use_transport = memory == chunk_memory::device &&
+            bool const host_candidate = memory == chunk_memory::host &&
+                may_arrive_later && count >= detail::host_transport_threshold();
+            bool const moved = memory == chunk_memory::device ||
+                (host_candidate && enable_host_transport());
+
+            // the transport isn't ready for host chunks to this destination
+            // yet: tell it there is one (once)
+            if (host_candidate && !moved && host_transport_pending() &&
+                !host_chunk_reported_ && !is_preprocessing() &&
+                transport != nullptr && transport->transport)
+            {
+                host_chunk_reported_ = true;
+                transport->transport->host_chunk_waiting();
+            }
+            bool const use_transport = moved &&
                 (is_preprocessing() ||
                     (transport != nullptr && transport->transport));
 
@@ -471,11 +494,15 @@ namespace hpx::serialization {
             }
             save(descriptor.source);
             save(descriptor.tag);
+            save(descriptor.extra);
             return true;
         }
 
         std::unique_ptr<erased_output_container> buffer_;
         bool filtered_ = false;
+
+        // a host chunk was reported to the transport (host_chunk_waiting)
+        bool host_chunk_reported_ = false;
     };
 }    // namespace hpx::serialization
 

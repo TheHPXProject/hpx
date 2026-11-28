@@ -46,3 +46,36 @@ if(HPX_WITH_DEVICE_CONDUIT_UCX
     locality_removed_worker
   )
 endif()
+
+# host chunks through the conduit, over every parcelport the test runs with
+if(HPX_WITH_DEVICE_CONDUIT_UCX)
+  add_hpx_executable(
+    host_chunks_test INTERNAL_FLAGS
+    SOURCES host_chunks.cpp
+    EXCLUDE_FROM_ALL
+    HPX_PREFIX ${HPX_BUILD_PREFIX}
+    FOLDER "Tests/Unit/Modules/Full/DeviceConduitUCX"
+  )
+
+  add_hpx_unit_test(
+    "modules.device_conduit_ucx" host_chunks
+    LOCALITIES 2
+    THREADS_PER_LOCALITY 4
+    RUN_SERIAL
+  )
+
+  # the conduit the configuration selects (by default: UCX)
+  add_hpx_executable(
+    configured_conduit_test INTERNAL_FLAGS
+    SOURCES configured_conduit.cpp
+    EXCLUDE_FROM_ALL
+    HPX_PREFIX ${HPX_BUILD_PREFIX}
+    FOLDER "Tests/Unit/Modules/Full/DeviceConduitUCX"
+  )
+
+  add_hpx_unit_test(
+    "modules.device_conduit_ucx" configured_conduit
+    LOCALITIES 2
+    THREADS_PER_LOCALITY 2
+  )
+endif()

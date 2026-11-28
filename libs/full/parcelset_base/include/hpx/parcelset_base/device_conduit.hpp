@@ -37,7 +37,8 @@ namespace hpx::parcelset {
     /// hpx.parcel.device_conduit names the one to use ('none' by default: the
     /// parcelport sends device memory itself if it can, otherwise it is
     /// staged through host memory). Both ends of a message must use the same
-    /// conduit.
+    /// conduit. A locality uses one conduit at a time, chosen at startup, for
+    /// all its parcelports and destinations (see get_device_conduit()).
     ///
     /// This is the interface the parcel layer uses, once per message;
     /// conduits implement it through hpx::parcelset::device_conduit_impl.
@@ -56,6 +57,23 @@ namespace hpx::parcelset {
         /// and 'locality_id' (the other one uses the same conduit).
         [[nodiscard]] virtual bool can_reach(
             std::uint32_t locality_id) const = 0;
+
+        /// Whether the conduit also moves host memory (the parcel layer
+        /// then lets it move large host chunks, where the parcelports are
+        /// configured to, see locality_capabilities::conduit_host_chunks).
+        [[nodiscard]] virtual bool moves_host_memory() const = 0;
+
+        /// Whether the conduit may move host chunks to 'locality_id' now
+        /// (moves_host_memory is true): a conduit may first check that it
+        /// can reach the destination (it starts the check when a message
+        /// to it has a host chunk, see
+        /// serialization::detail::device_chunk_transport::
+        /// host_chunk_waiting), host chunks go through the parcelport until
+        /// then, and for good if it can't. Called for every message to a
+        /// destination that receives host chunks through the conduit, from
+        /// any thread.
+        [[nodiscard]] virtual bool host_chunks_ready(
+            std::uint32_t locality_id) = 0;
 
         /// The transport for one message to 'locality_id' (can_reach is
         /// true). It keeps 'keep_alive' (the objects the message refers to,

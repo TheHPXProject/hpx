@@ -45,6 +45,8 @@ namespace hpx::parcelset {
     ///        serialization::detail::device_chunk_descriptor const& d,
     ///        void const* p, std::size_t size,
     ///        hpx::move_only_function<void(std::exception_ptr)> sent)
+    ///    (or taking 'd' by non-const reference to set d.extra, which the
+    ///    receiver gets with the descriptor, e.g. the sending GPU)
     ///    starts sending the data, calls 'sent' once the memory may be
     ///    reused (the message's objects are kept alive until then), with
     ///    the error if the data couldn't be sent: the parcel has left
@@ -60,6 +62,15 @@ namespace hpx::parcelset {
     ///
     /// and optionally (this base implements them doing nothing)
     ///
+    ///  - static constexpr bool moves_host_memory_impl()
+    ///    whether the conduit also moves host memory (false)
+    ///  - bool host_chunks_ready_impl(std::uint32_t locality_id)
+    ///    whether host chunks may go to 'locality_id' through the conduit
+    ///    now, e.g. once it has checked that it reaches it (true)
+    ///  - void prepare_host_chunks_impl(std::uint32_t locality_id)
+    ///    a message to 'locality_id' has a host chunk the conduit would
+    ///    move once ready (does nothing)
+    ///
     ///  - bool background_work_impl()
     ///    makes progress, called with the parcelports' background work
     ///  - void locality_removed_impl(
@@ -69,8 +80,9 @@ namespace hpx::parcelset {
     ///  - static void config_defaults(std::vector<std::string>& ini)
     ///    adds the defaults of its configuration entries
     ///
-    /// The descriptor of a chunk holds the sending locality and a tag unique
-    /// for it. Conduits are registered with HPX_REGISTER_DEVICE_CONDUIT
+    /// The descriptor of a chunk holds the sending locality, a tag unique
+    /// for it, and what the conduit's send_impl sets in 'extra' (0 if it
+    /// sets nothing). Conduits are registered with HPX_REGISTER_DEVICE_CONDUIT
     /// (compiled into HPX) or a static hpx::plugins::device_conduit_factory<>
     /// object (e.g. in the application).
     HPX_CXX_EXPORT template <typename Derived>
@@ -86,6 +98,17 @@ namespace hpx::parcelset {
             std::uint32_t const locality_id) const override
         {
             return derived().can_reach_impl(locality_id);
+        }
+
+        [[nodiscard]] bool moves_host_memory() const override
+        {
+            return Derived::moves_host_memory_impl();
+        }
+
+        [[nodiscard]] bool host_chunks_ready(
+            std::uint32_t const locality_id) override
+        {
+            return derived().host_chunks_ready_impl(locality_id);
         }
 
         [[nodiscard]] std::shared_ptr<
@@ -163,6 +186,18 @@ namespace hpx::parcelset {
         // its own)
         static void config_defaults(std::vector<std::string>&) noexcept {}
 
+        [[nodiscard]] static constexpr bool moves_host_memory_impl() noexcept
+        {
+            return false;
+        }
+
+        [[nodiscard]] bool host_chunks_ready_impl(std::uint32_t) noexcept
+        {
+            return true;
+        }
+
+        void prepare_host_chunks_impl(std::uint32_t) noexcept {}
+
         bool background_work_impl() noexcept
         {
             return false;
@@ -202,7 +237,8 @@ namespace hpx::parcelset {
                 void const* p, std::size_t const size) override
             {
                 device_conduit_impl& b = base(conduit_);
-                serialization::detail::device_chunk_descriptor const d{
+                // send_impl may set d.extra
+                serialization::detail::device_chunk_descriptor d{
                     hpx::get_locality_id(),
                     b.next_tag_.fetch_add(1, std::memory_order_relaxed)};
 
@@ -275,6 +311,11 @@ namespace hpx::parcelset {
                     throw;
                 }
                 return d;
+            }
+
+            void host_chunk_waiting() override
+            {
+                conduit_.prepare_host_chunks_impl(locality_id_);
             }
 
             void recv(serialization::detail::device_chunk_descriptor const&,
@@ -410,12 +451,31 @@ namespace hpx::parcelset {
             std::vector<plugins::device_conduit_factory_base*>&
             get_device_conduit_factories();
 
-        /// The archive flags to add to the parcelport's flags for a message
-        /// to 'locality_id': enable_device_transport and enable_device_chunks
-        /// if the conduit reaches the destination, none otherwise. The
-        /// preprocessing pass of a parcel and its real serialization must use
-        /// the same flags.
+        /// The archive flags to add to the flags of the parcelport 'pp' for
+        /// a message to 'locality_id': enable_device_transport and
+        /// enable_device_chunks if the conduit reaches the destination and
+        /// it uses the same conduit, also enable_host_transport if the
+        /// conduit moves host memory, 'pp' lets it and the destination
+        /// receives host chunks that way, none otherwise. What the
+        /// destination does comes from its endpoint for 'pp' (see
+        /// locality_capabilities), as recorded by
+        /// record_destination_capabilities. The preprocessing pass of a
+        /// parcel and its real serialization must use the same flags, except
+        /// enable_host_transport, which may become set in between (when the
+        /// conduit has found that it reaches the destination): that changes
+        /// only the size the preprocessing pass estimates.
         HPX_CXX_EXPORT HPX_EXPORT std::uint32_t device_conduit_flags(
+            parcelport const& pp, std::uint32_t locality_id) noexcept;
+
+        /// Records what the endpoints of 'locality_id' (as AGAS resolved
+        /// them) can do, for device_conduit_flags; once per locality. The
+        /// locality objects the parcelports keep for a destination may have
+        /// been created before (e.g. from the configuration), without it.
+        HPX_CXX_EXPORT HPX_EXPORT void record_destination_capabilities(
+            std::uint32_t locality_id, endpoints_type const& endpoints);
+
+        /// Forgets what was recorded for 'locality_id' (it was removed).
+        HPX_CXX_EXPORT HPX_EXPORT void forget_destination_capabilities(
             std::uint32_t locality_id) noexcept;
 
         /// Attaches the sending transport for a message to 'locality_id' to

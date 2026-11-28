@@ -50,7 +50,16 @@ namespace hpx::serialization {
         // detail::device_chunk_transport, the archive carries a marker for
         // each zero-copy chunk and a descriptor for each of those
         enable_device_transport = 0x00800000,
-        all_archive_flags = 0x00efe000    // all of the above
+        // with enable_device_transport: the transport also moves the data
+        // of large zero-copy chunks of host memory whose objects allow it
+        // (see detail::host_transport_threshold)
+        enable_host_transport = 0x01000000,
+        // with enable_device_transport: the transport would move large
+        // zero-copy chunks of host memory, but isn't ready to yet; the
+        // output archive tells it when it has one (see
+        // detail::device_chunk_transport::host_chunk_waiting)
+        host_transport_pending = 0x02000000,
+        all_archive_flags = 0x03efe000    // all of the above
     };
 
     HPX_CXX_CORE_EXPORT constexpr archive_flags operator|(
@@ -307,6 +316,22 @@ namespace hpx::serialization {
         {
             return static_cast<bool>(
                 flags_ & archive_flags::enable_device_transport);
+        }
+
+        // The transport also moves large chunks of host memory (with
+        // enable_device_transport).
+        [[nodiscard]] constexpr bool enable_host_transport() const noexcept
+        {
+            return static_cast<bool>(
+                flags_ & archive_flags::enable_host_transport);
+        }
+
+        // The transport would move large chunks of host memory once it is
+        // ready to (with enable_device_transport).
+        [[nodiscard]] constexpr bool host_transport_pending() const noexcept
+        {
+            return static_cast<bool>(
+                flags_ & archive_flags::host_transport_pending);
         }
 
         [[nodiscard]] constexpr std::uint32_t flags() const noexcept

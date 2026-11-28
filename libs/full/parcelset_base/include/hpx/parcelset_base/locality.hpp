@@ -17,6 +17,7 @@
 
 #include <hpx/parcelset_base/parcelset_base_fwd.hpp>
 
+#include <cstdint>
 #include <map>
 #include <memory>
 #include <string>
@@ -27,6 +28,38 @@
 
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx::parcelset {
+
+    /// What the parcelport behind an endpoint can do, besides being reached.
+    /// The parcel handler sets it for the endpoints of its locality; it
+    /// travels with them to the other localities (registration, AGAS), also
+    /// to localities connecting later, so a sender knows it for every
+    /// destination.
+    HPX_CXX_EXPORT struct locality_capabilities
+    {
+        /// The parcelport receives the zero-copy chunks of a parcel after
+        /// decoding it, into the memory of the de-serialized objects.
+        static constexpr std::uint32_t zero_copy_receive = 0x1;
+
+        /// The locality receives host chunks through its device conduit
+        /// ('conduit') when they come through this parcelport.
+        static constexpr std::uint32_t conduit_host_chunks = 0x2;
+
+        std::uint32_t flags = 0;
+
+        /// The name of the locality's device conduit, empty if it has none.
+        std::string conduit;
+
+        [[nodiscard]] bool has(std::uint32_t const f) const noexcept
+        {
+            return (flags & f) == f;
+        }
+
+        template <typename Archive>
+        void serialize(Archive& ar, unsigned)
+        {
+            ar & flags & conduit;
+        }
+    };
 
     //////////////////////////////////////////////////////////////////////////
     HPX_CXX_EXPORT class locality
@@ -107,6 +140,18 @@ namespace hpx::parcelset {
             return impl_->get<Impl>();
         }
 
+        /// What the parcelport behind this endpoint can do (not part of the
+        /// endpoint's identity: comparisons ignore it).
+        [[nodiscard]] locality_capabilities const& capabilities() const noexcept
+        {
+            return capabilities_;
+        }
+
+        void set_capabilities(locality_capabilities caps)
+        {
+            capabilities_ = HPX_MOVE(caps);
+        }
+
     private:
         friend HPX_EXPORT bool operator==(
             locality const& lhs, locality const& rhs);
@@ -131,6 +176,7 @@ namespace hpx::parcelset {
         HPX_SERIALIZATION_SPLIT_MEMBER()
 
         std::unique_ptr<impl_base> impl_;
+        locality_capabilities capabilities_;
 
         template <typename Impl>
         class impl : public impl_base

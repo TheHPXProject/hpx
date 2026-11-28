@@ -1503,6 +1503,43 @@ system and application performance.
 
        Please see :ref:`cmake_variables` for more details.
 
+.. list-table:: :term:`Parcel` layer performance counters ``/device_conduit/count/<conduit>/<operation>`` and ``/device_conduit/data/<conduit>/<operation>``
+   :widths: 20 80
+
+   * * Counter type
+     * ``/device_conduit/count/<conduit>/<operation>``
+
+       ``/device_conduit/data/<conduit>/<operation>``
+
+       where:
+
+       ``<operation>`` is one of the following: ``sent``, ``received``
+
+       ``<conduit>`` is the device conduit in use (see
+       ``hpx.parcel.device_conduit``), e.g. ``ucx`` or ``nccl``. A
+       :term:`locality` uses one device conduit at a time, so only the
+       counters of that conduit exist.
+   * * Counter instance formatting
+     * ``locality#*/total``
+
+       where ``*`` is the :term:`locality` id of the :term:`locality` the
+       chunks moved by the device conduit should be queried for. The
+       :term:`locality` id is a (zero based) number identifying the
+       :term:`locality`.
+   * * Description
+     * Returns the number of chunks (``count``) or bytes (``data``) the device
+       conduit has sent or received (see ``<operation>``): chunks of device
+       memory, and chunks of host memory where the conduit moves them (see
+       ``hpx.parcel.conduit_host_chunks``).
+
+       The performance counters exist only while a device conduit is in use.
+       They are available only if the compile time constant
+       ``HPX_HAVE_PARCELPORT_COUNTERS`` was defined while compiling the |hpx|
+       core library (which is not defined by default). The corresponding cmake
+       configuration constant is ``HPX_WITH_PARCELPORT_COUNTERS``.
+
+       Please see :ref:`cmake_variables` for more details.
+
 .. list-table:: :term:`Parcel` layer performance counter ``/parcelport/count/<connection_type>/<cache_statistics>``
    :widths: 20 80
 
